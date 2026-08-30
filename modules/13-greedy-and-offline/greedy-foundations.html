@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greedy Foundations &mdash; DSA Course</title>
+<meta name="description" content="A greedy choice is legal only with an exchange argument or a matroid / stay-ahead proof &mdash; &quot;it looks locally good&quot; is not a proof.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="greedy-foundations">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 13 &middot; Greedy & Offline Techniques</span>
+  <h1>Greedy Foundations</h1>
+  <p class="hero__tagline">A greedy choice is legal only with an exchange argument or a matroid / stay-ahead proof &mdash; "it looks locally good" is not a proof.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/problem-solving-framework.html">Problem-Solving Framework</a>,
+      <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">greedy</span>
+      <span class="chip">exchange</span>
+      <span class="chip">stay-ahead</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Half of the "just sort it" interview problems are greedy, and half of the wrong contest submissions are greedy on a problem that needed DP. The difference is a proof: exchange (any optimal solution can be rewritten to include your first choice) or stay-ahead (your prefix is always at least as good as any other).</p>
+<p>The mechanical test: if swapping two inversions of your order never hurts, the order is optimal. Activity selection, Huffman, Kruskal, and scheduling by deadline all have one-paragraph exchange proofs. Coin change with US denominations happens to work; arbitrary coin sets do not &mdash; that is the DP counterexample you should name.</p>
+<p>This page is the proof toolkit. The next page is the list of classic problem shapes. If you cannot sketch the exchange, do not code the greedy.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Write the first greedy choice, take an optimal solution that disagrees as early as possible, and swap. If the swap never loses, induction finishes the proof.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>An ordering (by start, by ratio, by deadline) suggests itself and a swap does not hurt</li>
+        <li>Matroid flavour: independent sets, Kruskal, scheduling with unit jobs</li>
+        <li>"Take the smallest / earliest / highest-ratio next" in the statement</li>
+        <li>You can prove a stay-ahead invariant on prefixes of the schedule</li>
+        <li>Counterexamples for nearby rules come easily, so this particular rule might be the right one</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Overlapping subproblems with a numeric state &rarr; DP</li>
+        <li>Need a global matching / flow &rarr; not a local choice</li>
+        <li>Arbitrary coin systems, unbounded knapsack &rarr; DP</li>
+        <li>The swap can make a later constraint infeasible &rarr; greedy is lying</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Earliest finish time</td>
+        <td>Activity selection</td>
+        <td>Greedy</td>
+      </tr>
+      <tr>
+        <td>Sort by deadline, fill from left</td>
+        <td>Unit-time scheduling</td>
+        <td>Greedy</td>
+      </tr>
+      <tr>
+        <td>Any coin system</td>
+        <td>Optimal substructure, overlapping</td>
+        <td>DP knapsack</td>
+      </tr>
+      <tr>
+        <td>Fractional knapsack</td>
+        <td>Ratio order, exchange</td>
+        <td>Greedy</td>
+      </tr>
+      <tr>
+        <td>0/1 knapsack</td>
+        <td>Cannot take fractions</td>
+        <td>DP</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "locally optimal so globally"</td>
+        <td>Needs a proof; Huffman yes, coin change no</td>
+        <td>Name the proof</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Greedy is usually O(n log n) from the sort. If the constraint is n=100 and values look like knapsack, it is DP even if a greedy runs.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Exchange: let G be greedy and O optimal, first index i where they differ. Build O' by putting G's item i into O (possibly dropping a later O item). Show cost(O') le cost(O) (or ge for max). Then O' is optimal and closer to G. Repeat.</p>
+<p>Stay-ahead: after k choices, greedy's k-th event happens no later (or its load is no larger) than any other feasible k-set. The last step implies optimality.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>If a swap that aligns the next greedy choice with some optimal solution never worsens that solution, the greedy prefix is contained in some optimal solution. That is the interview sentence.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="greedy-foundationsViz"></div>
+  <div class="viz-player" data-viz-target="greedy-foundationsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "finish times of activities =",
+      "array": [
+        1,
+        3,
+        0,
+        5,
+        8,
+        5
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "vars": [
+        "pick",
+        "lastFin",
+        "set"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Activities (start,fin): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sort by finish: 0,1,2,3,4,5 wait — sorted by fin: idx 0 (4), 1 (5), 2 (6), 3 (7), 4 (9), 5 (9).",
+          "active": [
+            0
+          ],
+          "values": {
+            "pick": "sort",
+            "lastFin": "—",
+            "set": "[]"
+          }
+        },
+        {
+          "note": "Take earliest finish: idx 0, fin=4.",
+          "active": [
+            0
+          ],
+          "values": {
+            "pick": 0,
+            "lastFin": 4,
+            "set": "{0}"
+          }
+        },
+        {
+          "note": "idx 1 starts at 3 < 4, skip. idx 2 starts 0 < 4, skip. idx 3 starts 5 ≥ 4, take. lastFin=7.",
+          "active": [
+            3
+          ],
+          "values": {
+            "pick": 3,
+            "lastFin": 7,
+            "set": "{0,3}"
+          }
+        },
+        {
+          "note": "idx 4 starts 8 ≥ 7, take. idx 5 starts 5 < 9, skip.",
+          "active": [
+            4
+          ],
+          "values": {
+            "pick": 4,
+            "lastFin": 9,
+            "set": "{0,3,4}"
+          }
+        },
+        {
+          "note": "Three activities. Optimal. Exchange: any schedule that skipped 0 could swap in 0 for the first overlapping job without losing count.",
+          "active": [
+            0,
+            3,
+            4
+          ],
+          "values": {
+            "pick": "done",
+            "lastFin": 9,
+            "set": "size 3"
+          }
+        },
+        {
+          "note": "Wrong greedy \"shortest duration\" would take (8,9) first and can still do well here, but fails on other instances — so we needed the finish-time proof.",
+          "active": [
+            4
+          ],
+          "values": {
+            "pick": "counter",
+            "lastFin": "—",
+            "set": "wrong rule"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Proof first, then the sort</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  idea["candidate greedy rule"] --&gt; proof{"exchange or stay-ahead?"}
+  proof -- "swap never hurts" --&gt; codeG["sort and scan"]
+  proof -- "swap can lose" --&gt; dp["it is DP or search"]
+  codeG --&gt; check["test a known counterexample of nearby rules"]
+  </div>
+  <figcaption>If you cannot finish the swap paragraph, do not ship the greedy.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the choice:</strong> which item is taken first, and by which key?</li>
+  <li><strong>Sort</strong> by that key (and a tie-break you can justify).</li>
+  <li><strong>Scan</strong> and take every item that is still feasible given what you took.</li>
+  <li><strong>Write the exchange</strong> in comments or on the whiteboard before coding.</li>
+  <li><strong>Hunt a counterexample</strong> for the next-most-tempting key (shortest, earliest start, …).</li>
+  <li><strong>Implement</strong> the scan; greedy code is usually ten lines after the sort.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>pick</th><th>lastFin</th><th>set</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>sort</td><td>—</td><td>[]</td><td>Activities (start,fin): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sort by finish: 0,1,2,3,4,5 wait — sorted by fin: idx 0 (4), 1 (5), 2 (6), 3 (7), 4 (9), 5 (9).</td></tr>
+      <tr><td>0</td><td>4</td><td>{0}</td><td>Take earliest finish: idx 0, fin=4.</td></tr>
+      <tr><td>3</td><td>7</td><td>{0,3}</td><td>idx 1 starts at 3 < 4, skip. idx 2 starts 0 < 4, skip. idx 3 starts 5 ≥ 4, take. lastFin=7.</td></tr>
+      <tr><td>4</td><td>9</td><td>{0,3,4}</td><td>idx 4 starts 8 ≥ 7, take. idx 5 starts 5 < 9, skip.</td></tr>
+      <tr><td>done</td><td>9</td><td>size 3</td><td>Three activities. Optimal. Exchange: any schedule that skipped 0 could swap in 0 for the first overlapping job without losing count.</td></tr>
+      <tr><td>counter</td><td>—</td><td>wrong rule</td><td>Wrong greedy "shortest duration" would take (8,9) first and can still do well here, but fails on other instances — so we needed the finish-time proof.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Greedy Foundations implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Enumerate subsets. Only n ≤ 20.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ActivityBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ActivityBrute {
+        static int best(int[] s, int[] f) {
+            int n = s.length, ans = 0;
+            for (int m = 0; m &lt; (1 &lt;&lt; n); m++) {
+                int cnt = 0, ok = 1, last = -1;
+                for (int i = 0; i &lt; n &amp;&amp; ok == 1; i++) if (((m &gt;&gt; i) &amp; 1) == 1) {
+                    if (s[i] &lt; last) ok = 0;
+                    else { last = f[i]; cnt++; }
+                }
+                if (ok == 1) ans = Math.max(ans, cnt);
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(best(new int[] {1, 3, 0, 5, 8, 5}, new int[] {4, 5, 6, 7, 9, 9}));
+        }
+        // Input : classic 6 activities
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Sort by finish time, take if start ≥ last finish.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ActivityGreedy.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class ActivityGreedy {
+        static int pick(int[] s, int[] f) {
+            int n = s.length;
+            Integer[] id = new Integer[n];
+            for (int i = 0; i &lt; n; i++) id[i] = i;
+            Arrays.sort(id, Comparator.comparingInt(i -&gt; f[i]));
+            int cnt = 0, last = -1;
+            for (int i : id) if (s[i] &gt;= last) { last = f[i]; cnt++; }
+            return cnt;
+        }
+        public static void main(String[] args) {
+            System.out.println(pick(new int[] {1, 3, 0, 5, 8, 5}, new int[] {4, 5, 6, 7, 9, 9}));
+        }
+        // Input : same six
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>A comment-only template of the proof you should recite.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExchangeSketch.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ExchangeSketch {
+        public static void main(String[] args) {
+            // Let G = greedy sequence, O = some optimal.
+            // Let i be the first index they differ.
+            // Replace O[i] with G[i] (drop a conflicting later job).
+            // Feasibility is preserved because G[i] finishes first.
+            // |O'| &gt;= |O|, so O' is optimal and agrees longer. QED.
+            System.out.println("proof, then code");
+        }
+        // Input : none
+        // Output: proof, then code
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The sort dominates. The scan is linear. Brute subsets are O(2^n n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Subset enum</td><td>O(2^n n)</td><td>O(n)</td><td>n <= 20</td></tr>
+      <tr><td>Greedy + sort</td><td>O(n log n)</td><td>O(n)</td><td>When an exchange exists</td></tr>
+      <tr><td>DP</td><td>poly in state</td><td>state</td><td>When exchange fails</td></tr>
+      <tr><td>Network flow</td><td>poly larger</td><td>graph</td><td>When the choice is a matching</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Sorting by start time</span>
+    <div class="pitfalls__bug">A long early activity blocks everything. Classic counterexample vs finish-time greedy.</div>
+    <div class="pitfalls__fix">Earliest finish, not earliest start.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Skipping the proof because the sample passed</span>
+    <div class="pitfalls__bug">Coin change on [1,3,4] for 6: greedy 4+1+1 vs 3+3.</div>
+    <div class="pitfalls__fix">If you cannot exchange, write DP.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wrong tie-break</span>
+    <div class="pitfalls__bug">Equal finish times: taking the one with later start can still be OK for count, but reconstruction may differ. For weighted activity you need DP anyway.</div>
+    <div class="pitfalls__fix">Unweighted count: any tie-break. Weighted: not this greedy.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mutating the original index order</span>
+    <div class="pitfalls__bug">You sort the finish array but not the starts, pairing the wrong jobs.</div>
+    <div class="pitfalls__fix">Sort indices, or sort pairs.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Claiming Huffman / Kruskal without naming the structure</span>
+    <div class="pitfalls__bug">Interviewers ask "why greedy". "Because Kruskal" is not a reason.</div>
+    <div class="pitfalls__fix">Cut property / matroid / exchange in one sentence.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Weighted activity</td>
+        <td>Greedy by finish is wrong. DP on sorted finish + binary search p(i).</td>
+        <td><code>LC 1235</code></td>
+        <td>DP</td>
+      </tr>
+      <tr>
+        <td>Fractional knapsack</td>
+        <td>Sort by value/weight, take prefix. Exchange on density.</td>
+        <td><code>textbook</code></td>
+        <td>fractions allowed</td>
+      </tr>
+      <tr>
+        <td>Huffman</td>
+        <td>Always merge two lightest. Exchange on tree shape.</td>
+        <td><code>LC 1167 analogue</code></td>
+        <td>prefix-free codes</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Give a one-line exchange for earliest-finish.</summary>
+    <div class="followup__body">
+      <p>Among jobs that overlap greedy's first pick, greedy's pick finishes first, so replacing the optimal's first overlapping job with it frees the timeline no later and keeps feasibility.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is coin greedy correct?</summary>
+    <div class="followup__body">
+      <p>Canonical coin systems (like US coins). Proof is not obvious. In contests, assume DP unless the statement says the canonical set or n is huge and values are 1,5,10,25.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Matroid in one sentence?</summary>
+    <div class="followup__body">
+      <p>A family of independent sets closed under subsets, with the exchange property (you can always grow the smaller). Kruskal is the graphic matroid. Greedy on weights works on every matroid.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Stay-ahead vs exchange?</summary>
+    <div class="followup__body">
+      <p>Stay-ahead compares prefixes (Dijkstra, Huffman sometimes). Exchange rewrites a full optimal solution. Both are induction. Use whichever is shorter.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/non-overlapping-intervals/" target="_blank" rel="noopener">Non Overlapping Intervals</a></td>
+        <td><span class="badge badge--lc">LC 435</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Equivalent to activity selection</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/minimum-number-of-arrows-to-burst-balloons/" target="_blank" rel="noopener">Minimum Number Of Arrows To Burst Balloons</a></td>
+        <td><span class="badge badge--lc">LC 452</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by end, shoot</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/jump-game/" target="_blank" rel="noopener">Jump Game</a></td>
+        <td><span class="badge badge--lc">LC 55</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Stay-ahead on farthest reach</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/gas-station/" target="_blank" rel="noopener">Gas Station</a></td>
+        <td><span class="badge badge--lc">LC 134</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>If total gas ≥ cost, a unique greedy start works</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/assign-cookies/" target="_blank" rel="noopener">Assign Cookies</a></td>
+        <td><span class="badge badge--lc">LC 455</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort both, two pointers</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/lemonade-change/" target="_blank" rel="noopener">Lemonade Change</a></td>
+        <td><span class="badge badge--lc">LC 860</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Canonical-ish change; still check fives</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/489/B" target="_blank" rel="noopener">BerSU Ball</a></td>
+        <td><span class="badge badge--cf">CF 489B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort both, two pointers — greedy matching</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/996/A" target="_blank" rel="noopener">Hit the Lottery</a></td>
+        <td><span class="badge badge--cf">CF 996A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Canonical coins; name the caveat</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Greedy needs an exchange or stay-ahead paragraph.</li>
+    <li>Activity selection = earliest finish.</li>
+    <li>Nearby keys (shortest, earliest start) have counters.</li>
+    <li>If the swap can break a later constraint, it is DP.</li>
+    <li>Code is a sort plus a linear scan.</li>
+  </ul>
+  <div class="recap__oneliner">sort by key; for (x : items) if (feasible(x)) take(x);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

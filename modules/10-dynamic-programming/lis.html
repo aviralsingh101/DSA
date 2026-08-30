@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Longest Increasing Subsequence &mdash; DSA Course</title>
+<meta name="description" content="Longest increasing subsequence is O(n&sup2;) prefix DP or O(n log n) patience sorting &mdash; same answer, different constraint.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="lis">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Longest Increasing Subsequence</h1>
+  <p class="hero__tagline">Longest increasing subsequence is O(n&sup2;) prefix DP or O(n log n) patience sorting &mdash; same answer, different constraint.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-1d.html">1-D DP</a>,
+      <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">LIS</span>
+      <span class="chip">patience</span>
+      <span class="chip">n log n</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>LIS is the first 1D DP whose transition is not O(1). dp[i] = 1 + max dp[j] over j &lt; i with a[j] &lt; a[i], else 1. That is O(n&sup2;), fine at n = 2000, dead at n = 1e5.</p>
+<p>The O(n log n) upgrade keeps tails[len] = the smallest tail of any increasing subsequence of that length. A new value either extends the longest (append) or lowers a tail (binary-search replace). The length of tails is the LIS length. The array tails is <em>not</em> itself an LIS.</p>
+<p>Variants (LDS, longest bitonic, longest chain of pairs, Russian-doll envelopes) are this page after a sort or a sign flip. Reconstruction needs a parent pointer; the n log n length algorithm does not give the sequence for free.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>dp[i] is the LIS <em>ending at i</em>. The global answer is the max of those. Patience tails answers only the length, in n log n, by keeping one representative per length.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Longest increasing / decreasing / non-decreasing subsequence (not subarray)</li>
+        <li>n ≤ 2000 → n² DP; n ≤ 1e5 → n log n tails</li>
+        <li>Box nesting, envelopes, chaining pairs after a sort</li>
+        <li>Longest bitonic = LIS + LDS meeting at i</li>
+        <li>You need the length, or the sequence, of a monotone subsequence</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Contiguous → longest increasing <em>subarray</em> is a one-pass, not LIS</li>
+        <li>Any subset that sums to k → knapsack</li>
+        <li>Longest common subsequence of two strings → string DP, not this page</li>
+        <li>You must pick a contiguous window of indices → sliding window / Kadane</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LIS length, n≤2000</td>
+        <td>dp[i] ending at i</td>
+        <td>O(n²) double loop</td>
+      </tr>
+      <tr>
+        <td>LIS length, n≤1e5</td>
+        <td>patience tails</td>
+        <td>lower_bound + replace</td>
+      </tr>
+      <tr>
+        <td>LIS sequence</td>
+        <td>parent[i] = best j</td>
+        <td>Walk back from argmax</td>
+      </tr>
+      <tr>
+        <td>LDS</td>
+        <td>Flip comparisons or negate a[]</td>
+        <td>Same algorithm</td>
+      </tr>
+      <tr>
+        <td>Bitonic</td>
+        <td>LIS from left + LDS from right - 1</td>
+        <td>Two passes</td>
+      </tr>
+      <tr>
+        <td>Envelopes / boxes</td>
+        <td>Sort one axis, LIS on the other</td>
+        <td>LC 354</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> LCS of a and sorted(a)</td>
+        <td>That counts a longest non-decreasing <em>if you keep duplicates right</em> and is O(n²)</td>
+        <td>Use LIS directly; LCS-of-sorted is a slower equivalent for strict increase after unique</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> forces O(n log n). <code>n &le; 2000</code> lets you write the n&sup2; DP and reconstruct easily. Values may need compression before a Fenwick-LIS.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Ending-at-i, then tails</h2>
+<p>O(n&sup2;): for each i, scan j &lt; i, take the max dp[j] among a[j] &lt; a[i], then dp[i] = that max + 1 (or 1). Answer max(dp). parent[i] = the j that won, or -1.</p>
+<p>O(n log n): tails starts empty. For each x, lower_bound the first tail &ge; x (strict LIS: first tail &ge; x, replace it; non-decreasing: first tail &gt; x). If x is larger than every tail, append. The length of tails is the answer. Why tails works: an increasing subsequence of length k can always be rewritten to end as small as possible without hurting future extensions. Replacing a tail is that rewrite. You lose the actual sequence unless you also store a predecessor per index.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>dp[i]</code> = length of a longest strictly increasing subsequence that <em>ends at i</em>.</p><span class="eq">tails[k] = smallest tail of any IS of length k+1</span>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">lower_bound in Java</span>
+    <p>Collections.binarySearch on a List, or a manual lo/hi on an int[] used as a size-t prefix. Insertion point = -idx-1 on a miss. mid = lo + (hi-lo)/2.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">tails is not an LIS</span>
+    <p>After [3, 1, 2] tails is [1, 2], which happens to be an LIS. After [1, 3, 2] tails ends as [1, 2], and [1, 2] is an LIS, but the replacements can mix values from different subsequences. Do not print tails.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>O(n²) dp[i] on [10, 9, 2, 5, 3, 7]</h3>
+
+<p>One row of lengths ending at each index. When we sit on i, from cells are the legal j's we consider; target is i.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="lisViz"></div>
+  <div class="viz-player" data-viz-target="lisViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "",
+      "rowHeads": [
+        "a",
+        "dp"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "vars": [
+        "i",
+        "best j",
+        "dp[i]"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "a = [10, 9, 2, 5, 3, 7]. Each singleton starts at length 1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "10"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "9"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "2"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "5"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "3"
+            },
+            {
+              "r": 0,
+              "c": 5,
+              "val": "7"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "1",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "i": 0,
+            "best j": "—",
+            "dp[i]": 1
+          }
+        },
+        {
+          "note": "i=1, a=9. 10 is not < 9. dp[1]=1.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 1,
+            "best j": "none",
+            "dp[i]": 1
+          }
+        },
+        {
+          "note": "i=2, a=2. Nobody is smaller. dp[2]=1.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "i": 2,
+            "best j": "none",
+            "dp[i]": 1
+          }
+        },
+        {
+          "note": "i=3, a=5. j=2 (2<5) wins. dp[3]=2. Target 3, from 2.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 3,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 3,
+            "best j": 2,
+            "dp[i]": 2
+          }
+        },
+        {
+          "note": "i=4, a=3. j=2 (2<3) wins. dp[4]=2.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 4,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 4,
+            "best j": 2,
+            "dp[i]": 2
+          }
+        },
+        {
+          "note": "i=5, a=7. j=3 (dp=2) and j=4 (dp=2) both legal. dp[5]=3.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 5,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 4,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 5,
+            "best j": "3 or 4",
+            "dp[i]": 3
+          }
+        },
+        {
+          "note": "max dp = 3. One LIS: indices 2,3,5 = 2,5,7.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 5,
+              "val": "3",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "5",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 5,
+              "val": "7",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "i": "LIS",
+            "best j": "2-3-5",
+            "dp[i]": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Answer 3, e.g. 2,5,7 or 2,3,7. Index 5 (value 7) reads the 2 at i=2 and i=4.</figcaption>
+</figure>
+
+<h3>n² or n log n?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["longest monotone subsequence"]) --&gt; nsize{"how big is n?"}
+  nsize -- "n &lt;= 2000 or need sequence cheaply" --&gt; n2["dp[i] ending at i, O(n squared)"]
+  nsize -- "n &lt;= 1e5, length only" --&gt; nlog["tails + lower_bound"]
+  n2 --&gt; rec["parent[i] = best j, walk back"]
+  nlog --&gt; rec2["optional: store pred at each append/replace"]
+  nsize -- "bitonic" --&gt; bit["LIS left + LDS right"]
+  </div>
+  <figcaption>Need the sequence? Prefer n² or extra parent bookkeeping on tails.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Decide length-only vs sequence, and n vs 2000.</strong></li>
+  <li><strong>n&sup2;:</strong> dp[i]=1, for j &lt; i if a[j] &lt; a[i] and dp[j]+1 &gt; dp[i], update and set parent.</li>
+  <li><strong>Answer</strong> is max(dp); reconstruct from the argmax via parent.</li>
+  <li><strong>n log n:</strong> int[] tails, size t = 0.</li>
+  <li><strong>For each x:</strong> lower_bound first index with tails[i] &ge; x (strict). Replace or append.</li>
+  <li><strong>Return t.</strong> Do not print tails as the sequence.</li>
+  <li><strong>Non-decreasing:</strong> lower_bound first tail &gt; x (upper bound).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Patience tails on [10, 9, 2, 5, 3, 7]. lower_bound on first tail ≥ x.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>x</th><th>tails before</th><th>action</th><th>tails after</th><th>len</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>10</td><td>[]</td><td>append</td><td>[10]</td><td>1</td><td>First pile.</td></tr>
+      <tr class="trace-table__row--change"><td>9</td><td>[10]</td><td>replace 10</td><td>[9]</td><td>1</td><td>Smaller tail.</td></tr>
+      <tr><td>2</td><td>[9]</td><td>replace 9</td><td>[2]</td><td>1</td><td></td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>[2]</td><td>append</td><td>[2, 5]</td><td>2</td><td>New length.</td></tr>
+      <tr><td>3</td><td>[2, 5]</td><td>replace 5</td><td>[2, 3]</td><td>2</td><td>Better tail of len 2.</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td>[2, 3]</td><td>append</td><td>[2, 3, 7]</td><td>3</td><td>Answer 3.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Longest Increasing Subsequence implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo / n²</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated n log n</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LisRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LisRec {
+    
+        static int lis(int[] a, int i) {
+            int best = 1;
+            for (int j = i + 1; j &lt; a.length; j++) {
+                if (a[j] &gt; a[i]) {
+                    best = Math.max(best, 1 + lis(a, j));
+                }
+            }
+            return best;
+        }
+    
+        static int lis(int[] a) {
+            int ans = 0;
+            for (int i = 0; i &lt; a.length; i++) {
+                ans = Math.max(ans, lis(a, i));
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lis(new int[] {10, 9, 2, 5, 3, 7}));
+        }
+        // Input : [10, 9, 2, 5, 3, 7]
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo / n²">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LisN2.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LisN2 {
+    
+        static int lis(int[] a) {
+            int n = a.length, ans = 1;
+            int[] dp = new int[n];
+            for (int i = 0; i &lt; n; i++) {
+                dp[i] = 1;
+                for (int j = 0; j &lt; i; j++) {
+                    if (a[j] &lt; a[i] &amp;&amp; dp[j] + 1 &gt; dp[i]) {
+                        dp[i] = dp[j] + 1;
+                    }
+                }
+                ans = Math.max(ans, dp[i]);
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lis(new int[] {10, 9, 2, 5, 3, 7}));
+        }
+        // Input : [10, 9, 2, 5, 3, 7]
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated n log n">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LisNlogN.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LisNlogN {
+    
+        static int lowerBound(int[] t, int hi, int x) {
+            int lo = 0;
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (t[mid] &gt;= x) {
+                    hi = mid;
+                } else {
+                    lo = mid + 1;
+                }
+            }
+            return lo;
+        }
+    
+        static int lis(int[] a) {
+            int[] tails = new int[a.length];
+            int t = 0;
+            for (int x : a) {
+                int i = lowerBound(tails, t, x);
+                tails[i] = x;
+                if (i == t) {
+                    t++;
+                }
+            }
+            return t;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lis(new int[] {10, 9, 2, 5, 3, 7}));
+        }
+        // Input : [10, 9, 2, 5, 3, 7]
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n²) or O(n log n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Ending-at-i tries every pair (j, i):</p>
+    <p><span class="eq">T = &Theta;(n&sup2;)</span></p>
+    <p>Each of n values does one binary search on a tails array of size at most n:</p>
+    <p><span class="eq">T = &Theta;(n log n)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>n² ending-at-i</td><td>O(n²)</td><td>O(n)</td><td>n≤2000, easy reconstruct</td></tr>
+      <tr><td>Patience tails</td><td>O(n log n)</td><td>O(n)</td><td>Length only, n=1e5</td></tr>
+      <tr><td>Fenwick / segtree on values</td><td>O(n log V)</td><td>O(V)</td><td>Also reconstructable</td></tr>
+      <tr><td>LCS with sorted unique</td><td>O(n²)</td><td>O(n²)</td><td>Slower equivalent</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Printing tails as the LIS</span>
+    <div class="pitfalls__bug">Tails mixes values from different subsequences after replacements.</div>
+    <div class="pitfalls__fix">parent / predecessor per index, walk from the last append that grew the length.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wrong bound for non-decreasing</span>
+    <div class="pitfalls__bug">Using ≥ when equals are allowed. Equal values replace instead of extend.</div>
+    <div class="pitfalls__fix">Strict: first tail ≥ x. Non-decreasing: first tail &gt; x.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">LIS vs subarray</span>
+    <div class="pitfalls__bug">A one-pass "longest run of increases" on a problem that allows gaps.</div>
+    <div class="pitfalls__fix">Subsequence may skip. If the problem says contiguous, it is not this page.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">n² at n = 1e5</span>
+    <div class="pitfalls__bug">10^10 operations. TLE, not WA.</div>
+    <div class="pitfalls__fix">Tails or a Fenwick of max dp by compressed value.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Envelopes without a tie-break sort</span>
+    <div class="pitfalls__bug">Same-width envelopes nest in the LIS of heights. They should not.</div>
+    <div class="pitfalls__fix">Sort width ascending, height descending on ties, then LIS on height.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Empty array</span>
+    <div class="pitfalls__bug">max of an empty dp, or tails length 0 vs 1.</div>
+    <div class="pitfalls__fix">n == 0 → 0. n == 1 → 1.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Longest decreasing</td>
+        <td>Negate a[], or flip < to >.</td>
+        <td><code>Same tails with reversed compare</code></td>
+        <td>Bitonic left half</td>
+      </tr>
+      <tr>
+        <td>Longest bitonic</td>
+        <td>lis[i] + lds[i] - 1, max over i.</td>
+        <td><code>Two n² (or two n log n) passes</code></td>
+        <td>GfG classic</td>
+      </tr>
+      <tr>
+        <td>Russian doll envelopes</td>
+        <td>Sort (w, -h), LIS on h.</td>
+        <td><code>LC 354</code></td>
+        <td>Tie-break is mandatory</td>
+      </tr>
+      <tr>
+        <td>Minimum deletions to sort</td>
+        <td>n - LIS. Delete what is not on some LIS.</td>
+        <td><code>Same length algorithm</code></td>
+        <td>Interview wording</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is tails increasing?</summary>
+    <div class="followup__body">
+      <p>If tails[k] &le; tails[k-1], the longer sequence would have a smaller-or-equal tail and would have replaced the shorter one. The construction maintains a strictly increasing tails.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I reconstruct with tails?</summary>
+    <div class="followup__body">
+      <p>Store, for each index i, the length assigned and a predecessor index that had length-1 when you placed i. Then walk from any index that received the maximum length. Several extra arrays, still O(n log n).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Fenwick LIS?</summary>
+    <div class="followup__body">
+      <p>Compress values. Fenwick stores max dp among values &lt; a[i]. Query, then update a[i] with that max+1. Same n log n, and reconstruction is natural via parent.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Does LCS(a, sort(a)) equal LIS?</summary>
+    <div class="followup__body">
+      <p>For strictly increasing, sort unique first or LCS can pick duplicates. It is O(n²) and a useful check, not an algorithm you submit at n = 1e5.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/longest-increasing-subsequence/" target="_blank" rel="noopener">Longest Increasing Subsequence</a></td>
+        <td><span class="badge badge--lc">LC 300</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Length, n log n expected</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/largest-divisible-subset/" target="_blank" rel="noopener">Largest Divisible Subset</a></td>
+        <td><span class="badge badge--lc">LC 368</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort, then LIS with a[i]%a[j]==0</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/russian-doll-envelopes/" target="_blank" rel="noopener">Russian Doll Envelopes</a></td>
+        <td><span class="badge badge--lc">LC 354</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Sort + LIS, tie-break heights</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/number-of-longest-increasing-subsequence/" target="_blank" rel="noopener">Number of Longest Increasing Subsequence</a></td>
+        <td><span class="badge badge--lc">LC 673</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>dp + cnt ending at i</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/maximum-length-of-pair-chain/" target="_blank" rel="noopener">Maximum Length of Pair Chain</a></td>
+        <td><span class="badge badge--lc">LC 646</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Greedy also works; LIS after sort</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_q" target="_blank" rel="noopener">Longest Increasing Subsequence</a></td>
+        <td><span class="badge badge--atc">ATC DP-Q</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Weighted LIS, Fenwick</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/longest-increasing-subsequence-1587115620/1" target="_blank" rel="noopener">LIS</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Implement length</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/652/D" target="_blank" rel="noopener">Nested Segments</a></td>
+        <td><span class="badge badge--cf">CF 652D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort + Fenwick, LIS cousin</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/10/D" target="_blank" rel="noopener">LCS on Permutations</a></td>
+        <td><span class="badge badge--cf">CF 10D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>LCS of two perms = LIS after remap</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://cses.fi/problemset/task/1145" target="_blank" rel="noopener">CSES Increasing Subsequence</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n=2e5, tails required</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 354</summary>
+  <div class="spoiler__body">
+    <p>Sort by width ascending. On equal width, height descending so two equal widths cannot form an increasing height pair in the later LIS. Then patience LIS on heights. n = 1e5, so n² dies.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-Q Flowers</summary>
+  <div class="spoiler__body">
+    <p>Weighted LIS: max sum of beauties with increasing heights. Fenwick or segtree on height: query max dp among height &lt; h[i], add beauty[i], update. Compress heights. long.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>dp[i] = LIS ending at i</strong>, O(n&sup2;), easy parent.</li>
+    <li><strong>tails[k] = smallest tail of length k+1</strong>, O(n log n) length.</li>
+    <li><strong>Do not print tails.</strong> Reconstruct with parent.</li>
+    <li><strong>Strict vs non-decreasing is the bound</strong> (≥ vs &gt;).</li>
+    <li><strong>Envelopes: sort one axis, LIS the other, tie-break.</strong></li>
+  </ul>
+  <div class="recap__oneliner">n2: max dp[j]+1 for a[j]&lt;a[i] | nlog: tails lower_bound replace/append | tails != LIS</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

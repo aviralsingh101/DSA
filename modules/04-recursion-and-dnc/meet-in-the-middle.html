@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meet in the Middle &mdash; DSA Course</title>
+<meta name="description" content="When n is 40, 2^n is dead and n/2 is 20: enumerate both halves, then match in the middle with a sort and a binary search.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="meet-in-the-middle">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 04 &middot; Recursion, Backtracking & D&C</span>
+  <h1>Meet in the Middle</h1>
+  <p class="hero__tagline">When n is 40, 2^n is dead and n/2 is 20: enumerate both halves, then match in the middle with a sort and a binary search.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="subsets-permutations-combinations.html">Subsets, Permutations, Combinations</a>,
+      <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">meet in the middle</span>
+      <span class="chip">subset sum</span>
+      <span class="chip">4-sum</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Subset sum on n = 40 is the poster child. <code>2<sup>40</sup></code> is a trillion. <code>2<sup>20</sup></code> is a million. Split the array, enumerate every subset sum of each half, and ask whether a left sum plus a right sum hits the target. The ask is a sort plus a binary search, which is how 2<sup>n/2</sup> becomes the running time.</p>
+<p>The same split turns 4-sum into two 2-sums: all pairwise sums of the first half of the variables versus all pairwise sums of the second. It also solves closest subsequence sum (LC 1755) and the Codeforces problems whose constraint line is n &le; 40.</p>
+<p>Meet-in-the-middle is not a clever search. It is the observation that a Cartesian product A &times; B can be enumerated from both sides when each factor is about the square root of a product you cannot afford.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>2<sup>n</sup> = 2<sup>n/2</sup> &times; 2<sup>n/2</sup>. Enumerate each factor, then join. The join, not the enumeration, is where the bugs live.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li><code>n &le; 40</code> (or 36, 42) and a subset / assignment whose naive cost is 2^n</li>
+        <li>4-sum over four independent arrays when n^3 is too slow and n^2 is fine</li>
+        <li>"Closest subsequence sum to a target" with n &le; 40</li>
+        <li>Two independent choices (left path / right path) that combine with XOR or addition</li>
+        <li>The statement offers n &le; 20 as a special case and n &le; 40 as the full constraint</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>n &le; 20 &rarr; plain bitmask; MITM is extra code for no gain</li>
+        <li>n &le; 80 with small sums &rarr; knapsack DP on the value</li>
+        <li>You need the subset reconstructed and have not planned how to store the witness</li>
+        <li>The combine is not a group operation and you cannot sort either half</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>subset sum, n <= 40</td>
+        <td>Split, 2^{n/2} sums each side</td>
+        <td>sort one side, lower_bound target-y</td>
+      </tr>
+      <tr>
+        <td>closest subsequence sum</td>
+        <td>Same, keep the closest rather than exact</td>
+        <td>LC 1755</td>
+      </tr>
+      <tr>
+        <td>4-sum of four arrays</td>
+        <td>All a[i]+b[j] vs all c[k]+d[l]</td>
+        <td>hash map or sort + two pointers</td>
+      </tr>
+      <tr>
+        <td>XOR path meeting in the middle of a grid</td>
+        <td>Walk each half, join on the middle column</td>
+        <td>CF 1006F</td>
+      </tr>
+      <tr>
+        <td>assign each item to 3 groups, n=20</td>
+        <td>3^{n/2} per half</td>
+        <td>still MITM, larger alphabet</td>
+      </tr>
+      <tr>
+        <td>count subsets with sum in [L,R]</td>
+        <td>sorted left, two binary searches per right sum</td>
+        <td>prefix counts</td>
+      </tr>
+      <tr>
+        <td>n = 20, exact sum</td>
+        <td>Do not split</td>
+        <td>plain bitmask</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> divide and conquer</td>
+        <td>D&C recurses; MITM enumerates both halves fully and joins once</td>
+        <td>No recurrence, just 2 * 2^{n/2} plus a join</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 40 with a subset-sum flavour is the tell. 2<sup>20</sup> &asymp; 1e6, times a log, fits in a second. 2<sup>25</sup> is the edge; 2<sup>30</sup> is a memory problem (an <code>int[]</code> of length 2<sup>30</sup> is 4&nbsp;GB).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: enumerate halves, then join</h2>
+<p>Split <code>a[0..n)</code> into <code>L = a[0..n/2)</code> and <code>R = a[n/2..n)</code>. Enumerate every subset sum of L with a bitmask loop, same for R. Sort the left sums. For each right sum <code>y</code>, binary-search <code>target - y</code> (exact) or the closest values (closest-sum).</p>
+<p>4-sum over four arrays is the same picture with pairwise sums in place of subset sums. 4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool when you have four <em>independent</em> arrays of size n &asymp; 400.</p>
+<p>Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB. Store witnesses only when the problem asks for the subset.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The interview sentence</span>
+    <p>Every subset of the whole array is a subset of the left half plus a subset of the right half, including the two empty ones. Enumerate both families and join a pair of sums in log time, and you have enumerated 2^n subsets in 2^{n/2} log time.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Two pointers for a range join</span>
+    <p>Sorted left sums, walk right sums, maintain a window of left values in <code>[L - y, R - y]</code>. Total join is linear after the sort. Use this when you count subsets with sum in a range.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Empty subsets are real</span>
+    <p>Mask 0 is sum 0 on each half. Forgetting it drops "the target lives entirely in one half" and the empty-empty case for target 0. Start the bitmask loop at 0, not 1.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why not three-way split?</span>
+    <p>A 3-way split is 3 &times; 2^{n/3} plus a harder join. Two-way is the default; three-way shows up when 2^{n/2} does not fit and the join can be hashed.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Subset sum n = 6, target 10, split 3 + 3</h3>
+
+<p><code>a = [2, 4, 5, 1, 3, 7]</code>. Left sums of <code>[2,4,5]</code>, right sums of <code>[1,3,7]</code>. Each right value asks for <code>10 - y</code> in the sorted left array.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="mitmJoin"></div>
+  <div class="viz-player" data-viz-target="mitmJoin">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "left subset sums, sorted",
+      "array": [
+        0,
+        2,
+        4,
+        5,
+        6,
+        7,
+        9,
+        11
+      ],
+      "vars": [
+        "y right",
+        "need",
+        "found"
+      ],
+      "speed": 950,
+      "frames": [
+        {
+          "note": "Left sums of {2,4,5} already sorted. Right starts at y = 0 (empty). Need 10: miss.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "y right": 0,
+            "need": 10,
+            "found": "no"
+          }
+        },
+        {
+          "note": "y = 1 (right {1}), need 9. 9 is in the left array (4+5).",
+          "active": [
+            6
+          ],
+          "values": {
+            "y right": 1,
+            "need": 9,
+            "found": "yes {4,5,1}"
+          }
+        },
+        {
+          "note": "Hit. Existence could return true here. We continue to see the join.",
+          "best": [
+            6
+          ],
+          "values": {
+            "y right": 1,
+            "need": 9,
+            "found": "yes"
+          }
+        },
+        {
+          "note": "y = 3, need 7. 7 is in left (2+5).",
+          "active": [
+            5
+          ],
+          "values": {
+            "y right": 3,
+            "need": 7,
+            "found": "yes {2,5,3}"
+          }
+        },
+        {
+          "note": "y = 7, need 3. 3 is not a left sum. Miss.",
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "y right": 7,
+            "need": 3,
+            "found": "no"
+          }
+        },
+        {
+          "note": "y = 11 (all of the right), need -1. Impossible.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "y right": 11,
+            "need": -1,
+            "found": "no"
+          }
+        },
+        {
+          "note": "y = 10 ({3,7}), need 0. 0 is the empty left subset. This is why mask 0 must stay.",
+          "best": [
+            0
+          ],
+          "values": {
+            "y right": 10,
+            "need": 0,
+            "found": "yes {3,7}"
+          }
+        },
+        {
+          "note": "Existence is true. A count would tally every (x,y) with x+y=10. Closest-sum would track min |x+y-target| instead.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "y right": "all 8",
+            "need": "—",
+            "found": "several hits"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Eight left sums, eight right sums. After sorting the left, each right value is one binary search. Hits include empty-left + {3,7}, which is why 0 stays in the array.</figcaption>
+</figure>
+
+<h3>The split-enumerate-join pipeline</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  splitA["split a into L and R of size n/2"] --&gt; enumL["bitmask all subset sums of L"]
+  splitA --&gt; enumR["bitmask all subset sums of R"]
+  enumL --&gt; sortL["sort left sums"]
+  enumR --&gt; joinQ{"what is asked?"}
+  sortL --&gt; joinQ
+  joinQ -- "exists target" --&gt; bsearch["for each y, binary search target-y"]
+  joinQ -- "closest" --&gt; close["for each y, find closest to target-y"]
+  joinQ -- "count in a range" --&gt; twoPtr["two pointers or two lower_bounds per y"]
+  joinQ -- "4-sum of four arrays" --&gt; pairs["same join, but the sums are pairwise"]
+  </div>
+  <figcaption>Two bitmask loops, one sort, then a join. Nothing here is recursive. That is the difference from divide and conquer.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible.</li>
+  <li><strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine.</li>
+  <li><strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0. Use <code>long</code> for sums.</li>
+  <li><strong>Sort one side</strong>, usually the left sums.</li>
+  <li><strong>Join.</strong> For each right sum y, search <code>target - y</code>.</li>
+  <li><strong>Keep the empty-empty case.</strong> Target 0 is true because of it.</li>
+  <li><strong>If you need the subset</strong>, store the mask next to the sum, or re-enumerate the winning half.</li>
+  <li><strong>Mind memory:</strong> 2^{n/2} longs plus a sort. Boxed HashMap keys are optional only at n &le; 36.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Existence of subset sum 10 on <code>[2, 4, 5, 1, 3, 7]</code>. Each row is one right-hand mask against sorted left sums <code>[0, 2, 4, 5, 6, 7, 9, 11]</code>.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>right mask</th><th>y</th><th>need 10-y</th><th>in left?</th><th>subset</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>000</td><td>0</td><td>10</td><td>no</td><td>—</td><td>Empty right.</td></tr>
+      <tr class="trace-table__row--change"><td>001</td><td>1</td><td>9</td><td>yes</td><td>{4,5} + {1}</td><td>First hit.</td></tr>
+      <tr><td>010</td><td>3</td><td>7</td><td>yes</td><td>{2,5} + {3}</td><td>Second hit.</td></tr>
+      <tr><td>100</td><td>7</td><td>3</td><td>no</td><td>—</td><td>3 is not a left sum.</td></tr>
+      <tr><td>011</td><td>4</td><td>6</td><td>yes</td><td>{2,4} + {1,3}</td><td>6 = 2+4.</td></tr>
+      <tr><td>101</td><td>8</td><td>2</td><td>yes</td><td>{2} + {1,7}</td><td>Hit.</td></tr>
+      <tr class="trace-table__row--change"><td>110</td><td>10</td><td>0</td><td>yes</td><td>{} + {3,7}</td><td>Empty left. This is why 0 stays in the array.</td></tr>
+      <tr><td>111</td><td>11</td><td>-1</td><td>no</td><td>—</td><td>Need negative; skip.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Four distinct subsets hit 10. Existence would have returned true on the second row.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Meet in the Middle implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Full 2^n">
+    <p>The oracle. Correct, and the reason n = 40 is impossible.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MitmBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MitmBrute {
+    
+        static boolean subsetSum(int[] a, long target) {
+            int n = a.length;
+            for (int m = 0; m &lt; (1 &lt;&lt; n); m++) {
+                long s = 0;
+                for (int i = 0; i &lt; n; i++) {
+                    if ((m &amp; (1 &lt;&lt; i)) != 0) {
+                        s += a[i];
+                    }
+                }
+                if (s == target) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+        }
+        // Input : [2, 4, 5, 1, 3, 7], target 10
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Meet in the middle">
+    <p>Enumerate halves, sort the left, binary-search each complement. <code>Arrays.binarySearch</code> returns a non-negative index on a hit.</p>
+    <div class="code" data-highlight="22-28">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MitmOptimal.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class MitmOptimal {
+    
+        static boolean subsetSum(int[] a, long target) {
+            int n = a.length;
+            int mid = n / 2;
+            long[] left = enumSums(a, 0, mid);
+            long[] right = enumSums(a, mid, n);
+            Arrays.sort(left);
+            for (long y : right) {
+                if (Arrays.binarySearch(left, target - y) &gt;= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        static long[] enumSums(int[] a, int from, int to) {
+            int m = to - from;
+            long[] sums = new long[1 &lt;&lt; m];
+            for (int mask = 0; mask &lt; (1 &lt;&lt; m); mask++) {
+                long s = 0;
+                for (int i = 0; i &lt; m; i++) {
+                    if ((mask &amp; (1 &lt;&lt; i)) != 0) {
+                        s += a[from + i];
+                    }
+                }
+                sums[mask] = s;
+            }
+            return sums;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+            System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 8));
+        }
+        // Input : [2,4,5,1,3,7] targets 10 and 8
+        // Output: true
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Closest + 4-sum halves">
+    <p>Closest subsequence sum, and 4-sum over four arrays via pairwise halves.</p>
+    <div class="code" data-highlight="14-24,40-52">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MitmTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.HashMap;
+    import java.util.Map;
+    
+    public class MitmTemplate {
+    
+        static int closestSum(int[] a, int target) {
+            int n = a.length, mid = n / 2;
+            long[] left = enumSums(a, 0, mid);
+            long[] right = enumSums(a, mid, n);
+            Arrays.sort(left);
+            long best = Long.MAX_VALUE / 4;
+            int ans = 0;
+            for (long y : right) {
+                int i = lowerBound(left, target - y);
+                for (int k = i - 1; k &lt;= i; k++) {
+                    if (k &lt; 0 || k &gt;= left.length) {
+                        continue;
+                    }
+                    long s = left[k] + y;
+                    long d = Math.abs(s - target);
+                    if (d &lt; best) {
+                        best = d;
+                        ans = (int) s;
+                    }
+                }
+            }
+            return ans;
+        }
+    
+        static int lowerBound(long[] a, long x) {
+            int lo = 0, hi = a.length;
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (a[mid] &lt; x) {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            return lo;
+        }
+    
+        static long[] enumSums(int[] a, int from, int to) {
+            int m = to - from;
+            long[] sums = new long[1 &lt;&lt; m];
+            for (int mask = 0; mask &lt; (1 &lt;&lt; m); mask++) {
+                long s = 0;
+                for (int i = 0; i &lt; m; i++) {
+                    if ((mask &amp; (1 &lt;&lt; i)) != 0) {
+                        s += a[from + i];
+                    }
+                }
+                sums[mask] = s;
+            }
+            return sums;
+        }
+    
+        /** Four independent arrays: exists a+b+c+d == target? */
+        static boolean fourSumHalves(int[] A, int[] B, int[] C, int[] D, int target) {
+            Map&lt;Integer, Integer&gt; left = new HashMap&lt;&gt;();
+            for (int a : A) {
+                for (int b : B) {
+                    left.merge(a + b, 1, Integer::sum);
+                }
+            }
+            for (int c : C) {
+                for (int d : D) {
+                    if (left.containsKey(target - c - d)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(closestSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+            System.out.println(fourSumHalves(
+                    new int[] {1, 2}, new int[] {-2, -1},
+                    new int[] {-1, 2}, new int[] {0, 2}, 0));
+        }
+        // Input : closest to 10; four arrays target 0
+        // Output: 10
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(2^{n/2} * n)</span>
+    <span class="badge badge--space">Space O(2^{n/2})</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each half has size n/2, so each bitmask loop is <code>O(2^{n/2} &middot; n/2)</code> if you walk bits, or <code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds.</p>
+    <p><span class="eq">sort 2^{n/2} sums + 2^{n/2} binary searches = O(2^{n/2} n)</span></p>
+    <p>4-sum over four arrays of length m is <code>O(m&sup2;)</code> time and memory for the map of pairwise sums. That is why m &le; 400 is the usual constraint.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Full 2^n bitmask</td><td>O(n 2^n)</td><td>O(1)</td><td>n <= 22</td></tr>
+      <tr><td>MITM + sort + binary search</td><td>O(n 2^{n/2})</td><td>O(2^{n/2})</td><td>n <= 42</td></tr>
+      <tr><td>MITM + two pointers</td><td>O(n 2^{n/2})</td><td>O(2^{n/2})</td><td>range counts</td></tr>
+      <tr><td>Knapsack DP</td><td>O(n * sum)</td><td>O(sum)</td><td>When sums are small</td></tr>
+      <tr><td>4-sum, one array, 3 pointers</td><td>O(n^3)</td><td>O(1)</td><td>Classic LC 18</td></tr>
+      <tr><td>4-sum, four arrays, MITM</td><td>O(m^2)</td><td>O(m^2)</td><td>LC 454</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting mask 0</span>
+    <div class="pitfalls__bug">Looping <code>mask = 1 .. 2^m-1</code>, so sum 0 is missing. Target that lives in one half, or target 0, is reported absent.</div>
+    <div class="pitfalls__fix">Start at 0. The empty subset is a legitimate half.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int sums on large values</span>
+    <div class="pitfalls__bug">n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses.</div>
+    <div class="pitfalls__fix"><code>long[]</code> sums, <code>long</code> target.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">binarySearch confusion</span>
+    <div class="pitfalls__bug">Treating a negative <code>Arrays.binarySearch</code> return as a valid index, or using it as "closest" without decoding the insertion point.</div>
+    <div class="pitfalls__fix">Existence: <code>&gt;= 0</code> is a hit. Closest: write your own lower_bound and inspect both neighbours.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">HashMap of 2^{20} boxed Longs</span>
+    <div class="pitfalls__bug">Memory and GC explode. An <code>long[]</code> plus a sort is smaller and faster.</div>
+    <div class="pitfalls__fix">Prefer sorted arrays. Hash only the pairwise 4-sum side, where m^2 is ~1e5.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Splitting 4-sum on one array the MITM way without handling index reuse</span>
+    <div class="pitfalls__bug">Pairwise sums from the same array can pick the same index twice.</div>
+    <div class="pitfalls__fix">Either use four independent arrays (LC 454), or generate pairs as (i, j) with i &lt; j and reject overlapping index pairs at join time.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Closest subsequence sum</td>
+        <td>Same split. For each y, look at the left values around target-y and keep the closest.</td>
+        <td><code>inspect left[lb] and left[lb-1]; track min |x+y-target|</code></td>
+        <td><a href="https://leetcode.com/problems/closest-subsequence-sum/" target="_blank" rel="noopener">LC 1755</a></td>
+      </tr>
+      <tr>
+        <td>4-sum over four arrays</td>
+        <td>Pairwise sums instead of subset sums. HashMap on A+B, probe with target-(C+D).</td>
+        <td><code>left.merge(a+b, 1, Integer::sum);</code></td>
+        <td><a href="https://leetcode.com/problems/4sum-ii/" target="_blank" rel="noopener">LC 454</a></td>
+      </tr>
+      <tr>
+        <td>XOR / path MITM</td>
+        <td>Walk from both ends of a path or both sides of a grid, meet on the middle vertex or column, join on XOR or remaining length.</td>
+        <td><code>map[xorAtMid]++ from the left; probe from the right</code></td>
+        <td>CF 1006F Xor-Paths</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not just knapsack DP?</summary>
+    <div class="followup__body">
+      <p>If the sums are bounded by S and nS fits, DP is simpler and often faster. MITM wins when S is 40 * 1e9 and n is 40: the value dimension is unusable, the index dimension splits cleanly.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I recover the subset?</summary>
+    <div class="followup__body">
+      <p>Store (sum, mask) pairs. On a hit, the two masks translate back to indices in each half. Or, once you know the two sums, re-enumerate the half (2^{20}) to find a mask that produces them. The second uses no extra memory.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the 4-sum-over-halves trick on one array?</summary>
+    <div class="followup__body">
+      <p>Generate all pair sums with i &lt; j from the left n/2 indices, all pair sums from the right n/2 indices, and join. Pairs that need two left and two right indices are covered; pairs that sit entirely in one half must be counted inside that half. It is messier than four arrays, which is why LC 18 stays n^3.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Gray codes and incremental sums?</summary>
+    <div class="followup__body">
+      <p>Walking masks in Gray-code order adds or removes one element per step, so each half is O(2^{n/2}) instead of O(n 2^{n/2}). Worth it at n = 42; unnecessary at n = 36.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>CSES Meet in the Middle and CF 888E are the two problems that teach the pattern. LC 1755 is the closest-sum variant; LC 454 is the 4-sum-over-halves variant.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://cses.fi/problemset/task/1628" target="_blank" rel="noopener">Meet in the Middle</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count subsets with sum x, n <= 40</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/888/E" target="_blank" rel="noopener">Maximum Subsequence</a></td>
+        <td><span class="badge badge--cf">CF 888E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max subset sum modulo m, n <= 35</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/1006/F" target="_blank" rel="noopener">Xor-Paths</a></td>
+        <td><span class="badge badge--cf">CF 1006F</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Walk both halves of a grid, join XOR</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/closest-subsequence-sum/" target="_blank" rel="noopener">Closest Subsequence Sum</a></td>
+        <td><span class="badge badge--lc">LC 1755</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>MITM + closest, not exact</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/4sum-ii/" target="_blank" rel="noopener">4Sum II</a></td>
+        <td><span class="badge badge--lc">LC 454</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Pairwise halves + HashMap</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/4sum/" target="_blank" rel="noopener">4Sum</a></td>
+        <td><span class="badge badge--lc">LC 18</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n^3 two-pointers; contrast with MITM</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/partition-array-into-two-arrays-to-minimize-sum-difference/" target="_blank" rel="noopener">Partition Array Into Two Arrays to Minimize Sum Difference</a></td>
+        <td><span class="badge badge--lc">LC 2035</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>MITM by size of the left pick</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://cses.fi/problemset/task/1623" target="_blank" rel="noopener">Apple Division</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>n <= 20, so plain 2^n; the warmup</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/585/D" target="_blank" rel="noopener">Lizard Era: Beginning</a></td>
+        <td><span class="badge badge--cf">CF 585D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>3^{n/2} MITM on three stats</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/abc128/tasks/abc128_c" target="_blank" rel="noopener">Switches</a></td>
+        <td><span class="badge badge--atc">ABC 128C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>n <= 10, bitmask; contrast with n=40</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://atcoder.jp/contests/abc184/tasks/abc184_f" target="_blank" rel="noopener">Programming Contest</a></td>
+        <td><span class="badge badge--atc">ABC 184F</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Classic MITM subset sum with a cap T</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/subset-sums2234/1" target="_blank" rel="noopener">Subset Sums</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>List all subset sums, n <= 15</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 888E &mdash; Maximum Subsequence</summary>
+  <div class="spoiler__body">
+    <p>Maximise a subset sum modulo m, n &le; 35. Enumerate left and right sums already reduced modulo m, sort the left. For each right value y, the best left x is the largest x &le; m-1-y (so x+y &lt; m), or the largest x at all (wrap). Two binary searches per y, plus the two empty-half candidates.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 2035 &mdash; minimise partition difference</summary>
+  <div class="spoiler__body">
+    <p>You must pick exactly n/2 elements into one side. Split the array in half; for each half enumerate sums <em>grouped by how many items you picked</em>. Join a left pick of k with a right pick of n/2-k. Closest total to sum/2 wins. This is MITM with an extra size coordinate.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>n &le; 40 subset-sum &rarr; split, enumerate, join.</strong></li>
+    <li><strong>Include mask 0</strong> on both halves.</li>
+    <li><strong>Sums are long.</strong> Sort one side; binary-search the complement.</li>
+    <li><strong>4-sum over four arrays</strong> is pairwise sums, same join.</li>
+    <li><strong>This is not divide and conquer.</strong> No recurrence, one join.</li>
+  </ul>
+  <div class="recap__oneliner">for (long y : right) if (Arrays.binarySearch(left, target-y) &gt;= 0) return true;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

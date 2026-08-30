@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweep Line &mdash; DSA Course</title>
+<meta name="description" content="Sort the interesting x-coordinates, keep an active set of segments that currently intersect the sweepline, and answer geometry / interval problems in one pass.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="sweep-line">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 13 &middot; Greedy & Offline Techniques</span>
+  <h1>Sweep Line</h1>
+  <p class="hero__tagline">Sort the interesting x-coordinates, keep an active set of segments that currently intersect the sweepline, and answer geometry / interval problems in one pass.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="greedy-classics.html">Greedy Classics</a>,
+      <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps & Priority Queue</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">sweep</span>
+      <span class="chip">intervals</span>
+      <span class="chip">geometry</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Intersection of segments, union of rectangles, "how many intervals cover this point", closest pair, and meeting-rooms all become: sort events, process left-to-right, maintain the active y-structure.</p>
+<p>The sweepline is a vertical line that jumps from event to event (starts, ends, crossings). Between events the combinatorial structure is constant, so you only work at O(n) events.</p>
+<p>1D sweep is a sorted list of +1/-1 at endpoints (coverage). 2D sweep needs a balanced tree of y-coordinates. Closest pair is divide-and-conquer with a sweep strip.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Nothing interesting happens between event x-coordinates. Sort events, update an active set, query that set.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Union / intersection of intervals or rectangles</li>
+        <li>Segment intersections, "any two overlap?"</li>
+        <li>Coverage of a line by segments as x moves</li>
+        <li>Meeting rooms / skyline / overlapping pop</li>
+        <li>Closest pair of points (sweep or D&C)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Static range queries on an array &rarr; prefix / Fenwick</li>
+        <li>Graph shortest path &rarr; not a geometry sweep</li>
+        <li>Need all pairwise intersections listed and m is n^2 &rarr; output-sensitive algorithms, still a sweep with a tree</li>
+        <li>Offline 2D queries that Fenwick-on-y after sorting x already handles without a "line"</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Interval coverage</td>
+        <td>+1 at L, -1 at R, sort, running sum</td>
+        <td>1D sweep</td>
+      </tr>
+      <tr>
+        <td>Skyline / union of rects</td>
+        <td>x-events, segment tree on y</td>
+        <td>2D sweep</td>
+      </tr>
+      <tr>
+        <td>Any overlap?</td>
+        <td>sort by start, track max end</td>
+        <td>Greedy / sweep</td>
+      </tr>
+      <tr>
+        <td>Closest pair</td>
+        <td>sort x, tree of y in the strip</td>
+        <td>Sweep</td>
+      </tr>
+      <tr>
+        <td>Meeting rooms</td>
+        <td>same as 1D coverage max</td>
+        <td>LC 253</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Mo's algorithm</td>
+        <td>Mo reorders queries in blocks; sweep moves a line through geometry</td>
+        <td>Different offline</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> for 1D. Rectangle union with a lazy segtree on compressed y is n log n. Closest pair n log n.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>1D: events (x, +1) and (x, -1) (process + before - or the reverse depending on closed/open intervals). Running counter is current coverage; max is the answer for meeting rooms.</p>
+<p>2D rectangles: events (x, y1, y2, +1/-1). A segment tree stores coverage of y-intervals and the measure of covered length. Area += (x_next - x) * covered_y.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After processing all events at x, the active structure represents exactly the objects that intersect the closed or half-open vertical line at x. The next event is the next x where that set changes.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="sweep-lineViz"></div>
+  <div class="viz-player" data-viz-target="sweep-lineViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "coverage after events =",
+      "array": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "indexLabels": [
+        "+L0",
+        "+L1",
+        "-R0",
+        "-R1"
+      ],
+      "vars": [
+        "event",
+        "cover",
+        "maxC"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Intervals [1,3], [2,4]. Events: + at 1, + at 2, - at 3, - at 4.",
+          "active": [
+            0
+          ],
+          "values": {
+            "event": "+1",
+            "cover": 1,
+            "maxC": 1
+          }
+        },
+        {
+          "note": "+ at 2: cover=2. Max overlapping = 2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "event": "+2",
+            "cover": 2,
+            "maxC": 2
+          }
+        },
+        {
+          "note": "- at 3: cover=1.",
+          "active": [
+            2
+          ],
+          "values": {
+            "event": "-3",
+            "cover": 1,
+            "maxC": 2
+          }
+        },
+        {
+          "note": "- at 4: cover=0. Done.",
+          "active": [
+            3
+          ],
+          "values": {
+            "event": "-4",
+            "cover": 0,
+            "maxC": 2
+          }
+        },
+        {
+          "note": "Tie at the same x: process + before - if intervals are closed and a touch counts as overlap; reverse if they do not.",
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "event": "tie",
+            "cover": "policy",
+            "maxC": 2
+          }
+        },
+        {
+          "note": "Skyline would store heights in a multiset as x hits left/right walls.",
+          "active": [
+            0
+          ],
+          "values": {
+            "event": "skyline",
+            "cover": "multiset",
+            "maxC": "h"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Events, active set, measure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  ev["sort events by x"] --&gt; proc["at each x, apply +1/-1"]
+  proc --&gt; active["query active set"]
+  active --&gt; area["add deltaX times measure"]
+  area --&gt; nextX["next event"]
+  </div>
+  <figcaption>The sweepline jumps. Between jumps the picture is combinatorially constant.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>List events</strong> (x, type, payload). Type order at equal x is part of the problem.</li>
+  <li><strong>Sort</strong> by x, then type.</li>
+  <li><strong>Init</strong> the active structure (counter, TreeSet, segment tree).</li>
+  <li><strong>Process</strong> each event: update active, then (if x changed) add the contribution of the previous strip.</li>
+  <li><strong>Query</strong> the active set when the statement asks about "right now".</li>
+  <li><strong>Compress y</strong> if the tree is an array-based segtree.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>event</th><th>cover</th><th>maxC</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>+1</td><td>1</td><td>1</td><td>Intervals [1,3], [2,4]. Events: + at 1, + at 2, - at 3, - at 4.</td></tr>
+      <tr><td>+2</td><td>2</td><td>2</td><td>+ at 2: cover=2. Max overlapping = 2.</td></tr>
+      <tr><td>-3</td><td>1</td><td>2</td><td>- at 3: cover=1.</td></tr>
+      <tr><td>-4</td><td>0</td><td>2</td><td>- at 4: cover=0. Done.</td></tr>
+      <tr><td>tie</td><td>policy</td><td>2</td><td>Tie at the same x: process + before - if intervals are closed and a touch counts as overlap; reverse if they do not.</td></tr>
+      <tr><td>skyline</td><td>multiset</td><td>h</td><td>Skyline would store heights in a multiset as x hits left/right walls.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Sweep Line implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Check all pairs. O(n^2).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OverlapBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class OverlapBrute {
+        static int maxCover(int[][] a) {
+            int n = a.length, best = 0;
+            for (int x = 0; x &lt; 100; x++) {
+                int c = 0;
+                for (int[] iv : a) if (iv[0] &lt;= x &amp;&amp; x &lt; iv[1]) c++;
+                best = Math.max(best, c);
+            }
+            return best;
+        }
+        public static void main(String[] args) {
+            System.out.println(maxCover(new int[][] {{1, 3}, {2, 4}}));
+        }
+        // Input : [1,3],[2,4]
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>1D +1/-1 sweep. Max coverage.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SweepCover.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class SweepCover {
+        static int maxCover(int[][] a) {
+            int n = a.length;
+            int[][] ev = new int[2 * n][2];
+            for (int i = 0; i &lt; n; i++) {
+                ev[2 * i] = new int[] {a[i][0], 1};
+                ev[2 * i + 1] = new int[] {a[i][1], -1};
+            }
+            Arrays.sort(ev, (p, q) -&gt; p[0] != q[0] ? p[0] - q[0] : p[1] - q[1]);
+            int cur = 0, best = 0;
+            for (int[] e : ev) { cur += e[1]; best = Math.max(best, cur); }
+            return best;
+        }
+        public static void main(String[] args) {
+            System.out.println(maxCover(new int[][] {{1, 3}, {2, 4}}));
+        }
+        // Input : [1,3],[2,4]
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Multiset of heights. LC 218 shape.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SkylineSweep.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class SkylineSweep {
+        static List&lt;int[]&gt; skyline(int[][] b) {
+            List&lt;int[]&gt; ev = new ArrayList&lt;&gt;();
+            for (int[] x : b) {
+                ev.add(new int[] {x[0], -x[2]});
+                ev.add(new int[] {x[1], x[2]});
+            }
+            ev.sort((p, q) -&gt; p[0] != q[0] ? p[0] - q[0] : p[1] - q[1]);
+            TreeMap&lt;Integer, Integer&gt; h = new TreeMap&lt;&gt;();
+            h.put(0, 1);
+            int prev = 0;
+            List&lt;int[]&gt; ans = new ArrayList&lt;&gt;();
+            for (int[] e : ev) {
+                if (e[1] &lt; 0) h.merge(-e[1], 1, Integer::sum);
+                else {
+                    int c = h.get(e[1]);
+                    if (c == 1) h.remove(e[1]); else h.put(e[1], c - 1);
+                }
+                int cur = h.lastKey();
+                if (cur != prev) { ans.add(new int[] {e[0], cur}); prev = cur; }
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(skyline(new int[][] {{1, 3, 2}, {2, 4, 3}}).size());
+        }
+        // Input : two buildings
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>O(n) events, sort O(n log n), each update O(log n) in a tree or O(1) for a counter. Rectangle area is the same with a segtree measure.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pairwise</td><td>O(n^2)</td><td>O(1)</td><td>n tiny</td></tr>
+      <tr><td>1D sweep</td><td>O(n log n)</td><td>O(n)</td><td>Coverage, rooms</td></tr>
+      <tr><td>2D + segtree</td><td>O(n log n)</td><td>O(n)</td><td>Union area</td></tr>
+      <tr><td>Mo</td><td>O((n+q) sqrt n)</td><td>O(n)</td><td>Offline array queries, not geometry</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Same-x order</span>
+    <div class="pitfalls__bug">A segment ends at x and another starts at x. Processing - first makes coverage 0 in between and you miss a touch (or the reverse).</div>
+    <div class="pitfalls__fix">Decide closed/open. For max overlap of closed intervals, process + first.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using a HashSet of active y without duplicates</span>
+    <div class="pitfalls__bug">Two segments at the same y. TreeSet of y collapses them.</div>
+    <div class="pitfalls__fix">Multiset (TreeMap counts) or store unique ids.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Integer overflow on area</span>
+    <div class="pitfalls__bug">Width * coveredHeight for 1e9 coordinates.</div>
+    <div class="pitfalls__fix"><code>long</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to add the last strip</span>
+    <div class="pitfalls__bug">You update at event x but never add (x - prevX) * measure before the last event.</div>
+    <div class="pitfalls__fix">On x change: add, then update prevX, then apply the event. Or apply then add using next x.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Y not compressed</span>
+    <div class="pitfalls__bug">segtree of size 1e9.</div>
+    <div class="pitfalls__fix">Collect y's, unique, map to 0..2n.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Union of rectangles area</td>
+        <td>Lazy coverage count + length of positive coverage.</td>
+        <td><code>CSES Rectangle Union</code></td>
+        <td>2D sweep</td>
+      </tr>
+      <tr>
+        <td>Closest pair</td>
+        <td>Sort x; keep a TreeSet of points in [x-d, x] ordered by y.</td>
+        <td><code>O(n log n)</code></td>
+        <td>CLRS</td>
+      </tr>
+      <tr>
+        <td>Bentley-Ottmann</td>
+        <td>Segment intersections, events include crossings.</td>
+        <td><code>O((n+k) log n)</code></td>
+        <td>rare in interviews</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Sweep vs sort+greedy for meeting rooms?</summary>
+    <div class="followup__body">
+      <p>They are the same 1D sweep. The heap-of-ends version is also a sweep that only stores active ends.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you get union length of intervals?</summary>
+    <div class="followup__body">
+      <p>Same +1/-1. When coverage goes 0	o1 start a run; when it returns to 0 add the length. Or add Δx whenever coverage &gt; 0.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why a segment tree for y?</summary>
+    <div class="followup__body">
+      <p>You need to add +1 on a y-interval and query the measure of y with coverage &gt; 0. That is lazy coverage, not a TreeSet (TreeSet cannot add a range of y at once).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Offline 2D points "count in rectangle"?</summary>
+    <div class="followup__body">
+      <p>Sort points and queries by x, Fenwick on compressed y. It is a sweep, just with Fenwick as the active structure.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/meeting-rooms-ii/" target="_blank" rel="noopener">Meeting Rooms Ii</a></td>
+        <td><span class="badge badge--lc">LC 253</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>1D sweep / heap</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/the-skyline-problem/" target="_blank" rel="noopener">The Skyline Problem</a></td>
+        <td><span class="badge badge--lc">LC 218</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>x-events + height multiset</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/rectangle-area-ii/" target="_blank" rel="noopener">Rectangle Area Ii</a></td>
+        <td><span class="badge badge--lc">LC 850</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>2D sweep + y segtree</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/perfect-rectangle/" target="_blank" rel="noopener">Perfect Rectangle</a></td>
+        <td><span class="badge badge--lc">LC 391</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Sweep / corner counting</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1000/C" target="_blank" rel="noopener">Covered Points Count</a></td>
+        <td><span class="badge badge--cf">CF 1000C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>1D coverage histogram</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/13132/C" target="_blank" rel="noopener">Skyscrapers</a></td>
+        <td><span class="badge badge--cf">CF 1313C2</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Different greedy; nearby construction</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-iii/" target="_blank" rel="noopener">My Calendar Iii</a></td>
+        <td><span class="badge badge--lc">LC 732</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Sweep or lazy tree of counts</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/remove-covered-intervals/" target="_blank" rel="noopener">Remove Covered Intervals</a></td>
+        <td><span class="badge badge--lc">LC 1288</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort and scan, cousin of sweep</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Events at interesting x, sort them.</li>
+    <li>Active set = objects that currently intersect the line.</li>
+    <li>1D coverage is +1/-1 and a counter.</li>
+    <li>2D area needs a y-structure (segtree).</li>
+    <li>Equal-x order is a semantic choice.</li>
+  </ul>
+  <div class="recap__oneliner">sort events; for (e : events) { add strip; update active; }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

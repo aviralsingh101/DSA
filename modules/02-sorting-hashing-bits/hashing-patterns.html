@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hashing Patterns &mdash; DSA Course</title>
+<meta name="description" content="A hash map turns &quot;have I seen the partner of this value?&quot; into expected O(1), which is why two-sum, anagrams, and longest consecutive all look like the same trick.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="hashing-patterns">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Hashing Patterns</h1>
+  <p class="hero__tagline">A hash map turns "have I seen the partner of this value?" into expected O(1), which is why two-sum, anagrams, and longest consecutive all look like the same trick.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">hash map</span>
+      <span class="chip">hash set</span>
+      <span class="chip">frequency</span>
+      <span class="chip">prefix</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The naive partner search is a nested loop. A map from value to index (or value to count) makes the inner loop a lookup. That is two-sum, group-anagrams (key = sorted letters or a 26-count), and "subarray sum equals k" (key = prefix). The data structure is the algorithm.</p>
+<p>The second skill is choosing the key. For anagrams it is a canonical signature. For consecutive sequence it is membership in a set, plus the rule "only start a run from a value whose predecessor is absent". For sliding-window uniqueness it is a map of last-seen indices. Wrong keys give wrong collisions, which look like random WA rather than an obvious off-by-one.</p>
+<p>Java's <code>HashMap</code> is expected O(1) and worst-case O(n) if keys collide. In interviews state expected linear. In contests, adversarial tests exist; for integer keys in a small range prefer an array, and for 64-bit keys consider a custom hash.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Store the thing you would have nested-looped for. The key is the partner: target-x, the anagram signature, the prefix that would complete sum k, or the predecessor that would extend a consecutive run.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Two sum / pair with given XOR / pair with given difference" in expected linear time</li>
+        <li>"Group anagrams", "valid anagram", "sort characters by frequency"</li>
+        <li>"Longest consecutive sequence" in O(n) expected</li>
+        <li>"Count subarrays with sum k / XOR k" &mdash; prefix + map</li>
+        <li>"Contains nearby duplicate", last-seen index within distance k</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need ordered keys (floor / ceiling / range) &rarr; TreeMap, not HashMap</li>
+        <li>The partner is the next greater element, not an equal-to-target &rarr; monotonic stack</li>
+        <li>Keys are 1..n and you may mutate &rarr; <a href="cyclic-sort-and-index-tricks.html">index as hash</a></li>
+        <li>You need worst-case O(1) lookups in a contest with anti-hash tests and huge ints &rarr; sorted vector + binary search, or a custom splitmix hash</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>two sum, pair = target</td>
+        <td>Map value → index, look up t-x</td>
+        <td>LC 1</td>
+      </tr>
+      <tr>
+        <td>group anagrams</td>
+        <td>Canonical key: sorted string or 26-count</td>
+        <td>LC 49</td>
+      </tr>
+      <tr>
+        <td>longest consecutive</td>
+        <td>Set; start only if x-1 is absent</td>
+        <td>LC 128</td>
+      </tr>
+      <tr>
+        <td>subarray sum = k</td>
+        <td>Map prefix → count, look up prefix-k</td>
+        <td>LC 560</td>
+      </tr>
+      <tr>
+        <td>no-repeat substring</td>
+        <td>Last-seen index, shrink left</td>
+        <td>LC 3</td>
+      </tr>
+      <tr>
+        <td>4-sum II</td>
+        <td>Map of pair sums, look up the negation</td>
+        <td>LC 454</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> TreeMap for floor/ceiling</td>
+        <td>HashMap has no order; nearby-by-value needs a tree or buckets</td>
+        <td>LC 220 is TreeMap / buckets, not HashMap</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with expected O(1) lookups is the hash signature. Integer overflow on <code>target - x</code> needs <code>long</code> keys. Seed prefix maps with <code>(0, 1)</code> for subarray counts. Load factor and boxing cost real constants; an <code>int[]</code> of size R beats a map when R is tiny.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Two-sum one pass: for each x, if <code>map.containsKey(target - x)</code> return the pair of indices; then <code>map.put(x, i)</code>. Putting after the lookup avoids using the same element twice. Consecutive sequence: dump everything into a HashSet, then for each x whose <code>x-1</code> is missing, walk x, x+1, … until the run breaks. Each number is visited twice at most, so expected linear.</p>
+<p>Prefix+map: running sum S, add <code>map[S-k]</code> to the answer, then increment <code>map[S]</code>. The empty prefix 0 must be in the map before the loop. Anagram keys: <code>char[]</code> sorted, or a frozen 26-int signature. Never use the raw string as a key unless you want grouping by identity, not by letter bag.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After processing prefix <code>a[0..i]</code>, the map holds every partner that prefix could complete:</p><span class="eq">map[v] = how we would answer "have I seen v?" on a[0..i]</span><p>Interview sentence: <em>"I hash the partner, not the whole nested search."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="hashing-patternsViz"></div>
+  <div class="viz-player" data-viz-target="hashing-patternsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        2,
+        7,
+        11,
+        15
+      ],
+      "vars": [
+        "i",
+        "x",
+        "need",
+        "map"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Two-sum, target 9, array [2,7,11,15]. Map empty. i=0, x=2, need=7. 7 not in map. Put 2→0.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "i": 0,
+            "x": 2,
+            "need": 7,
+            "map": "{2:0}"
+          }
+        },
+        {
+          "note": "i=1, x=7, need=2. 2 is in the map at index 0. Pair (0,1). Done.",
+          "active": [
+            1
+          ],
+          "best": [
+            0,
+            1
+          ],
+          "dim": [
+            2,
+            3
+          ],
+          "values": {
+            "i": 1,
+            "x": 7,
+            "need": 2,
+            "map": "{2:0}"
+          }
+        },
+        {
+          "note": "If we continued: i=2, x=11, need=-2, miss, put 11→2.",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3
+          ],
+          "values": {
+            "i": 2,
+            "x": 11,
+            "need": -2,
+            "map": "{2:0,11:2}"
+          }
+        },
+        {
+          "note": "Consecutive on [100,4,200,1,3,2]: set of six. 1 has no predecessor, run 1-2-3-4 length 4.",
+          "window": [
+            1,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "i": "run",
+            "x": 1,
+            "need": "x-1 missing",
+            "map": "set of 6"
+          }
+        },
+        {
+          "note": "Start-of-run rule skips 2,3,4 (each has x-1). 100 and 200 are length-1 runs.",
+          "dim": [
+            0,
+            2
+          ],
+          "values": {
+            "i": "skip",
+            "x": 2,
+            "need": "1 present",
+            "map": "do not restart"
+          }
+        },
+        {
+          "note": "Prefix+map for sum k=3 on [1,2,1,2,1]: seed {0:1}. After four 1-2 pairs the count is 4.",
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "i": "pref",
+            "x": "S",
+            "need": "S-3",
+            "map": "counts of prefixes"
+          }
+        },
+        {
+          "note": "HashMap is expected O(1). For keys in 0..n, prefer int[] so there is no hash at all.",
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "i": "note",
+            "x": "—",
+            "need": "—",
+            "map": "array if range tiny"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Pick the hash key</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  need["need a partner lookup"] --&gt; key{"what is the key?"}
+  key -- "value / t-x" --&gt; two["HashMap value to index"]
+  key -- "letter bag" --&gt; ana["sorted string or 26-count"]
+  key -- "prefix sum" --&gt; pre["map prefix to count, seed 0"]
+  key -- "membership only" --&gt; set["HashSet, start runs at x-1 missing"]
+  key -- "floor / ceiling" --&gt; tree["wrong page: TreeMap"]
+  two --&gt; lin["expected O(n)"]
+  ana --&gt; lin
+  pre --&gt; lin
+  set --&gt; lin
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the partner</strong> you would have searched for in a nested loop.</li>
+  <li><strong>Choose the key:</strong> value, signature, prefix, or membership.</li>
+  <li><strong>One pass:</strong> look up first, then insert, so an element is not its own partner.</li>
+  <li><strong>Seed prefix maps with 0.</strong> For longest-subarray, store the earliest index.</li>
+  <li><strong>Consecutive:</strong> only expand a run from x where x-1 is absent.</li>
+  <li><strong>Tiny integer range:</strong> replace the map with <code>int[]</code>.</li>
+  <li><strong>State expected O(n)</strong> time, O(n) extra space.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>x</th><th>need</th><th>map</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>2</td><td>7</td><td>{2:0}</td><td>Two-sum, target 9, array [2,7,11,15]. Map empty. i=0, x=2, need=7. 7 not in map. Put 2→0.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>7</td><td>2</td><td>{2:0}</td><td>i=1, x=7, need=2. 2 is in the map at index 0. Pair (0,1). Done.</td></tr>
+      <tr><td>2</td><td>11</td><td>-2</td><td>{2:0,11:2}</td><td>If we continued: i=2, x=11, need=-2, miss, put 11→2.</td></tr>
+      <tr><td>run</td><td>1</td><td>x-1 missing</td><td>set of 6</td><td>Consecutive on [100,4,200,1,3,2]: set of six. 1 has no predecessor, run 1-2-3-4 length 4.</td></tr>
+      <tr><td>skip</td><td>2</td><td>1 present</td><td>do not restart</td><td>Start-of-run rule skips 2,3,4 (each has x-1). 100 and 200 are length-1 runs.</td></tr>
+      <tr><td>pref</td><td>S</td><td>S-3</td><td>counts of prefixes</td><td>Prefix+map for sum k=3 on [1,2,1,2,1]: seed {0:1}. After four 1-2 pairs the count is 4.</td></tr>
+      <tr><td>note</td><td>—</td><td>—</td><td>array if range tiny</td><td>HashMap is expected O(1). For keys in 0..n, prefer int[] so there is no hash at all.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Hashing Patterns implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Nested two-sum. Correct, quadratic, the map removes the inner loop.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HashBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class HashBrute {
+        static int[] twoSum(int[] a, int target) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = i + 1; j &lt; n; j++) {
+                    if (a[i] + a[j] == target) {
+                        return new int[] {i, j};
+                    }
+                }
+            }
+            return new int[] {-1, -1};
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(twoSum(new int[] {2, 7, 11, 15}, 9)));
+        }
+        // Input : [2, 7, 11, 15], target 9
+        // Output: [0, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Two-sum, subarray-sum-k, and longest consecutive: three keys, one structure.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HashPatterns.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.HashMap;
+    import java.util.HashSet;
+    import java.util.Map;
+    import java.util.Set;
+    
+    public class HashPatterns {
+        static int[] twoSum(int[] a, int target) {
+            Map&lt;Integer, Integer&gt; idx = new HashMap&lt;&gt;();
+            for (int i = 0; i &lt; a.length; i++) {
+                Integer j = idx.get(target - a[i]);
+                if (j != null) {
+                    return new int[] {j, i};
+                }
+                idx.put(a[i], i);
+            }
+            return new int[] {-1, -1};
+        }
+    
+        static int subarraySum(int[] a, int k) {
+            Map&lt;Long, Integer&gt; seen = new HashMap&lt;&gt;();
+            seen.put(0L, 1);
+            long s = 0;
+            int count = 0;
+            for (int v : a) {
+                s += v;
+                count += seen.getOrDefault(s - k, 0);
+                seen.merge(s, 1, Integer::sum);
+            }
+            return count;
+        }
+    
+        static int longestConsecutive(int[] a) {
+            Set&lt;Integer&gt; set = new HashSet&lt;&gt;();
+            for (int v : a) {
+                set.add(v);
+            }
+            int best = 0;
+            for (int v : set) {
+                if (!set.contains(v - 1)) {
+                    int x = v;
+                    int len = 1;
+                    while (set.contains(x + 1)) {
+                        x++;
+                        len++;
+                    }
+                    best = Math.max(best, len);
+                }
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(twoSum(new int[] {2, 7, 11, 15}, 9)));
+            System.out.println(subarraySum(new int[] {1, 2, 1, 2, 1}, 3));
+            System.out.println(longestConsecutive(new int[] {100, 4, 200, 1, 3, 2}));
+        }
+        // Input : two-sum [2,7,11,15] t=9; sums [1,2,1,2,1] k=3; consec [100,4,200,1,3,2]
+        // Output: [0, 1]
+        //         4
+        //         4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Canonical keys for anagrams: sorted letters, or a 26-count packed as a string.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AnagramKey.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.HashMap;
+    import java.util.List;
+    import java.util.Map;
+    
+    public class AnagramKey {
+        static List&lt;List&lt;String&gt;&gt; groupAnagrams(String[] strs) {
+            Map&lt;String, List&lt;String&gt;&gt; g = new HashMap&lt;&gt;();
+            for (String s : strs) {
+                char[] c = s.toCharArray();
+                Arrays.sort(c);
+                String key = new String(c);
+                g.computeIfAbsent(key, k -&gt; new ArrayList&lt;&gt;()).add(s);
+            }
+            return new ArrayList&lt;&gt;(g.values());
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;String&gt;&gt; g = groupAnagrams(
+                new String[] {"eat", "tea", "tan", "ate", "nat", "bat"});
+            System.out.println(g);
+        }
+        // Input : eat tea tan ate nat bat
+        // Output: groups [eat,tea,ate], [tan,nat], [bat] (order may vary)
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) expected; O(n L log L) for anagram keys of length L</span>
+    <span class="badge badge--space">Space O(n) entries in the map / set</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each of n items does a constant number of expected-O(1) map operations: <span class="eq">T(n) = Θ(n)</span> expected. Worst case is quadratic if every key collides; interviews want the expected bound.</p>
+    <p>Consecutive sequence visits each value at most twice (membership + walk). Anagram grouping sorts each string: <code>O(n L log L)</code>, or <code>O(n L)</code> with a 26-count key.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Nested pair search</td><td>O(n²)</td><td>O(1)</td><td>n ≤ 2000</td></tr>
+      <tr><td>HashMap / HashSet</td><td>O(n) expected</td><td>O(n)</td><td>Default partner lookup</td></tr>
+      <tr><td>Sort + two pointers</td><td>O(n log n)</td><td>O(n)</td><td>When you also need order</td></tr>
+      <tr><td>TreeMap</td><td>O(n log n)</td><td>O(n)</td><td>Floor / ceiling / range of keys</td></tr>
+      <tr><td>int[] indexed by key</td><td>O(n + R)</td><td>O(R)</td><td>Tiny integer universe</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Inserting before looking up in two-sum</span>
+    <div class="pitfalls__bug">target = 2*x uses the same index twice when you put x first.</div>
+    <div class="pitfalls__fix">Lookup, then put. For two-sum II (sorted) use two pointers instead.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to seed prefix 0</span>
+    <div class="pitfalls__bug">A subarray that starts at index 0 and sums to k is never counted.</div>
+    <div class="pitfalls__fix"><code>map.put(0L, 1)</code> before the loop. Use long keys for sums.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Restarting a consecutive run at every value</span>
+    <div class="pitfalls__bug">Walking up from 2, 3, and 4 as well as 1 makes the algorithm quadratic.</div>
+    <div class="pitfalls__fix">Only start if <code>!set.contains(v-1)</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using the string itself as an anagram key</span>
+    <div class="pitfalls__bug">"eat" and "tea" land in different buckets.</div>
+    <div class="pitfalls__fix">Sort the letters, or serialise a 26-count. Intern the key.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on target - x</span>
+    <div class="pitfalls__bug">target = Integer.MIN_VALUE, x = 1, the need wraps.</div>
+    <div class="pitfalls__fix">Use long: <code>long need = (long) target - x;</code> or a Long-keyed map.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>4-sum II</td>
+        <td>Hash all pair sums of A,B; for each pair of C,D look up -(c+d).</td>
+        <td><code>n² map then n² lookups = O(n²).</code></td>
+        <td>LC 454.</td>
+      </tr>
+      <tr>
+        <td>Contains duplicate within k</td>
+        <td>Map value → last index; if i - last ≤ k, yes.</td>
+        <td><code>Or a sliding HashSet of the last k values.</code></td>
+        <td>LC 219.</td>
+      </tr>
+      <tr>
+        <td>Minimum window / last-seen</td>
+        <td>Map char → last index, shrink the left to keep uniqueness.</td>
+        <td><code>Same as sliding window with a hash of counts.</code></td>
+        <td>LC 3, LC 76.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why expected O(n) and not worst-case?</summary>
+    <div class="followup__body">
+      <p>Java HashMap is a table with treeified buckets (Java 8+), so a single bucket is O(log n), not O(n), unless you force many distinct keys into pathological hashes. Still say "expected linear" in an interview; in CF, xor a random odd constant into integer keys if you roll your own table.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Two-sum if the array must not be mutated and you need all pairs?</summary>
+    <div class="followup__body">
+      <p>Map value → list of indices. After building, walk keys x ≤ target-x to avoid listing a pair twice. Complexity is output-sensitive.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Longest consecutive if values do not fit in a HashSet of ints?</summary>
+    <div class="followup__body">
+      <p>They do: n ≤ 1e5, Integer caches aside, HashSet of n boxed ints is fine. If the range is 1..n, a boolean[] is simpler.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When should the key be a list instead of a string?</summary>
+    <div class="followup__body">
+      <p>A 26-count as a string with a delimiter is easy. Arrays.hashCode as a key is wrong because HashMap uses equals: two int[] with the same contents are not equal. Wrap in a string, or use a record/List.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/two-sum/" target="_blank" rel="noopener">Two Sum</a></td>
+        <td><span class="badge badge--lc">LC 1</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Map value to index, look up t-x</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/group-anagrams/" target="_blank" rel="noopener">Group Anagrams</a></td>
+        <td><span class="badge badge--lc">LC 49</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Canonical sorted-letter key</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/longest-consecutive-sequence/" target="_blank" rel="noopener">Longest Consecutive Sequence</a></td>
+        <td><span class="badge badge--lc">LC 128</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Set; start only if x-1 missing</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/subarray-sum-equals-k/" target="_blank" rel="noopener">Subarray Sum Equals K</a></td>
+        <td><span class="badge badge--lc">LC 560</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix + HashMap, seed 0</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener">Longest Substring Without Repeating</a></td>
+        <td><span class="badge badge--lc">LC 3</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Last-seen index window</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/4sum-ii/" target="_blank" rel="noopener">4Sum II</a></td>
+        <td><span class="badge badge--lc">LC 454</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Hash pair sums of two arrays</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/contains-duplicate-ii/" target="_blank" rel="noopener">Contains Duplicate II</a></td>
+        <td><span class="badge badge--lc">LC 219</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Last index within distance k</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/valid-anagram/" target="_blank" rel="noopener">Valid Anagram</a></td>
+        <td><span class="badge badge--lc">LC 242</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>26-count or sort both</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/4/C" target="_blank" rel="noopener">Registration System</a></td>
+        <td><span class="badge badge--cf">CF 4C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Frequency map of strings</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/855/A" target="_blank" rel="noopener">Tom Riddle's Diary</a></td>
+        <td><span class="badge badge--cf">CF 855A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Set of seen names</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Hash the partner</strong>, then one pass is enough.</li>
+    <li><strong>Look up, then insert</strong> so an item is not its own pair.</li>
+    <li><strong>Seed prefix maps with 0</strong>; use long sums.</li>
+    <li><strong>Consecutive runs start where x-1 is missing.</strong></li>
+    <li><strong>Tiny range → int[]</strong>, not HashMap.</li>
+  </ul>
+  <div class="recap__oneliner">if (map.containsKey(target - x)) return pair; map.put(x, i);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

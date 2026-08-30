@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Euler Tour &amp; Subtree Queries &mdash; DSA Course</title>
+<meta name="description" content="tin[v]..tout[v] is a contiguous segment of a flattened DFS, so subtree sum / add becomes a Fenwick range on that segment.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="euler-tour-subtree-queries">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Euler Tour & Subtree Queries</h1>
+  <p class="hero__tagline">tin[v]..tout[v] is a contiguous segment of a flattened DFS, so subtree sum / add becomes a Fenwick range on that segment.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="lca-binary-lifting.html">LCA & Binary Lifting</a>,
+      <a href="../06-range-queries/fenwick-tree.html">Fenwick Tree</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Euler tour</span>
+      <span class="chip">subtree</span>
+      <span class="chip">tin tout</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A subtree is not a contiguous slice of the parent-pointer array, so a Fenwick on vertex ids is meaningless. An Euler tour (enter-time order) numbers vertices so that the subtree of v is exactly the interval [tin[v], tout[v]]. Point add + subtree sum is then a Fenwick on that interval; subtree add + point query is a range-add on the interval.</p>
+<p>The same timestamps give the ancestry test tin[u] &le; tin[v] &le; tout[u] and are the substrate for HLD, virtual trees, and Mo on trees. CF 620E New Year Tree, 383C Propagating tree, 877E Danil are the cluster.</p>
+<p>Tour variants: node-only (one tin per vertex), or enter-and-leave (the true Euler tour used for RMQ-LCA). Subtree queries use the node-only flattening.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>DFS enter times make every subtree a contiguous range. Put a Fenwick (or segtree) on those times, not on vertex labels.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Add on a subtree, query a point (or the reverse)</li>
+        <li>Subtree sum / min / xor after point updates</li>
+        <li>Ancestry tests, flattening for HLD first step</li>
+        <li>n,q=1e5 static tree shape, values change</li>
+        <li>Colour / bitset of a subtree (CF 620E) after mapping to [tin,tout]</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Path queries u-v, not subtrees &rarr; lift a payload, or HLD</li>
+        <li>The tree shape changes &rarr; LCT / Euler-tour-tree (different)</li>
+        <li>One DFS aggregate without updates &rarr; plain tree DP</li>
+        <li>Queries are LCAs only &rarr; binary lifting, no Fenwick needed</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Subtree sum, point add</td>
+        <td>Fenwick at tin[v], query [tin,tout]</td>
+        <td>Classic</td>
+      </tr>
+      <tr>
+        <td>Subtree add, point query</td>
+        <td>Range add on [tin,tout], point at tin</td>
+        <td>Diff + Fenwick</td>
+      </tr>
+      <tr>
+        <td>Is u ancestor of v?</td>
+        <td>tin[u]<=tin[v]<=tout[u]</td>
+        <td>Timestamps only</td>
+      </tr>
+      <tr>
+        <td>Path u-v updates</td>
+        <td>Not a single interval</td>
+        <td>HLD or lift+diff at lca</td>
+      </tr>
+      <tr>
+        <td>RMQ LCA</td>
+        <td>True Euler tour of 2n-1 entries, ST on depth</td>
+        <td>Other LCA method</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Eulerian path in a graph</td>
+        <td>That is an edge-using tour of a different meaning</td>
+        <td>This page is DFS timestamps on a tree</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n,q &le; 2e5. tin in 0..n-1 (or 1..n). Fenwick of size n+2. Recursion depth: iterative DFS to assign tin if the tree is a chain.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>timer=0. dfs(u,p): tin[u]=timer++. rec children. tout[u]=timer-1 (so [tin,tout] includes u and descendants). If you prefer half-open, tout=timer after children and the subtree is [tin, tout).</p>
+<p>Map vertex v to index tin[v] in a Fenwick. Point add at v: add(tin[v], x). Subtree sum: range(tin[v], tout[v]). Subtree add: rangeAdd(tin, tout, x); point query at tin[v].</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The subtree of v, in DFS enter order, occupies a contiguous index interval.</p><span class="eq">subtree(v) = { u | tin[v] &le; tin[u] &le; tout[v] }</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Euler numbering on 0-1-2, 1-3, 0-4</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="euler-tour-subtree-queriesViz"></div>
+  <div class="viz-player" data-viz-target="euler-tour-subtree-queriesViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "tin[v] then the flattened order",
+      "array": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "u",
+        "tin",
+        "tout",
+        "flat"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Enter 0, tin[0]=0. Recurse to 1.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "tin": 0,
+            "tout": "—",
+            "flat": "[0]"
+          }
+        },
+        {
+          "note": "Enter 1, tin[1]=1. Recurse to 2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "tin": 1,
+            "tout": "—",
+            "flat": "[0,1]"
+          }
+        },
+        {
+          "note": "Enter 2, tin[2]=2, leaf, tout[2]=2. Then 3: tin=3, tout=3.",
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "u": 2,
+            "tin": 2,
+            "tout": 2,
+            "flat": "[0,1,2,3]"
+          }
+        },
+        {
+          "note": "Leave 1, tout[1]=3. Subtree of 1 is indices 1..3 = {1,2,3}.",
+          "window": [
+            1,
+            3
+          ],
+          "values": {
+            "u": 1,
+            "tin": 1,
+            "tout": 3,
+            "flat": "sub 1"
+          }
+        },
+        {
+          "note": "Enter 4, tin[4]=4, tout=4. Leave 0, tout[0]=4. Whole tree [0,4].",
+          "active": [
+            4
+          ],
+          "values": {
+            "u": 4,
+            "tin": 4,
+            "tout": 4,
+            "flat": "[0,1,2,3,4]"
+          }
+        },
+        {
+          "note": "Fenwick range [1,3] is subtree of 1. Ancestry: 0 is ancestor of 3 because 0<=3<=4 (tins) and tout[0]>=tin[3].",
+          "best": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": "query",
+            "tin": 1,
+            "tout": 3,
+            "flat": "BIT range"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>DFS flatten order 0,1,2,3,4</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t0["0 tin=0"] --&gt; t1["1 tin=1"]
+  t0 --&gt; t4["4 tin=4"]
+  t1 --&gt; t2["2 tin=2"]
+  t1 --&gt; t3["3 tin=3"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>DFS:</strong> tin[u]=timer++ before children; tout[u]=timer-1 after.</li>
+  <li><strong>Fenwick of size n</strong> indexed by tin.</li>
+  <li><strong>Point add on vertex v:</strong> bit.add(tin[v], delta).</li>
+  <li><strong>Subtree sum:</strong> bit.range(tin[v], tout[v]).</li>
+  <li><strong>Subtree add, point query:</strong> rangeAdd on [tin,tout], query prefix(tin[v]).</li>
+  <li><strong>Ancestry:</strong> tin[u]&lt;=tin[v] &amp;&amp; tout[v]&lt;=tout[u].</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>tin</th><th>tout</th><th>flat</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>—</td><td>[0]</td><td>Enter 0, tin[0]=0. Recurse to 1.</td></tr>
+      <tr><td>1</td><td>1</td><td>—</td><td>[0,1]</td><td>Enter 1, tin[1]=1. Recurse to 2.</td></tr>
+      <tr><td>2</td><td>2</td><td>2</td><td>[0,1,2,3]</td><td>Enter 2, tin[2]=2, leaf, tout[2]=2. Then 3: tin=3, tout=3.</td></tr>
+      <tr><td>1</td><td>1</td><td>3</td><td>sub 1</td><td>Leave 1, tout[1]=3. Subtree of 1 is indices 1..3 = {1,2,3}.</td></tr>
+      <tr><td>4</td><td>4</td><td>4</td><td>[0,1,2,3,4]</td><td>Enter 4, tin[4]=4, tout=4. Leave 0, tout[0]=4. Whole tree [0,4].</td></tr>
+      <tr class="trace-table__row--change"><td>query</td><td>1</td><td>3</td><td>BIT range</td><td>Fenwick range [1,3] is subtree of 1. Ancestry: 0 is ancestor of 3 because 0<=3<=4 (tins) and tout[0]>=tin[3].</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Euler Tour & Subtree Queries implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SubtreeScan.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class SubtreeScan {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int[] val;
+        static int sum(int u, int p) {
+            int s = val[u];
+            for (int v : g.get(u)) if (v != p) s += sum(v, u);
+            return s;
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            val = new int[]{1, 1, 1, 1, 1};
+            System.out.println(sum(1, 0));
+        }
+        // Input : all ones, subtree of 1
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">EulerFenwick.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class EulerFenwick {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int[] tin, tout, timer = {0};
+        static long[] bit;
+        static int n;
+    
+        static void dfs(int u, int p) {
+            tin[u] = timer[0]++;
+            for (int v : g.get(u)) if (v != p) dfs(v, u);
+            tout[u] = timer[0] - 1;
+        }
+        static void add(int i, long v) {
+            for (i++; i &lt;= n; i += i &amp; -i) bit[i] += v;
+        }
+        static long sum(int i) {
+            long s = 0;
+            for (i++; i &gt; 0; i -= i &amp; -i) s += bit[i];
+            return s;
+        }
+        static long range(int l, int r) { return sum(r) - (l == 0 ? 0 : sum(l - 1)); }
+    
+        public static void main(String[] args) {
+            n = 5;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            tin = new int[n]; tout = new int[n];
+            dfs(0, -1);
+            bit = new long[n + 2];
+            int[] val = {1, 1, 1, 1, 1};
+            for (int v = 0; v &lt; n; v++) add(tin[v], val[v]);
+            System.out.println(range(tin[1], tout[1]));
+            add(tin[2], 10);
+            System.out.println(range(tin[1], tout[1]));
+        }
+        // Input : ones, subtree 1, then +10 at node 2
+        // Output: 3
+        //         13
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SubtreeAdd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SubtreeAdd {
+        static int[] tin, tout;
+        static long[] bit;
+        static int n;
+        static void rangeAdd(int l, int r, long v) {
+            for (int i = l + 1; i &lt;= n; i += i &amp; -i) bit[i] += v;
+            for (int i = r + 2; i &lt;= n; i += i &amp; -i) bit[i] -= v;
+        }
+        static long point(int i) {
+            long s = 0;
+            for (i++; i &gt; 0; i -= i &amp; -i) s += bit[i];
+            return s;
+        }
+        public static void main(String[] args) {
+            n = 5;
+            tin = new int[]{0,1,2,3,4};
+            tout = new int[]{4,3,2,3,4};
+            bit = new long[n + 2];
+            rangeAdd(tin[1], tout[1], 5);
+            System.out.println(point(tin[2]) + " " + point(tin[4]));
+        }
+        // Input : +5 on subtree of 1 (indices 1..3)
+        // Output: 5 0
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) tour, O(log n) per update/query</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>DFS assigns each vertex one tin. Fenwick ops are O(log n). Naive subtree walk is O(subtree) per query and dies at q=1e5.</p>
+    <p><span class="eq">T_prep = O(n), T_op = O(log n)</span></p>
+    <p>Path queries are not an interval in this flattening (unless you add HLD or lift diffs at the LCA).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Walk the subtree</td><td>O(|sub|) / query</td><td>O(n)</td><td>q tiny</td></tr>
+      <tr><td>Euler + Fenwick</td><td>O(log n)</td><td>O(n)</td><td>Subtree point/range</td></tr>
+      <tr><td>HLD</td><td>O(log^2 n)</td><td>O(n)</td><td>Path queries</td></tr>
+      <tr><td>Rerooting DP</td><td>O(n)</td><td>O(n)</td><td>No updates, all roots</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">tout exclusive vs inclusive mix-up</span>
+    <div class="pitfalls__bug">range(tin, tout) with tout=timer after children is exclusive on the right if you also stored tin as the start; off-by-one drops the last descendant or includes a sibling.</div>
+    <div class="pitfalls__fix">Pick one: tout=timer-1 inclusive, or half-open [tin,tout). Draw the sample.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Fenwick on vertex id instead of tin</span>
+    <div class="pitfalls__bug">Subtree {1,2,3} is not ids 1..3 after an arbitrary labelling.</div>
+    <div class="pitfalls__fix">Always index by tin[v].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Updating val[v] without adding at tin[v]</span>
+    <div class="pitfalls__bug">You change an array the Fenwick never sees.</div>
+    <div class="pitfalls__fix">add(tin[v], newVal-oldVal) or set via two adds.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Root's parent edge in an undirected list causing a second DFS into the parent</span>
+    <div class="pitfalls__bug">tin assigned twice, timer explodes, or infinite rec.</div>
+    <div class="pitfalls__fix">skip parent, same as every tree DFS.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using this flattening for path u-v</span>
+    <div class="pitfalls__bug">Path is two intervals to the LCA, not one. Queries give nonsense.</div>
+    <div class="pitfalls__fix">HLD, or difference array at u,v,+lca according to the op.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>True Euler tour (2n-1)</td>
+        <td>Push u on enter and after each child; RMQ of depth for LCA.</td>
+        <td><code>tour.add(u) before and after</code></td>
+        <td>O(1) LCA with sparse table</td>
+      </tr>
+      <tr>
+        <td>Subtree add + subtree query</td>
+        <td>Two Fenwicks or a lazy segtree on [tin,tout].</td>
+        <td><code>lazy range on the tour array</code></td>
+        <td>Heavier ops</td>
+      </tr>
+      <tr>
+        <td>Mo on trees</td>
+        <td>Queries on [tin,tout] for subtree; paths need extra in/out trick.</td>
+        <td><code>Euler + Mo</code></td>
+        <td>CF 375D</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Ancestry in O(1)?</summary>
+    <div class="followup__body">
+      <p>Yes: tin[u] &le; tin[v] &le; tout[u]. That is why you should still store tout even if you only planned sums.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Path add, point query without HLD?</summary>
+    <div class="followup__body">
+      <p>Add +x at v, add -x at parent[u] depending on the op; more carefully: difference on the root-path by adding at the node and subtracting at the LCA's parent. Then a subtree-sum (Euler+BIT) of the diffs reconstructs the point. Common CF trick.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>tin unique?</summary>
+    <div class="followup__body">
+      <p>Node-only flattening: each vertex once, tin in 0..n-1 permutation. True Euler tour: vertices repeat, length 2n-1, first[] stores the first index for RMQ-LCA.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>HLD connection?</summary>
+    <div class="followup__body">
+      <p>HLD chains are also intervals, but of a different numbering (heavy-path compressed). The first step of HLD still uses sz[] from a DFS; Euler is the lighter tool when the query is a whole subtree.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/range-sum-of-bst/" target="_blank" rel="noopener">Range Sum Of Bst</a></td>
+        <td><span class="badge badge--lc">LC 938</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Not Euler; BST range. Contrast</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/sum-of-distances-in-tree/" target="_blank" rel="noopener">Sum Of Distances In Tree</a></td>
+        <td><span class="badge badge--lc">LC 834</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Reroot, not Euler</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/620/E" target="_blank" rel="noopener">New Year Tree</a></td>
+        <td><span class="badge badge--cf">CF 620E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Euler + lazy bits of colours</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/383/C" target="_blank" rel="noopener">Propagating tree</a></td>
+        <td><span class="badge badge--cf">CF 383C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Euler + parity Fenwicks</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/877/E" target="_blank" rel="noopener">Danil and a Part-time Job</a></td>
+        <td><span class="badge badge--cf">CF 877E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Euler + lazy flip/sum</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/1076/E" target="_blank" rel="noopener">Vasya and a Tree</a></td>
+        <td><span class="badge badge--cf">CF 1076E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Subtree add by depth, Euler/diff</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/reconstruct-itinerary/" target="_blank" rel="noopener">Reconstruct Itinerary</a></td>
+        <td><span class="badge badge--lc">LC 332</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Eulerian path, different Euler</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/375/D" target="_blank" rel="noopener">Tree and Queries</a></td>
+        <td><span class="badge badge--cf">CF 375D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Euler + Mo on subtrees</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>tin before children, tout after</strong> &mdash; subtree is [tin, tout].</li>
+    <li><strong>Fenwick indexes tin</strong>, not the vertex label.</li>
+    <li><strong>Point add + subtree sum</strong> (or range add + point query).</li>
+    <li><strong>Ancestry is an interval test.</strong></li>
+    <li><strong>Paths are not intervals here</strong> &mdash; that is HLD / lifting.</li>
+  </ul>
+  <div class="recap__oneliner">tin[u]=timer++; rec; tout[u]=timer-1; BIT on tin for subtree ranges</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digit DP &mdash; DSA Course</title>
+<meta name="description" content="Count (or sum) the numbers ≤ R whose digits satisfy a local property by walking the decimal positions with a tight flag.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="digit-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Digit DP</h1>
+  <p class="hero__tagline">Count (or sum) the numbers ≤ R whose digits satisfy a local property by walking the decimal positions with a tight flag.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">digit DP</span>
+      <span class="chip">tight</span>
+      <span class="chip">counting</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"How many numbers ≤ R have digit-sum S / no two adjacent equal / exactly K non-zero digits?" looks like a loop to R, which dies at R = 10^{18}. Digit DP walks the decimal representation left to right. At each position you choose a digit, remembering only a small state (position, tight, started, sum so far, last digit).</p>
+<p>The tight flag is the whole trick. If the prefix so far matches R, the next digit may not exceed R's digit; otherwise 0..9 are free. A started flag avoids counting leading zeros as real digits when the property cares.</p>
+<p>Range [L, R] is f(R) - f(L-1), with f(-1) = 0. That reduction is why every problem is "count ≤ R". P2 because the state design (what to remember so the property is Markov) is the contest, and tight/started bugs fail hidden tests.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A number ≤ R is a walk through digit positions where, as long as you have tied R, you are not allowed to step above its next digit. Dropping below frees you forever.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Count / sum of integers in [L, R] with a digit property, R up to 10^18</li>
+        <li>Digit sum, last digit, adjacent difference, count of a certain digit</li>
+        <li>"Classy numbers", "numbers with no consecutive 1s in decimal"</li>
+        <li>The property depends on O(1) extra (sum ≤ 9*18, last digit, tight, started)</li>
+        <li>L and R given as strings of up to 18–100 digits</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>R ≤ 1e6 and the property is awkward → just loop</li>
+        <li>The property needs the whole number modulo a large coprime in a way that explodes the state</li>
+        <li>Prime in [L,R] → sieve / segmented sieve, not digit DP</li>
+        <li>Subsequence of digits matching a regex of length m → add m to the state (still digit DP if m is tiny)</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Count ≤ R with digit sum = S</td>
+        <td>pos, sum, tight, started</td>
+        <td>Classic</td>
+      </tr>
+      <tr>
+        <td>[L, R] range</td>
+        <td>f(R) − f(L−1)</td>
+        <td>Always</td>
+      </tr>
+      <tr>
+        <td>No leading zeros in the property</td>
+        <td>started flag</td>
+        <td>Do not count 0 as a digit 0 until started</td>
+      </tr>
+      <tr>
+        <td>Adjacent distinct digits</td>
+        <td>last digit in the state</td>
+        <td>+1 dimension</td>
+      </tr>
+      <tr>
+        <td>R as a 100-digit string</td>
+        <td>pos up to 100, same DP</td>
+        <td>Big integers as arrays of digits</td>
+      </tr>
+      <tr>
+        <td>Sum of such numbers, not count</td>
+        <td>add the place-value contribution in the transition</td>
+        <td>Extra long in the DP value</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> generating all numbers</td>
+        <td>You never emit the numbers; you count walks in the digit trie of ≤ R</td>
+        <td>States, not enumeration</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> R ≤ 10^{18} (18 positions) or a 10^4-digit string. Extra state (sum, mod, last) must keep pos * extras * 2 * 2 under 1e7. Answers are long.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>pos, tight, started, and the extras</h2>
+<p>Write the digits of R as d[0..len) most-significant first. rec(pos, sum, tight, started) = how many ways to fill positions pos..end. If pos == len, return 1 if the state is legal (and maybe started, if you do not count 0), else 0.</p>
+<p>The next digit lo is 0; hi is tight ? d[pos] : 9. For each digit v in lo..hi, recurse with nsum = sum + (started || v>0 ? v : 0), ntight = tight && v==d[pos], nstarted = started || v>0. Memoize on those arguments. Dry-run: count numbers in 0..23 with digit sum 5. Length 2, d = [2,3]. The legal numbers are 5, 14, 23 — three of them. The table below walks the tight tree.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>rec(pos, extra, tight, started) counts completions of the remaining suffix that stay ≤ R if tight, and that realise a legal extra-state at the end.</p><span class="eq">hi = tight ? d[pos] : 9 &nbsp;&nbsp; ntight = tight &amp;&amp; v == d[pos]</span>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Leading zeros</span>
+    <p>Until started is true, v = 0 does not add to the digit sum and does not set last-digit. The number 0 itself is the walk of all zeros; decide whether it satisfies the property (sum 0 usually yes if S=0).</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">f(R) - f(L-1)</span>
+    <p>Implement one function on a digit array. For L-1, handle L=0 as 0. String subtraction or parse L as long when it fits, then convert L-1 to digits.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Memo table slice: pos × tight for sum-so-far = 0..5, n = 23, target sum 5</h3>
+
+<p>Simplified view: rows are digit positions (0 = tens, 1 = ones, 2 = done). Columns are (tight, started) pairs we actually hit. Values are remaining ways to reach sum 5. Target is the state we fill; from is a child position.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="digit-dpViz"></div>
+  <div class="viz-player" data-viz-target="digit-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "pos",
+      "rowHeads": [
+        "pos0",
+        "pos1",
+        "done"
+      ],
+      "colHeads": [
+        "tight1 st0",
+        "tight0 st1",
+        "tight1 st1",
+        "ans"
+      ],
+      "vars": [
+        "pos",
+        "tight",
+        "ways"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Leaves: pos=2 (done). A state is 1 way iff running sum is 5, else 0.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 3,
+              "val": "0/1",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "pos": "done",
+            "tight": "—",
+            "ways": "sum==5"
+          }
+        },
+        {
+          "note": "From pos=1, tight=1 (prefix 2, so ones digit 0..3). To reach sum 5 we need ones = 5-tens.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "?",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "0/1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "pos": 1,
+            "tight": 1,
+            "ways": "hi=3"
+          }
+        },
+        {
+          "note": "Number 23: tens=2, ones=3, sum=5, both tight. One leaf fires.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "…"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "1",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "pos": "23",
+            "tight": 1,
+            "ways": 1
+          }
+        },
+        {
+          "note": "Number 14: tens=1 < 2, so after tens we are tight=0, ones can be 0..9. ones=4 gives sum 5.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "pos": "14",
+            "tight": 0,
+            "ways": 1
+          }
+        },
+        {
+          "note": "Number 5: leading zero at tens, started stays 0, then ones=5 (and 5>3 so this walk is NOT under tight=1 unless we first put tens=0, hi=2, 0 is allowed, then ones tight with hi=3 — 5 is illegal. Wait: 05 is 5, which is <=23. tens=0, still tight? 0<2 so tight drops, ones 0-9, ones=5 works.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "…",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "pos": "05",
+            "tight": 0,
+            "ways": 1
+          }
+        },
+        {
+          "note": "Summing the three successful walks: 5, 14, 23. Start state ways = 3.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "pos": 0,
+            "tight": 1,
+            "ways": 3
+          }
+        },
+        {
+          "note": "f(23) = 3. For a range [L,R] subtract f(L-1). No number was enumerated explicitly; only states were counted.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "3",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "pos": "ans",
+            "tight": "—",
+            "ways": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Reading top-down, each cell sums the children that keep the running sum ≤ 5. The start cell (pos 0, tight 1, started 0) is 3.</figcaption>
+</figure>
+
+<h3>The tight bit on n = 23</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  start["pos 0 tight, hi = 2"] --&gt; z["v=0, tight drops"]
+  start --&gt; one["v=1, tight drops"]
+  start --&gt; two["v=2, still tight"]
+  z --&gt; zFree["ones 0..9"]
+  one --&gt; oneFree["ones 0..9"]
+  two --&gt; twoTight["ones 0..3"]
+  </div>
+  <figcaption>As soon as a digit drops below d[pos], the rest of the number is free (tight = 0).</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Convert R to a digit array</strong> d[0..len) MSB first.</li>
+  <li><strong>State:</strong> pos, extra (sum / last / mod), tight, started.</li>
+  <li><strong>Base:</strong> pos == len → 1 if extra is legal (and handle 0).</li>
+  <li><strong>hi = tight ? d[pos] : 9.</strong> Loop v = 0..hi.</li>
+  <li><strong>Recurse</strong> with updated extra, ntight, nstarted. Add the results.</li>
+  <li><strong>Memoize</strong> on the tuple. Use long.</li>
+  <li><strong>[L,R] = f(R) - f(L-1).</strong></li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Count x in 0..23 with digit sum 5. Walks that succeed.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>tens v</th><th>tight after</th><th>ones v</th><th>sum</th><th>keep?</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>5</td><td>5</td><td>yes (number 5)</td><td>Leading zero, then free ones.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>0</td><td>4</td><td>5</td><td>yes (14)</td><td>Dropped below 2.</td></tr>
+      <tr><td>1</td><td>0</td><td>5</td><td>6</td><td>no</td><td>Sum too big.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>1</td><td>3</td><td>5</td><td>yes (23)</td><td>Stayed tight, ones ≤3.</td></tr>
+      <tr><td>2</td><td>1</td><td>4</td><td>6</td><td>illegal digit</td><td>hi=3.</td></tr>
+      <tr class="trace-table__row--change"><td>total</td><td>—</td><td>—</td><td>—</td><td>3</td><td>Answer.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Digit DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DigitRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class DigitRec {
+    
+        static int[] d;
+        static int target;
+    
+        static long rec(int pos, int sum, boolean tight, boolean started) {
+            if (pos == d.length) {
+                return (started &amp;&amp; sum == target) || (!started &amp;&amp; target == 0) ? 1 : 0;
+            }
+            int hi = tight ? d[pos] : 9;
+            long ans = 0;
+            for (int v = 0; v &lt;= hi; v++) {
+                boolean nst = started || v &gt; 0;
+                int nsum = sum + (nst ? v : 0);
+                if (nsum &gt; target) {
+                    continue;
+                }
+                ans += rec(pos + 1, nsum, tight &amp;&amp; v == d[pos], nst);
+            }
+            return ans;
+        }
+    
+        static long count(int n, int s) {
+            d = String.valueOf(n).chars().map(c -&gt; c - '0').toArray();
+            target = s;
+            return rec(0, 0, true, false);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(count(23, 5));
+        }
+        // Input : R=23, S=5
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DigitMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class DigitMemo {
+    
+        static int[] d;
+        static int target;
+        static long[][][][] memo;
+    
+        static long rec(int pos, int sum, int tight, int started) {
+            if (pos == d.length) {
+                return (started == 1 &amp;&amp; sum == target) || (started == 0 &amp;&amp; target == 0) ? 1 : 0;
+            }
+            if (memo[pos][sum][tight][started] != -1) {
+                return memo[pos][sum][tight][started];
+            }
+            int hi = tight == 1 ? d[pos] : 9;
+            long ans = 0;
+            for (int v = 0; v &lt;= hi; v++) {
+                int nst = (started == 1 || v &gt; 0) ? 1 : 0;
+                int nsum = sum + (nst == 1 ? v : 0);
+                if (nsum &gt; target) {
+                    continue;
+                }
+                ans += rec(pos + 1, nsum, (tight == 1 &amp;&amp; v == d[pos]) ? 1 : 0, nst);
+            }
+            return memo[pos][sum][tight][started] = ans;
+        }
+    
+        static long count(int n, int s) {
+            d = String.valueOf(n).chars().map(c -&gt; c - '0').toArray();
+            target = s;
+            memo = new long[d.length][s + 1][2][2];
+            for (long[][][] a : memo) {
+                for (long[][] b : a) {
+                    for (long[] c : b) {
+                        Arrays.fill(c, -1);
+                    }
+                }
+            }
+            return rec(0, 0, 1, 0);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(count(23, 5));
+        }
+        // Input : R=23, S=5
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DigitTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class DigitTab {
+    
+        static long count(int n, int S) {
+            int[] d = String.valueOf(n).chars().map(c -&gt; c - '0').toArray();
+            int len = d.length;
+            // dp[pos][sum][tight][started] remaining from pos — fill pos = len down to 0
+            long[][][][] dp = new long[len + 1][S + 1][2][2];
+            for (int sum = 0; sum &lt;= S; sum++) {
+                dp[len][sum][0][1] = sum == S ? 1 : 0;
+                dp[len][sum][1][1] = sum == S ? 1 : 0;
+                dp[len][0][0][0] = S == 0 ? 1 : 0;
+                dp[len][0][1][0] = S == 0 ? 1 : 0;
+            }
+            for (int pos = len - 1; pos &gt;= 0; pos--) {
+                for (int sum = 0; sum &lt;= S; sum++) {
+                    for (int tight = 0; tight &lt; 2; tight++) {
+                        for (int started = 0; started &lt; 2; started++) {
+                            int hi = tight == 1 ? d[pos] : 9;
+                            long ans = 0;
+                            for (int v = 0; v &lt;= hi; v++) {
+                                int nst = (started == 1 || v &gt; 0) ? 1 : 0;
+                                int nsum = sum + (nst == 1 ? v : 0);
+                                if (nsum &gt; S) {
+                                    continue;
+                                }
+                                int nt = (tight == 1 &amp;&amp; v == d[pos]) ? 1 : 0;
+                                ans += dp[pos + 1][nsum][nt][nst];
+                            }
+                            dp[pos][sum][tight][started] = ans;
+                        }
+                    }
+                }
+            }
+            return dp[0][0][1][0];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(count(23, 5));
+        }
+        // Input : R=23, S=5
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(len * extra * 10)</span>
+    <span class="badge badge--space">Space O(len * extra) memo</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>len positions, extra = O(digitSum) or O(mod), 2 tight, 2 started, 10 digit tries:</p>
+    <p><span class="eq">T = &Theta;(len &middot; extra &middot; 10)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Loop to R</td><td>O(R log R)</td><td>O(1)</td><td>R≤1e7</td></tr>
+      <tr><td>Digit DP memo</td><td>O(len * extra * 10)</td><td>O(len * extra)</td><td>R=1e18</td></tr>
+      <tr><td>Digit DP tabulated</td><td>O(len * extra * 10)</td><td>O(len * extra)</td><td>Same bound, no recursion</td></tr>
+      <tr><td>Digit DP on a big string</td><td>O(|s| * extra * 10)</td><td>O(|s| * extra)</td><td>1000 digits</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting tight</span>
+    <div class="pitfalls__bug">Counting all len-digit strings, including those > R.</div>
+    <div class="pitfalls__fix">hi depends on tight; ntight = tight && v==d[pos].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Leading zeros counted as digits</span>
+    <div class="pitfalls__bug">Number 5 counted as tens=0, ones=5 with sum 0+5 but also as a 2-digit 05 with last-digit property treating 0 as last.</div>
+    <div class="pitfalls__fix">started flag. Zeros before the first non-zero do not update extra.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">f(R) - f(L) instead of f(L-1)</span>
+    <div class="pitfalls__bug">Drops L or double-counts, depending on inclusivity.</div>
+    <div class="pitfalls__fix">Closed range [L,R] = f(R) - f(L-1). L=0 → just f(R).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Memo key missing a flag</span>
+    <div class="pitfalls__bug">Same pos and sum reused for tight and non-tight, mixing answers.</div>
+    <div class="pitfalls__fix">Every argument of rec is part of the key, including tight and started.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int for the answer</span>
+    <div class="pitfalls__bug">Count of 18-digit numbers is up to 1e18.</div>
+    <div class="pitfalls__fix">long. Modulus if the statement asks.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">target == 0 and the number 0</span>
+    <div class="pitfalls__bug">started stays false all the way; you return 0 and miss the empty/zero case, or return 1 and overcount.</div>
+    <div class="pitfalls__fix">Decide explicitly: !started && target==0 is the number 0.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sum of numbers with the property</td>
+        <td>DP returns (count, sum). When you place digit v at a remaining place-value, add v * 10^rest * count_of_suffix.</td>
+        <td><code>Two longs per state</code></td>
+        <td>CF 55C / digit-sum sums</td>
+      </tr>
+      <tr>
+        <td>Last digit / adjacent</td>
+        <td>Put last in the state, 10 extra values, or 11 with a dummy for unstarted.</td>
+        <td><code>No two consecutive equal</code></td>
+        <td>Classic</td>
+      </tr>
+      <tr>
+        <td>Mod M</td>
+        <td>running value % M in the state. Extra = M. M ≤ 100 is the usual.</td>
+        <td><code>CF 628D</code></td>
+        <td>M larger → not digit DP</td>
+      </tr>
+      <tr>
+        <td>Digits in a given alphabet / binary</td>
+        <td>Same template, base b instead of 10, hi in 0..b-1.</td>
+        <td><code>Binary digit DP is the same idea</code></td>
+        <td>AtCoder DP-S</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is dropping below R irreversible?</summary>
+    <div class="followup__body">
+      <p>The remaining suffix of R is some number T. Once your prefix is already strictly smaller, any suffix of the right length is still ≤ R. So tight never turns back on. That is why one bit suffices.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Do I need started if I only care about digit sum?</summary>
+    <div class="followup__body">
+      <p>Leading zeros add 0 to the sum, so for pure digit-sum you can skip started. You need it as soon as "count of digits", "last digit", or "no leading zero in the output number" matters. Keeping it always is cheaper than debugging.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I handle L and R as 1000-digit strings?</summary>
+    <div class="followup__body">
+      <p>f on a char array. For L-1, decrement the digit string (borrow). Do not parse as long. Memo dimension pos ≤ 1000 is fine.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is this related to automata?</summary>
+    <div class="followup__body">
+      <p>Yes. The extra state is the automaton of the property; tight is the automaton of ≤ R. Digit DP is counting walks of length len on the product automaton.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/numbers-at-most-n-given-digit-set/" target="_blank" rel="noopener">Numbers At Most N Given Digit Set</a></td>
+        <td><span class="badge badge--lc">LC 902</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Digit DP with a restricted alphabet</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/digit-count-in-range/" target="_blank" rel="noopener">Digit Count in Range</a></td>
+        <td><span class="badge badge--lc">LC 1067</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Count digit d in [L,R]</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/numbers-with-repeated-digits/" target="_blank" rel="noopener">Numbers With Repeated Digits</a></td>
+        <td><span class="badge badge--lc">LC 1012</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Used-digit mask + tight</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_s" target="_blank" rel="noopener">Digit DP</a></td>
+        <td><span class="badge badge--atc">ATC DP-S</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Digit sum % D, big K as string</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1036/C" target="_blank" rel="noopener">Classy Numbers</a></td>
+        <td><span class="badge badge--cf">CF 1036C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>At most 3 non-zero digits</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/628/D" target="_blank" rel="noopener">Magic Numbers</a></td>
+        <td><span class="badge badge--cf">CF 628D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Even positions digit d, mod m</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://lightoj.com/problem/investigation" target="_blank" rel="noopener">Investigation</a></td>
+        <td><span class="badge badge--gfg">LightOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Digit sum and number both % k</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://cses.fi/problemset/task/2220" target="_blank" rel="noopener">Counting Numbers</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>No two adjacent digits equal</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/digit-dp-introduction/" target="_blank" rel="noopener">Digit DP GfG</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Tutorial + practice links</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/non-negative-integers-without-consecutive-ones/" target="_blank" rel="noopener">Non-negative Integers without Consecutive Ones</a></td>
+        <td><span class="badge badge--lc">LC 600</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary digit DP</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 1036C Classy Numbers</summary>
+  <div class="spoiler__body">
+    <p>A classy number has at most 3 non-zero digits. State = (pos, nonZeroCount, tight). started is implied by count&gt;0. n ≤ 10^18, q ≤ 1e4, so memo per query (reset by a vis-stamp). [L,R] = f(R)-f(L-1).</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-S</summary>
+  <div class="spoiler__body">
+    <p>K has up to 10000 digits, D ≤ 100. Count numbers ≤ K whose digit sum is 0 mod D. State (pos, sumMod, tight). Mod 1e9+7. Do not parse K as long. Subtract 0 if you excluded 0 and the problem includes it — read the statement; usually 0 is allowed and has sum 0.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Walk digits MSB first</strong> with tight (and usually started).</li>
+    <li><strong>hi = tight ? d[pos] : 9.</strong> ntight = tight && v==d[pos].</li>
+    <li><strong>Extra state holds the property</strong> (sum, last, mask, mod).</li>
+    <li><strong>[L,R] = f(R) - f(L-1)</strong>, long answers.</li>
+    <li><strong>Memo every argument</strong> including the two flags.</li>
+  </ul>
+  <div class="recap__oneliner">rec(pos,extra,tight,started) | hi=tight?d[pos]:9 | [L,R]=f(R)-f(L-1) | long</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

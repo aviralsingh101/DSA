@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridges &amp; Articulation Points &mdash; DSA Course</title>
+<meta name="description" content="A bridge is an edge whose removal disconnects an undirected graph; an articulation point is a vertex with the same property. Both fall out of one tin/low DFS.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bridges-and-articulation-points">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>Bridges & Articulation Points</h1>
+  <p class="hero__tagline">A bridge is an edge whose removal disconnects an undirected graph; an articulation point is a vertex with the same property. Both fall out of one tin/low DFS.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/dfs-and-components.html">DFS & Connected Components</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">bridges</span>
+      <span class="chip">articulation</span>
+      <span class="chip">tin/low</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Critical connections", "edges we must repair", "nodes whose failure splits the network" are the same DFS. Discovery time <code>tin[u]</code> and <code>low[u]</code> — the earliest discovery you can reach from u without using the parent edge — classify every edge and every vertex in one pass.</p>
+<p>Edge u-v (v a child) is a bridge iff <code>low[v] &gt; tin[u]</code>: v cannot climb to u or above, so the only way out is that edge. Vertex u is articulation (non-root) iff some child has <code>low[v] &ge; tin[u]</code>. The root is articulation iff it has two or more DFS children.</p>
+<p>The bridge-block tree (compress 2-edge-connected components) is a tree you can run reroot DP on. Same for the block-cut tree of articulation points.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>low[v] > tin[u] means "v cannot reach u or above without this edge" — a bridge. low[v] >= tin[u] means "v cannot reach strictly above u" — u is a cut vertex for that child.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Critical connections / bridges in an undirected graph</li>
+        <li>Articulation points / cut vertices</li>
+        <li>2-edge-connected components, bridge-block tree</li>
+        <li>"Minimum edges to add so there is no bridge"</li>
+        <li>LC 1192 Critical Connections in a Network</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Directed graphs &rarr; SCCs / bridges-in-directed (different, rarer)</li>
+        <li>Weighted "most critical" with capacities &rarr; min-cut / flow</li>
+        <li>You only need connected components &rarr; plain DFS, no tin/low</li>
+        <li>Finding a cycle &rarr; parent-coloured DFS, no low</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bridge</td>
+        <td>low[child] > tin[u]</td>
+        <td>Do not use parent edge as a back-edge</td>
+      </tr>
+      <tr>
+        <td>Articulation, non-root</td>
+        <td>low[child] >= tin[u]</td>
+        <td>One child is enough</td>
+      </tr>
+      <tr>
+        <td>Articulation, root</td>
+        <td>DFS children >= 2</td>
+        <td>Not low</td>
+      </tr>
+      <tr>
+        <td>2-edge-connected component</td>
+        <td>Compress after dropping bridges</td>
+        <td>Bridge-block tree</td>
+      </tr>
+      <tr>
+        <td>Directed critical edges</td>
+        <td>Not this algorithm</td>
+        <td>SCC / dominators</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Tarjan SCC</td>
+        <td>Same tin/low look; SCC uses a stack and onStack, bridges are undirected and skip the parent</td>
+        <td>Do not copy the SCC snippet blindly</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>, undirected, possibly with parallel edges (a parallel pair is never a bridge). Multiedges need an edge id so the parent skip is exact.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>DFS from every unvisited node. tin[u] = low[u] = timer++. For a neighbour v: if v is the parent, skip; if visited, low[u] = min(low[u], tin[v]) (back-edge); else recurse, low[u] = min(low[u], low[v]), then test the bridge / articulation predicates.</p>
+<p>Parent must be an edge identity, not just a vertex, when parallel edges exist. The root's articulation test is "number of DFS children >= 2", independent of low.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>low[u]</code> is the smallest <code>tin</code> reachable from u by tree edges going down plus at most one back-edge, never using the parent edge. A child that cannot beat <code>tin[u]</code> is trapped in u's subtree.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bridges-and-articulation-pointsViz"></div>
+  <div class="viz-player" data-viz-target="bridges-and-articulation-pointsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "tin =",
+      "array": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "u",
+        "v",
+        "low",
+        "kind"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Graph: 0-1-2-0 a triangle, plus 1-3 a pending leaf. DFS 0-1-2.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "v": 1,
+            "low": "1,2,3,4",
+            "kind": "start"
+          }
+        },
+        {
+          "note": "2 sees 0 as a back-edge: low[2]=tin[0]=1.",
+          "active": [
+            2
+          ],
+          "values": {
+            "u": 2,
+            "v": 0,
+            "low": "1,2,1,4",
+            "kind": "back"
+          }
+        },
+        {
+          "note": "Return to 1: low[1]=min(2, low[2]=1)=1. low[1] > tin[0]? No. 0-1 is not a bridge.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "v": 2,
+            "low": "1,1,1,4",
+            "kind": "no bridge"
+          }
+        },
+        {
+          "note": "1-3: 3 is a leaf, low[3]=4 > tin[1]=2. Edge 1-3 is a bridge.",
+          "active": [
+            3
+          ],
+          "values": {
+            "u": 1,
+            "v": 3,
+            "low": "1,1,1,4",
+            "kind": "bridge"
+          }
+        },
+        {
+          "note": "low[3] >= tin[1], so 1 is an articulation point. Root 0 has one DFS child → not articulation.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "v": 3,
+            "low": "1,1,1,4",
+            "kind": "cut vertex 1"
+          }
+        },
+        {
+          "note": "Bridges: {1-3}. Articulation: {1}.",
+          "active": [
+            1,
+            3
+          ],
+          "values": {
+            "u": "done",
+            "v": "—",
+            "low": "final",
+            "kind": "1-3 + vertex 1"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  n0["0"] --- n1["1"]
+  n1 --- n2["2"]
+  n2 --- n0
+  n1 --- n3["3"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>tin = low = -1</strong>, timer = 0. DFS every component.</li>
+  <li><strong>On a child:</strong> recurse, then low[u] = min(low[u], low[v]).</li>
+  <li><strong>Bridge:</strong> low[v] > tin[u]. <strong>Articulation:</strong> low[v] >= tin[u] (and u not a 1-child root).</li>
+  <li><strong>Back-edge</strong> to an already visited non-parent: low[u] = min(low[u], tin[v]).</li>
+  <li><strong>Root:</strong> articulation iff it has two or more DFS children.</li>
+  <li><strong>Multiedges:</strong> identify the parent by edge id, not by vertex.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>v</th><th>low</th><th>kind</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>1</td><td>1,2,3,4</td><td>start</td><td>Graph: 0-1-2-0 a triangle, plus 1-3 a pending leaf. DFS 0-1-2.</td></tr>
+      <tr><td>2</td><td>0</td><td>1,2,1,4</td><td>back</td><td>2 sees 0 as a back-edge: low[2]=tin[0]=1.</td></tr>
+      <tr><td>1</td><td>2</td><td>1,1,1,4</td><td>no bridge</td><td>Return to 1: low[1]=min(2, low[2]=1)=1. low[1] > tin[0]? No. 0-1 is not a bridge.</td></tr>
+      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>bridge</td><td>1-3: 3 is a leaf, low[3]=4 > tin[1]=2. Edge 1-3 is a bridge.</td></tr>
+      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>cut vertex 1</td><td>low[3] >= tin[1], so 1 is an articulation point. Root 0 has one DFS child → not articulation.</td></tr>
+      <tr><td>done</td><td>—</td><td>final</td><td>1-3 + vertex 1</td><td>Bridges: {1-3}. Articulation: {1}.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Bridges & Articulation Points implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BridgeBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class BridgeBrute {
+        static int comps(int n, List&lt;int[]&gt; edges, int skip) {
+            int[] p = new int[n];
+            for (int i = 0; i &lt; n; i++) p[i] = i;
+            java.util.function.IntUnaryOperator f = new java.util.function.IntUnaryOperator() {
+                public int applyAsInt(int x) { return p[x] == x ? x : (p[x] = applyAsInt(p[x])); }
+            };
+            for (int i = 0; i &lt; edges.size(); i++) if (i != skip) {
+                int[] e = edges.get(i);
+                p[f.applyAsInt(e[0])] = f.applyAsInt(e[1]);
+            }
+            int c = 0;
+            for (int i = 0; i &lt; n; i++) if (f.applyAsInt(i) == i) c++;
+            return c;
+        }
+        public static void main(String[] args) {
+            List&lt;int[]&gt; e = List.of(new int[]{0,1}, new int[]{1,2}, new int[]{2,0}, new int[]{1,3});
+            int base = comps(4, e, -1);
+            for (int i = 0; i &lt; e.size(); i++)
+                if (comps(4, e, i) &gt; base) System.out.println(e.get(i)[0] + "-" + e.get(i)[1]);
+        }
+        // Input : triangle 0-1-2 plus 1-3
+        // Output: 1-3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Bridges.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Bridges {
+        List&lt;int[]&gt;[] g;
+        int[] tin, low;
+        int timer;
+        List&lt;int[]&gt; bridges = new ArrayList&lt;&gt;();
+        boolean[] art;
+        Bridges(int n) {
+            g = new List[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new ArrayList&lt;&gt;();
+            tin = new int[n]; low = new int[n]; art = new boolean[n];
+            Arrays.fill(tin, -1);
+        }
+        void add(int u, int v, int id) { g[u].add(new int[] {v, id}); g[v].add(new int[] {u, id}); }
+        void dfs(int u, int pe) {
+            tin[u] = low[u] = timer++;
+            int kids = 0;
+            for (int[] e : g[u]) {
+                int v = e[0], id = e[1];
+                if (id == pe) continue;
+                if (tin[v] != -1) { low[u] = Math.min(low[u], tin[v]); continue; }
+                kids++;
+                dfs(v, id);
+                low[u] = Math.min(low[u], low[v]);
+                if (low[v] &gt; tin[u]) bridges.add(new int[] {u, v});
+                if (pe != -1 &amp;&amp; low[v] &gt;= tin[u]) art[u] = true;
+            }
+            if (pe == -1 &amp;&amp; kids &gt;= 2) art[u] = true;
+        }
+        public static void main(String[] args) {
+            Bridges b = new Bridges(4);
+            b.add(0, 1, 0); b.add(1, 2, 1); b.add(2, 0, 2); b.add(1, 3, 3);
+            b.dfs(0, -1);
+            System.out.println(b.bridges.get(0)[0] + "-" + b.bridges.get(0)[1]);
+            System.out.println(Arrays.toString(b.art));
+        }
+        // Input : triangle + leaf
+        // Output: 1-3
+        //         [false, true, false, false]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LowLink.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LowLink {
+        static void rec(int u, int p, int[] tin, int[] low, int[] t, java.util.List&lt;Integer&gt;[] g) {
+            tin[u] = low[u] = t[0]++;
+            for (int v : g[u]) {
+                if (v == p) continue;
+                if (tin[v] != -1) { low[u] = Math.min(low[u], tin[v]); continue; }
+                rec(v, u, tin, low, t, g);
+                low[u] = Math.min(low[u], low[v]);
+            }
+        }
+        public static void main(String[] args) {
+            int n = 3;
+            java.util.List&lt;Integer&gt;[] g = new java.util.List[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new java.util.ArrayList&lt;&gt;();
+            g[0].add(1); g[1].add(0); g[1].add(2); g[2].add(1);
+            int[] tin = new int[n], low = new int[n];
+            java.util.Arrays.fill(tin, -1);
+            rec(0, -1, tin, low, new int[1], g);
+            System.out.println(java.util.Arrays.toString(low));
+        }
+        // Input : path 0-1-2
+        // Output: [0, 1, 2]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>One DFS. Each edge is looked at twice. The predicates are O(1) per tree edge.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Remove each edge + DFS</td><td>O(m(n+m))</td><td>O(n)</td><td>m <= 200</td></tr>
+      <tr><td>tin/low DFS</td><td>O(n+m)</td><td>O(n+m)</td><td>Default</td></tr>
+      <tr><td>Tarjan SCC</td><td>O(n+m)</td><td>O(n+m)</td><td>Directed</td></tr>
+      <tr><td>Max-flow min-cut</td><td>Polynomial</td><td>O(n+m)</td><td>Capacitated cuts, not bridges</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using the parent as a back-edge</span>
+    <div class="pitfalls__bug">low[v] becomes tin[u] for every child, so you report zero bridges.</div>
+    <div class="pitfalls__fix">Skip the parent edge (by edge id if the graph has multis).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Bridge test with >= instead of ></span>
+    <div class="pitfalls__bug">A back-edge into u itself is not a bridge; <code>&gt;=</code> falsely flags it.</div>
+    <div class="pitfalls__fix">Bridge is strict <code>&gt;</code>. Articulation is <code>&ge;</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Root tested with the non-root rule</span>
+    <div class="pitfalls__bug">A root with one long child looks like an articulation under the low test and is not.</div>
+    <div class="pitfalls__fix">Root: two or more DFS children. Never the low predicate.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Directed input treated as undirected</span>
+    <div class="pitfalls__bug">You add only one direction and the DFS cannot climb back-edges.</div>
+    <div class="pitfalls__fix">This page is undirected: store both directions, parent-skip one id.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Parallel edges</span>
+    <div class="pitfalls__bug">Parent stored as a vertex: the second  u-v  is skipped as "parent" and a real non-bridge is reported as a bridge.</div>
+    <div class="pitfalls__fix">Give every undirected edge an id; skip that id only.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bridge-block tree</td>
+        <td>Drop bridges, compress remaining components, put bridges back as tree edges.</td>
+        <td><code>reroot DP</code></td>
+        <td>CF 118E</td>
+      </tr>
+      <tr>
+        <td>Block-cut tree</td>
+        <td>Biconnected components + articulation nodes as joints.</td>
+        <td><code>more bookkeeping</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Add min edges to eliminate bridges</td>
+        <td>Bridge-block tree: ceil(leaves/2) on that tree.</td>
+        <td><code>CF 1000? classic</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the bridge test strict >?</summary>
+    <div class="followup__body">
+      <p>If low[v] == tin[u], v can reach u via a back-edge (or via something that reaches u). Removing u-v, that back-edge still connects v's subtree to u. Not a bridge.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is articulation >=?</summary>
+    <div class="followup__body">
+      <p>If low[v] == tin[u], v can reach u but not above u. Removing u disconnects v's subtree from the rest of the graph (the parent side of u).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Directed bridges?</summary>
+    <div class="followup__body">
+      <p>A directed edge is a bridge if it is a bridge in the underlying undirected sense <em>and</em> it is the unique way to go between those SCCs — usually you just want "edges between SCCs" on the condensation.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you handle multiple components?</summary>
+    <div class="followup__body">
+      <p>Run the DFS from every unvisited node. Each call has its own root test.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/critical-connections-in-a-network/" target="_blank" rel="noopener">Critical Connections In A Network</a></td>
+        <td><span class="badge badge--lc">LC 1192</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bridges</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/minimum-number-of-days-to-disconnect-island/" target="_blank" rel="noopener">Minimum Number Of Days To Disconnect Island</a></td>
+        <td><span class="badge badge--lc">LC 1568</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Articulation on a grid</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/118/E" target="_blank" rel="noopener">Bertown Roads</a></td>
+        <td><span class="badge badge--cf">CF 118E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Orient edges so none is a bridge</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/732/F" target="_blank" rel="noopener">Tourist Reform</a></td>
+        <td><span class="badge badge--cf">CF 732F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SCC / bridges mix</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1000/F" target="_blank" rel="noopener">One Occurrence</a></td>
+        <td><span class="badge badge--cf">CF 1000F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Not bridges — skip if looking for CF 1000C</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/2076" target="_blank" rel="noopener">Required Roads? / Bridges</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Print bridges</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://www.spoj.com/problems/EC_P/" target="_blank" rel="noopener">Critical Edges</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Bridges</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc075/tasks/abc075_c" target="_blank" rel="noopener">ABC 075 C</a></td>
+        <td><span class="badge badge--atc">ABC 075C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count bridges</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>low[v] > tin[u] → edge u-v is a bridge.</li>
+    <li>low[v] >= tin[u] → u is articulation (not the 1-child root).</li>
+    <li>Root is articulation iff it has 2+ DFS children.</li>
+    <li>Never treat the parent edge as a back-edge.</li>
+    <li>Multiedges need an edge id.</li>
+  </ul>
+  <div class="recap__oneliner">if (low[v] &gt; tin[u]) bridge; if (low[v] &gt;= tin[u] &amp;&amp; not 1-child-root) art;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

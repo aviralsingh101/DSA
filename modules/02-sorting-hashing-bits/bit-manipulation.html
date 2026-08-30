@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bit Manipulation &mdash; DSA Course</title>
+<meta name="description" content="Bits are a 32- or 64-slot boolean array that hardware already ANDs, ORs and XORs in one cycle — subset enumeration, parity, and &quot;every bit independently&quot; all live here.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bit-manipulation">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Bit Manipulation</h1>
+  <p class="hero__tagline">Bits are a 32- or 64-slot boolean array that hardware already ANDs, ORs and XORs in one cycle — subset enumeration, parity, and "every bit independently" all live here.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">bits</span>
+      <span class="chip">XOR</span>
+      <span class="chip">bitmask</span>
+      <span class="chip">popcount</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>XOR is addition without carry: x^x = 0, x^0 = x, and XOR is commutative. That is why "every element appears twice except one" is a single accumulator, and why you can swap two ints without a temp. AND/OR are the set operations on the bit-set of a 32-bit mask. Interviews hammer a small toolkit until it is muscle memory.</p>
+<p>The other half is subset enumeration. n ≤ 20 means 2^n masks fit in time; each mask is a subset, and <code>mask &amp; (1&lt;&lt;i)</code> tests membership. SOS DP, meet-in-the-middle, and many contest tricks start from that loop. You do not need a bitset class; an <code>int</code> is enough for n≤30, a <code>long</code> for n≤60.</p>
+<p>Java-specific traps: <code>&gt;&gt;</code> sign-extends, <code>&gt;&gt;&gt;</code> is logical; <code>Integer.bitCount</code> is popcount; <code>n &amp; -n</code> is the lowest set bit (two's complement). Shifting by 32 on an int is masked to 5 bits, so <code>1 &lt;&lt; 32</code> is 1, not 0. These are not trivia; they are WA.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Treat the integer as a set of bit positions. XOR toggles, AND intersects, OR unions, and <code>mask ^ (1&lt;&lt;i)</code> flips membership. Most bit problems are set problems in costume.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Every number appears twice except one" / "appears three times except one"</li>
+        <li>"Count set bits", "power of two", "range AND / OR"</li>
+        <li>n ≤ 20 and "every subset" — iterate masks 0..(1&lt;&lt;n)-1</li>
+        <li>"Maximum XOR of two numbers", "XOR of a subarray" (prefix XOR)</li>
+        <li>Need to pack several flags into one int (visited subsets, Game of Life states)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Arbitrary-precision bitsets of size n=1e5 &rarr; <code>BitSet</code> or a <code>long[]</code>, plus a Fenwick/seg-tree if you need prefixes</li>
+        <li>Maximum XOR of a subarray with n=1e5 &rarr; a binary XOR trie, not a nested mask loop</li>
+        <li>Subset sums with n=40 &rarr; meet in the middle, not 2^40</li>
+        <li>Just need popcount of one number once &rarr; <code>Integer.bitCount</code>, stop</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>single number, pairs cancel</td>
+        <td>XOR everything</td>
+        <td>LC 136</td>
+      </tr>
+      <tr>
+        <td>power of two</td>
+        <td>x>0 && (x & (x-1))==0</td>
+        <td>LC 231</td>
+      </tr>
+      <tr>
+        <td>count bits 0..n</td>
+        <td>dp[i] = dp[i>>1] + (i&1)</td>
+        <td>LC 338</td>
+      </tr>
+      <tr>
+        <td>enumerate subsets</td>
+        <td>for (mask = 0; mask < 1<<n; mask++)</td>
+        <td>n ≤ 20</td>
+      </tr>
+      <tr>
+        <td>lowest set bit</td>
+        <td>x & -x  (two's complement)</td>
+        <td>Fenwick next</td>
+      </tr>
+      <tr>
+        <td>range AND l..r</td>
+        <td>common prefix of l and r</td>
+        <td>LC 201</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> bitmask DP on n=40</td>
+        <td>2^40 does not fit; split the set</td>
+        <td>meet in the middle</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n ≤ 20</code> (sometimes 22) is the 2^n signature. 32-bit ops on <code>int</code>, 64-bit on <code>long</code>. Shifts: <code>1L &lt;&lt; k</code> when k can be 31 or more. XOR of many ints still fits in 32 bits; sums of counts need <code>long</code>.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>XOR fold: the unique element in a twice-array is the XOR of everything. For three times, count each bit mod 3 (or the two-bit state machine). Power of two: exactly one bit set, <code>(x &amp; (x-1)) == 0</code> and x &gt; 0. Turn off lowest bit: <code>x &amp;= x-1</code>, which is also the kernel of Kernighan popcount.</p>
+<p>Masks: bit i is on iff element i is in the subset. Iterate submasks of m with <code>s = (s-1) &amp; m</code>. Prefix XOR makes subarray XOR a two-endpoint query, same identity as prefix sums. Java: prefer <code>Integer.bitCount</code>, <code>Integer.numberOfTrailingZeros</code>, <code>Integer.highestOneBit</code> over hand-rolled loops unless you are teaching them.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>XOR is its own inverse and is associative:</p><span class="eq">x ⊕ x = 0,&nbsp; x ⊕ 0 = x,&nbsp; (a⊕b⊕c) ⊕ b = a⊕c</span><p>Interview sentence: <em>"Pairs cancel under XOR; a mask is a subset of bit positions."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bit-manipulationViz"></div>
+  <div class="viz-player" data-viz-target="bit-manipulationViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        4,
+        1,
+        2,
+        1,
+        2
+      ],
+      "vars": [
+        "i",
+        "x",
+        "acc",
+        "bits"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "XOR-fold [4,1,2,1,2]. acc=0. i=0, x=4 (100b). acc=4.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 0,
+            "x": 4,
+            "acc": 4,
+            "bits": "100"
+          }
+        },
+        {
+          "note": "x=1 (001b). acc=4^1=5 (101b).",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 1,
+            "x": 1,
+            "acc": 5,
+            "bits": "101"
+          }
+        },
+        {
+          "note": "x=2 (010b). acc=5^2=7 (111b).",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4
+          ],
+          "values": {
+            "i": 2,
+            "x": 2,
+            "acc": 7,
+            "bits": "111"
+          }
+        },
+        {
+          "note": "x=1. acc=7^1=6 (110b). The first 1 cancelled.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4
+          ],
+          "values": {
+            "i": 3,
+            "x": 1,
+            "acc": 6,
+            "bits": "110"
+          }
+        },
+        {
+          "note": "x=2. acc=6^2=4 (100b). Pairs cancelled; unique 4 remains.",
+          "active": [
+            4
+          ],
+          "best": [
+            0
+          ],
+          "done": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "i": 4,
+            "x": 2,
+            "acc": 4,
+            "bits": "100"
+          }
+        },
+        {
+          "note": "Kernighan: popcount of 12 (1100b): 12, 8, 0 — two bits, two iterations of x&=x-1.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": "pop",
+            "x": 12,
+            "acc": 2,
+            "bits": "x&=x-1"
+          }
+        },
+        {
+          "note": "Masks for n=3: 000..111 are the 8 subsets. bit i on ⇔ include a[i].",
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "i": "mask",
+            "x": "0..7",
+            "acc": "—",
+            "bits": "2^3 subsets"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Which bit tool?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["bit question"] --&gt; kind{"cancel, count, or enumerate?"}
+  kind -- pairs cancel --&gt; xor["XOR fold"]
+  kind -- popcount / power2 --&gt; kern["x and x-1, or Integer.bitCount"]
+  kind -- every subset --&gt; mask["for mask in 0 .. 1&lt;&lt;n"]
+  kind -- subarray XOR --&gt; pfx["prefix XOR, same as prefix sums"]
+  kind -- max XOR n large --&gt; trie["wrong page: XOR trie"]
+  xor --&gt; ops["AND intersect, OR union, XOR toggle"]
+  kern --&gt; ops
+  mask --&gt; ops
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>XOR fold</strong> when pairs (or even counts) should vanish.</li>
+  <li><strong>x &amp; (x-1)</strong> drops the lowest set bit; loop for popcount.</li>
+  <li><strong>x &amp; -x</strong> isolates the lowest set bit (Fenwick step).</li>
+  <li><strong>Enumerate masks</strong> <code>for (int m = 0; m &lt; (1 &lt;&lt; n); m++)</code> when n ≤ 20. Use <code>1L &lt;&lt; i</code> for i up to 62.</li>
+  <li><strong>Submasks:</strong> <code>for (int s = m; s &gt; 0; s = (s - 1) &amp; m)</code>.</li>
+  <li><strong>Prefix XOR</strong> for subarray XOR queries: <code>px[r+1]^px[l]</code>.</li>
+  <li><strong>Java:</strong> <code>&gt;&gt;&gt;</code> for logical shift; never <code>1 &lt;&lt; 32</code> on an int.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>x</th><th>acc</th><th>bits</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>4</td><td>4</td><td>100</td><td>XOR-fold [4,1,2,1,2]. acc=0. i=0, x=4 (100b). acc=4.</td></tr>
+      <tr><td>1</td><td>1</td><td>5</td><td>101</td><td>x=1 (001b). acc=4^1=5 (101b).</td></tr>
+      <tr><td>2</td><td>2</td><td>7</td><td>111</td><td>x=2 (010b). acc=5^2=7 (111b).</td></tr>
+      <tr><td>3</td><td>1</td><td>6</td><td>110</td><td>x=1. acc=7^1=6 (110b). The first 1 cancelled.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>2</td><td>4</td><td>100</td><td>x=2. acc=6^2=4 (100b). Pairs cancelled; unique 4 remains.</td></tr>
+      <tr><td>pop</td><td>12</td><td>2</td><td>x&=x-1</td><td>Kernighan: popcount of 12 (1100b): 12, 8, 0 — two bits, two iterations of x&=x-1.</td></tr>
+      <tr><td>mask</td><td>0..7</td><td>—</td><td>2^3 subsets</td><td>Masks for n=3: 000..111 are the 8 subsets. bit i on ⇔ include a[i].</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Bit Manipulation implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Count the unique element with a map. XOR drops the extra memory.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BitBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class BitBrute {
+        static int singleNumber(int[] a) {
+            Map&lt;Integer, Integer&gt; c = new HashMap&lt;&gt;();
+            for (int v : a) {
+                c.merge(v, 1, Integer::sum);
+            }
+            for (var e : c.entrySet()) {
+                if (e.getValue() == 1) {
+                    return e.getKey();
+                }
+            }
+            return 0;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(singleNumber(new int[] {4, 1, 2, 1, 2}));
+        }
+        // Input : [4, 1, 2, 1, 2]
+        // Output: 4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>XOR fold, power-of-two, Kernighan popcount, and prefix XOR.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BitOps.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class BitOps {
+        static int singleNumber(int[] a) {
+            int x = 0;
+            for (int v : a) {
+                x ^= v;
+            }
+            return x;
+        }
+    
+        static boolean isPowerOfTwo(int x) {
+            return x &gt; 0 &amp;&amp; (x &amp; (x - 1)) == 0;
+        }
+    
+        static int popcount(int x) {
+            int c = 0;
+            while (x != 0) {
+                x &amp;= x - 1;
+                c++;
+            }
+            return c;
+        }
+    
+        static int[] prefixXor(int[] a) {
+            int n = a.length;
+            int[] p = new int[n + 1];
+            for (int i = 0; i &lt; n; i++) {
+                p[i + 1] = p[i] ^ a[i];
+            }
+            return p;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(singleNumber(new int[] {4, 1, 2, 1, 2}));
+            System.out.println(isPowerOfTwo(8) + " " + isPowerOfTwo(7));
+            System.out.println(popcount(12));
+            System.out.println(Arrays.toString(prefixXor(new int[] {1, 2, 3})));
+        }
+        // Input : [4,1,2,1,2]; 8 and 7; popcount 12; prefix XOR [1,2,3]
+        // Output: 4
+        //         true false
+        //         2
+        //         [0, 1, 3, 0]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Enumerate subsets as masks. Sum of each subset stored in a long.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BitmaskSubsets.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class BitmaskSubsets {
+        static List&lt;Long&gt; subsetSums(int[] a) {
+            int n = a.length;
+            List&lt;Long&gt; out = new ArrayList&lt;&gt;();
+            for (int mask = 0; mask &lt; (1 &lt;&lt; n); mask++) {
+                long s = 0;
+                for (int i = 0; i &lt; n; i++) {
+                    if ((mask &amp; (1 &lt;&lt; i)) != 0) {
+                        s += a[i];
+                    }
+                }
+                out.add(s);
+            }
+            return out;
+        }
+    
+        /** Number of (mask, submask) pairs is 3^n. Includes the empty submask. */
+        static long countSubmasks(int n) {
+            long cnt = 0;
+            for (int mask = 0; mask &lt; (1 &lt;&lt; n); mask++) {
+                for (int sub = mask; ; sub = (sub - 1) &amp; mask) {
+                    cnt++;
+                    if (sub == 0) break;
+                }
+            }
+            return cnt;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subsetSums(new int[] {1, 2, 4}));
+            System.out.println(countSubmasks(3));
+        }
+        // Input : subset sums of [1, 2, 4]; submasks of n = 3
+        // Output: [0, 1, 2, 3, 4, 5, 6, 7]
+        //         27
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time XOR fold O(n); popcount O(set bits); subset enum O(2^n · n)</span>
+    <span class="badge badge--space">Space O(1) for folds; O(2^n) if you store every subset sum</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>XOR / AND / OR of n integers is one pass: <span class="eq">Θ(n)</span>. Kernighan popcount is Θ(popcount(x)).</p>
+    <p>Subset enumeration: 2^n masks, n bit tests each, <span class="eq">T(n) = Θ(n 2^n)</span>. Submask enumeration of one mask with popcount p is 2^p. n=20 is about 20 million operations; n=25 is already tight in Java.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>HashMap counts</td><td>O(n)</td><td>O(n)</td><td>Single-number without XOR</td></tr>
+      <tr><td>XOR fold</td><td>O(n)</td><td>O(1)</td><td>Pairs cancel</td></tr>
+      <tr><td>Bit-mod-3 counts</td><td>O(32 n)</td><td>O(1)</td><td>Single number II</td></tr>
+      <tr><td>Mask enumeration</td><td>O(n 2^n)</td><td>O(2^n)</td><td>n ≤ 20 subsets</td></tr>
+      <tr><td>Submask enumeration</td><td>O(3^n)</td><td>O(1) extra</td><td>n ≤ 15; SOS inner loop</td></tr>
+      <tr><td>XOR trie</td><td>O(n · 32)</td><td>O(n · 32)</td><td>Max XOR, large n</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">1 << 31 and 1 << 32 on int</span>
+    <div class="pitfalls__bug"><code>1 &lt;&lt; 31</code> is Integer.MIN_VALUE (negative). <code>1 &lt;&lt; 32</code> is 1 because the shift count is masked to 5 bits.</div>
+    <div class="pitfalls__fix"><code>1L &lt;&lt; k</code> for k up to 62. Never shift an int by ≥ 32.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Arithmetic >> on a sign bit</span>
+    <div class="pitfalls__bug"><code>-1 >> 1</code> stays -1 (sign extend). Logical fill needs <code>&gt;&gt;&gt;</code>.</div>
+    <div class="pitfalls__fix">Unsigned / bit patterns: <code>&gt;&gt;&gt;</code>. Java has no unsigned int type.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">x & (x-1) on x=0</span>
+    <div class="pitfalls__bug">Power-of-two test without <code>x &gt; 0</code> accepts 0, and negatives.</div>
+    <div class="pitfalls__fix"><code>x &gt; 0 &amp;&amp; (x &amp; (x-1)) == 0</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">XOR of a subarray without a prefix</span>
+    <div class="pitfalls__bug">Recomputing XOR(l..r) in O(r-l) per query dies at n,q=1e5.</div>
+    <div class="pitfalls__fix">Prefix XOR array, query is <code>p[r+1] ^ p[l]</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mask loop with n=31 on int</span>
+    <div class="pitfalls__bug"><code>1 &lt;&lt; n</code> overflows the loop bound; signed int 2^31 is negative.</div>
+    <div class="pitfalls__fix">n≤30 for <code>int</code> masks; use <code>1L &lt;&lt; n</code> and a long loop.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Single number II (triples)</td>
+        <td>For each of 32 bits, count how many times it is set, mod 3.</td>
+        <td><code>or a finite-state pair (ones, twos) of bits.</code></td>
+        <td>LC 137.</td>
+      </tr>
+      <tr>
+        <td>Range bitwise AND</td>
+        <td>AND of [l,r] is the common prefix of l and r; shift both until equal.</td>
+        <td><code>while (l &lt; r) { l &gt;&gt;= 1; r &gt;&gt;= 1; shift++; } return l &lt;&lt; shift;</code></td>
+        <td>LC 201.</td>
+      </tr>
+      <tr>
+        <td>Subsets via bits (LC 78)</td>
+        <td>Each mask is a subset; no recursion needed.</td>
+        <td><code>same loop as BitmaskSubsets, collect elements instead of sums.</code></td>
+        <td>LC 78.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Two unique numbers, everything else twice?</summary>
+    <div class="followup__body">
+      <p>XOR everything to get a^b. The lowest set bit of a^b is a bit they differ on. Partition the array by that bit and XOR-fold each part: LC 260.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is n & -n the lowest set bit?</summary>
+    <div class="followup__body">
+      <p>Two's complement: -n is ~n+1. Adding one flips trailing ones into zeros and the first zero into a one, which is exactly the lowest set bit of n, and AND isolates it.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Enumerate only submasks of m, not all 2^n?</summary>
+    <div class="followup__body">
+      <p><code>for (int s = m; s != 0; s = (s-1) &amp; m)</code> then handle s=0. That is SOS / subset-convolution's inner loop. 3^n over all (mask, submask) pairs.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Maximum XOR pair in O(n)?</summary>
+    <div class="followup__body">
+      <p>Not with masks. Build a binary trie of the numbers (or of prefix XORs for subarrays) and greedy-match the opposite bit. See XOR trie.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/single-number/" target="_blank" rel="noopener">Single Number</a></td>
+        <td><span class="badge badge--lc">LC 136</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>XOR fold</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/number-of-1-bits/" target="_blank" rel="noopener">Number of 1 Bits</a></td>
+        <td><span class="badge badge--lc">LC 191</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Kernighan x&=x-1</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/counting-bits/" target="_blank" rel="noopener">Counting Bits</a></td>
+        <td><span class="badge badge--lc">LC 338</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>dp[i]=dp[i>>1]+(i&1)</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/power-of-two/" target="_blank" rel="noopener">Power of Two</a></td>
+        <td><span class="badge badge--lc">LC 231</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>x>0 && (x&(x-1))==0</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/single-number-ii/" target="_blank" rel="noopener">Single Number II</a></td>
+        <td><span class="badge badge--lc">LC 137</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Bits mod 3</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/single-number-iii/" target="_blank" rel="noopener">Single Number III</a></td>
+        <td><span class="badge badge--lc">LC 260</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>XOR then split on a differing bit</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/bitwise-and-of-numbers-range/" target="_blank" rel="noopener">Bitwise AND of Range</a></td>
+        <td><span class="badge badge--lc">LC 201</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Common prefix of l and r</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/subsets/" target="_blank" rel="noopener">Subsets</a></td>
+        <td><span class="badge badge--lc">LC 78</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>One mask per subset</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/550/B" target="_blank" rel="noopener">Preparing Olympiad</a></td>
+        <td><span class="badge badge--cf">CF 550B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>2^n subsets, n ≤ 15</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1095/C" target="_blank" rel="noopener">Powers Of Two</a></td>
+        <td><span class="badge badge--cf">CF 1095C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Split n into k powers of two</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>XOR cancels pairs</strong>; prefix XOR is the subarray identity.</li>
+    <li><strong>x &amp; (x-1)</strong> drops the lowest set bit; <strong>x &amp; -x</strong> isolates it.</li>
+    <li><strong>A mask is a subset</strong>; n ≤ 20 enumerates 2^n.</li>
+    <li><strong>Use 1L &lt;&lt; k</strong> and <code>&gt;&gt;&gt;</code> for bit patterns.</li>
+    <li><strong>Integer.bitCount</strong> exists; do not roll it unless teaching.</li>
+  </ul>
+  <div class="recap__oneliner">int x = 0; for (int v : a) x ^= v;  // pairs cancel</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

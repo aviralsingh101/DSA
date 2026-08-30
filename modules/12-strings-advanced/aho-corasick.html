@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aho-Corasick &mdash; DSA Course</title>
+<meta name="description" content="A trie of all patterns plus KMP-style failure links: feed the text once and report every pattern occurrence, overlapping included, in linear time.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="aho-corasick">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 12 &middot; Strings, Advanced</span>
+  <h1>Aho-Corasick</h1>
+  <p class="hero__tagline">A trie of all patterns plus KMP-style failure links: feed the text once and report every pattern occurrence, overlapping included, in linear time.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="kmp-and-prefix-function.html">KMP & the Prefix Function</a>,
+      <a href="../05-trees/trie.html">Trie</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Aho-Corasick</span>
+      <span class="chip">automaton</span>
+      <span class="chip">trie</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>KMP matches one pattern. m patterns in a text of length n is O(n * sum |p|) naively, or m KMP automata. Aho-Corasick builds one automaton whose states are trie nodes and whose failure links jump to the longest proper suffix that is still a prefix of some pattern.</p>
+<p>BFS from the root fills failure links (the same queue idea as KMP's π, on a trie). Output links skip to the next terminal along the failure chain so you do not walk O(patterns) per character.</p>
+<p>Hidden as "virus detection", "count how many dictionaries words appear", and CF problems that DP on the automaton ("avoid these forbidden words").</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Failure[u] is the KMP border of the string represented by u, inside the trie of all patterns. Feeding a character is: follow the edge, or fail until you can.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Many patterns, one text, report or count all hits</li>
+        <li>DP on strings that must avoid a set of forbidden words</li>
+        <li>Sum of occurrences of every dictionary word, overlaps allowed</li>
+        <li>You already have a trie and need a failure function on it</li>
+        <li>n + sum |p| ≤ 1e6 so a linear automaton fits</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>One pattern &rarr; KMP</li>
+        <li>Patterns with wildcards / regex &rarr; different automaton</li>
+        <li>You need suffix order of one string &rarr; SA</li>
+        <li>Offline "is this pattern a substring" of many texts and few patterns &rarr; maybe reverse AC, or hashing</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>m patterns in one text</td>
+        <td>Trie + failure BFS</td>
+        <td>Aho-Corasick</td>
+      </tr>
+      <tr>
+        <td>One pattern</td>
+        <td>Prefix function</td>
+        <td>KMP</td>
+      </tr>
+      <tr>
+        <td>Avoid forbidden words DP</td>
+        <td>DP on (position, AC state)</td>
+        <td>AC + DP</td>
+      </tr>
+      <tr>
+        <td>Prefix queries on one dict</td>
+        <td>Plain trie</td>
+        <td>Trie page</td>
+      </tr>
+      <tr>
+        <td>All substrings of one s</td>
+        <td>Suffix automaton / SA</td>
+        <td>Not AC</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> suffix links of a suffix tree</td>
+        <td>Similar idea, different objects</td>
+        <td>AC failure is on a dictionary trie</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>sum |p| + |t| &le; 10&#8310;</code>. Alphabet 26 is an array of 26; larger alphabets use maps and a slower fail. Output-link compression is mandatory if many patterns nest.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Insert every pattern into a trie; store pattern ids on terminal nodes. BFS: for each node, for each char, if the child exists, fail[child] = next(fail[node], char); else next(node,char) = next(fail[node], char) (lazy or filled).</p>
+<p>Scan the text: state = next(state, c). Then walk output links from state and collect terminals. DP: edges of the automaton are the transitions.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The string of fail[u] is the longest proper suffix of u's string that is a prefix of some pattern. After reading a prefix of the text, the current state is the longest suffix of that prefix that is a trie prefix.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="aho-corasickViz"></div>
+  <div class="viz-player" data-viz-target="aho-corasickViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "state after feeding a,b,a,c,a =",
+      "array": [
+        0,
+        1,
+        2,
+        0,
+        3
+      ],
+      "indexLabels": [
+        "a",
+        "b",
+        "a",
+        "c",
+        "a"
+      ],
+      "vars": [
+        "ch",
+        "state",
+        "hit"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Patterns: ab, ba, aba. Trie: 0 -a-> 1 -b-> 2 (ab, and continue -a-> 4 aba). 0 -b-> 3 (ba).",
+          "active": [
+            0
+          ],
+          "values": {
+            "ch": "build",
+            "state": 0,
+            "hit": "none"
+          }
+        },
+        {
+          "note": "fail[1]=0, fail[2]=3 (\"b\" of \"ab\"), fail[3]=0, fail[4]=1 (\"a\" of \"aba\").",
+          "active": [
+            0
+          ],
+          "values": {
+            "ch": "fail",
+            "state": "links",
+            "hit": "—"
+          }
+        },
+        {
+          "note": "Feed a: state 1. Feed b: state 2, hit \"ab\".",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "ch": "ab",
+            "state": 2,
+            "hit": "ab"
+          }
+        },
+        {
+          "note": "Feed a: state 4, hit \"aba\" and via fail also \"ba\"? fail[4]=1, output walk collects aba.",
+          "active": [
+            2
+          ],
+          "values": {
+            "ch": "aba",
+            "state": 4,
+            "hit": "aba"
+          }
+        },
+        {
+          "note": "Feed c: no edge, fail to 1 then 0. state 0.",
+          "active": [
+            3
+          ],
+          "values": {
+            "ch": "c",
+            "state": 0,
+            "hit": "none"
+          }
+        },
+        {
+          "note": "Feed a: state 1. Text abaca had hits at \"ab\" and \"aba\".",
+          "active": [
+            4
+          ],
+          "values": {
+            "ch": "a",
+            "state": 1,
+            "hit": "done"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Trie edges solid, failure dashed</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart LR
+  r0["root"] --&gt;|"a"| a1["a"]
+  r0 --&gt;|"b"| b3["b"]
+  a1 --&gt;|"b"| ab2["ab"]
+  ab2 --&gt;|"a"| aba4["aba"]
+  b3 --&gt;|"a"| baN["ba"]
+  ab2 -.-&gt;|"fail"| b3
+  aba4 -.-&gt;|"fail"| a1
+  </div>
+  <figcaption>Failure is the KMP border inside the dictionary trie. BFS fills them parent-first.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Trie insert</strong> every pattern; mark terminals with ids.</li>
+  <li><strong>BFS from root:</strong> fail[root]=root (or 0). For each edge, set fail[child] using fail[parent].</li>
+  <li><strong>Fill missing transitions</strong> to next(fail, c) so the scan has no while-loop, or keep the while.</li>
+  <li><strong>output[u]</strong> = u if terminal, else output[fail[u]] (skip chain).</li>
+  <li><strong>Scan t:</strong> state = go(state, c); walk output links; record hits.</li>
+  <li><strong>DP variant:</strong> states of the automaton are DP indices.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>ch</th><th>state</th><th>hit</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>build</td><td>0</td><td>none</td><td>Patterns: ab, ba, aba. Trie: 0 -a-> 1 -b-> 2 (ab, and continue -a-> 4 aba). 0 -b-> 3 (ba).</td></tr>
+      <tr><td>fail</td><td>links</td><td>—</td><td>fail[1]=0, fail[2]=3 ("b" of "ab"), fail[3]=0, fail[4]=1 ("a" of "aba").</td></tr>
+      <tr><td>ab</td><td>2</td><td>ab</td><td>Feed a: state 1. Feed b: state 2, hit "ab".</td></tr>
+      <tr><td>aba</td><td>4</td><td>aba</td><td>Feed a: state 4, hit "aba" and via fail also "ba"? fail[4]=1, output walk collects aba.</td></tr>
+      <tr><td>c</td><td>0</td><td>none</td><td>Feed c: no edge, fail to 1 then 0. state 0.</td></tr>
+      <tr><td>a</td><td>1</td><td>done</td><td>Feed a: state 1. Text abaca had hits at "ab" and "aba".</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Aho-Corasick implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>For each pattern, indexOf / KMP separately.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DictBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class DictBrute {
+        static int hits(String t, String[] ps) {
+            int c = 0;
+            for (String p : ps) {
+                for (int i = 0; i + p.length() &lt;= t.length(); i++)
+                    if (t.startsWith(p, i)) c++;
+            }
+            return c;
+        }
+        public static void main(String[] args) {
+            System.out.println(hits("abaca", new String[] {"ab", "ba", "aba"}));
+        }
+        // Input : abaca vs ab, ba, aba
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Alphabet 26. BFS failure links. Count terminal visits (with output walk).</p>
+    <div class="code" data-highlight="28-40">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AhoCorasick.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class AhoCorasick {
+        static final int A = 26;
+        int[][] nxt = new int[1][A];
+        int[] fail, out;
+        int sz = 1;
+        void grow() {
+            nxt = Arrays.copyOf(nxt, sz + 1);
+            nxt[sz] = new int[A];
+            sz++;
+        }
+        void add(String p) {
+            int u = 0;
+            for (int i = 0; i &lt; p.length(); i++) {
+                int c = p.charAt(i) - 'a';
+                if (nxt[u][c] == 0) { grow(); nxt[u][c] = sz - 1; }
+                u = nxt[u][c];
+            }
+            out = out == null ? new int[sz] : Arrays.copyOf(out, sz);
+            out[u]++;
+        }
+        void build() {
+            fail = new int[sz];
+            out = Arrays.copyOf(out == null ? new int[sz] : out, sz);
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            for (int c = 0; c &lt; A; c++) if (nxt[0][c] != 0) q.add(nxt[0][c]);
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                for (int c = 0; c &lt; A; c++) {
+                    int v = nxt[u][c];
+                    if (v == 0) nxt[u][c] = nxt[fail[u]][c];
+                    else {
+                        fail[v] = nxt[fail[u]][c];
+                        out[v] += out[fail[v]];
+                        q.add(v);
+                    }
+                }
+            }
+        }
+        long feed(String t) {
+            int u = 0;
+            long ans = 0;
+            for (int i = 0; i &lt; t.length(); i++) {
+                u = nxt[u][t.charAt(i) - 'a'];
+                ans += out[u];
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            AhoCorasick ac = new AhoCorasick();
+            for (String p : new String[] {"ab", "ba", "aba"}) ac.add(p);
+            ac.build();
+            System.out.println(ac.feed("abaca"));
+        }
+        // Input : patterns ab, ba, aba; text abaca
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>The go() fallback without pre-filling missing edges — same idea as KMP's while.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AhoGo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class AhoGo {
+        static int go(int[][] nxt, int[] fail, int u, int c) {
+            while (u &gt; 0 &amp;&amp; nxt[u][c] == 0) u = fail[u];
+            return nxt[u][c];
+        }
+        public static void main(String[] args) {
+            int[][] nxt = {{1, 0}, {0, 2}, {0, 0}};
+            int[] fail = {0, 0, 0};
+            System.out.println(go(nxt, fail, 2, 0));
+        }
+        // Input : tiny trie, from state 2 ask for 'a'
+        // Output: 1
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O((|t| + sum |p|) * alphabet) with filled transitions, or amortised O(|t|+sum|p|) with while-fail</span>
+    <span class="badge badge--space">Space O(sum |p| * alphabet)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Trie size is O(sum |p|). BFS visits each node and each edge once. Scanning the text follows one transition per character; output-link walks are O(hits) if compressed, or can be O(n * patterns) if you naively climb fail every time — store aggregated out[u] += out[fail[u]].</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>m × KMP</td><td>O(n m + sum |p|)</td><td>O(sum |p|)</td><td>few patterns</td></tr>
+      <tr><td>Aho-Corasick</td><td>O(n + sum |p|)</td><td>O(sum |p| · σ)</td><td>The default</td></tr>
+      <tr><td>Hash every pattern</td><td>O(n + sum |p|)</td><td>O(sum |p|)</td><td>False positives</td></tr>
+      <tr><td>Suffix automaton of t</td><td>O(|t|)</td><td>O(|t|)</td><td>When the text is one and patterns are queries</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not copying out along fail</span>
+    <div class="pitfalls__bug">A nested pattern ("ab" inside "xab") is missed because you only look at the current node.</div>
+    <div class="pitfalls__fix"><code>out[v] += out[fail[v]]</code> in BFS, or an output link you walk.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">fail[child] using an unfilled parent fail</span>
+    <div class="pitfalls__bug">BFS order is mandatory: a node's fail is known before its children are processed? Actually fail[v] uses fail[u] and nxt[fail[u]][c], so parent must already be dequeued. Root's children fail to root.</div>
+    <div class="pitfalls__fix">Queue: push root's children first, fail=0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">nxt[0][c]==0 meaning missing vs meaning root</span>
+    <div class="pitfalls__bug">Using 0 as both "no edge" and "root". Filling missing edges of root to 0 is correct; using 0 as a real child is not.</div>
+    <div class="pitfalls__fix">Nodes numbered from 0 = root; missing stored as 0 on non-root is "follow fail". Root missing stays 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Alphabet not 'a'-'z'</span>
+    <div class="pitfalls__bug">char - 'a' negative; crash.</div>
+    <div class="pitfalls__fix">Map to 0..sigma-1, or a HashMap per node (slower fail).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Growing nxt incorrectly</span>
+    <div class="pitfalls__bug">new int[sz][A] every insert is O(n^2) memory copies.</div>
+    <div class="pitfalls__fix">Preallocate a generous cap, or ArrayList of nodes.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>DP avoid words</td>
+        <td>dp[i][state] ways to build length i landing in state; skip terminals (or absorb into a sink).</td>
+        <td><code>CF 163E / classic</code></td>
+        <td>forbidden-string DP</td>
+      </tr>
+      <tr>
+        <td>Count each pattern separately</td>
+        <td>Don't aggregate out[]; store lists of ids and output-link walk.</td>
+        <td><code>report id list</code></td>
+        <td>when m is small</td>
+      </tr>
+      <tr>
+        <td>Binary alphabet / bits</td>
+        <td>Same trie, 2 children. Used on binary codes.</td>
+        <td><code>nxt[u][0/1]</code></td>
+        <td>CF DNA problems</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why BFS not DFS for failure links?</summary>
+    <div class="followup__body">
+      <p>fail[u] points at a strictly shorter string, which is an ancestor in the failure tree, not necessarily in the trie. BFS by string length (which is trie depth) guarantees that shorter states are ready. Depth BFS on the trie is enough because |fail[u]| &lt; |u|.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Aho vs suffix automaton?</summary>
+    <div class="followup__body">
+      <p>AC is a dictionary matcher. SAM represents all substrings of one text. If the text is huge and patterns are queries, SAM or SA of the text. If patterns are the dictionary and the text is a stream, AC.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you reconstruct positions, not just counts?</summary>
+    <div class="followup__body">
+      <p>Store pattern ids on terminals. On a hit at text index i, the pattern of length L ends at i, starts at i-L+1. Walk output links for nested hits.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the output link?</summary>
+    <div class="followup__body">
+      <p>The nearest terminal on the failure chain. Jumping output[u] → output[output[u]] skips non-terminal fails. Aggregating counts into out[u] is even cheaper when you only need totals.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://cses.fi/problemset/task/2102" target="_blank" rel="noopener">String Matching II? / Pattern Finder</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Multiple patterns — CSES Word Combinations is DP</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://cses.fi/problemset/task/1731" target="_blank" rel="noopener">Word Combinations</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Trie DP; AC if many overlapping words</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/word-search-ii/" target="_blank" rel="noopener">Word Search Ii</a></td>
+        <td><span class="badge badge--lc">LC 212</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Trie on board; AC optional</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/stream-of-characters/" target="_blank" rel="noopener">Stream Of Characters</a></td>
+        <td><span class="badge badge--lc">LC 1032</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Online AC / reversed trie</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/163/E" target="_blank" rel="noopener">e-Government</a></td>
+        <td><span class="badge badge--cf">CF 163E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>AC + Fenwick on fail tree</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/1202/E" target="_blank" rel="noopener">You Are Given Some Strings...</a></td>
+        <td><span class="badge badge--cf">CF 1202E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>AC both directions</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/963/D" target="_blank" rel="noopener">Frequency of String</a></td>
+        <td><span class="badge badge--cf">CF 963D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>AC + k-th occurrence gaps</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/ACODE/" target="_blank" rel="noopener">ACODE</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Not AC — warmup DP; use SUBST1 / JZPGYZ for AC</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Trie of all patterns + KMP failure on nodes.</li>
+    <li>BFS fills fail and missing transitions.</li>
+    <li>out[v] += out[fail[v]] so nested hits are not missed.</li>
+    <li>Scan is one transition per character.</li>
+    <li>DP-on-automaton avoids forbidden words.</li>
+  </ul>
+  <div class="recap__oneliner">if (nxt[u][c]==0) nxt[u][c]=nxt[fail[u]][c]; else fail[v]=nxt[fail[u]][c];</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

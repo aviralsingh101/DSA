@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sum Over Subsets DP &mdash; DSA Course</title>
+<meta name="description" content="Sum over subsets in O(n 2n) instead of O(3n): for each bit, add the values of masks that differ only in that bit.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="sos-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Sum Over Subsets DP</h1>
+  <p class="hero__tagline">Sum over subsets in O(n 2<sup>n</sup>) instead of O(3<sup>n</sup>): for each bit, add the values of masks that differ only in that bit.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="bitmask-dp.html">Bitmask DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">SOS</span>
+      <span class="chip">submasks</span>
+      <span class="chip">zeta transform</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Naive F[mask] = sum of A[sub] over sub subseteq mask is 3<sup>n</sup> if you loop every mask and every submask. SOS (sum over subsets) does the same zeta transform in n 2<sup>n</sup> by a DP that looks like a fast Walsh/zeta: for bit b from 0 to n-1, for every mask with bit b set, add the value of mask without b.</p>
+<p>That one transform is the bottleneck in "for every mask, combine with every submask" problems: subset-OR convolution, counting pairs (i, j) with a[i]|a[j] = x, sum of f[sub] * g[mask^sub], and CF classics like 165E Compatible Numbers.</p>
+<p>P2 because the implementation is short and the mistakes (wrong loop order, summing supersets vs subsets, in-place twice) are silent. Draw the n=3 cube once.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>After processing bit b, every mask has already absorbed all submasks that differ only in the processed bits. At the end, f[mask] holds the sum over all submasks.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>F[mask] should be the sum / or / min of A over all submasks of mask</li>
+        <li>n ≤ 20 and 3^n TLE but n 2^n fits</li>
+        <li>Compatible pairs: a[i] & a[j] = 0, or a[i] | a[j] = ALL</li>
+        <li>Subset convolution (with extra extra-bits of popcount)</li>
+        <li>For every mask, query the sum of an array over its submasks, many queries</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You only need one mask's submasks → iterate s = (s-1)&mask once, O(2^{popcount})</li>
+        <li>n = 40 → not 2^n memory</li>
+        <li>Ordinary knapsack / TSP → previous pages</li>
+        <li>You need sum over supersets: run SOS on the complement, or reverse the add direction</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sum over submasks, all masks</td>
+        <td>Zeta / SOS</td>
+        <td>n 2^n in-place</td>
+      </tr>
+      <tr>
+        <td>Sum over supersets</td>
+        <td>SOS on reversed bits, or add when bit is 0</td>
+        <td>Möbius cousin</td>
+      </tr>
+      <tr>
+        <td>Count submasks with A[sub]=1</td>
+        <td>SOS on the indicator</td>
+        <td>CF 165E</td>
+      </tr>
+      <tr>
+        <td>Subset convolution</td>
+        <td>SOS per popcount layer, then pointwise, then inverse</td>
+        <td>Advanced</td>
+      </tr>
+      <tr>
+        <td>Naive submask enum of all masks</td>
+        <td>3^n</td>
+        <td>n≤14 only</td>
+      </tr>
+      <tr>
+        <td>Single mask submasks</td>
+        <td>(s-1)&mask</td>
+        <td>No SOS needed</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> FWHT XOR convolution</td>
+        <td>XOR convolution is a different transform (Walsh)</td>
+        <td>SOS is the subset (OR) zeta transform</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 20</code> (2^20 = 1e6, times 20 is 2e7). n = 23 is the Java edge. Values need long. Inverse Möbius is the same loop with subtraction.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>One bit at a time</h2>
+<p>Start with f = A copied. For b = 0..n-1, for mask = 0..2^n-1, if mask has bit b, f[mask] += f[mask ^ (1<<b)]. After bit b, f[mask] includes all submasks that may differ in bits 0..b and must match bits > b.</p>
+<p>Dry-run n=3, A = [1,2,3,4,5,6,7,8] on masks 0..7. After all bits, f[7] = sum of all A[0..7] = 36. f[1] = A[0]+A[1], because the only submasks of 001 are 000 and 001. Inverse (Möbius): the same loops with -= instead of +=. Supersets: add f[mask | (1<<b)] into f[mask] when bit b is off, or SOS the array reversed.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>f[mask] = sum of A[sub] over sub that agree with mask on bits &gt; b and are subseteq mask on bits ≤ b.</p><span class="eq">if (mask &amp; (1&lt;&lt;b)) f[mask] += f[mask ^ (1&lt;&lt;b)]</span>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Loop mask from 0 to 2^n-1, not the other way, for +=</span>
+    <p>You read mask without bit b, which is a smaller integer, so 0..2^n-1 is safe in-place. If you reversed the add (supersets), you may need to walk masks downwards. Draw n=2 once if unsure.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">OR-convolution via SOS</span>
+    <p>To compute C[k] = sum_{i|j=k} A[i]B[j], zeta-transform A and B, pointwise multiply, inverse zeta. That is the subset/OR convolution. XOR uses FWHT instead.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>SOS on n = 3, A = [1,2,3,4,5,6,7,8]</h3>
+
+<p>One row of 8 masks. Each bit-layer adds the from-cell (mask with bit cleared) into the target (bit set).</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="sos-dpViz"></div>
+  <div class="viz-player" data-viz-target="sos-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "f",
+      "rowHeads": [
+        "A/f"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "vars": [
+        "bit",
+        "mask",
+        "f"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start: f = A = [1,2,3,4,5,6,7,8] for masks 000..111.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "2"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "4"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "5"
+            },
+            {
+              "r": 0,
+              "c": 5,
+              "val": "6"
+            },
+            {
+              "r": 0,
+              "c": 6,
+              "val": "7"
+            },
+            {
+              "r": 0,
+              "c": 7,
+              "val": "8"
+            }
+          ],
+          "values": {
+            "bit": "init",
+            "mask": "all",
+            "f": "A"
+          }
+        },
+        {
+          "note": "Bit 0: mask 001 += mask 000 → 2+1=3. Target 1, from 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "bit": 0,
+            "mask": 1,
+            "f": 3
+          }
+        },
+        {
+          "note": "Bit 0: mask 011 += 010 → 4+3=7. Mask 101 += 100, 111 += 110 similarly.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "7",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 5,
+              "val": "11"
+            },
+            {
+              "r": 0,
+              "c": 7,
+              "val": "15"
+            }
+          ],
+          "values": {
+            "bit": 0,
+            "mask": "odds",
+            "f": "done bit0"
+          }
+        },
+        {
+          "note": "Bit 1: mask 010 += 000 → 3+1=4. Target 2, from 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "4",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "bit": 1,
+            "mask": 2,
+            "f": 4
+          }
+        },
+        {
+          "note": "Bit 1 continues: 011 += 001, 110 += 100, 111 += 101.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "10",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "3",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "bit": 1,
+            "mask": 3,
+            "f": 10
+          }
+        },
+        {
+          "note": "Bit 2: 100 += 000, 101 += 001, 110 += 010, 111 += 011. f[7] becomes 1+2+3+4+5+6+7+8=36.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 7,
+              "val": "36",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "10",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "bit": 2,
+            "mask": 7,
+            "f": 36
+          }
+        },
+        {
+          "note": "Final f = sums of submasks. f[0]=1, f[1]=1+2=3, f[7]=36. Query any mask in O(1) now.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "3"
+            },
+            {
+              "r": 0,
+              "c": 7,
+              "val": "36",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "bit": "done",
+            "mask": "query",
+            "f": "O(1)"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>After bit 0: odd masks absorbed their even neighbour. After all 3 bits, f[mask] is the sum of A on the subcube below mask.</figcaption>
+</figure>
+
+<h3>The n=3 subset lattice</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  z["000"] --&gt; a["001"]
+  z --&gt; b["010"]
+  z --&gt; c["100"]
+  a --&gt; ab["011"]
+  a --&gt; ac["101"]
+  b --&gt; ab
+  b --&gt; bc["110"]
+  c --&gt; ac
+  c --&gt; bc
+  ab --&gt; abc["111"]
+  ac --&gt; abc
+  bc --&gt; abc
+  </div>
+  <figcaption>SOS pushes values along these edges, one bit-direction per layer.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Copy A into f</strong> of length 1&lt;&lt;n.</li>
+  <li><strong>For b = 0 .. n-1:</strong></li>
+  <li><strong>For mask = 0 .. (1&lt;&lt;n)-1:</strong> if bit b is set, f[mask] += f[mask ^ (1&lt;&lt;b)].</li>
+  <li><strong>Use long</strong> if the sum of A can exceed 2e9.</li>
+  <li><strong>Now f[mask] is the submask sum.</strong> Inverse: the same loops with -=.</li>
+  <li><strong>Supersets:</strong> add the other way, or reverse the array indices by ~mask.</li>
+  <li><strong>Do not run the transform twice</strong> unless you meant to.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>n=2, A=[1,2,3,4] on 00,01,10,11. Bits 0 then 1.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>step</th><th>f[00]</th><th>f[01]</th><th>f[10]</th><th>f[11]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>A</td><td>1</td><td>2</td><td>3</td><td>4</td><td>Copy.</td></tr>
+      <tr class="trace-table__row--change"><td>bit0</td><td>1</td><td>3</td><td>3</td><td>7</td><td>01+=00, 11+=10.</td></tr>
+      <tr class="trace-table__row--change"><td>bit1</td><td>1</td><td>3</td><td>4</td><td>10</td><td>10+=00, 11+=01.</td></tr>
+      <tr><td>check</td><td>1</td><td>1+2=3</td><td>1+3=4</td><td>1+2+3+4=10</td><td>Matches all submask sums.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Sum Over Subsets DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion / naive</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo / SOS</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated inverse</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion / naive">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SosNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SosNaive {
+    
+        static long[] sos(long[] a, int n) {
+            int N = 1 &lt;&lt; n;
+            long[] f = new long[N];
+            for (int mask = 0; mask &lt; N; mask++) {
+                for (int s = mask; ; s = (s - 1) &amp; mask) {
+                    f[mask] += a[s];
+                    if (s == 0) {
+                        break;
+                    }
+                }
+            }
+            return f;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(sos(new long[] {1, 2, 3, 4, 5, 6, 7, 8}, 3)));
+        }
+        // Input : A=1..8, n=3
+        // Output: [1, 3, 4, 10, 6, 14, 16, 36]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo / SOS">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SosDp.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SosDp {
+    
+        static long[] sos(long[] a, int n) {
+            int N = 1 &lt;&lt; n;
+            long[] f = Arrays.copyOf(a, N);
+            for (int b = 0; b &lt; n; b++) {
+                for (int mask = 0; mask &lt; N; mask++) {
+                    if ((mask &amp; (1 &lt;&lt; b)) != 0) {
+                        f[mask] += f[mask ^ (1 &lt;&lt; b)];
+                    }
+                }
+            }
+            return f;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(sos(new long[] {1, 2, 3, 4, 5, 6, 7, 8}, 3)));
+        }
+        // Input : A=1..8, n=3
+        // Output: [1, 3, 4, 10, 6, 14, 16, 36]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated inverse">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SosMobius.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SosMobius {
+    
+        static long[] mobius(long[] f, int n) {
+            int N = 1 &lt;&lt; n;
+            long[] a = Arrays.copyOf(f, N);
+            for (int b = 0; b &lt; n; b++) {
+                for (int mask = 0; mask &lt; N; mask++) {
+                    if ((mask &amp; (1 &lt;&lt; b)) != 0) {
+                        a[mask] -= a[mask ^ (1 &lt;&lt; b)];
+                    }
+                }
+            }
+            return a;
+        }
+    
+        public static void main(String[] args) {
+            long[] f = {1, 3, 4, 10, 6, 14, 16, 36};
+            System.out.println(Arrays.toString(mobius(f, 3)));
+        }
+        // Input : SOS result of 1..8
+        // Output: [1, 2, 3, 4, 5, 6, 7, 8]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n 2^n)</span>
+    <span class="badge badge--space">Space O(2^n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>n layers, 2<sup>n</sup> masks, O(1) add each:</p>
+    <p><span class="eq">T = &Theta;(n 2<sup>n</sup>) vs naive &Theta;(3<sup>n</sup>)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive all submasks</td><td>O(3^n)</td><td>O(2^n)</td><td>n≤14</td></tr>
+      <tr><td>SOS zeta</td><td>O(n 2^n)</td><td>O(2^n)</td><td>n≤20</td></tr>
+      <tr><td>One mask's submasks</td><td>O(2^{popcount})</td><td>O(1)</td><td>No SOS</td></tr>
+      <tr><td>FWHT XOR</td><td>O(n 2^n)</td><td>O(2^n)</td><td>Different product</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Adding supersets with the subset loop</span>
+    <div class="pitfalls__bug">You wanted "how many a[i] are supersets of mask" and ran the standard SOS.</div>
+    <div class="pitfalls__fix">Flip the condition (add when bit is off) or reverse indices via ((1<<n)-1)^mask.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">In-place SOS twice</span>
+    <div class="pitfalls__bug">Second pass turns sums-of-sums into garbage.</div>
+    <div class="pitfalls__fix">One transform. Inverse is -=, not a second +=.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow</span>
+    <div class="pitfalls__bug">1e6 entries of 1e9.</div>
+    <div class="pitfalls__fix">long[] f.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">3^n "because I know submask enumeration"</span>
+    <div class="pitfalls__bug">n=20, 3.4e9.</div>
+    <div class="pitfalls__fix">If you need F for every mask, it is SOS, not nested (s-1)&mask.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one on n vs array length</span>
+    <div class="pitfalls__bug">A has 8 elements and you pass n=2.</div>
+    <div class="pitfalls__fix">N = 1<<n must equal a.length.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">XOR convolution with SOS</span>
+    <div class="pitfalls__bug">OR/subset product is SOS; XOR product is FWHT. Mixing them is a wrong count.</div>
+    <div class="pitfalls__fix">Name the monoid: OR → zeta, XOR → Walsh, AND → reverse zeta.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sum over supersets</td>
+        <td>if ((mask & (1<<b))==0) f[mask] += f[mask | (1<<b)] walking masks high-to-low, or SOS the reversed array.</td>
+        <td><code>Compatible numbers often need supersets of the complement</code></td>
+        <td>CF 165E</td>
+      </tr>
+      <tr>
+        <td>Möbius inversion</td>
+        <td>Same loops, -=. Recovers A from F.</td>
+        <td><code>When you have prefix-or sums and want exactly-mask</code></td>
+        <td>This page's third tab</td>
+      </tr>
+      <tr>
+        <td>Subset convolution</td>
+        <td>SOS on each popcount slice, pointwise, inverse, extract popcount layer.</td>
+        <td><code>O(n^2 2^n)</code></td>
+        <td>When i&j=0 and i|j=k</td>
+      </tr>
+      <tr>
+        <td>High-dimension prefix sums</td>
+        <td>SOS is n-dimensional prefix sums on the boolean lattice.</td>
+        <td><code>Same code as 2D prefix, n axes</code></td>
+        <td>Mental model</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why n 2^n and not 3^n?</summary>
+    <div class="followup__body">
+      <p>Each element A[sub] should be added to every mask supseteq sub. There are n bits to "turn on" from sub to mask. SOS adds it along those bits one at a time, so each (sub, extra-bit) pair is handled once, totalling n 2^n, not one add per (sub, mask).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How is this related to FMT / zeta?</summary>
+    <div class="followup__body">
+      <p>It is the fast zeta transform on the subset poset. Möbius inversion is the inverse transform. The same idea on other posets gives AND/OR/XOR convolutions.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I SOS with min instead of +?</summary>
+    <div class="followup__body">
+      <p>Yes if you want f[mask] = min of A on submasks: f[mask] = min(f[mask], f[mask without b]). Idempotent semirings work; subtraction inverse does not. For min, there is no Möbius.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Query-only, n=20, q=1e5?</summary>
+    <div class="followup__body">
+      <p>Build SOS once in n 2^n, then each query is O(1) if it is a submask-sum of a stored mask. If queries are arbitrary, that is a different structure.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://codeforces.com/problemset/problem/165/E" target="_blank" rel="noopener">Compatible Numbers</a></td>
+        <td><span class="badge badge--cf">CF 165E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SOS on existence, query complement</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/449/D" target="_blank" rel="noopener">Jzzhu and Numbers</a></td>
+        <td><span class="badge badge--cf">CF 449D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SOS + inclusion on AND=0</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/383/E" target="_blank" rel="noopener">Vowels</a></td>
+        <td><span class="badge badge--cf">CF 383E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SOS over alphabet bits</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_u" target="_blank" rel="noopener">SOS practice</a></td>
+        <td><span class="badge badge--atc">ATC DP-U</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>3^n grouping; SOS is the faster cousin</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://www.geeksforgeeks.org/sum-of-bitwise-or-of-all-subsets/" target="_blank" rel="noopener">Bitwise Equations</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Contribution, not always SOS</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/" target="_blank" rel="noopener">Maximum XOR of Two Numbers</a></td>
+        <td><span class="badge badge--lc">LC 421</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Trie; contrast with SOS-not-XOR</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/number-of-valid-words-for-each-puzzle/" target="_blank" rel="noopener">Number of Valid Words for Each Puzzle</a></td>
+        <td><span class="badge badge--lc">LC 1178</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Submasks of 7-bit puzzles</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1416/C" target="_blank" rel="noopener">Count Pairs With AND equal to 0</a></td>
+        <td><span class="badge badge--cf">CF 1416C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bit DP cousin; XOR inversions</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://cses.fi/problemset/task/2220" target="_blank" rel="noopener">Subset Zeta</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Digit-ish; see also SOS blogs</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/abc187/tasks/abc187_f" target="_blank" rel="noopener">And Closure</a></td>
+        <td><span class="badge badge--atc">ABC 187F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Graph + subset DP, SOS optional</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 165E Compatible Numbers</summary>
+  <div class="spoiler__body">
+    <p>Two numbers are compatible if a &amp; b = 0, i.e. b is a submask of ~a (restricted to n bits). SOS an existence array of the input values over supersets (or submasks of the complement). For each a print any stored value whose bits sit inside ~a, or -1.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 449D</summary>
+  <div class="spoiler__body">
+    <p>Count subsets whose AND is 0. Inclusion via SOS: let g[mask] = count of values that are supersets of mask. Then 2^{g[mask]} subsets have AND supseteq mask. Möbius to get AND == 0. Mod 1e9+7, handle 2^n with fastpow.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>F[mask] = sum of A over submasks</strong> in O(n 2^n), not O(3^n).</li>
+    <li><strong>For each bit, add f[mask without bit] into f[mask].</strong></li>
+    <li><strong>Inverse is the same loop with minus.</strong></li>
+    <li><strong>Supersets flip the direction</strong> or reverse the index.</li>
+    <li><strong>OR-convolution = zeta, multiply, inverse zeta.</strong></li>
+  </ul>
+  <div class="recap__oneliner">for b for mask: if bit b set, f[mask]+=f[mask^1&lt;&lt;b] | n 2^n | inverse -=</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

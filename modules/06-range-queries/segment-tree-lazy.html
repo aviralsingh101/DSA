@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segment Tree with Lazy Prop. &mdash; DSA Course</title>
+<meta name="description" content="Range updates become O(log n) by parking a tag on a canonical node and pushing it to the children only when you next have to split that node.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="segment-tree-lazy">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 06 &middot; Range Query Structures</span>
+  <h1>Segment Tree with Lazy Prop.</h1>
+  <p class="hero__tagline">Range updates become O(log n) by parking a tag on a canonical node and pushing it to the children only when you next have to split that node.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="segment-tree.html">Segment Tree</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">lazy propagation</span>
+      <span class="chip">range update</span>
+      <span class="chip">segment tree</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A plain segment tree updates a <em>point</em> in O(log n). Updating a range of length k by walking k leaves is O(k log n) and dies at k = n. The observation is the same canonical cover used by queries: a range update touches O(log n) nodes that exactly partition the range. If you can apply the update to a whole node in O(1), you are done &mdash; provided you remember to tell the children later.</p>
+<p>That memory is a lazy tag. When a node is fully inside the update range you apply the update to t[p] immediately (so queries that stop here are correct) and add the update to lazy[p] instead of recursing. The next time a query or update needs to look at a child, you <em>push</em>: apply the tag to both children, clear it, then proceed. Tags sink only on demand, so the total work stays O(log n).</p>
+<p>This is the default contest structure for range add + range sum / min, range assign, and range XOR. It is also the first place people write a segment tree that is wrong on hidden tests: forgotten pushes, tags applied twice, or combining children before pushing. The invariant below is the whole topic.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Apply the update to a fully covered node in O(1), store a tag, and push that tag to the children only when you next split the node.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Range add / range assign mixed with range sum or range min</li>
+        <li>"Add v to [l, r], then report min / sum of [l2, r2]", many mixed operations</li>
+        <li>Range XOR of a segment, then range sum (CF 242E)</li>
+        <li>Circular RMQ: range add and range min on a cycle (CF 52C)</li>
+        <li>The plain point-update tree is not enough because the update itself is a range</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Point updates only &rarr; <a href="segment-tree.html">plain segment tree</a></li>
+        <li>Range add, point query &rarr; difference array in a <a href="fenwick-tree.html">Fenwick</a> is shorter</li>
+        <li>All updates then one read &rarr; difference array, no tree</li>
+        <li>Static range min &rarr; <a href="sparse-table-and-rmq.html">sparse table</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"add v to [l,r], query sum [l,r]"</td>
+        <td>Range add, range sum</td>
+        <td>Lazy + length * v</td>
+      </tr>
+      <tr>
+        <td>"add v to [l,r], query min [l,r]"</td>
+        <td>Range add, range min</td>
+        <td>Lazy + v, min += v</td>
+      </tr>
+      <tr>
+        <td>"set [l,r] = v, query sum"</td>
+        <td>Range assign</td>
+        <td>Lazy assign tag, overrides add</td>
+      </tr>
+      <tr>
+        <td>"XOR [l,r] with x, query sum"</td>
+        <td>Bit-lazy, 20 bit-segtree or one with bits</td>
+        <td>CF 242E</td>
+      </tr>
+      <tr>
+        <td>"range add on a cycle"</td>
+        <td>Two linear updates, or a circular split</td>
+        <td>CF 52C</td>
+      </tr>
+      <tr>
+        <td>"chmin / chmax on a range"</td>
+        <td>More tags (beats, Jotaro)</td>
+        <td>P2+, not this page</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Fenwick range-add range-sum</td>
+        <td>Two BITs do that for sums only, with a smaller constant</td>
+        <td>Lazy segtree when you also need min, or a custom combine</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with mixed range updates and range queries. Each operation must be O(log n), so you cannot walk the leaves. Tags must compose: applying v2 after v1 is one combined tag.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Keep t[p] always equal to the true combine of the segment, including updates that have been applied to p but not yet pushed. lazy[p] is the update that children have <em>not</em> received. apply(p, v) writes v into t[p] (for a range add: <code>t[p] += v * length</code>) and into lazy[p]. push(p) calls apply on both children with lazy[p], then zeros the tag.</p>
+<p>Range update: disjoint &rarr; return; complete cover &rarr; apply and return (do not recurse); otherwise push, recurse both children, recompute t[p] from children. Range query is the same three-way branch, with a push on the partial case so the children are up to date before you read them.</p>
+<p>Tags must compose. For range add, composition is addition: lazy += v. For range assign, a new assign overwrites the old tag (and you must still push first if a child might have a different pending tag). Mixing add and assign needs two tags or a single tagged union with a defined override rule.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After every public operation:</p><span class="eq">t[p] is correct for p's segment;&nbsp; lazy[p] is the update children have not yet seen</span><p>Interview sentence: <em>"I apply on a full cover and I push before I split. I never read a child without pushing the parent first."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Push before you look down</span>
+    <p>Both query and update, on the partial-overlap branch, must push first. If you recurse without pushing, children hold stale t[] and you combine garbage, then write that garbage back into t[p] on the way up.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why t[p] += v * length</span>
+    <p>A range add of v increases every one of the (r-l+1) leaves by v, so the sum increases by v times the length. For range min the length factor is absent: min += v. Applying the wrong formula is a silent off-by-factor.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Range add [1, 5] += 2, then the query [2, 6] reads tagged nodes</h3>
+
+<p>Same 8-element tree. The update parks tags on the canonical cover of [1, 5]: leaf 1, node [2,3], node [4,5]. The array shows t[] after the apply (sums already include +2 * length).</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="segment-tree-lazyViz"></div>
+  <div class="viz-player" data-viz-target="segment-tree-lazyViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "t[1..15] after add [1,5] += 2",
+      "array": [
+        31,
+        9,
+        22,
+        4,
+        5,
+        14,
+        8,
+        3,
+        1,
+        4,
+        1,
+        5,
+        9,
+        2,
+        6
+      ],
+      "indexLabels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "vars": [
+        "node",
+        "tag",
+        "t[p]",
+        "note"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Before the update, t[1] = 31. Range add [1, 5] += 2 should increase the total by 2 * 5 = 10.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "values": {
+            "node": 1,
+            "tag": 0,
+            "t[p]": 31,
+            "note": "start"
+          }
+        },
+        {
+          "note": "Canonical cover of [1,5]: leaf node 9 ([1,1]), node 5 ([2,3]), node 6 ([4,5]). Apply +2 * length there.",
+          "active": [
+            8,
+            4,
+            5
+          ],
+          "values": {
+            "node": "cover",
+            "tag": "+2",
+            "t[p]": "apply 3 nodes",
+            "note": "not 5 leaves"
+          }
+        },
+        {
+          "note": "Node 9 length 1: t = 1+2 = 3, lazy = 2. Node 5 length 2: t = 5+4 = 9, lazy = 2. Node 6 length 2: t = 14+4 = 18, lazy = 2.",
+          "arr": [
+            31,
+            9,
+            22,
+            4,
+            9,
+            18,
+            8,
+            3,
+            3,
+            4,
+            1,
+            5,
+            9,
+            2,
+            6
+          ],
+          "active": [
+            8,
+            4,
+            5
+          ],
+          "values": {
+            "node": "applied",
+            "tag": 2,
+            "t[p]": "3, 9, 18",
+            "note": "children stale"
+          }
+        },
+        {
+          "note": "Recompute ancestors: t[2] = 4+9 = 13, t[3] = 18+8 = 26, t[1] = 13+26 = 39. Whole sum 31+10 = 39. Correct without visiting leaves 10..13.",
+          "arr": [
+            39,
+            13,
+            26,
+            4,
+            9,
+            18,
+            8,
+            3,
+            3,
+            4,
+            1,
+            5,
+            9,
+            2,
+            6
+          ],
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "done": [
+            4,
+            5,
+            8
+          ],
+          "values": {
+            "node": 1,
+            "tag": 0,
+            "t[p]": 39,
+            "note": "ancestors rebuilt"
+          }
+        },
+        {
+          "note": "Query [2,6]: node 5 is a full cover, t[5]=9 already includes the tag. Add 9. Do not push.",
+          "arr": [
+            39,
+            13,
+            26,
+            4,
+            9,
+            18,
+            8,
+            3,
+            3,
+            4,
+            1,
+            5,
+            9,
+            2,
+            6
+          ],
+          "best": [
+            4
+          ],
+          "values": {
+            "node": 5,
+            "tag": 2,
+            "t[p]": 9,
+            "note": "acc=9"
+          }
+        },
+        {
+          "note": "Node 6 full cover, add 18. acc = 27. Node 14 ([6,6]) disjoint from the update, t=2. acc = 29.",
+          "arr": [
+            39,
+            13,
+            26,
+            4,
+            9,
+            18,
+            8,
+            3,
+            3,
+            4,
+            1,
+            5,
+            9,
+            2,
+            6
+          ],
+          "best": [
+            4,
+            5,
+            13
+          ],
+          "values": {
+            "node": "5+6+14",
+            "tag": "—",
+            "t[p]": 29,
+            "note": "acc=29"
+          }
+        },
+        {
+          "note": "Check: new array is [3, 3, 6, 3, 7, 11, 2, 6], sum[2,6] = 6+3+7+11+2 = 29. Three nodes, not five leaves.",
+          "arr": [
+            39,
+            13,
+            26,
+            4,
+            9,
+            18,
+            8,
+            3,
+            3,
+            4,
+            1,
+            5,
+            9,
+            2,
+            6
+          ],
+          "best": [
+            4,
+            5,
+            13
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "node": "ans",
+            "tag": "—",
+            "t[p]": 29,
+            "note": "matches"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Update touches three canonical nodes, not five leaves. Query [2, 6] then reads node 5 (already tagged), node 6 (tagged), and leaf 14 (untouched, value 2).</figcaption>
+</figure>
+
+<h3>Tags sit on the canonical cover of [1, 5]</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  z1["1: sum 39"] --&gt; z2["2: sum 13"]
+  z1 --&gt; z3["3: sum 26"]
+  z2 --&gt; z4["4: 0-1"]
+  z2 --&gt; z5["5: 2-3 tag plus 2"]
+  z3 --&gt; z6["6: 4-5 tag plus 2"]
+  z3 --&gt; z7["7: 6-7"]
+  z4 --&gt; z8["8: a0 = 3"]
+  z4 --&gt; z9["9: a1 tag plus 2"]
+  z5 --&gt; z10["10: stale"]
+  z5 --&gt; z11["11: stale"]
+  z6 --&gt; z12["12: stale"]
+  z6 --&gt; z13["13: stale"]
+  z7 --&gt; z14["14: a6 = 2"]
+  z7 --&gt; z15["15: a7 = 6"]
+  </div>
+  <figcaption>Nodes 9, 5, and 6 hold the +2 tag. Their descendants are stale until a later query or update pushes.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Store two arrays:</strong> <code>t[4n]</code> (current combine) and <code>lazy[4n]</code> (pending child update). Build t as in the plain tree; lazy starts at 0.</li>
+  <li><strong>apply(p, l, r, v):</strong> <code>t[p] += v * (r - l + 1)</code>, <code>lazy[p] += v</code>. This is O(1) and makes t[p] correct.</li>
+  <li><strong>push(p, l, r):</strong> if lazy[p] is non-zero and p is not a leaf, apply it to both children, then zero lazy[p].</li>
+  <li><strong>Range update:</strong> disjoint return; complete cover &rarr; apply and return; else push, recurse, recompute t[p] from children.</li>
+  <li><strong>Range query:</strong> the same three-way branch, with push on the partial case.</li>
+  <li><strong>Never recurse without pushing</strong> on a node that you are about to split.</li>
+  <li><strong>Compose tags.</strong> For add, +=. For assign, overwrite (after a push, or with an explicit override rule).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Range add [1, 5] += 2 on the sample, then query [2, 6]. acc is the query accumulator.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>node</th><th>tag</th><th>t[p]</th><th>note</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td>0</td><td>31</td><td>start</td><td>Before the update, t[1] = 31. Range add [1, 5] += 2 should increase the total by 2 * 5 = 10.</td></tr>
+      <tr><td>cover</td><td>+2</td><td>apply 3 nodes</td><td>not 5 leaves</td><td>Canonical cover of [1,5]: leaf node 9 ([1,1]), node 5 ([2,3]), node 6 ([4,5]). Apply +2 * length there.</td></tr>
+      <tr><td>applied</td><td>2</td><td>3, 9, 18</td><td>children stale</td><td>Node 9 length 1: t = 1+2 = 3, lazy = 2. Node 5 length 2: t = 5+4 = 9, lazy = 2. Node 6 length 2: t = 14+4 = 18, lazy = 2.</td></tr>
+      <tr><td>1</td><td>0</td><td>39</td><td>ancestors rebuilt</td><td>Recompute ancestors: t[2] = 4+9 = 13, t[3] = 18+8 = 26, t[1] = 13+26 = 39. Whole sum 31+10 = 39. Correct without visiting leaves 10..13.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>2</td><td>9</td><td>acc=9</td><td>Query [2,6]: node 5 is a full cover, t[5]=9 already includes the tag. Add 9. Do not push.</td></tr>
+      <tr class="trace-table__row--change"><td>5+6+14</td><td>—</td><td>29</td><td>acc=29</td><td>Node 6 full cover, add 18. acc = 27. Node 14 ([6,6]) disjoint from the update, t=2. acc = 29.</td></tr>
+      <tr class="trace-table__row--change"><td>ans</td><td>—</td><td>29</td><td>matches</td><td>Check: new array is [3, 3, 6, 3, 7, 11, 2, 6], sum[2,6] = 6+3+7+11+2 = 29. Three nodes, not five leaves.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The five updated leaves were never all visited. Leaves 10..13 stay stale until something splits nodes 5 or 6.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Segment Tree with Lazy Prop. implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute range add</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Lazy add</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Lazy min</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Loop the range. Correct, O(n) per update, the thing lazy avoids.</p>
+    <div class="code" data-highlight="8-10,13-17">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BruteRangeAdd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BruteRangeAdd {
+    
+        static long[] a;
+    
+        static void add(int l, int r, long v) {
+            for (int i = l; i &lt;= r; i++) a[i] += v;
+        }
+    
+        static long sum(int l, int r) {
+            long s = 0;
+            for (int i = l; i &lt;= r; i++) s += a[i];
+            return s;
+        }
+    
+        public static void main(String[] args) {
+            a = new long[] {3, 1, 4, 1, 5, 9, 2, 6};
+            add(1, 5, 2);
+            System.out.println(sum(2, 6));
+            System.out.println(sum(0, 7));
+            System.out.println(java.util.Arrays.toString(a));
+        }
+        // Input : [3,1,4,1,5,9,2,6], add [1,5] += 2
+        // Output: 29
+        //         41
+        //         [3, 3, 6, 3, 7, 11, 2, 6]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Range add, range sum. apply / push / the three-way branch. Matches the dry run.</p>
+    <div class="code" data-highlight="22-26,29-36,39-48,51-60">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LazySegTree.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LazySegTree {
+    
+        final int n;
+        final long[] t, lazy;
+    
+        LazySegTree(int[] a) {
+            n = a.length;
+            t = new long[n * 4];
+            lazy = new long[n * 4];
+            build(1, 0, n - 1, a);
+        }
+    
+        void build(int p, int l, int r, int[] a) {
+            if (l == r) { t[p] = a[l]; return; }
+            int m = l + (r - l) / 2;
+            build(p &lt;&lt; 1, l, m, a);
+            build(p &lt;&lt; 1 | 1, m + 1, r, a);
+            t[p] = t[p &lt;&lt; 1] + t[p &lt;&lt; 1 | 1];
+        }
+    
+        void apply(int p, int l, int r, long v) {
+            t[p] += v * (r - l + 1);
+            lazy[p] += v;
+        }
+    
+        void push(int p, int l, int r) {
+            if (lazy[p] == 0 || l == r) return;
+            int m = l + (r - l) / 2;
+            apply(p &lt;&lt; 1, l, m, lazy[p]);
+            apply(p &lt;&lt; 1 | 1, m + 1, r, lazy[p]);
+            lazy[p] = 0;
+        }
+    
+        void add(int p, int l, int r, int ql, int qr, long v) {
+            if (qr &lt; l || r &lt; ql) return;
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) { apply(p, l, r, v); return; }
+            push(p, l, r);
+            int m = l + (r - l) / 2;
+            add(p &lt;&lt; 1, l, m, ql, qr, v);
+            add(p &lt;&lt; 1 | 1, m + 1, r, ql, qr, v);
+            t[p] = t[p &lt;&lt; 1] + t[p &lt;&lt; 1 | 1];
+        }
+    
+        long query(int p, int l, int r, int ql, int qr) {
+            if (qr &lt; l || r &lt; ql) return 0;
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) return t[p];
+            push(p, l, r);
+            int m = l + (r - l) / 2;
+            return query(p &lt;&lt; 1, l, m, ql, qr)
+                 + query(p &lt;&lt; 1 | 1, m + 1, r, ql, qr);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            LazySegTree st = new LazySegTree(a);
+            st.add(1, 0, st.n - 1, 1, 5, 2);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            System.out.println(st.query(1, 0, st.n - 1, 0, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], add [1,5] += 2
+        // Output: 29
+        //         41
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Range add, range min. apply adds v without a length factor. Identity is <code>Long.MAX_VALUE</code>. CF 52C is this on a cycle.</p>
+    <div class="code" data-highlight="22-25,39-48">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LazySegTreeMin.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LazySegTreeMin {
+    
+        final int n;
+        final long[] t, lazy;
+    
+        LazySegTreeMin(int[] a) {
+            n = a.length;
+            t = new long[n * 4];
+            lazy = new long[n * 4];
+            build(1, 0, n - 1, a);
+        }
+    
+        void build(int p, int l, int r, int[] a) {
+            if (l == r) { t[p] = a[l]; return; }
+            int m = l + (r - l) / 2;
+            build(p &lt;&lt; 1, l, m, a);
+            build(p &lt;&lt; 1 | 1, m + 1, r, a);
+            t[p] = Math.min(t[p &lt;&lt; 1], t[p &lt;&lt; 1 | 1]);
+        }
+    
+        void apply(int p, int l, int r, long v) {
+            t[p] += v;
+            lazy[p] += v;
+        }
+    
+        void push(int p, int l, int r) {
+            if (lazy[p] == 0 || l == r) return;
+            int m = l + (r - l) / 2;
+            apply(p &lt;&lt; 1, l, m, lazy[p]);
+            apply(p &lt;&lt; 1 | 1, m + 1, r, lazy[p]);
+            lazy[p] = 0;
+        }
+    
+        void add(int p, int l, int r, int ql, int qr, long v) {
+            if (qr &lt; l || r &lt; ql) return;
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) { apply(p, l, r, v); return; }
+            push(p, l, r);
+            int m = l + (r - l) / 2;
+            add(p &lt;&lt; 1, l, m, ql, qr, v);
+            add(p &lt;&lt; 1 | 1, m + 1, r, ql, qr, v);
+            t[p] = Math.min(t[p &lt;&lt; 1], t[p &lt;&lt; 1 | 1]);
+        }
+    
+        long query(int p, int l, int r, int ql, int qr) {
+            if (qr &lt; l || r &lt; ql) return Long.MAX_VALUE;
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) return t[p];
+            push(p, l, r);
+            int m = l + (r - l) / 2;
+            return Math.min(query(p &lt;&lt; 1, l, m, ql, qr),
+                            query(p &lt;&lt; 1 | 1, m + 1, r, ql, qr));
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            LazySegTreeMin st = new LazySegTreeMin(a);
+            st.add(1, 0, st.n - 1, 1, 5, 2);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            System.out.println(st.query(1, 0, st.n - 1, 0, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], add [1,5] += 2
+        // Output: 2
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) build, O(log n) per range update or query</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>A range update applies to O(log n) canonical nodes and pushes O(log n) tags on the way down. Each apply / push is O(1):</p>
+    <p><span class="eq">T<sub>update</sub> = T<sub>query</sub> = O(log n)</span></p>
+    <p>Without lazy, a range update of length k is O(k log n). At k = n that is O(n log n) per operation, which at q = 10&#8309; is 2&times;10&#8311; and timeouts. Lazy is the difference between those two recurrences.</p>
+    <p>Two Fenwick trees match the sum special case with a smaller constant. Lazy wins the moment the combine is min, or you also have range assign, or the node is a struct.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Loop the range</td><td><code>O(n)</code> / update</td><td><code>O(1)</code></td><td>n is tiny</td></tr>
+      <tr><td>Two Fenwicks</td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>Range add + range sum only</td></tr>
+      <tr><td>Lazy segment tree</td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>Range add/assign + any combine</td></tr>
+      <tr><td>Plain segment tree</td><td><code>O(k log n)</code> range update</td><td><code>O(n)</code></td><td>k-length updates, no tags</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting to push before splitting</span>
+    <div class="pitfalls__bug">Partial-overlap update or query recurses into children that have not received the parent's tag. Combining those stale children then overwrites t[p] with a wrong value, and the tag is still sitting on p so a later push double-applies.</div>
+    <div class="pitfalls__fix">First line of the partial branch: <code>push(p, l, r);</code></div>
+  </li>
+  <li>
+    <span class="pitfalls__title">apply uses the wrong length factor</span>
+    <div class="pitfalls__bug">Range-sum apply does <code>t[p] += v</code> without multiplying by <code>(r-l+1)</code>, so a tag on a length-4 node undercounts by 4. Range-min apply that <em>does</em> multiply is equally wrong.</div>
+    <div class="pitfalls__fix">Sum: times length. Min/max: not times length. XOR: <code>t[p] ^= (length is odd ? v : 0)</code> for a range XOR of a sum, or just <code>t[p] ^= v</code> for a range XOR of an XOR-tree.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Pushing a leaf</span>
+    <div class="pitfalls__bug">apply on a leaf is fine; push on a leaf tries to write children that do not exist (or exist as garbage indices). AIOOB or silent corruption.</div>
+    <div class="pitfalls__fix"><code>if (lazy[p] == 0 || l == r) return;</code> at the top of push.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recomputing t[p] without pushing</span>
+    <div class="pitfalls__bug">After a partial update you write <code>t[p] = t[left] + t[right]</code> using children that still lack the new tag you just applied further down, <em>and</em> p still has an old tag. Two sources of staleness.</div>
+    <div class="pitfalls__fix">Push first, recurse, then recompute. After this, lazy[p] is 0 and t[p] matches the children.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Assign tags composed like add tags</span>
+    <div class="pitfalls__bug">Range assign v2 after pending assign v1 should drop v1, not add. Mixing add and assign without an override rule double-counts.</div>
+    <div class="pitfalls__fix">Assign overwrites. If both exist, store a pair (add, assign) with assign taking priority, and push in that order.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Range assign (set all to v)</td>
+        <td>lazy holds the assigned value plus a "has assign" flag. apply sets t[p] = v * length. A new assign overwrites the tag without adding.</td>
+        <td><code>t[p] = v * (r - l + 1); lazy[p] = v; tagged[p] = true;</code></td>
+        <td>CF 356A, range colouring</td>
+      </tr>
+      <tr>
+        <td>Range XOR</td>
+        <td>For a sum-tree, XOR of v on a segment flips a bit of each element: the sum changes by a closed form per bit. For an XOR-tree, t[p] ^= v if the length is odd. CF 242E keeps 20 bit-count trees.</td>
+        <td><code>t[p] ^= v * (length &amp; 1); lazy[p] ^= v;</code></td>
+        <td>CF 242E</td>
+      </tr>
+      <tr>
+        <td>Beats (chmin / chmax on a range)</td>
+        <td>A node stores min, second-min, count-of-min. A chmin tag can be applied in O(1) when it does not cross the second-min; otherwise you must split. Amortised O(log n).</td>
+        <td><code>if (tmin &gt;= v) return; if (secondMin &gt; v) apply; else recurse;</code></td>
+        <td>Segment-tree beats, P2</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is a push on a full-cover query unnecessary?</summary>
+    <div class="followup__body">
+      <p>t[p] already includes the tag, by the apply invariant. Returning t[p] is correct for the parent. You only push when you need a child's value, i.e. when you split. Pushing on every full cover would still be correct but would turn a lazy structure back into an eager one and could TLE.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do two Fenwicks replace this for sums?</summary>
+    <div class="followup__body">
+      <p>Range add [l, r] += v is four point updates on B1 and B2, and range sum is two prefix evaluations of i*B1 - B2. Constants are much smaller. The moment you need range min, or range assign, or a struct node, the Fenwick identity disappears and this page is the tool.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What breaks if the update is not uniformly applicable to a node?</summary>
+    <div class="followup__body">
+      <p>If "add v to every element" cannot be summarised in O(1) given only t[p] and the length, lazy does not work. Example: "divide each element by v, integer division" &mdash; the new sum is not a function of the old sum. Then you need segment-tree beats, a different structure, or to fall back to touching leaves.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does CF 52C handle the circular case?</summary>
+    <div class="followup__body">
+      <p>A range that wraps (l &gt; r) is two linear updates [l, n] and [1, r]. Each is an ordinary lazy range add. Queries wrap the same way, combining two range mins. The tree itself stays linear; the circle is a client-side split.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/range-addition/" target="_blank" rel="noopener">Range Addition</a></td>
+        <td><span class="badge badge--lc">LC 370</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Difference array; lazy is overkill here</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/falling-squares/" target="_blank" rel="noopener">Falling Squares</a></td>
+        <td><span class="badge badge--lc">LC 699</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Range max assign after coord compress</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-iii/" target="_blank" rel="noopener">My Calendar II / III</a></td>
+        <td><span class="badge badge--lc">LC 732</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Range add 1, query max occupancy</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/range-module/" target="_blank" rel="noopener">Range Module</a></td>
+        <td><span class="badge badge--lc">LC 715</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Range assign coverage bits, dynamic</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/52/C" target="_blank" rel="noopener">Circular RMQ</a></td>
+        <td><span class="badge badge--cf">CF 52C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Range add, range min, wraparound</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/242/E" target="_blank" rel="noopener">XOR on Segment</a></td>
+        <td><span class="badge badge--cf">CF 242E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>20 lazy bit-count trees, range XOR</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/438/D" target="_blank" rel="noopener">The Child and Sequence</a></td>
+        <td><span class="badge badge--cf">CF 438D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Range mod, drop out when t[p] < mod</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/52/C" target="_blank" rel="noopener">Range Updates and Sums</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Add and assign tags together</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-iii/" target="_blank" rel="noopener">Polynomial Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Arithmetic-progression range add</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1114/F" target="_blank" rel="noopener">Please, another Queries on Array?</a></td>
+        <td><span class="badge badge--cf">CF 1114F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Lazy product + totient, bitset of primes</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 52C &mdash; wrap the circle outside the tree</summary>
+  <div class="spoiler__body">
+    <p>Store a linear lazy min-tree on a[0..n). If a query or update has l &le; r, it is one call. If l &gt; r, it is the pair [l, n-1] and [0, r]. Combine two mins with ordinary Math.min. Fast IO and 64-bit adds (values plus many updates can exceed 32 bits). The circularity is not a node type; it is two segments.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 242E &mdash; one tree per bit</summary>
+  <div class="spoiler__body">
+    <p>XOR of x on a range flips, independently, each bit of x. For bit b, the new count of 1s in a node is length minus old count. Keep 20 trees of 1-counts, or one node storing 20 counts. Range sum is the sum over bits of count[b] * 2^b. Lazy tag is the XOR still to apply. Push flips the children's counts for bits set in the tag.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>apply</strong> updates t[p] in O(1) and records a tag.</li>
+    <li><strong>push</strong> sinks the tag to both children before you split.</li>
+    <li><strong>Full cover: apply and return.</strong> Do not recurse.</li>
+    <li><strong>Sum apply multiplies by length; min apply does not.</strong></li>
+    <li><strong>Compose tags</strong> (add +=, assign overwrites).</li>
+  </ul>
+  <div class="recap__oneliner">full: apply(p,v); return | partial: push; recurse; t[p]=op(L,R) | apply sum: t+=v*len, lazy+=v</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

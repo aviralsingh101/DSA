@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eulerian Path &amp; Circuit &mdash; DSA Course</title>
+<meta name="description" content="An Eulerian circuit uses every edge exactly once and returns. Hierholzer: walk unused edges, splice leftover tours at the vertex you stalled.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="eulerian-path-and-circuit">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>Eulerian Path & Circuit</h1>
+  <p class="hero__tagline">An Eulerian circuit uses every edge exactly once and returns. Hierholzer: walk unused edges, splice leftover tours at the vertex you stalled.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/graph-representations.html">Graph Representations</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Eulerian</span>
+      <span class="chip">Hierholzer</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Hamiltonian paths (every <em>vertex</em> once) are NP-complete. Eulerian paths (every <em>edge</em> once) are linear. The degree conditions are the whole existence proof, and Hierholzer is the construction.</p>
+<p>Undirected: a circuit exists iff every vertex has even degree (and the edges sit in one component). A path exists iff exactly zero or two vertices have odd degree. Directed: circuit iff every in-degree equals out-degree; path iff one vertex has out-in = 1, one has in-out = 1, rest equal.</p>
+<p>LC 332 Reconstruct Itinerary is Hierholzer on a directed multigraph of airports, with a min-heap of unused outgoing edges so the tour is the lexicographically smallest.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>When a walk stalls, every unused edge sits in a leftover cycle attached to some vertex already on the walk. Recurse from the stall point, then append the walk so far — that splices the cycle in.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Use every edge exactly once (circuit or path)</li>
+        <li>Reconstruct itinerary / Chinese Postman on undirected (add duplicate edges first)</li>
+        <li>De Bruijn sequences (Euler tour of a graph on (k-1)-mers)</li>
+        <li>Undirected / directed multigraphs — store edge ids and mark used</li>
+        <li>Degree conditions already checked or you must also report "impossible"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Visit every vertex once &rarr; Hamiltonian, NP-complete</li>
+        <li>Shortest path that uses each edge at least once on a directed graph &rarr; rural postman / harder</li>
+        <li>You need a spanning tree &rarr; MST</li>
+        <li>Matching, not a tour &rarr; next pages</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Undirected circuit</td>
+        <td>All degrees even, one component</td>
+        <td>Hierholzer</td>
+      </tr>
+      <tr>
+        <td>Undirected path</td>
+        <td>0 or 2 odd degrees</td>
+        <td>Start at an odd vertex</td>
+      </tr>
+      <tr>
+        <td>Directed circuit</td>
+        <td>in = out for all</td>
+        <td>Hierholzer on out-edges</td>
+      </tr>
+      <tr>
+        <td>Directed path</td>
+        <td>one +1 out, one +1 in</td>
+        <td>Start at the +1 out</td>
+      </tr>
+      <tr>
+        <td>Lex smallest tour</td>
+        <td>Always take the smallest unused label</td>
+        <td>LC 332 min-heap</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Hamiltonian</td>
+        <td>Vertices vs edges</td>
+        <td>Euler is the easy one</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Hierholzer is O(n+m). Multiedges and self-loops are allowed and must be consumed. Isolated vertices are fine if they have no edges.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Check the degree conditions and that all edges live in one component (ignore isolates). Start at a vertex that must be the start of a path, or any vertex incident to an edge.</p>
+<p>Hierholzer: from u, while it has unused out-edges, take one, mark used, go to the head. When u is stuck, push u onto the answer and backtrack. Reverse the answer at the end (you pushed in reverse finish order).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>At every moment the unused edges of the current connected piece still satisfy the Euler condition for a circuit (or for a path from the current vertex). Splicing a leftover tour at the stall vertex preserves the used-exactly-once property.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="eulerian-path-and-circuitViz"></div>
+  <div class="viz-player" data-viz-target="eulerian-path-and-circuitViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "tour =",
+      "array": [
+        0,
+        1,
+        2,
+        0
+      ],
+      "indexLabels": [
+        "s",
+        "a",
+        "b",
+        "s"
+      ],
+      "vars": [
+        "u",
+        "used",
+        "stack"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Undirected cycle 0-1-2-0 plus chord 0-2. All degrees even: 0:3? Wait 0 has edges to 1,2,2 — degree 3. Use 0-1-2-0 only for the toy circuit.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "used": "0",
+            "stack": "0"
+          }
+        },
+        {
+          "note": "Walk 0→1, unused at 1 is 1-2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "used": "0-1",
+            "stack": "0,1"
+          }
+        },
+        {
+          "note": "1→2, then 2→0. Back at 0 with no unused edges. Push 0,2,1,0 in reverse.",
+          "active": [
+            2
+          ],
+          "values": {
+            "u": 2,
+            "used": "all cycle",
+            "stack": "stall at 0"
+          }
+        },
+        {
+          "note": "Reverse: 0-1-2-0. Circuit.",
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": "done",
+            "used": "3 edges",
+            "stack": "0,1,2,0"
+          }
+        },
+        {
+          "note": "If a leftover loop sat at 2, Hierholzer would recurse from 2 before pushing 2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "u": 2,
+            "used": "splice",
+            "stack": "insert loop"
+          }
+        },
+        {
+          "note": "Directed itinerary: always pop the smallest unused destination (PriorityQueue per node).",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": "JFK",
+            "used": "lex",
+            "stack": "Hierholzer + heap"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  a["0"] --- b["1"]
+  b --- c["2"]
+  c --- a
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Check degrees</strong> (and one edge-component). If they fail, impossible.</li>
+  <li><strong>Pick start:</strong> the unique +1-out / odd-degree vertex, else any non-isolate.</li>
+  <li><strong>Hierholzer:</strong> while u has unused edges, take one and go. Else push u and pop back.</li>
+  <li><strong>Reverse</strong> the pushed list.</li>
+  <li><strong>Verify</strong> the tour length is m+1 (vertices in the walk).</li>
+  <li><strong>Lex smallest:</strong> store outgoing neighbours in a min-heap / TreeMap.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>used</th><th>stack</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>0</td><td>Undirected cycle 0-1-2-0 plus chord 0-2. All degrees even: 0:3? Wait 0 has edges to 1,2,2 — degree 3. Use 0-1-2-0 only for the toy circuit.</td></tr>
+      <tr><td>1</td><td>0-1</td><td>0,1</td><td>Walk 0→1, unused at 1 is 1-2.</td></tr>
+      <tr><td>2</td><td>all cycle</td><td>stall at 0</td><td>1→2, then 2→0. Back at 0 with no unused edges. Push 0,2,1,0 in reverse.</td></tr>
+      <tr><td>done</td><td>3 edges</td><td>0,1,2,0</td><td>Reverse: 0-1-2-0. Circuit.</td></tr>
+      <tr><td>2</td><td>splice</td><td>insert loop</td><td>If a leftover loop sat at 2, Hierholzer would recurse from 2 before pushing 2.</td></tr>
+      <tr><td>JFK</td><td>lex</td><td>Hierholzer + heap</td><td>Directed itinerary: always pop the smallest unused destination (PriorityQueue per node).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Eulerian Path & Circuit implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">EulerCheck.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class EulerCheck {
+        static boolean circuit(int[] deg) {
+            for (int d : deg) if (d % 2 != 0) return false;
+            return true;
+        }
+        public static void main(String[] args) {
+            System.out.println(circuit(new int[] {2, 2, 2}));
+            System.out.println(circuit(new int[] {1, 3, 2}));
+        }
+        // Input : triangle degrees; then a path plus extra
+        // Output: true
+        //         false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Hierholzer.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Hierholzer {
+        static List&lt;Integer&gt; tour(int n, int[][] edges, boolean directed) {
+            List&lt;int[]&gt;[] g = new List[n];
+            int[] deg = new int[n], indeg = new int[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new ArrayList&lt;&gt;();
+            int m = edges.length;
+            boolean[] used = new boolean[m];
+            for (int i = 0; i &lt; m; i++) {
+                int u = edges[i][0], v = edges[i][1];
+                g[u].add(new int[] {v, i});
+                deg[u]++; deg[v]++;
+                indeg[v]++;
+                if (!directed) g[v].add(new int[] {u, i});
+            }
+            int start = 0;
+            for (int i = 0; i &lt; n; i++) if (!g[i].isEmpty()) { start = i; break; }
+            Deque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+            List&lt;Integer&gt; ans = new ArrayList&lt;&gt;();
+            st.push(start);
+            int[] it = new int[n];
+            while (!st.isEmpty()) {
+                int u = st.peek();
+                while (it[u] &lt; g[u].size() &amp;&amp; used[g[u].get(it[u])[1]]) it[u]++;
+                if (it[u] == g[u].size()) { ans.add(u); st.pop(); }
+                else {
+                    int[] e = g[u].get(it[u]++);
+                    used[e[1]] = true;
+                    st.push(e[0]);
+                }
+            }
+            Collections.reverse(ans);
+            return ans.size() == m + 1 ? ans : List.of();
+        }
+        public static void main(String[] args) {
+            System.out.println(tour(3, new int[][] {{0,1},{1,2},{2,0}}, false));
+        }
+        // Input : triangle
+        // Output: [0, 1, 2, 0]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Itinerary.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Itinerary {
+        static List&lt;String&gt; find(String[][] tickets) {
+            Map&lt;String, PriorityQueue&lt;String&gt;&gt; g = new HashMap&lt;&gt;();
+            for (String[] t : tickets) g.computeIfAbsent(t[0], k -&gt; new PriorityQueue&lt;&gt;()).add(t[1]);
+            LinkedList&lt;String&gt; ans = new LinkedList&lt;&gt;();
+            Deque&lt;String&gt; st = new ArrayDeque&lt;&gt;();
+            st.push("JFK");
+            while (!st.isEmpty()) {
+                String u = st.peek();
+                PriorityQueue&lt;String&gt; pq = g.get(u);
+                if (pq != null &amp;&amp; !pq.isEmpty()) st.push(pq.poll());
+                else ans.addFirst(st.pop());
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(find(new String[][] {{"MUC","LHR"},{"JFK","MUC"},{"SFO","SJC"},{"LHR","SFO"}}));
+        }
+        // Input : LC 332 sample
+        // Output: [JFK, MUC, LHR, SFO, SJC]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each edge is pushed and popped once. The iterative version with an adjacency iterator is linear. A min-heap per node for lex-smallest adds a log on the degree.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Hierholzer</td><td>O(n+m)</td><td>O(n+m)</td><td>Default</td></tr>
+      <tr><td>Fleury</td><td>O(m^2)</td><td>O(n+m)</td><td>Do not write</td></tr>
+      <tr><td>Hamiltonian search</td><td>exponential</td><td>O(n)</td><td>Wrong problem</td></tr>
+      <tr><td>DFS + used set of vertices</td><td>misses edges</td><td>—</td><td>Not Euler</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Checking vertices instead of edges for connectivity</span>
+    <div class="pitfalls__bug">Two components that both have edges: degrees can look fine locally and the tour cannot jump.</div>
+    <div class="pitfalls__fix">All <em>edges</em> in one component. Ignore isolated vertices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Starting at a vertex of even degree when two odds exist</span>
+    <div class="pitfalls__bug">You produce a circuit of a subgraph and leftover edges.</div>
+    <div class="pitfalls__fix">Start at an odd-degree vertex (undirected) or the +1-out vertex (directed).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to reverse</span>
+    <div class="pitfalls__bug">Hierholzer pushes in reverse-finish order. The printed walk is backwards.</div>
+    <div class="pitfalls__fix"><code>Collections.reverse</code> or <code>addFirst</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Marking vertices used</span>
+    <div class="pitfalls__bug">Euler re-visits vertices. Marking a vertex used drops leftover cycles.</div>
+    <div class="pitfalls__fix">Mark <em>edges</em> used (an id or an iterator).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Directed tickets without a heap</span>
+    <div class="pitfalls__bug">Any Euler tour is accepted by some judges; LC 332 wants the lex smallest.</div>
+    <div class="pitfalls__fix"><code>PriorityQueue</code> of unused destinations.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Lex smallest</td>
+        <td>Always take the smallest unused label.</td>
+        <td><code>LC 332</code></td>
+        <td>JFK</td>
+      </tr>
+      <tr>
+        <td>Chinese Postman undirected</td>
+        <td>Pair odd-degree vertices with min-cost matching, duplicate those paths, then Euler.</td>
+        <td><code>O(n^3) matching</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>De Bruijn</td>
+        <td>Nodes = (k-1)-mers, edges = k-mers. Euler tour is the sequence.</td>
+        <td><code>bio / CF</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not mark vertices?</summary>
+    <div class="followup__body">
+      <p>A vertex of degree 4 must be entered and left twice. The unused-edge loop at that vertex is a leftover tour you splice in. Vertex-visited flags destroy it.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Hamiltonian vs Eulerian in one sentence?</summary>
+    <div class="followup__body">
+      <p>Hamiltonian = every vertex once (hard). Eulerian = every edge once (easy, degree conditions + Hierholzer).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if the graph is disconnected?</summary>
+    <div class="followup__body">
+      <p>A circuit still exists if every component that contains an edge is Eulerian (all even / in=out) and you only need a circuit of that component. If the statement wants the whole graph, require a single edge-component.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Directed path start?</summary>
+    <div class="followup__body">
+      <p>The unique vertex with out-in = 1. If every in equals out, any vertex with an edge is a circuit start.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/reconstruct-itinerary/" target="_blank" rel="noopener">Reconstruct Itinerary</a></td>
+        <td><span class="badge badge--lc">LC 332</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Directed Hierholzer, lex smallest</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/cracking-the-safe/" target="_blank" rel="noopener">Cracking The Safe</a></td>
+        <td><span class="badge badge--lc">LC 753</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>De Bruijn Euler</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/508/D" target="_blank" rel="noopener">Tanya and Password</a></td>
+        <td><span class="badge badge--cf">CF 508D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Directed Euler on 2-mers</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/1186/F" target="_blank" rel="noopener">Vus the Cossack and a Graph</a></td>
+        <td><span class="badge badge--cf">CF 1186F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Delete to Eulerian</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1361/C" target="_blank" rel="noopener">Johnny and Contribution? skip</a></td>
+        <td><span class="badge badge--cf">CF 1361C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>XOR Euler-ish</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1691" target="_blank" rel="noopener">Mail Delivery</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Undirected circuit</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/1693" target="_blank" rel="noopener">Teleporters Path</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Directed path</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc213/tasks/abc213_d" target="_blank" rel="noopener">ABC 213 D</a></td>
+        <td><span class="badge badge--atc">ABC 213D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Euler-like tree walk</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Circuit: all even (undirected) or in=out (directed).</li>
+    <li>Path: 0/2 odds, or one +1 out and one +1 in.</li>
+    <li>Hierholzer walks unused edges, then pushes the stall vertex.</li>
+    <li>Reverse the stack. Mark edges, never vertices.</li>
+    <li>Lex smallest: min-heap of unused out-labels.</li>
+  </ul>
+  <div class="recap__oneliner">while u has unused edges take one; else push u and pop; reverse;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

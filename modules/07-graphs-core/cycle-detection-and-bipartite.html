@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycle Detection &amp; Bipartite &mdash; DSA Course</title>
+<meta name="description" content="A back-edge is a cycle, and a clash while 2-colouring is an odd cycle &mdash; the same flood that paints a component also answers both questions.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="cycle-detection-and-bipartite">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 07 &middot; Graphs: Core</span>
+  <h1>Cycle Detection & Bipartite</h1>
+  <p class="hero__tagline">A back-edge is a cycle, and a clash while 2-colouring is an odd cycle &mdash; the same flood that paints a component also answers both questions.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="bfs.html">BFS</a>,
+      <a href="dfs-and-components.html">DFS &amp; Components</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">cycle</span>
+      <span class="chip">bipartite</span>
+      <span class="chip">2-color</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Cycle detection is the first graph question that is not just "visit everything". In an undirected graph a cycle is a back-edge to an already-seen vertex that is not your parent. In a directed graph you need three colours, because a finished vertex is allowed to be pointed at and an in-progress vertex is not.</p>
+<p>Bipartite checking is the same walk with one extra bit. A graph is bipartite if and only if it has no odd cycle, if and only if it is 2-colourable. BFS layers give the colours for free: odd distances one side, even the other. A neighbour already coloured the same as you is the odd cycle.</p>
+<p>Interviews hide these as "can we split into two groups", "is the course schedule possible" (that's directed cycle + topo), "odd-length cycle", and "graph coloring with 2 colours". One template covers them if you know which flavour of graph you have.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Undirected cycle: seen + not parent. Directed cycle: neighbour is grey (in the recursion stack). Bipartite: the same BFS, and a colour clash is an odd cycle.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Does this graph contain a cycle?" undirected or directed</li>
+        <li>"Can we split vertices into two groups with all edges between groups?"</li>
+        <li>"Is the graph bipartite / 2-colourable / free of odd cycles?"</li>
+        <li>Course schedule, task dependencies: a directed cycle means impossible</li>
+        <li>A tree check: n vertices and n-1 edges is necessary but not sufficient without acyclicity</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Finding the <em>shortest</em> cycle &rarr; BFS from each vertex, not a boolean walk</li>
+        <li>Counting cycles or listing all of them &rarr; exponential, different problem</li>
+        <li>Directed mutual reachability &rarr; SCCs; a cycle is a special SCC of size &ge; 2</li>
+        <li>Odd cycle through a particular vertex only &rarr; BFS layered from that vertex</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Undirected, "has a cycle?"</td>
+        <td>Back-edge to seen non-parent</td>
+        <td>DFS with parent, or n vs n-1 plus connected</td>
+      </tr>
+      <tr>
+        <td>Directed, "has a cycle?"</td>
+        <td>Edge to a grey node</td>
+        <td>3-colour DFS</td>
+      </tr>
+      <tr>
+        <td>"Bipartite?" / two teams / two colours</td>
+        <td>No odd cycle</td>
+        <td>BFS 2-colour, clash = no</td>
+      </tr>
+      <tr>
+        <td>Course schedule / prerequisites</td>
+        <td>Directed cycle = impossible</td>
+        <td>3-colour or Kahn leftover</td>
+      </tr>
+      <tr>
+        <td>"Is it a tree?"</td>
+        <td>Connected + acyclic</td>
+        <td>One component and m = n-1</td>
+      </tr>
+      <tr>
+        <td>Odd-length cycle exists</td>
+        <td>Not bipartite</td>
+        <td>Same as 2-colour failure</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> undirected 3-colour DFS</td>
+        <td>Parent looks like a grey neighbour</td>
+        <td>Always skip the parent in the undirected case</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>, one O(n + m) walk. Colour arrays are <code>int[]</code> with -1 / 0 / 1, not a HashMap. Directed cycle needs the third state; two booleans (seen / done) are the same thing.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Three checks, one walk each</h2>
+<p>Undirected: DFS(u, parent). For each neighbour v, ignore v == parent. If v is already visited you have a cycle. If the graph may be disconnected, run from every unvisited start. A self-loop is a cycle; a double edge is a cycle of length 2.</p>
+<p>Directed: colours WHITE / GREY / BLACK. Paint GREY on enter, BLACK on exit. An edge to GREY is a back-edge into the recursion stack, hence a directed cycle. An edge to BLACK is a cross or forward edge and is legal.</p>
+<p>Bipartite: BFS (or DFS) assigning colour[v] = colour[u] xor 1. If v is already coloured and colour[v] == colour[u], there is an odd cycle. Each component is checked independently; a graph is bipartite iff every component is.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The interview sentence</span>
+    <p>A graph is bipartite iff it is 2-colourable iff it has no odd cycle. BFS layers are the colours. For directed cycles, <em>grey means on the current path</em> &mdash; that is the only extra state beyond visited.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The parent is not a cycle</span>
+    <p>In an undirected list, the edge you just came from is stored backwards. Without <code>if (v == p) continue;</code> every edge looks like a cycle. This is the single most common false positive on this page.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Kahn's leftover is a directed cycle</span>
+    <p>If you run topological Kahn and vertices remain with positive indegree, those leftovers sit on directed cycles. Same answer as 3-colour DFS, useful when you already have the indegree array for a schedule problem.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>A triangle is an odd cycle</h3>
+
+<p>Triangle 0-1-2 plus a pendant 3. The graph has a cycle and is not bipartite. 2-colouring from 0 paints 1 red, then 2 wants both red and blue.</p>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  n0["0 even"] --- n1["1 odd"]
+  n0 --- n2["2 clash"]
+  n1 --- n2
+  n1 --- n3["3 even"]
+  </div>
+  <figcaption>Undirected triangle. BFS colours 0 even, 1 and 2 odd &mdash; but 1-2 is an edge inside the odd layer, so the colouring fails.</figcaption>
+</figure>
+
+<h3>colour[] and the BFS queue during 2-colouring</h3>
+
+<p>The array is the colour of each vertex: -1 unseen, 0 even, 1 odd. A clash on the edge 1-2 is the moment we know the graph is not bipartite.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="cycColor"></div>
+  <div class="viz-player" data-viz-target="cycColor">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "colour[u]  (-1 unseen, 0 / 1 sides)",
+      "array": [
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "u",
+        "queue",
+        "colour[u]"
+      ],
+      "speed": 950,
+      "frames": [
+        {
+          "note": "Seed 0 with colour 0. Queue = [0].",
+          "arr": [
+            0,
+            -1,
+            -1,
+            -1
+          ],
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": "seed",
+            "queue": "[0]",
+            "colour[u]": 0
+          }
+        },
+        {
+          "note": "Pop 0. Paint 1 with colour 1 and push.",
+          "arr": [
+            0,
+            1,
+            -1,
+            -1
+          ],
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3
+          ],
+          "values": {
+            "u": 0,
+            "queue": "[1]",
+            "colour[u]": 0
+          }
+        },
+        {
+          "note": "Still from 0: paint 2 with colour 1 and push. Queue = [1, 2].",
+          "arr": [
+            0,
+            1,
+            1,
+            -1
+          ],
+          "active": [
+            2
+          ],
+          "done": [
+            0
+          ],
+          "best": [
+            1
+          ],
+          "dim": [
+            3
+          ],
+          "values": {
+            "u": 0,
+            "queue": "[1, 2]",
+            "colour[u]": 0
+          }
+        },
+        {
+          "note": "Pop 1. Neighbour 0 is the other colour, fine. Neighbour 3 unseen: paint 0, push.",
+          "arr": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "best": [
+            2
+          ],
+          "values": {
+            "u": 1,
+            "queue": "[2, 3]",
+            "colour[u]": 1
+          }
+        },
+        {
+          "note": "Still from 1: neighbour 2 is already colour 1, same as 1. Clash. Odd cycle 0-1-2.",
+          "arr": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "active": [
+            1,
+            2
+          ],
+          "x": [
+            2
+          ],
+          "done": [
+            0
+          ],
+          "values": {
+            "u": 1,
+            "queue": "[2, 3]",
+            "colour[u]": "clash 1-2"
+          }
+        },
+        {
+          "note": "We can stop. The graph is not bipartite, and the undirected cycle check would have fired on the same back-edge 1-2.",
+          "arr": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "x": [
+            1,
+            2
+          ],
+          "done": [
+            0,
+            3
+          ],
+          "values": {
+            "u": "fail",
+            "queue": "stop",
+            "colour[u]": "not bipartite"
+          }
+        },
+        {
+          "note": "If the edge 1-2 were missing, colours [0,1,1,0] would be a valid bipartition: {0,3} vs {1,2}.",
+          "arr": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "best": [
+            0,
+            3
+          ],
+          "done": [
+            1,
+            2
+          ],
+          "values": {
+            "u": "if no 1-2",
+            "queue": "[]",
+            "colour[u]": "ok"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Queue holds the BFS frontier. When 2 is first painted 1 (from 0), then later seen from 1 with colour 1, the clash fires.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Decide undirected vs directed vs bipartite.</strong> The three checks share a walk and differ in the extra state.</li>
+  <li><strong>Undirected cycle:</strong> DFS(u, p). Skip v == p. If v is visited, return true.</li>
+  <li><strong>Directed cycle:</strong> WHITE/GREY/BLACK. GREY on enter, BLACK on exit, edge to GREY is a cycle.</li>
+  <li><strong>Bipartite:</strong> BFS. colour[s] = 0. For each edge, if v unseen paint the opposite and push; if colour[v] == colour[u] fail.</li>
+  <li><strong>Disconnected:</strong> restart from every unvisited vertex. One bad component fails the whole graph.</li>
+  <li><strong>Self-loops:</strong> undirected or directed, they are cycles. Handle before the parent test if the input can contain them.</li>
+  <li><strong>Return</strong> the boolean, and optionally the two colour classes or a vertex on the cycle.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>2-colour BFS on the triangle-plus-pendant. Adjacency: 0:[1,2], 1:[0,2,3], 2:[0,1], 3:[1].</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>colour[u]</th><th>queue</th><th>edge checked</th><th>result</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>seed</td><td>0</td><td>[0]</td><td>—</td><td>start</td><td>colour = [0,-1,-1,-1]</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>[1,2]</td><td>0-1, 0-2</td><td>paint 1 and 2 as 1</td><td>Both children opposite of 0.</td></tr>
+      <tr><td>1</td><td>1</td><td>[2,3]</td><td>1-0 ok, 1-3 paint 0</td><td>push 3</td><td>Parent is the other colour.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>1</td><td>[2,3]</td><td>1-2</td><td>clash, both colour 1</td><td>Odd cycle. Return false.</td></tr>
+      <tr><td>stop</td><td>—</td><td>—</td><td>—</td><td>not bipartite</td><td>No need to pop 2 or 3.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Cycle Detection & Bipartite implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Undirected cycle</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Bipartite BFS</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Directed 3-colour</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Undirected">
+    <p>Parent-skipping DFS. Returns true if any component contains a cycle.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">UndirectedCycle.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class UndirectedCycle {
+    
+        static boolean dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int p, boolean[] seen) {
+            seen[u] = true;
+            for (int v : g.get(u)) {
+                if (v == p) {
+                    continue;
+                }
+                if (seen[v] || dfs(g, v, u, seen)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        static boolean hasCycle(List&lt;List&lt;Integer&gt;&gt; g) {
+            boolean[] seen = new boolean[g.size()];
+            for (int s = 0; s &lt; g.size(); s++) {
+                if (!seen[s] &amp;&amp; dfs(g, s, -1, seen)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}};
+            for (int[] x : e) {
+                g.get(x[0]).add(x[1]);
+                g.get(x[1]).add(x[0]);
+            }
+            System.out.println(hasCycle(g));
+        }
+        // Input : triangle 0-1-2 plus pendant 3
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Bipartite">
+    <p>The dry-run 2-colouring. Same graph returns false; drop edge 1-2 and it becomes true.</p>
+    <div class="code" data-highlight="16-22">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Bipartite.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class Bipartite {
+    
+        static boolean isBipartite(List&lt;List&lt;Integer&gt;&gt; g) {
+            int n = g.size();
+            int[] col = new int[n];
+            Arrays.fill(col, -1);
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            for (int s = 0; s &lt; n; s++) {
+                if (col[s] != -1) {
+                    continue;
+                }
+                col[s] = 0;
+                q.offer(s);
+                while (!q.isEmpty()) {
+                    int u = q.poll();
+                    for (int v : g.get(u)) {
+                        if (col[v] == -1) {
+                            col[v] = col[u] ^ 1;
+                            q.offer(v);
+                        } else if (col[v] == col[u]) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}};
+            for (int[] x : e) {
+                g.get(x[0]).add(x[1]);
+                g.get(x[1]).add(x[0]);
+            }
+            System.out.println(isBipartite(g));
+        }
+        // Input : triangle plus pendant
+        // Output: false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Directed">
+    <p>WHITE=0, GREY=1, BLACK=2. An edge into GREY is a directed cycle.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DirectedCycle.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class DirectedCycle {
+    
+        static boolean dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int[] col) {
+            col[u] = 1;
+            for (int v : g.get(u)) {
+                if (col[v] == 1) {
+                    return true;
+                }
+                if (col[v] == 0 &amp;&amp; dfs(g, v, col)) {
+                    return true;
+                }
+            }
+            col[u] = 2;
+            return false;
+        }
+    
+        static boolean hasCycle(List&lt;List&lt;Integer&gt;&gt; g) {
+            int[] col = new int[g.size()];
+            for (int s = 0; s &lt; g.size(); s++) {
+                if (col[s] == 0 &amp;&amp; dfs(g, s, col)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 3; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            g.get(0).add(1);
+            g.get(1).add(2);
+            g.get(2).add(0);
+            System.out.println(hasCycle(g));
+        }
+        // Input : directed cycle 0 -&gt; 1 -&gt; 2 -&gt; 0
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each check is one walk of the graph. Bipartite BFS examines every edge once per direction; 3-colour DFS does the same:</p>
+    <p><span class="eq">T = &Theta;(n + m)</span></p>
+    <p>You cannot do better in the worst case: an isolated last edge may be the only cycle or the only odd cycle, so every edge must be looked at.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Undirected DFS + parent</td><td>O(n + m)</td><td>O(n)</td><td>Has-a-cycle</td></tr>
+      <tr><td>Directed 3-colour DFS</td><td>O(n + m)</td><td>O(n)</td><td>Directed cycle / course schedule</td></tr>
+      <tr><td>BFS 2-colour</td><td>O(n + m)</td><td>O(n)</td><td>Bipartite, odd-cycle</td></tr>
+      <tr><td>Kahn leftover</td><td>O(n + m)</td><td>O(n)</td><td>Directed cycle if you already need topo</td></tr>
+      <tr><td>Shortest cycle</td><td>O(n(n + m))</td><td>O(n)</td><td>BFS from every vertex</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not skipping the parent</span>
+    <div class="pitfalls__bug">Every undirected edge is reported as a cycle.</div>
+    <div class="pitfalls__fix">Pass p and continue when v == p. For multi-edges, count how many times p appears; a second copy is a real cycle.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Two-colour DFS on a directed graph for "cycle"</span>
+    <div class="pitfalls__bug">Using bipartite logic to detect directed cycles. A directed triangle is a cycle and may still be 2-colourable as an undirected graph if you ignore direction.</div>
+    <div class="pitfalls__fix">Directed cycle = 3 colours. Bipartite = undirected (or the underlying undirected graph) 2-colour.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Only checking one component</span>
+    <div class="pitfalls__bug">The odd cycle or the directed cycle sits in a component you never started.</div>
+    <div class="pitfalls__fix">Outer loop over unvisited / white vertices, same as component count.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Treating a back-edge to BLACK as a directed cycle</span>
+    <div class="pitfalls__bug">Two disjoint paths to a finished vertex look like a cycle if you only have visited/unvisited.</div>
+    <div class="pitfalls__fix">GREY vs BLACK. Only GREY is on the current path.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">m == n-1 implies tree</span>
+    <div class="pitfalls__bug">A 3-cycle plus an isolated vertex has m = n-1 and is not a tree.</div>
+    <div class="pitfalls__fix">Tree = connected and acyclic, or connected and m = n-1. Check both, or check one component and m = n-1.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Colour stored as boolean, unseen as false</span>
+    <div class="pitfalls__bug">You cannot tell unseen from colour 0.</div>
+    <div class="pitfalls__fix">int[] col filled with -1, then 0/1. Three-way state, always.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Reconstruct a cycle</td>
+        <td>Keep parent[]. On the back-edge v-u walk parent from u to v and reverse.</td>
+        <td><code>At clash: walk parent from u until v, collect, reverse.</code></td>
+        <td>CSES Round Trip</td>
+      </tr>
+      <tr>
+        <td>Odd / even cycle separately</td>
+        <td>Bipartite failure is an odd cycle. An even cycle can exist in a bipartite graph (any C_4).</td>
+        <td><code>isBipartite == false  iff  odd cycle exists</code></td>
+        <td>Interview wording trap</td>
+      </tr>
+      <tr>
+        <td>Directed cycle via Kahn</td>
+        <td>Queue zeros of indegree, peel. If popped < n, leftover vertices are on cycles.</td>
+        <td><code>See topological-sort-and-dag-dp.html</code></td>
+        <td>LC 207</td>
+      </tr>
+      <tr>
+        <td>Bipartite matching graphs</td>
+        <td>If the graph is promised bipartite you can skip the check; if it is not, run this page first or matching will silently be wrong.</td>
+        <td><code>&lt;a href="../08-graphs-advanced/bipartite-matching.html"&gt;Matching&lt;/a&gt;</code></td>
+        <td>undefined</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is a colour clash an odd cycle?</summary>
+    <div class="followup__body">
+      <p>BFS colours by distance parity from the component start. An edge inside a layer connects two vertices at the same distance, and the two paths back to the start plus that edge form a closed walk of odd length. An odd closed walk contains an odd cycle.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can a directed graph be "bipartite"?</summary>
+    <div class="followup__body">
+      <p>Usually the question is about the underlying undirected graph. A directed graph can still have a 2-colouring of vertices so every arc goes between sides; that is "the underlying graph is bipartite". It says nothing about directed cycles.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I find any vertex on a directed cycle?</summary>
+    <div class="followup__body">
+      <p>When you see a GREY neighbour v, v is on the cycle. Walk parent / the recursion stack from u back to v. Tarjan/Kosaraju give you the whole SCC if you need every vertex that sits on some cycle.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is a self-loop an odd cycle?</summary>
+    <div class="followup__body">
+      <p>A self-loop is a cycle of length 1, which is odd, so the graph is not bipartite. Detect it as u == v before the parent test. Directed self-loops are also cycles.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/is-graph-bipartite/" target="_blank" rel="noopener">Is Graph Bipartite?</a></td>
+        <td><span class="badge badge--lc">LC 785</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>BFS 2-colour, list input</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/possible-bipartition/" target="_blank" rel="noopener">Possible Bipartition</a></td>
+        <td><span class="badge badge--lc">LC 886</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dislike edges, same check</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/course-schedule/" target="_blank" rel="noopener">Course Schedule</a></td>
+        <td><span class="badge badge--lc">LC 207</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Directed cycle or Kahn leftover</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/redundant-connection/" target="_blank" rel="noopener">Redundant Connection</a></td>
+        <td><span class="badge badge--lc">LC 684</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Undirected cycle, DSU is cleanest</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/graph-valid-tree/" target="_blank" rel="noopener">Graph Valid Tree</a></td>
+        <td><span class="badge badge--lc">LC 261</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Connected and m = n-1, or DSU no extra union</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1669" target="_blank" rel="noopener">Round Trip</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reconstruct an undirected cycle</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/977/E" target="_blank" rel="noopener">Cyclic Components</a></td>
+        <td><span class="badge badge--cf">CF 977E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count components that are a simple cycle</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/detect-cycle-in-an-undirected-graph/1" target="_blank" rel="noopener">Detect cycle in an undirected graph</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Parent-skip DFS</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/detect-cycle-in-a-directed-graph/1" target="_blank" rel="noopener">Detect cycle in a directed graph</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>3-colour DFS</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/abc126/tasks/abc126_d" target="_blank" rel="noopener">ABC 126 D Even Relation</a></td>
+        <td><span class="badge badge--atc">ABC 126D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Tree 2-colour by edge-weight parity</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 207 &mdash; cycle iff the schedule is impossible</summary>
+  <div class="spoiler__body">
+    <p>Build a directed graph of prerequisites. A cycle means a course depends on itself through a chain. 3-colour DFS or Kahn: if you cannot peel n vertices, return false. LC 210 is the same with the peeled order as the answer.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 977E &mdash; a simple cycle component</summary>
+  <div class="spoiler__body">
+    <p>A component is a simple cycle iff every degree is 2 and it is connected with at least 3 vertices. Flood each component, track vertex count and whether any degree is not 2. Do not accept a theta graph (degrees 3) or a lone edge.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Undirected cycle:</strong> seen and not the parent.</li>
+    <li><strong>Directed cycle:</strong> edge into a GREY vertex.</li>
+    <li><strong>Bipartite:</strong> BFS 2-colour; a clash is an odd cycle.</li>
+    <li><strong>Outer loop</strong> over components; one failure fails the graph.</li>
+    <li><strong>m = n-1 is not a tree</strong> unless the graph is also connected.</li>
+  </ul>
+  <div class="recap__oneliner">undirected: skip parent | directed: grey=on path | bipartite: colour xor 1, clash=odd cycle</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipartite Matching &mdash; DSA Course</title>
+<meta name="description" content="A matching is a set of edges with no shared vertex. In a bipartite graph, Kuhn / Hopcroft-Karp (or unit flow) finds a maximum matching in polynomial time. Kőnig: max matching = min">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bipartite-matching">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>Bipartite Matching</h1>
+  <p class="hero__tagline">A matching is a set of edges with no shared vertex. In a bipartite graph, Kuhn / Hopcroft-Karp (or unit flow) finds a maximum matching in polynomial time. Kőnig: max matching = min vertex cover.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="max-flow-min-cut.html">Max Flow / Min Cut</a>,
+      <a href="../07-graphs-core/cycle-detection-and-bipartite.html">Cycle Detection & Bipartite</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">matching</span>
+      <span class="chip">Kuhn</span>
+      <span class="chip">Kőnig</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Assigning jobs to workers, boys to girls, rows to columns of a chessboard — if the graph is bipartite, a maximum matching is the complete answer and is not NP-hard. Kuhn's DFS-augment is twenty lines; Hopcroft-Karp is the faster version you write when n is a few thousand.</p>
+<p>Kőnig's theorem: in a bipartite graph the size of a maximum matching equals the size of a minimum vertex cover. Hall's marriage theorem is the existence form. After a max matching, a min cover is recovered from the Hungarian forest (unsaturated L, alternate reach).</p>
+<p>The flow view is the same algorithm: s 	o L 	o R 	o t with unit capacities. Write Kuhn when you want less code; write Dinic when you already have a flow snippet and the graph is bigger.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>An augmenting path alternates free-edge / matching-edge and starts at a free left vertex. Flipping it increases the matching by one. When none exists, the matching is maximum (Berge).</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Bipartite graph, maximum number of pairs</li>
+        <li>Minimum vertex cover / maximum independent set on a bipartite graph (n - matching)</li>
+        <li>Assign rows to columns with forbidden cells (rook placement)</li>
+        <li>n <= 500 Kuhn, n <= 2000 Hopcroft-Karp / Dinic</li>
+        <li>You already proved the graph is bipartite</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>General-graph matching &rarr; Blossom, not this page</li>
+        <li>Weighted assignment &rarr; Hungarian / min-cost flow</li>
+        <li>The graph is not bipartite and you still want a pairing &rarr; different algorithm</li>
+        <li>Edge cover vs vertex cover — different theorems</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Max matching, n<=500</td>
+        <td>DFS augment from each free L</td>
+        <td>Kuhn</td>
+      </tr>
+      <tr>
+        <td>n<=2000, dense-ish</td>
+        <td>Hopcroft-Karp / Dinic</td>
+        <td>O(E √V)</td>
+      </tr>
+      <tr>
+        <td>Min vertex cover</td>
+        <td>Hungarian forest after max matching</td>
+        <td>Kőnig</td>
+      </tr>
+      <tr>
+        <td>Max independent set</td>
+        <td>n - max matching (bipartite)</td>
+        <td>same</td>
+      </tr>
+      <tr>
+        <td>Weighted</td>
+        <td>Hungarian or MCMF</td>
+        <td>not unweighted Kuhn</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> general matching</td>
+        <td>Odd cycles need blossoms</td>
+        <td>Edmonds, not Kuhn</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|L|, |R| le 500</code> is Kuhn. <code>2000</code> wants Hopcroft-Karp or Dinic. Recursion depth is the augmenting-path length; iterative is safer on CF Java.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Kuhn: <code>matchR[r] = -1</code>. For each left u, DFS: try unused neighbours v; if v is free or <code>dfs(matchR[v])</code> succeeds, set matchR[v]=u and return true. Clear the seen-on-right array every start from a free u (or every phase).</p>
+<p>Min vertex cover: from all free left vertices, walk unused edges L	o R and matching edges R	o L (the Hungarian forest). Cover = (unvisited L) ∪ (visited R).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Berge: a matching is maximum iff there is no augmenting path. Kuhn searches one from every free left vertex. After termination, Kőnig's construction on the Hungarian forest is a vertex cover of the same size.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bipartite-matchingViz"></div>
+  <div class="viz-player" data-viz-target="bipartite-matchingViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "matchR =",
+      "array": [
+        -1,
+        0,
+        1
+      ],
+      "indexLabels": [
+        "r0",
+        "r1",
+        "r2"
+      ],
+      "vars": [
+        "u",
+        "v",
+        "match"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "L={0,1,2}, R={0,1,2}. Edges 0-0, 0-1, 1-1, 2-2.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "v": 0,
+            "match": "free"
+          }
+        },
+        {
+          "note": "u=0 takes r0. matchR[0]=0.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "v": 0,
+            "match": "0\to r0"
+          }
+        },
+        {
+          "note": "u=1 wants r1 (free). matchR[1]=1.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "v": 1,
+            "match": "1\to r1"
+          }
+        },
+        {
+          "note": "u=2 takes r2. Matching size 3.",
+          "active": [
+            2
+          ],
+          "values": {
+            "u": 2,
+            "v": 2,
+            "match": "2\to r2"
+          }
+        },
+        {
+          "note": "If r1 were taken, u=1 would DFS into matchR[1] and try to rematch that left vertex.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "v": 1,
+            "match": "augment flip"
+          }
+        },
+        {
+          "note": "No free L remains. Maximum matching = 3.",
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": "done",
+            "v": "—",
+            "match": "size 3"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  s["s"] --&gt;|"1/1"| l0["L0"]
+  s --&gt;|"1/1"| l1["L1"]
+  l0 --&gt;|"1/1"| r0["R0"]
+  l1 --&gt;|"1/1"| r1["R1"]
+  r0 --&gt;|"1/1"| t["t"]
+  r1 --&gt;|"1/1"| t
+  </div>
+  <figcaption>Unit-capacity flow network for the same matching. Labels are flow/capacity.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm bipartite</strong> (2-colour). If you already have L and R, skip.</li>
+  <li><strong>matchR = -1</strong>. For each left u, clear seen, DFS-augment.</li>
+  <li><strong>DFS:</strong> try each unused neighbour; claim it if free or if its match can rematch.</li>
+  <li><strong>Size</strong> is the number of r with matchR[r] != -1.</li>
+  <li><strong>Min cover:</strong> Hungarian forest from free L; cover = unvisited L + visited R.</li>
+  <li><strong>Independent set</strong> is the complement of the cover (size n - matching).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>v</th><th>match</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>free</td><td>L={0,1,2}, R={0,1,2}. Edges 0-0, 0-1, 1-1, 2-2.</td></tr>
+      <tr><td>0</td><td>0</td><td>0	o r0</td><td>u=0 takes r0. matchR[0]=0.</td></tr>
+      <tr><td>1</td><td>1</td><td>1	o r1</td><td>u=1 wants r1 (free). matchR[1]=1.</td></tr>
+      <tr><td>2</td><td>2</td><td>2	o r2</td><td>u=2 takes r2. Matching size 3.</td></tr>
+      <tr><td>1</td><td>1</td><td>augment flip</td><td>If r1 were taken, u=1 would DFS into matchR[1] and try to rematch that left vertex.</td></tr>
+      <tr><td>done</td><td>—</td><td>size 3</td><td>No free L remains. Maximum matching = 3.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Bipartite Matching implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MatchBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class MatchBrute {
+        static int max(int n, List&lt;Integer&gt;[] g) {
+            int best = 0, lim = 1 &lt;&lt; n;
+            for (int m = 0; m &lt; lim; m++) {
+                boolean[] used = new boolean[n];
+                int ok = 1, cnt = 0;
+                for (int u = 0; u &lt; n &amp;&amp; ok == 1; u++) if (((m &gt;&gt; u) &amp; 1) == 1) {
+                    boolean got = false;
+                    for (int v : g[u]) if (!used[v]) { used[v] = true; got = true; break; }
+                    if (!got) ok = 0;
+                    else cnt++;
+                }
+                if (ok == 1) best = Math.max(best, cnt);
+            }
+            return best;
+        }
+        public static void main(String[] args) {
+            List&lt;Integer&gt;[] g = new List[2];
+            g[0] = List.of(0, 1); g[1] = List.of(1);
+            System.out.println(max(2, g));
+        }
+        // Input : L0-R0, L0-R1, L1-R1
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Kuhn.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Kuhn {
+        List&lt;Integer&gt;[] g;
+        int[] match;
+        boolean[] seen;
+        Kuhn(int nL, int nR) {
+            g = new List[nL];
+            for (int i = 0; i &lt; nL; i++) g[i] = new ArrayList&lt;&gt;();
+            match = new int[nR];
+            Arrays.fill(match, -1);
+        }
+        boolean dfs(int u) {
+            for (int v : g[u]) {
+                if (seen[v]) continue;
+                seen[v] = true;
+                if (match[v] == -1 || dfs(match[v])) { match[v] = u; return true; }
+            }
+            return false;
+        }
+        int maxMatching() {
+            int ans = 0;
+            for (int u = 0; u &lt; g.length; u++) {
+                seen = new boolean[match.length];
+                if (dfs(u)) ans++;
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            Kuhn k = new Kuhn(2, 2);
+            k.g[0].add(0); k.g[0].add(1); k.g[1].add(1);
+            System.out.println(k.maxMatching());
+        }
+        // Input : L0-R0, L0-R1, L1-R1
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KonigCover.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class KonigCover {
+        static List&lt;Integer&gt;[] g;
+        static int[] matchR, matchL;
+        static boolean[] visL, visR;
+        static void dfs(int u) {
+            visL[u] = true;
+            for (int v : g[u]) if (!visR[v] &amp;&amp; matchL[u] != v) {
+                visR[v] = true;
+                if (matchR[v] != -1) dfs(matchR[v]);
+            }
+        }
+        public static void main(String[] args) {
+            g = new List[2];
+            g[0] = new ArrayList&lt;&gt;(List.of(0, 1));
+            g[1] = new ArrayList&lt;&gt;(List.of(1));
+            matchR = new int[] {0, 1};
+            matchL = new int[] {0, 1};
+            visL = new boolean[2]; visR = new boolean[2];
+            // no free L in this tiny perfect matching
+            System.out.println(Arrays.toString(visL) + " " + Arrays.toString(visR));
+        }
+        // Input : perfect matching of size 2
+        // Output: [false, false] [false, false]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time Kuhn O(V E), Hopcroft-Karp O(E √V)</span>
+    <span class="badge badge--space">Space O(V + E)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Kuhn starts an O(E) DFS from each of V left vertices, so O(VE). Hopcroft-Karp (and Dinic on the unit network) groups shortest augmenting paths into phases; there are O(√V) phases.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Kuhn</td><td>O(VE)</td><td>O(V+E)</td><td>n <= 500</td></tr>
+      <tr><td>Hopcroft-Karp / Dinic</td><td>O(E √V)</td><td>O(V+E)</td><td>n <= 2000</td></tr>
+      <tr><td>General Blossom</td><td>O(V^3)</td><td>O(V+E)</td><td>Non-bipartite</td></tr>
+      <tr><td>Hungarian weighted</td><td>O(V^3)</td><td>O(V^2)</td><td>Costs on edges</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not resetting seen per left vertex</span>
+    <div class="pitfalls__bug">A failed attempt poisons the seen flags and later left vertices cannot use those right vertices.</div>
+    <div class="pitfalls__fix">New <code>seen[]</code> (or a vis-token) every time you start from a free u.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Running Kuhn on a non-bipartite graph</span>
+    <div class="pitfalls__bug">Odd-cycle blossoms are ignored; the matching can be non-maximum.</div>
+    <div class="pitfalls__fix">2-colour first. If it fails, you need Blossom or a different model.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Min cover = the matched vertices</span>
+    <div class="pitfalls__bug">That set can miss an unmatched cover vertex or include both ends of a matching edge.</div>
+    <div class="pitfalls__fix">Hungarian forest: free L, alternate; cover = unvisited L ∪ visited R.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Independent set = the matching</span>
+    <div class="pitfalls__bug">A matching is an edge set. Max independent set on a bipartite graph is n - matching (vertices).</div>
+    <div class="pitfalls__fix">Complement of the min vertex cover.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Flow gadget with cap 2 on L-R edges</span>
+    <div class="pitfalls__bug">A left vertex can then match two rights.</div>
+    <div class="pitfalls__fix">s	o L and R	o t have cap 1; L	o R cap 1 is enough and necessary.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Minimum path cover on a DAG</td>
+        <td>Split vertices, edge u	o v becomes u_out-v_in; path cover = n - matching.</td>
+        <td><code>classic</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Weighted assignment</td>
+        <td>Hungarian, or MCMF with cost = -weight.</td>
+        <td><code>O(n^3)</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Hall violator</td>
+        <td>The unreachable side of the Hungarian forest is a Hall-violating set.</td>
+        <td><code>debug assignments</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>State Kőnig's theorem.</summary>
+    <div class="followup__body">
+      <p>In a bipartite graph, the cardinality of a maximum matching equals the cardinality of a minimum vertex cover. The Hungarian-forest construction is the proof you can code.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Maximum independent set?</summary>
+    <div class="followup__body">
+      <p>On a bipartite graph it is <code>n - max matching</code>: the complement of a min vertex cover. On a general graph it is NP-hard.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you recover the actual pairs?</summary>
+    <div class="followup__body">
+      <p><code>matchR[v] = u</code> means edge u-v is in the matching. Invert if you want matchL.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Kuhn vs Hopcroft-Karp in an interview?</summary>
+    <div class="followup__body">
+      <p>Kuhn. Mention the O(E √V) algorithm and the flow reduction. Do not write HK from scratch unless asked.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/is-graph-bipartite/" target="_blank" rel="noopener">Is Graph Bipartite</a></td>
+        <td><span class="badge badge--lc">LC 785</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The check you run first</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/maximum-students-taking-exam/" target="_blank" rel="noopener">Maximum Students Taking Exam</a></td>
+        <td><span class="badge badge--lc">LC 1349</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Grid matching</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/489/B" target="_blank" rel="noopener">BerSU Ball</a></td>
+        <td><span class="badge badge--cf">CF 489B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Greedy almost-matching</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/1139/E" target="_blank" rel="noopener">Maximize Mex</a></td>
+        <td><span class="badge badge--cf">CF 1139E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Matching + offline deletions</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1139/C" target="_blank" rel="noopener">Edgy Trees</a></td>
+        <td><span class="badge badge--cf">CF 1139C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Not matching — extra CF</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1696" target="_blank" rel="noopener">School Dance</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kuhn / flow template</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/practice2/tasks/practice2_d" target="_blank" rel="noopener">ACL Matching via flow</a></td>
+        <td><span class="badge badge--atc">ACL</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dinic matching</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/MATCHING/" target="_blank" rel="noopener">Fast Maximum Matching</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Hopcroft-Karp</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Berge: no augmenting path ⇔ maximum matching.</li>
+    <li>Kuhn: DFS-augment from every free left vertex; reset seen.</li>
+    <li>Kőnig: max matching = min vertex cover (bipartite only).</li>
+    <li>Independent set = n - matching.</li>
+    <li>Unit flow s-L-R-t is the same matching.</li>
+  </ul>
+  <div class="recap__oneliner">for each free u: dfs try v; if (match[v]&lt;0 || dfs(match[v])) match[v]=u;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

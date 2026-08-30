@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparse Table &amp; RMQ &mdash; DSA Course</title>
+<meta name="description" content="Idempotent range queries on a static array in O(1) after an O(n log n) doubling table &mdash; two overlapping blocks, no inverse required.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="sparse-table-and-rmq">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 06 &middot; Range Query Structures</span>
+  <h1>Sparse Table & RMQ</h1>
+  <p class="hero__tagline">Idempotent range queries on a static array in <code>O(1)</code> after an <code>O(n log n)</code> doubling table &mdash; two overlapping blocks, no inverse required.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>,
+      <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">sparse table</span>
+      <span class="chip">RMQ</span>
+      <span class="chip">idempotent</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Prefix sums give <code>O(1)</code> range sums because addition has an inverse. Minimum, maximum, gcd and bitwise AND do not: knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>. A sparse table exploits a different algebraic property, <em>idempotence</em>: overlapping ranges may be combined freely because <code>min(S, S) = min(S)</code>.</p>
+<p>The table stores, for every index i and every k, the min (or gcd, or AND) of the block of length <code>2<sup>k</sup></code> starting at i. Any query range of length L is covered by two such blocks of length <code>2<sup>floor(log2 L)</sup></code>, one aligned with the left end and one with the right. Two lookups, one combine, <code>O(1)</code>.</p>
+<p>The catch is that the array must be static: a point update invalidates <code>O(n)</code> table entries. For mixed updates use a segment tree. For invertible ops on a static array, prefix sums are smaller and simpler. This page is the remaining quadrant: static + idempotent.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Idempotent operations can overlap. Cover [L, R] with two power-of-two blocks and combine them; the overlap is free.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Range minimum / maximum / gcd / AND / OR on a <strong>static</strong> array, many queries</li>
+        <li>The constraints are <code>n, q &le; 10&#8310;</code> and you cannot afford <code>O(log n)</code> per query constants of a segment tree</li>
+        <li>LCA via RMQ on an Euler tour (the min-depth range)</li>
+        <li>"The array does not change" is explicit or implied (build once, query many)</li>
+        <li>You need the <em>index</em> of the minimum, not just the value (store argmin in the table)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The array is updated between queries &rarr; <a href="segment-tree.html">segment tree</a> or <a href="fenwick-tree.html">Fenwick</a></li>
+        <li>The operation is sum / XOR (invertible) on a static array &rarr; <a href="../01-arrays-and-windows/prefix-sums.html">prefix sums</a></li>
+        <li>Exactly one query &rarr; just scan the range</li>
+        <li>You need range add and range min together &rarr; lazy segment tree, not a sparse table</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"static range minimum, q queries"</td>
+        <td>Idempotent, no updates</td>
+        <td>Sparse table RMQ</td>
+      </tr>
+      <tr>
+        <td>"static range gcd / AND / OR"</td>
+        <td>Same table, different combine</td>
+        <td>Sparse table</td>
+      </tr>
+      <tr>
+        <td>"range sum, static"</td>
+        <td>Invertible, not idempotent-needed</td>
+        <td>Prefix sums</td>
+      </tr>
+      <tr>
+        <td>"range sum, point updates"</td>
+        <td>Invertible + updates</td>
+        <td>Fenwick tree</td>
+      </tr>
+      <tr>
+        <td>"range min, point updates"</td>
+        <td>Idempotent + updates</td>
+        <td>Segment tree</td>
+      </tr>
+      <tr>
+        <td>"LCA of two nodes, many queries"</td>
+        <td>RMQ on the Euler tour of depths</td>
+        <td><a href="../05-trees/lca-binary-lifting.html">or binary lifting</a></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sliding-window minimum</td>
+        <td>That is online in one pass with a deque, not arbitrary offline [L,R] queries</td>
+        <td><a href="../01-arrays-and-windows/sliding-window.html">monotonic deque</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 10&#8310;</code> static RMQ is the textbook sparse-table prompt. Memory is <code>n log n</code> integers (about 80 MB at n = 10&#8310; with 32-bit cells), which is acceptable. If n is 10&#8311; you cannot afford the table.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Let <code>st[k][i]</code> be the combine of <code>a[i .. i + 2<sup>k</sup> - 1]</code>. The k = 0 row is a copy of the array. The recurrence is <code>st[k][i] = op(st[k-1][i], st[k-1][i + 2<sup>k-1</sup>])</code>, defined for every i where the second block still fits. Building is a double loop, k outer, i inner.</p>
+<p>A query [L, R] inclusive has length <code>len = R - L + 1</code>. Let <code>k = floor(log2(len))</code>. The two blocks <code>[L, L+2<sup>k</sup>-1]</code> and <code>[R-2<sup>k</sup>+1, R]</code> both lie inside [L, R] and together cover it. Their overlap is harmless because op is idempotent. Precompute <code>lg[i]</code> so the floor-log is an array lookup, not a library call.</p>
+<p>Idempotence is load-bearing. Sum is <em>not</em> idempotent: two overlapping blocks would double-count the middle. That is why sparse tables are not a replacement for prefix sums. The operations that work: min, max, gcd, lcm (with care), AND, OR, and "first index of the minimum".</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>For an idempotent associative op, any range is the combine of two (possibly overlapping) dyadic blocks:</p><span class="eq">op(L, R) = op( st[k][L], st[k][R - 2<sup>k</sup> + 1] ),&nbsp; k = &lfloor;log<sub>2</sub>(R - L + 1)&rfloor;</span><p>Interview sentence: <em>"I overlap two power-of-two windows; min does not mind the overlap, sum would."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Do not sparse-table a sum</span>
+    <p>It compiles and produces a number. The number is wrong whenever the two blocks overlap, which is every query whose length is not itself a power of two. Use prefix sums.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Precompute lg[]</span>
+    <p><code>lg[1] = 0; for (i = 2; i &le; n; i++) lg[i] = lg[i &gt;&gt; 1] + 1;</code> Integer log in O(1) with no floating point, no <code>numberOfLeadingZeros</code> in a hot loop, and defined at 0-length guards you will not hit.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Two overlapping blocks answering min on [2, 6]</h3>
+
+<p>Array <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>. Query min of indices 2..6 (values 4, 1, 5, 9, 2). Length 5, so k = 2, blocks of length 4.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="sparse-table-and-rmqViz"></div>
+  <div class="viz-player" data-viz-target="sparse-table-and-rmqViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a",
+      "array": [
+        3,
+        1,
+        4,
+        1,
+        5,
+        9,
+        2,
+        6
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "vars": [
+        "L",
+        "R",
+        "k",
+        "ans"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "The array. Query [L, R] = [2, 6], length 5.",
+          "active": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "window": [
+            2,
+            6
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": "?",
+            "ans": "?"
+          }
+        },
+        {
+          "note": "lg[5] = 2 because 2^2 = 4 <= 5 < 8. k = 2, block length 4.",
+          "active": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "window": [
+            2,
+            6
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": 2,
+            "ans": "?"
+          }
+        },
+        {
+          "note": "Left block starts at L = 2, length 4: indices 2..5, values 4,1,5,9. min = 1. This is st[2][2].",
+          "active": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "window": [
+            2,
+            5
+          ],
+          "dim": [
+            0,
+            1,
+            6,
+            7
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": 2,
+            "ans": "st[2][2]=1"
+          }
+        },
+        {
+          "note": "Right block ends at R = 6: starts at 6 - 4 + 1 = 3, indices 3..6, values 1,5,9,2. min = 1. This is st[2][3].",
+          "active": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "window": [
+            3,
+            6
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            7
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": 2,
+            "ans": "st[2][3]=1"
+          }
+        },
+        {
+          "note": "Combine: min(1, 1) = 1. The overlap [3, 5] was in both blocks and did not matter.",
+          "best": [
+            3
+          ],
+          "window": [
+            2,
+            6
+          ],
+          "done": [
+            2,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": 2,
+            "ans": 1
+          }
+        },
+        {
+          "note": "A sum sparse table would have added 1+5+9 twice and reported 32 instead of 21. That is why this structure is for min/gcd/AND, not sum.",
+          "x": [
+            3,
+            4,
+            5
+          ],
+          "window": [
+            2,
+            6
+          ],
+          "values": {
+            "L": 2,
+            "R": 6,
+            "k": 2,
+            "ans": "sum would be wrong"
+          }
+        },
+        {
+          "note": "Query [0, 7] has length 8, k = 3, one block covers the whole array: st[3][0] = 1. Two lookups still, both the same cell.",
+          "best": [
+            1
+          ],
+          "window": [
+            0,
+            7
+          ],
+          "values": {
+            "L": 0,
+            "R": 7,
+            "k": 3,
+            "ans": 1
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Left block [2, 5] = min(4,1,5,9) = 1. Right block [3, 6] = min(1,5,9,2) = 1. Overlap at [3, 5] is free. Answer 1.</figcaption>
+</figure>
+
+<h3>When a sparse table is the right structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["range query on an array"]) --&gt; upd{"does the array change?"}
+  upd -- yes --&gt; kind{"point update or range update?"}
+  kind -- point --&gt; fen["Fenwick or segment tree"]
+  kind -- range --&gt; lazy["lazy segment tree"]
+  upd -- no --&gt; op{"which operation?"}
+  op -- "sum or XOR" --&gt; pfx["prefix array, O of 1 query"]
+  op -- "min, max, gcd, AND, OR" --&gt; st["sparse table, O of 1 query"]
+  </div>
+  <figcaption>Static plus idempotent is the sparse-table quadrant. The other three quadrants are prefix sums, Fenwick, and segment trees.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate</strong> <code>st[LOG][n]</code> and <code>lg[n+1]</code>. <code>LOG = 32 - Integer.numberOfLeadingZeros(n)</code>.</li>
+  <li><strong>lg:</strong> <code>lg[1] = 0</code>; for i = 2..n, <code>lg[i] = lg[i >> 1] + 1</code>.</li>
+  <li><strong>Row 0:</strong> copy the array into <code>st[0][i]</code>.</li>
+  <li><strong>Double:</strong> for k = 1..LOG-1, for i such that <code>i + (1<<k) - 1 &lt; n</code>, <code>st[k][i] = op(st[k-1][i], st[k-1][i + (1<<(k-1))])</code>.</li>
+  <li><strong>Query [L, R]:</strong> <code>k = lg[R - L + 1]</code>, return <code>op(st[k][L], st[k][R - (1<<k) + 1])</code>.</li>
+  <li><strong>Do not use this for sum.</strong> Overlap would double-count.</li>
+  <li><strong>Updates:</strong> rebuild the table, or switch to a segment tree.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Building the min-table on <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, then querying <code>[2, 6]</code>. Only a few representative cells are shown.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>L</th><th>R</th><th>k</th><th>ans</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>2</td><td>6</td><td>?</td><td>?</td><td>The array. Query [L, R] = [2, 6], length 5.</td></tr>
+      <tr><td>2</td><td>6</td><td>2</td><td>?</td><td>lg[5] = 2 because 2^2 = 4 <= 5 < 8. k = 2, block length 4.</td></tr>
+      <tr><td>2</td><td>6</td><td>2</td><td>st[2][2]=1</td><td>Left block starts at L = 2, length 4: indices 2..5, values 4,1,5,9. min = 1. This is st[2][2].</td></tr>
+      <tr><td>2</td><td>6</td><td>2</td><td>st[2][3]=1</td><td>Right block ends at R = 6: starts at 6 - 4 + 1 = 3, indices 3..6, values 1,5,9,2. min = 1. This is st[2][3].</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>6</td><td>2</td><td>1</td><td>Combine: min(1, 1) = 1. The overlap [3, 5] was in both blocks and did not matter.</td></tr>
+      <tr><td>2</td><td>6</td><td>2</td><td>sum would be wrong</td><td>A sum sparse table would have added 1+5+9 twice and reported 32 instead of 21. That is why this structure is for min/gcd/AND, not sum.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>7</td><td>3</td><td>1</td><td>Query [0, 7] has length 8, k = 3, one block covers the whole array: st[3][0] = 1. Two lookups still, both the same cell.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Verify by hand: a[2..6] = 4, 1, 5, 9, 2, min is 1. The two length-4 blocks both contain that 1.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Sparse Table & RMQ implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute scan</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Sparse table</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">GCD table</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Each query scans the range. Correct, <code>O(n)</code> per query, dies at <code>n = q = 10&#8309;</code>.</p>
+    <div class="code" data-highlight="6-11">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BruteRmq.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BruteRmq {
+    
+        static int rangeMin(int[] a, int l, int r) {
+            int m = a[l];
+            for (int i = l + 1; i &lt;= r; i++) m = Math.min(m, a[i]);
+            return m;
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            System.out.println(rangeMin(a, 2, 6));
+            System.out.println(rangeMin(a, 0, 7));
+            System.out.println(rangeMin(a, 4, 4));
+        }
+        // Input : [3, 1, 4, 1, 5, 9, 2, 6]
+        // Output: 1
+        //         1
+        //         5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Min-table with precomputed logs. Queries are two lookups. The dry-run sample.</p>
+    <div class="code" data-highlight="16-22,25-28">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SparseTable.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SparseTable {
+    
+        final int[] lg;
+        final int[][] st;
+    
+        SparseTable(int[] a) {
+            int n = a.length;
+            int LOG = 32 - Integer.numberOfLeadingZeros(n);
+            lg = new int[n + 1];
+            for (int i = 2; i &lt;= n; i++) lg[i] = lg[i &gt;&gt; 1] + 1;
+            st = new int[LOG][n];
+            System.arraycopy(a, 0, st[0], 0, n);
+            for (int k = 1; k &lt; LOG; k++) {
+                for (int i = 0; i + (1 &lt;&lt; k) &lt;= n; i++) {
+                    st[k][i] = Math.min(st[k - 1][i], st[k - 1][i + (1 &lt;&lt; (k - 1))]);
+                }
+            }
+        }
+    
+        int rangeMin(int l, int r) {
+            int k = lg[r - l + 1];
+            return Math.min(st[k][l], st[k][r - (1 &lt;&lt; k) + 1]);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            SparseTable st = new SparseTable(a);
+            System.out.println(st.rangeMin(2, 6));
+            System.out.println(st.rangeMin(0, 7));
+            System.out.println(st.rangeMin(4, 4));
+        }
+        // Input : [3, 1, 4, 1, 5, 9, 2, 6]
+        // Output: 1
+        //         1
+        //         5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>The same doubling with <code>gcd</code>. Range gcd is the other common idempotent query; CF 474F is this plus a count of how many array entries equal the gcd.</p>
+    <div class="code" data-highlight="22-28,31-34">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SparseTableGcd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SparseTableGcd {
+    
+        static int gcd(int a, int b) {
+            while (b != 0) { int t = a % b; a = b; b = t; }
+            return Math.abs(a);
+        }
+    
+        final int[] lg;
+        final int[][] st;
+    
+        SparseTableGcd(int[] a) {
+            int n = a.length;
+            int LOG = 32 - Integer.numberOfLeadingZeros(n);
+            lg = new int[n + 1];
+            for (int i = 2; i &lt;= n; i++) lg[i] = lg[i &gt;&gt; 1] + 1;
+            st = new int[LOG][n];
+            System.arraycopy(a, 0, st[0], 0, n);
+            for (int k = 1; k &lt; LOG; k++) {
+                for (int i = 0; i + (1 &lt;&lt; k) &lt;= n; i++) {
+                    st[k][i] = gcd(st[k - 1][i], st[k - 1][i + (1 &lt;&lt; (k - 1))]);
+                }
+            }
+        }
+    
+        int rangeGcd(int l, int r) {
+            int k = lg[r - l + 1];
+            return gcd(st[k][l], st[k][r - (1 &lt;&lt; k) + 1]);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            SparseTableGcd st = new SparseTableGcd(a);
+            System.out.println(st.rangeGcd(2, 6));
+            System.out.println(st.rangeGcd(4, 7));
+            System.out.println(st.rangeGcd(0, 0));
+        }
+        // Input : [3, 1, 4, 1, 5, 9, 2, 6]
+        // Output: 1
+        //         1
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n) build, O(1) query</span>
+    <span class="badge badge--space">Space O(n log n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Row k has at most n entries, and there are <code>log n</code> rows, each filled with a constant-time combine:</p>
+    <p><span class="eq">T<sub>build</sub> = &Theta;(n log n),&nbsp;&nbsp; T<sub>query</sub> = &Theta;(1)</span></p>
+    <p>A segment tree is <code>O(n)</code> build and <code>O(log n)</code> query, and supports updates. When there are no updates and q is huge, the sparse table wins on query constants (two array reads vs a dozen). At <code>n = 10&#8310;</code> the table is the memory you pay for those constants.</p>
+    <p>Farach-Colton/Bender RMQ is <code>O(n)</code> build and <code>O(1)</code> query after a Cartesian-tree reduction; nobody codes it in a contest. Binary lifting LCA is the usual alternative when the RMQ is on a tree, not an array.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Scan each query</td><td><code>O(n q)</code></td><td><code>O(1)</code></td><td>q is 1</td></tr>
+      <tr><td>Prefix sums</td><td><code>O(n + q)</code></td><td><code>O(n)</code></td><td>Invertible op, static</td></tr>
+      <tr><td>Sparse table</td><td><code>O(n log n + q)</code></td><td><code>O(n log n)</code></td><td>Idempotent op, static</td></tr>
+      <tr><td>Segment tree</td><td><code>O(n + q log n)</code></td><td><code>O(n)</code></td><td>Updates, any associative op</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using it for sum / XOR</span>
+    <div class="pitfalls__bug">The two blocks overlap, the middle is combined twice, and XOR of a value with itself is 0, so you can even "zero out" the overlap. Silently wrong.</div>
+    <div class="pitfalls__fix">Sparse tables are for idempotent ops. Sum and XOR go to prefix arrays.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one in the right block</span>
+    <div class="pitfalls__bug"><code>st[k][r - (1<<k)]</code> without the <code>+ 1</code>, so the right block ends at R-1 and the last element is dropped whenever length is not a power of two.</div>
+    <div class="pitfalls__fix">Right start is <code>r - (1<<k) + 1</code>. Check a query of length 3: k = 1, blocks of length 2 must cover all three indices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Floating-point log</span>
+    <div class="pitfalls__bug"><code>(int)(Math.log(len) / Math.log(2))</code> rounding down incorrectly at powers of two, picking k too large, and reading off the end of a row.</div>
+    <div class="pitfalls__fix">Integer <code>lg[]</code> table, or <code>31 - Integer.numberOfLeadingZeros(len)</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Building with i outer, k inner</span>
+    <div class="pitfalls__bug"><code>st[k][i]</code> reads <code>st[k-1][...]</code> that has not been filled yet if k is the inner loop.</div>
+    <div class="pitfalls__fix">k outermost, then i. Same dependency as binary-lifting's doubling.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Inclusive / exclusive bounds mix-up</span>
+    <div class="pitfalls__bug">The table is built for closed intervals but the query is written as <code>[L, R)</code> from a prefix-sum habit, dropping a[R] or throwing.</div>
+    <div class="pitfalls__fix">Pick closed [L, R] and document it. The length is <code>R - L + 1</code>.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Argmin table</td>
+        <td>Store the index of the minimum, not the value. Combine by comparing <code>a[i]</code> at the two candidate indices. LCA-via-RMQ needs this.</td>
+        <td><code>st[k][i] = a[leftIdx] &lt;= a[rightIdx] ? leftIdx : rightIdx;</code></td>
+        <td>Euler tour + RMQ LCA</td>
+      </tr>
+      <tr>
+        <td>Disjoint sparse table</td>
+        <td>Blocks do not overlap; any range splits at a unique midpoint into two disjoint dyadic pieces. Supports non-idempotent ops too, still O(1) query, more code.</td>
+        <td><code>Split at the highest bit where L and R differ</code></td>
+        <td>When you want O(1) range sum without a prefix array (rare)</td>
+      </tr>
+      <tr>
+        <td>2D sparse table</td>
+        <td>Four-way doubling: st[k][p][i][j] = combine of a 2^k by 2^p submatrix. Query is four overlapping rectangles. Memory is n m log n log m.</td>
+        <td><code>Four lookups, same overlap idea</code></td>
+        <td>Static 2D RMQ</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Can you support updates?</summary>
+    <div class="followup__body">
+      <p>A single point update touches O(n) entries in the worst case (every block that covers that index). Rebuilding the whole table is O(n log n), which is fine if updates are rare. For interleaved updates, use a segment tree: O(log n) per update and query, O(n) memory, and it handles non-idempotent ops too.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does this become O(1) LCA?</summary>
+    <div class="followup__body">
+      <p>DFS an Euler tour of every visit (length 2n-1) and the depths at those visits. The LCA of u and v is the minimum-depth node between their first occurrences on the tour. That is RMQ on the depth array, which a sparse table answers in O(1). See <a href="../05-trees/lca-binary-lifting.html">binary lifting</a> for the version that also gives k-th ancestor.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why not just use a segment tree always?</summary>
+    <div class="followup__body">
+      <p>You can. A segment tree of mins is O(log n) query, O(n) memory, and survives updates. The sparse table wins when (1) there are no updates, (2) q is large enough that the log n factor and heavier constants show up, and (3) you want the two-line query. In Java the difference is often a factor of 3-5 on query-heavy RMQ.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Does gcd really belong here?</summary>
+    <div class="followup__body">
+      <p>Yes: gcd(a, a) = a, so it is idempotent, and gcd is associative. Range gcd plus "how many entries equal that gcd" is CF 474F: the sparse table gives the gcd, then a binary search on a positions-list of that value counts occurrences in [L, R].</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Sliding Window Maximum</a></td>
+        <td><span class="badge badge--lc">LC 239</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Deque is better; ST also works (static)</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Range Minimum Query</a></td>
+        <td><span class="badge badge--gfg">SPOJ RMQSQ</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The pure implementation drill</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/475/D" target="_blank" rel="noopener">CGCDSSQ</a></td>
+        <td><span class="badge badge--cf">CF 475D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sparse table gcd, two pointers on changing gcd</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/474/F" target="_blank" rel="noopener">Ant Colony</a></td>
+        <td><span class="badge badge--cf">CF 474F</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Range gcd + count of that gcd</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/872/B" target="_blank" rel="noopener">Maximum of Maximums of Minimums</a></td>
+        <td><span class="badge badge--cf">CF 872B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Casework on k; RMQ intuition</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/359/D" target="_blank" rel="noopener">Pair of Numbers</a></td>
+        <td><span class="badge badge--cf">CF 359D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search + range gcd / min</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/872/B" target="_blank" rel="noopener">Static Range Minimum Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Build and query, nothing else</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1548/B" target="_blank" rel="noopener">Company Queries II</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>LCA as RMQ on an Euler tour</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-immutable/" target="_blank" rel="noopener">Range GCD</a></td>
+        <td><span class="badge badge--atc">ATC</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix/suffix gcd, ST optional</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/maximum-score-of-a-good-subarray/" target="_blank" rel="noopener">Maximum Score of a Good Subarray</a></td>
+        <td><span class="badge badge--lc">LC 1793</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search + RMQ, or two pointers</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 474F &mdash; gcd plus a count</summary>
+  <div class="spoiler__body">
+    <p>The number of surviving ants in [L, R] is the length minus the number of array entries equal to G = gcd(L, R). Sparse table gives G. The positions of each value are a sorted list; binary search how many sit in [L, R]. If that count is zero, nobody equals G and everyone dies except... wait: ants equal to G survive. Answer is (R-L+1) - count(G in [L,R]).</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 475D &mdash; how many ranges have gcd g</summary>
+  <div class="spoiler__body">
+    <p>From a fixed right endpoint, as the left end moves left the gcd jumps down a divisor chain at most log A times. A sparse table plus binary search finds, for each jump, the farthest left where the gcd stays the same. Accumulate counts per gcd value. Queries are then map lookups.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Idempotent + static</strong> is the sparse-table quadrant.</li>
+    <li><strong>Two overlapping dyadic blocks</strong> cover any range in O(1).</li>
+    <li><strong>k = lg[R-L+1]</strong>, right block starts at <code>R - (1&lt;&lt;k) + 1</code>.</li>
+    <li><strong>Not for sums.</strong> Overlap would double-count.</li>
+    <li><strong>Updates kill the table;</strong> switch to a segment tree.</li>
+  </ul>
+  <div class="recap__oneliner">st[k][i]=op(st[k-1][i], st[k-1][i+(1&lt;&lt;(k-1))]) | k=lg[r-l+1]; op(st[k][l], st[k][r-(1&lt;&lt;k)+1])</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

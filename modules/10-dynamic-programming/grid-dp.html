@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid DP &mdash; DSA Course</title>
+<meta name="description" content="A grid that only moves down and right is already a DAG &mdash; dp[r][c] reads the cell above and the cell to the left.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="grid-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Grid DP</h1>
+  <p class="hero__tagline">A grid that only moves down and right is already a DAG &mdash; <code>dp[r][c]</code> reads the cell above and the cell to the left.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>,
+      <a href="../07-graphs-core/topological-sort-and-dag-dp.html">Topological Sort &amp; DAG DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">grid</span>
+      <span class="chip">unique paths</span>
+      <span class="chip">min path</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Unique paths, minimum path sum, dungeon game, falling path, and cherry pickup all share one picture: a cell's answer is a combine of a constant number of incoming cells. Because you cannot move up or left (or you process layers so that you never need to), the dependency is a DAG and a double loop in row-major order is a topo scan.</p>
+<p>This is the most visual DP. The table is the grid. The from cells are the legal predecessors. If you can fill a 3&times;3 unique-paths table by hand, you can write every problem on this page.</p>
+<p>Obstacles are just cells you skip (leave at 0 ways / +inf cost). Space-opt rolls the previous row into one array. The hard variants add a second robot or a third dimension (remaining health, remaining cherries) &mdash; same grid, thicker state.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>dp[r][c] = combine(dp[r-1][c], dp[r][c-1]) plus whatever the cell itself contributes. Row-major (or diagonal) order writes every from-cell first.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Paths on a grid with only down/right (or 4-way with a decreasing rank)</li>
+        <li>Unique paths, min/max path sum, dungeon game, falling path sum</li>
+        <li>Obstacles that block a cell</li>
+        <li>Two tokens moving on the same grid (cherry pickup): add a dimension</li>
+        <li>R, C ≤ 200 so R*C*extra fits</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>4-way movement with no decreasing rank and you want a shortest unweighted path → BFS</li>
+        <li>Weighted 4-way shortest path → Dijkstra, not a simple double loop</li>
+        <li>You must visit every cell → Hamiltonian, not grid DP</li>
+        <li>The "grid" is a matrix chain / interval → interval DP</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Unique paths, empty grid</td>
+        <td>ways += from up and left</td>
+        <td>LC 62</td>
+      </tr>
+      <tr>
+        <td>Obstacles</td>
+        <td>blocked cell stays 0 / skip</td>
+        <td>LC 63</td>
+      </tr>
+      <tr>
+        <td>Min path sum</td>
+        <td>cell + min(up, left)</td>
+        <td>LC 64</td>
+      </tr>
+      <tr>
+        <td>Falling path (any col in next row)</td>
+        <td>min of 3 parents above</td>
+        <td>LC 931</td>
+      </tr>
+      <tr>
+        <td>Dungeon / health</td>
+        <td>work backwards from the exit</td>
+        <td>LC 174</td>
+      </tr>
+      <tr>
+        <td>Two people pick cherries</td>
+        <td>dp[r1][c1][r2] (c2 implied)</td>
+        <td>LC 741</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> BFS on a maze</td>
+        <td>BFS is shortest hops with 4-way and walls</td>
+        <td>Grid DP is for path-aggregates on a DAG of moves</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>R, C &le; 200</code> is the usual. O(RC) time, O(C) space after rolling. Extra dimensions (k, second robot) must still fit 1e7..1e8 cells. Ways need long / modulus.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>One cell, two parents</h2>
+<p>Unique paths on an empty R&times;C grid: dp[0][*] = dp[*][0] = 1, then dp[r][c] = dp[r-1][c] + dp[r][c-1]. That is the dry run. With an obstacle, that cell is 0 and contributes nothing to its children.</p>
+<p>Min path sum: dp[r][c] = a[r][c] + min(up, left), with the first row/col being prefix sums (only one parent). Dungeon game is the same DAG run backwards: you need enough health to enter a cell and still survive the later min-requirement. Rolling: dp[c] += dp[c-1] for unique paths (the old dp[c] is "up", dp[c-1] is "left" already updated). Order inside the row is left-to-right so left is new and up is old &mdash; the 0/1-knapsack direction trick in costume.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After processing (r, c), <code>dp[r][c]</code> is the aggregate (ways, min sum, min required health) over all legal paths from the start (or to the exit, if you ran backwards) that end at this cell.</p><span class="eq">dp[r][c] = dp[r-1][c] + dp[r][c-1]</span>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">First row and first column are prefix-only</span>
+    <p>They have one parent. Initialise them as a running sum / running product of ways (0 after the first obstacle). Forgetting this is the usual off-by-one.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Cherry pickup is not two independent paths</span>
+    <p>Two robots on the same grid share the cherries. State must remember both positions (and usually the step, or use r1+c1=r2+c2 to drop a coordinate). Adding two independent unique-path answers double-counts cells both visit.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Unique paths on a 3&times;3 grid</h3>
+
+<p>Each cell is ways to reach it from (0,0) moving only right or down. Target is the cell we write; from is up and left.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="grid-dpViz"></div>
+  <div class="viz-player" data-viz-target="grid-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "r\\c",
+      "rowHeads": [
+        "0",
+        "1",
+        "2"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2"
+      ],
+      "vars": [
+        "r,c",
+        "from",
+        "ways"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start (0,0) has 1 empty path. First row and first col are all 1s: only one way along the border.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "1"
+            }
+          ],
+          "values": {
+            "r,c": "border",
+            "from": "one parent",
+            "ways": 1
+          }
+        },
+        {
+          "note": "(1,1): from up=1 and left=1. Write 2.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "r,c": "1,1",
+            "from": "up+left",
+            "ways": 2
+          }
+        },
+        {
+          "note": "(1,2): from up=1 and left=2. Write 3.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "r,c": "1,2",
+            "from": "up+left",
+            "ways": 3
+          }
+        },
+        {
+          "note": "(2,1): from up=2 and left=1. Write 3.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 1,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "r,c": "2,1",
+            "from": "up+left",
+            "ways": 3
+          }
+        },
+        {
+          "note": "(2,2): from up=3 and left=3. Write 6. That is the answer.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 2,
+              "val": "6",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "3",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "r,c": "2,2",
+            "from": "3+3",
+            "ways": 6
+          }
+        },
+        {
+          "note": "Full table. Every interior cell is the sum of the two from-cells.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "3"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "6",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "r,c": "done",
+            "from": "—",
+            "ways": 6
+          }
+        },
+        {
+          "note": "Space-opt: one array [1,1,1] then [1,2,3] then [1,3,6]. Left-to-right, old value is up.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "6",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "r,c": "roll",
+            "from": "1 row",
+            "ways": 6
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Answer 6. The centre 2 is 1+1; the exit 6 is 3+3. This is the table you should be able to rebuild on a whiteboard in thirty seconds.</figcaption>
+</figure>
+
+<h3>The DAG of a 2&times;2 grid</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  a00["0,0  ways 1"] --&gt; a01["0,1  ways 1"]
+  a00 --&gt; a10["1,0  ways 1"]
+  a01 --&gt; a11["1,1  ways 2"]
+  a10 --&gt; a11
+  </div>
+  <figcaption>Every edge goes down or right. Row-major is a topo order. No mermaid node named end.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm the move set is a DAG</strong> (down/right, or falling down a row).</li>
+  <li><strong>Allocate dp[R][C]</strong> (or one row).</li>
+  <li><strong>Base:</strong> start cell 1 (ways) or a[0][0] (cost). Fill first row and first col from their single parent.</li>
+  <li><strong>For r = 1..R-1, for c = 1..C-1:</strong> combine up and left (and the cell).</li>
+  <li><strong>Obstacles:</strong> write 0 / skip / +inf and do not feed children.</li>
+  <li><strong>Roll</strong> into one array of length C if you do not need the table.</li>
+  <li><strong>Read dp[R-1][C-1].</strong> Backwards problems (dungeon) start at the exit.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Unique paths, 3&times;3, no obstacles.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>r,c</th><th>up</th><th>left</th><th>dp</th><th>note</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0,0</td><td>—</td><td>—</td><td>1</td><td>start</td><td>Base.</td></tr>
+      <tr><td>0,1 / 0,2</td><td>—</td><td>1</td><td>1</td><td>first row</td><td></td></tr>
+      <tr><td>1,0 / 2,0</td><td>1</td><td>—</td><td>1</td><td>first col</td><td></td></tr>
+      <tr class="trace-table__row--change"><td>1,1</td><td>1</td><td>1</td><td>2</td><td>first interior</td><td>from both.</td></tr>
+      <tr><td>1,2</td><td>1</td><td>2</td><td>3</td><td></td><td></td></tr>
+      <tr><td>2,1</td><td>2</td><td>1</td><td>3</td><td></td><td></td></tr>
+      <tr class="trace-table__row--change"><td>2,2</td><td>3</td><td>3</td><td>6</td><td>answer</td><td>6 paths.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Grid DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Space-opt</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathsRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class PathsRec {
+    
+        static int ways(int r, int c, int R, int C) {
+            if (r &gt;= R || c &gt;= C) {
+                return 0;
+            }
+            if (r == R - 1 &amp;&amp; c == C - 1) {
+                return 1;
+            }
+            return ways(r + 1, c, R, C) + ways(r, c + 1, R, C);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(ways(0, 0, 3, 3));
+        }
+        // Input : 3 x 3
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathsMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class PathsMemo {
+    
+        static int ways(int r, int c, int R, int C, int[][] memo) {
+            if (r &gt;= R || c &gt;= C) {
+                return 0;
+            }
+            if (r == R - 1 &amp;&amp; c == C - 1) {
+                return 1;
+            }
+            if (memo[r][c] != -1) {
+                return memo[r][c];
+            }
+            return memo[r][c] = ways(r + 1, c, R, C, memo) + ways(r, c + 1, R, C, memo);
+        }
+    
+        public static void main(String[] args) {
+            int[][] memo = new int[3][3];
+            for (int[] row : memo) {
+                Arrays.fill(row, -1);
+            }
+            System.out.println(ways(0, 0, 3, 3, memo));
+        }
+        // Input : 3 x 3
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathsTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class PathsTab {
+    
+        static int uniquePaths(int R, int C) {
+            int[][] dp = new int[R][C];
+            for (int r = 0; r &lt; R; r++) {
+                dp[r][0] = 1;
+            }
+            for (int c = 0; c &lt; C; c++) {
+                dp[0][c] = 1;
+            }
+            for (int r = 1; r &lt; R; r++) {
+                for (int c = 1; c &lt; C; c++) {
+                    dp[r][c] = dp[r - 1][c] + dp[r][c - 1];
+                }
+            }
+            return dp[R - 1][C - 1];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(uniquePaths(3, 3));
+        }
+        // Input : 3 x 3
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathsRoll.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class PathsRoll {
+    
+        static int uniquePaths(int R, int C) {
+            int[] dp = new int[C];
+            Arrays.fill(dp, 1);
+            for (int r = 1; r &lt; R; r++) {
+                for (int c = 1; c &lt; C; c++) {
+                    dp[c] += dp[c - 1];
+                }
+            }
+            return dp[C - 1];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(uniquePaths(3, 3));
+        }
+        // Input : 3 x 3
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(R C)</span>
+    <span class="badge badge--space">Space O(C) rolled; O(R C) table</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>One constant-time combine per cell:</p>
+    <p><span class="eq">T = &Theta;(R C)</span></p>
+    <p>Unique paths without obstacles is also a binomial <code>C(R+C-2, R-1)</code>, computable in O(R) multiplications if you only need the empty-grid count.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Unique / min path</td><td>O(RC)</td><td>O(C)</td><td>This page</td></tr>
+      <tr><td>Binomial closed form</td><td>O(R+C)</td><td>O(1)</td><td>Empty grid, ways only</td></tr>
+      <tr><td>4-way shortest hops</td><td>O(RC)</td><td>O(RC)</td><td>BFS, not DP</td></tr>
+      <tr><td>Cherry pickup</td><td>O(R C min(R,C))</td><td>O(R C min)</td><td>Third coordinate</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not initialising the first row/col</span>
+    <div class="pitfalls__bug">Interior formula reads 0 from an unfilled border and the whole table stays 0.</div>
+    <div class="pitfalls__fix">Set the start, then walk the first row using only left, first col using only up.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Obstacle on the start or the exit</span>
+    <div class="pitfalls__bug">Returning 1 or a[0][0] anyway.</div>
+    <div class="pitfalls__fix">If either is blocked, ways = 0 / min-path is impossible.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Rolling right-to-left for unique paths</span>
+    <div class="pitfalls__bug">dp[c-1] would be the old row's left, not the new left. You mix two rows wrong.</div>
+    <div class="pitfalls__fix">Left-to-right: old dp[c] is up, new dp[c-1] is left.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on ways</span>
+    <div class="pitfalls__bug">C(38, 18) already exceeds int. LC 62 is within int; CF often is not.</div>
+    <div class="pitfalls__fix">long, or the modulus.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Dungeon game run forwards</span>
+    <div class="pitfalls__bug">Min health is not a min-sum. A deep negative late cell cannot be prepaid from an early surplus in the naive forwards rec.</div>
+    <div class="pitfalls__fix">dp[r][c] = min health needed from here to the exit. Work from the exit backward.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Two independent min-path sums for two robots</span>
+    <div class="pitfalls__bug">Shared cells counted twice.</div>
+    <div class="pitfalls__fix">One state that holds both positions (or one position plus the step).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Min path sum</td>
+        <td>dp = a[r][c] + min(up, left). First row/col are prefix sums.</td>
+        <td><code>LC 64</code></td>
+        <td>Same loops, min instead of +</td>
+      </tr>
+      <tr>
+        <td>Obstacles</td>
+        <td>If grid[r][c] is blocked, dp = 0 and do not add into it.</td>
+        <td><code>LC 63</code></td>
+        <td>Zero the cell, continue</td>
+      </tr>
+      <tr>
+        <td>Falling path</td>
+        <td>From row r, parents are (r-1, c-1), (r-1,c), (r-1,c+1).</td>
+        <td><code>LC 931</code></td>
+        <td>Still a DAG, down only</td>
+      </tr>
+      <tr>
+        <td>Dungeon / backwards</td>
+        <td>Need = max(1, laterNeed - a[r][c]). Start at exit.</td>
+        <td><code>LC 174</code></td>
+        <td>Reverse topo</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>When is the binomial enough?</summary>
+    <div class="followup__body">
+      <p>Empty rectangle, only down/right, count of paths: C(R+C-2, R-1). Obstacles, min cost, or extra state kill the closed form. Use it as a check on the empty table.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I grid-DP a 4-way maze?</summary>
+    <div class="followup__body">
+      <p>Only if you add a rank that strictly decreases (remaining health, remaining steps, a bitset of visited &mdash; the last is exponential). Plain 4-way shortest path is BFS/Dijkstra. A naive 4-way "dp[r][c] = min of four neighbours" is a cyclic system, not a DAG.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does cherry pickup drop a coordinate?</summary>
+    <div class="followup__body">
+      <p>After t steps, r+c = t for each robot. So r1+c1 = r2+c2, and c2 = r1+c1-r2. The state (t, r1, r2) or (r1, c1, r2) is enough. That is what keeps it O(n^3).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Rolling two rows vs one?</summary>
+    <div class="followup__body">
+      <p>Falling path needs the previous row intact while you write the next (three parents in the same old row). Keep two rows, or write into a fresh array. Unique paths can overwrite in place left-to-right.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/unique-paths/" target="_blank" rel="noopener">Unique Paths</a></td>
+        <td><span class="badge badge--lc">LC 62</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The dry-run problem</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/unique-paths-ii/" target="_blank" rel="noopener">Unique Paths II</a></td>
+        <td><span class="badge badge--lc">LC 63</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Obstacles zero a cell</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/minimum-path-sum/" target="_blank" rel="noopener">Minimum Path Sum</a></td>
+        <td><span class="badge badge--lc">LC 64</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>cell + min(up,left)</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/triangle/" target="_blank" rel="noopener">Triangle</a></td>
+        <td><span class="badge badge--lc">LC 120</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Falling path on a triangle</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/dungeon-game/" target="_blank" rel="noopener">Dungeon Game</a></td>
+        <td><span class="badge badge--lc">LC 174</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Backwards min-health</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/cherry-pickup/" target="_blank" rel="noopener">Cherry Pickup</a></td>
+        <td><span class="badge badge--lc">LC 741</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two robots, 3D state</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_h" target="_blank" rel="noopener">Grid 1</a></td>
+        <td><span class="badge badge--atc">ATC DP-H</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Unique paths + obstacles, mod</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/path-in-matrix3805/1" target="_blank" rel="noopener">Minimum path in a grid</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Falling max/min</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/601/A" target="_blank" rel="noopener">Two Routes</a></td>
+        <td><span class="badge badge--cf">CF 601A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Graph, not grid — contrast; see 407B</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/407/B" target="_blank" rel="noopener">Long Path</a></td>
+        <td><span class="badge badge--cf">CF 407B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>1D/grid-like ways with portals, mod</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 174 Dungeon Game</summary>
+  <div class="spoiler__body">
+    <p>dp[r][c] = min health you must have <em>on entry</em> to survive from here to the princess. From the exit, need max(1, 1 - a[R-1][C-1]). Then dp[r][c] = max(1, min(dp[r+1][c], dp[r][c+1]) - a[r][c]). Forwards min-sum is a different (wrong) problem.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 741 Cherry Pickup</summary>
+  <div class="spoiler__body">
+    <p>Two paths of n-1 down/right steps. State (r1, c1, r2); c2 = r1+c1-r2. Add cell cherries once if the two sit on the same cell. Transition: 4 pairs of (down/right, down/right). Walk in increasing r1+c1.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Down/right grids are DAGs.</strong> Row-major is the topo order.</li>
+    <li><strong>dp[r][c] combines up and left</strong> (plus the cell for costs).</li>
+    <li><strong>Obstacles write 0 / +inf</strong> and contribute nothing.</li>
+    <li><strong>Roll one row</strong> left-to-right for unique paths.</li>
+    <li><strong>4-way shortest path is BFS</strong>, not this page, unless a rank decreases.</li>
+  </ul>
+  <div class="recap__oneliner">dp[r][c] = up + left (or min + cell) | first row/col prefix | roll one row L-to-R</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

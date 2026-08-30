@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix Patterns &mdash; DSA Course</title>
+<meta name="description" content="A matrix is an array with 2D indexing: layers for rotate and spiral, in-place markers for set-zeroes, and a staircase walk when rows and columns are sorted.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="matrix-patterns">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Matrix Patterns</h1>
+  <p class="hero__tagline">A matrix is an array with 2D indexing: layers for rotate and spiral, in-place markers for set-zeroes, and a staircase walk when rows and columns are sorted.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>,
+      <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">matrix</span>
+      <span class="chip">spiral</span>
+      <span class="chip">rotate</span>
+      <span class="chip">search 2D</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Most matrix questions are not graph search. Rotate 90° is transpose then reverse each row. Spiral is four shrinking bounds. Set zeroes is "mark first row/column as a bitset". Search in a row-and-column-sorted matrix is a staircase from the top-right. Once you own those four templates, the rest are payloads.</p>
+<p>Index arithmetic is where people bleed time. Off-by-one on layers, walking off the right edge of a spiral, and using the first row as a marker then zeroing it too early are the classic bugs. Drawing the layer and naming <code>top, bottom, left, right</code> removes them.</p>
+<p>When the matrix really is a graph (islands, unique paths with obstacles, word search), switch modules: BFS/DFS on the four neighbours. This page is the geometry of a dense grid you scan in a prescribed order, not the implicit graph.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Name the bounds of the current layer (or the current staircase cell). Every index you write should be a function of those bounds, never a hard-coded n-1 inside a nested loop that also shrinks.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Rotate the square matrix 90 degrees in place"</li>
+        <li>"Spiral order / generate spiral matrix"</li>
+        <li>"Set entire row and column to zero if a zero is present"</li>
+        <li>"Search a target in a matrix sorted by rows, or by rows and columns"</li>
+        <li>"Diagonal traverse", "reshape", "transpose"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Number of islands / surrounded regions / word search &rarr; grid DFS, possibly from the border (this page's flood)</li>
+        <li>Rectangle sums many times &rarr; <a href="../01-arrays-and-windows/prefix-sums.html">2D prefix</a></li>
+        <li>Path count with obstacles &rarr; grid DP</li>
+        <li>Sparse matrix as an adjacency list &rarr; graph representations</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>rotate 90 clockwise in place</td>
+        <td>Transpose, then reverse each row</td>
+        <td>LC 48</td>
+      </tr>
+      <tr>
+        <td>spiral order</td>
+        <td>Four bounds, shrink after each side</td>
+        <td>LC 54</td>
+      </tr>
+      <tr>
+        <td>set zeroes in place</td>
+        <td>First row/col as markers</td>
+        <td>LC 73</td>
+      </tr>
+      <tr>
+        <td>sorted rows, first of next > last of prev</td>
+        <td>Binary search as 1D of n*m</td>
+        <td>LC 74</td>
+      </tr>
+      <tr>
+        <td>each row and column sorted</td>
+        <td>Staircase from top-right</td>
+        <td>LC 240</td>
+      </tr>
+      <tr>
+        <td>diagonal traverse</td>
+        <td>Diagonals i+j constant, reverse even</td>
+        <td>LC 498</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> BFS on a grid</td>
+        <td>Spiral is a prescribed walk, not a queue of neighbours</td>
+        <td>Islands / rotting oranges are the other page</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m le 400</code> is in-place geometry; <code>n = 10&#8309;</code> as a flattened 1D search still works if you never materialise n². Rotate and set-zeroes must be O(1) extra when they say in-place: the first row/column are the allowed markers.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Rotate 90° clockwise: <code>a[i][j] → a[j][n-1-i]</code>. In-place: transpose (<code>a[i][j] ↔ a[j][i]</code> for j&gt;i) then reverse each row. Layers work too: cycle four cells. Spiral: while top≤bottom and left≤right, walk right, down, left, up, and shrink the bound you just finished. After walking a side, check the bounds again so a single middle row is not walked twice.</p>
+<p>Set zeroes: first pass records which rows/cols contain a zero, using row 0 and col 0 as the bitsets plus one extra boolean for cell [0][0]'s double duty. Second pass zeroes from the inside out so the markers survive. Staircase search: start at top-right; if the cell is too big, move left; too small, move down. Each step discards a row or a column, so O(n+m).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>A layer with bounds <code>top, bottom, left, right</code> is processed exactly once, and the next layer is strictly inside:</p><span class="eq">top++, bottom--, left++, right--</span><p>Interview sentence: <em>"I walk the current rectangle's perimeter, then I shrink all four bounds."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="matrix-patternsViz"></div>
+  <div class="viz-player" data-viz-target="matrix-patternsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "a",
+      "rowHeads": [
+        "0",
+        "1",
+        "2"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2"
+      ],
+      "vars": [
+        "step",
+        "cell",
+        "note2"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "3x3 matrix [[1,2,3],[4,5,6],[7,8,9]]. Rotate 90 clockwise.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "2"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "4"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "5"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "6"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "7"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "8"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "9"
+            }
+          ],
+          "values": {
+            "step": "start",
+            "cell": "—",
+            "note2": "original"
+          }
+        },
+        {
+          "note": "Transpose: swap a[i][j] with a[j][i]. Now columns are the old rows.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "7"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "2"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "5"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "8"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "3"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "6"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "9"
+            }
+          ],
+          "values": {
+            "step": "transpose",
+            "cell": "a[i][j]↔a[j][i]",
+            "note2": "mirror"
+          }
+        },
+        {
+          "note": "Reverse each row. Row 0: [1,4,7]→[7,4,1]. This is 90° clockwise.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "7"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "8"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "5"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "2"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "9"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "6"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "3"
+            }
+          ],
+          "values": {
+            "step": "rev rows",
+            "cell": "row reverse",
+            "note2": "rotated"
+          }
+        },
+        {
+          "note": "Spiral of the original: right 1,2,3 then down 6,9 then left 8,7 then up 4 then in 5.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "2"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "6"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "9"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "8"
+            }
+          ],
+          "values": {
+            "step": "spiral",
+            "cell": "bounds shrink",
+            "note2": "1 2 3 6 9 8 …"
+          }
+        },
+        {
+          "note": "Continue spiral: 7, then 4, then centre 5. Sequence [1,2,3,6,9,8,7,4,5].",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "7"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "4"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "5"
+            }
+          ],
+          "values": {
+            "step": "spiral",
+            "cell": "inner 5",
+            "note2": "done"
+          }
+        },
+        {
+          "note": "Staircase search for 6 in a row-and-col sorted matrix starts at top-right 3, goes down to 6.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "6"
+            }
+          ],
+          "values": {
+            "step": "stair",
+            "cell": "[0,2]→[1,2]",
+            "note2": "found 6"
+          }
+        },
+        {
+          "note": "Set-zeroes: a zero at [1][1] marks row1 and col1 via the first row/col sentinels, then fill.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "m"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "m"
+            }
+          ],
+          "values": {
+            "step": "zero",
+            "cell": "markers",
+            "note2": "in-place"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Which matrix template?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["matrix question"] --&gt; kind{"geometry, search, or graph?"}
+  kind -- rotate --&gt; rot["transpose then reverse rows"]
+  kind -- spiral --&gt; sp["four bounds, shrink each side"]
+  kind -- set zero --&gt; z["first row and col as markers"]
+  kind -- sorted 2D --&gt; sr{"rows only, or rows and cols?"}
+  sr -- rows concatenated --&gt; bs["binary search as 1D"]
+  sr -- both sorted --&gt; stair["start top-right, left or down"]
+  kind -- islands / surrounded --&gt; dfs["DFS from the border, then flip interior"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Classify:</strong> in-place geometry vs search vs grid graph.</li>
+  <li><strong>Rotate:</strong> transpose, reverse rows (clockwise). Undo = reverse then transpose.</li>
+  <li><strong>Spiral:</strong> maintain top, bottom, left, right; shrink after each side; re-check bounds before the reverse walk.</li>
+  <li><strong>Set zero:</strong> marker pass, then zero inner cells, then the first row/col.</li>
+  <li><strong>LC 74:</strong> treat as 1D of length n*m, <code>mid = lo+(hi-lo)/2</code>, map to <code>[mid/m][mid%m]</code>.</li>
+  <li><strong>LC 240:</strong> start at <code>[0][m-1]</code>, smaller → down, larger → left.</li>
+  <li><strong>Border flood:</strong> DFS/BFS from every border cell of the start state, mark safe, then flip the interior.</li>
+  <li><strong>Never</strong> allocate n² extra if they said in-place.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>step</th><th>cell</th><th>note2</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>start</td><td>—</td><td>original</td><td>3x3 matrix [[1,2,3],[4,5,6],[7,8,9]]. Rotate 90 clockwise.</td></tr>
+      <tr><td>transpose</td><td>a[i][j]↔a[j][i]</td><td>mirror</td><td>Transpose: swap a[i][j] with a[j][i]. Now columns are the old rows.</td></tr>
+      <tr><td>rev rows</td><td>row reverse</td><td>rotated</td><td>Reverse each row. Row 0: [1,4,7]→[7,4,1]. This is 90° clockwise.</td></tr>
+      <tr><td>spiral</td><td>bounds shrink</td><td>1 2 3 6 9 8 …</td><td>Spiral of the original: right 1,2,3 then down 6,9 then left 8,7 then up 4 then in 5.</td></tr>
+      <tr><td>spiral</td><td>inner 5</td><td>done</td><td>Continue spiral: 7, then 4, then centre 5. Sequence [1,2,3,6,9,8,7,4,5].</td></tr>
+      <tr><td>stair</td><td>[0,2]→[1,2]</td><td>found 6</td><td>Staircase search for 6 in a row-and-col sorted matrix starts at top-right 3, goes down to 6.</td></tr>
+      <tr><td>zero</td><td>markers</td><td>in-place</td><td>Set-zeroes: a zero at [1][1] marks row1 and col1 via the first row/col sentinels, then fill.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Matrix Patterns implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Allocate a second matrix. Correct, O(n²) extra, the in-place version drops the copy.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RotateBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class RotateBrute {
+        static int[][] rotate(int[][] a) {
+            int n = a.length;
+            int[][] b = new int[n][n];
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = 0; j &lt; n; j++) {
+                    b[j][n - 1 - i] = a[i][j];
+                }
+            }
+            return b;
+        }
+    
+        public static void main(String[] args) {
+            int[][] a = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+            System.out.println(Arrays.deepToString(rotate(a)));
+        }
+        // Input : [[1,2,3],[4,5,6],[7,8,9]]
+        // Output: [[7,4,1],[8,5,2],[9,6,3]]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Rotate in place, spiral order, and staircase search.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MatrixOps.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class MatrixOps {
+        static void rotate(int[][] a) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = i + 1; j &lt; n; j++) {
+                    int t = a[i][j];
+                    a[i][j] = a[j][i];
+                    a[j][i] = t;
+                }
+            }
+            for (int i = 0; i &lt; n; i++) {
+                int l = 0, r = n - 1;
+                while (l &lt; r) {
+                    int t = a[i][l];
+                    a[i][l] = a[i][r];
+                    a[i][r] = t;
+                    l++;
+                    r--;
+                }
+            }
+        }
+    
+        static List&lt;Integer&gt; spiral(int[][] a) {
+            int top = 0, bottom = a.length - 1;
+            int left = 0, right = a[0].length - 1;
+            List&lt;Integer&gt; out = new ArrayList&lt;&gt;();
+            while (top &lt;= bottom &amp;&amp; left &lt;= right) {
+                for (int j = left; j &lt;= right; j++) {
+                    out.add(a[top][j]);
+                }
+                top++;
+                for (int i = top; i &lt;= bottom; i++) {
+                    out.add(a[i][right]);
+                }
+                right--;
+                if (top &lt;= bottom) {
+                    for (int j = right; j &gt;= left; j--) {
+                        out.add(a[bottom][j]);
+                    }
+                    bottom--;
+                }
+                if (left &lt;= right) {
+                    for (int i = bottom; i &gt;= top; i--) {
+                        out.add(a[i][left]);
+                    }
+                    left++;
+                }
+            }
+            return out;
+        }
+    
+        static boolean searchSorted(int[][] a, int t) {
+            int i = 0, j = a[0].length - 1;
+            while (i &lt; a.length &amp;&amp; j &gt;= 0) {
+                if (a[i][j] == t) {
+                    return true;
+                }
+                if (a[i][j] &gt; t) {
+                    j--;
+                } else {
+                    i++;
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            int[][] a = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+            System.out.println(spiral(a));
+            rotate(a);
+            System.out.println(Arrays.deepToString(a));
+            System.out.println(searchSorted(new int[][] {{1, 4, 7}, {2, 5, 8}, {3, 6, 9}}, 6));
+        }
+        // Input : spiral then rotate [[1,2,3],[4,5,6],[7,8,9]]; search 6
+        // Output: [1, 2, 3, 6, 9, 8, 7, 4, 5]
+        //         [[7, 4, 1], [8, 5, 2], [9, 6, 3]]
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>First row and first column as markers. Extra boolean for a[0][0].</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SetZeroes.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SetZeroes {
+        static void setZeroes(int[][] a) {
+            int n = a.length, m = a[0].length;
+            boolean firstCol = false;
+            for (int i = 0; i &lt; n; i++) {
+                if (a[i][0] == 0) {
+                    firstCol = true;
+                }
+                for (int j = 1; j &lt; m; j++) {
+                    if (a[i][j] == 0) {
+                        a[i][0] = 0;
+                        a[0][j] = 0;
+                    }
+                }
+            }
+            for (int i = 1; i &lt; n; i++) {
+                for (int j = 1; j &lt; m; j++) {
+                    if (a[i][0] == 0 || a[0][j] == 0) {
+                        a[i][j] = 0;
+                    }
+                }
+            }
+            if (a[0][0] == 0) {
+                Arrays.fill(a[0], 0);
+            }
+            if (firstCol) {
+                for (int i = 0; i &lt; n; i++) {
+                    a[i][0] = 0;
+                }
+            }
+        }
+    
+        public static void main(String[] args) {
+            int[][] a = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
+            setZeroes(a);
+            System.out.println(Arrays.deepToString(a));
+        }
+        // Input : [[1,1,1],[1,0,1],[1,1,1]]
+        // Output: [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n m) to touch every cell; staircase search O(n + m)</span>
+    <span class="badge badge--space">Space O(1) extra for in-place rotate / set-zero; O(n m) for spiral output</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Rotate, spiral, and set-zeroes each visit every cell a constant number of times: <span class="eq">T = Θ(n m)</span>. Extra memory is the output list or O(1) markers.</p>
+    <p>Staircase discards a row or a column per step, at most n+m steps. LC 74 binary search is <code>O(log(n m))</code> comparisons on a virtual 1D array.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Copy rotate</td><td>O(n²)</td><td>O(n²)</td><td>Fine unless in-place required</td></tr>
+      <tr><td>Transpose + reverse</td><td>O(n²)</td><td>O(1)</td><td>LC 48 default</td></tr>
+      <tr><td>Spiral bounds</td><td>O(n m)</td><td>O(1) extra</td><td>LC 54 / 59</td></tr>
+      <tr><td>Marker set-zero</td><td>O(n m)</td><td>O(1)</td><td>LC 73 in-place</td></tr>
+      <tr><td>Staircase search</td><td>O(n + m)</td><td>O(1)</td><td>LC 240</td></tr>
+      <tr><td>1D binary search</td><td>O(log(n m))</td><td>O(1)</td><td>LC 74, rows concatenated</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Spiral walking a row twice</span>
+    <div class="pitfalls__bug">After shrinking top, the left-going pass re-reads the same single remaining row.</div>
+    <div class="pitfalls__fix"><code>if (top &lt;= bottom)</code> before walking left; <code>if (left &lt;= right)</code> before walking up.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Zeroing markers too early</span>
+    <div class="pitfalls__bug">Clearing row 0 in the first inner pass wipes the column-marker bits.</div>
+    <div class="pitfalls__fix">Zero the inner (n-1)×(m-1) first; then row 0; then col 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">mid * m overflow when flattening LC 74</span>
+    <div class="pitfalls__bug"><code>int mid = (lo+hi)/2; a[mid/m][mid%m]</code> is fine; <code>(lo+hi)/2</code> is not the overflow you fear, but <code>lo+hi</code> is.</div>
+    <div class="pitfalls__fix"><code>int mid = lo + (hi - lo) / 2;</code> always.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Staircase starting at bottom-right</span>
+    <div class="pitfalls__bug">Both directions increase, so you cannot discard a row or a column.</div>
+    <div class="pitfalls__fix">Start at top-right or bottom-left, where one step is decrease and one is increase.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Transpose of a non-square</span>
+    <div class="pitfalls__bug">In-place swap a[i][j]↔a[j][i] is only for square. Rectangular transpose needs a new array.</div>
+    <div class="pitfalls__fix">Allocate m×n, or treat rotate as square-only (LC 48 is square).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Rotate 180 / 90 counter-clockwise</td>
+        <td>180 = reverse rows then reverse each row; CCW = transpose then reverse columns.</td>
+        <td><code>Same four-cycle with the opposite permutation.</code></td>
+        <td>Useful follow-up to LC 48.</td>
+      </tr>
+      <tr>
+        <td>Generate spiral (LC 59)</td>
+        <td>Write 1..n² with the same four bounds into an empty matrix.</td>
+        <td><code>int k=1; a[top][j]=k++; …</code></td>
+        <td>LC 59.</td>
+      </tr>
+      <tr>
+        <td>Diagonal traverse</td>
+        <td>Group by i+j; even diagonals reversed. Or simulate direction with a bounce.</td>
+        <td><code>Map&lt;Integer,List&gt; by i+j, then concatenate.</code></td>
+        <td>LC 498.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Rotate anti-clockwise in place?</summary>
+    <div class="followup__body">
+      <p>Transpose, then reverse each <em>column</em> (or reverse rows first, then transpose). Derive the mapping a[i][j] → a[n-1-j][i] and check one cell.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can staircase search be binary search?</summary>
+    <div class="followup__body">
+      <p>You can binary-search each row in O(n log m). That is worse than O(n+m) when napprox m, and better when one dimension is tiny. LC 240 wants the staircase.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Set zeroes without using the first row as a marker?</summary>
+    <div class="followup__body">
+      <p>Two boolean arrays of size n and m are O(n+m) extra and simpler. The O(1) version is only required when they insist. Mention both.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Spiral on a jagged / empty matrix?</summary>
+    <div class="followup__body">
+      <p>Guard m=0. A 1×n row is only the rightward pass; the reverse passes must be skipped via the bound checks.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/rotate-image/" target="_blank" rel="noopener">Rotate Image</a></td>
+        <td><span class="badge badge--lc">LC 48</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Transpose then reverse rows</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/spiral-matrix/" target="_blank" rel="noopener">Spiral Matrix</a></td>
+        <td><span class="badge badge--lc">LC 54</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Four shrinking bounds</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/spiral-matrix-ii/" target="_blank" rel="noopener">Spiral Matrix II</a></td>
+        <td><span class="badge badge--lc">LC 59</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Fill 1..n² with the same bounds</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/set-matrix-zeroes/" target="_blank" rel="noopener">Set Matrix Zeroes</a></td>
+        <td><span class="badge badge--lc">LC 73</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>First row/col markers</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/search-a-2d-matrix/" target="_blank" rel="noopener">Search a 2D Matrix</a></td>
+        <td><span class="badge badge--lc">LC 74</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>1D binary search, mid=lo+(hi-lo)/2</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/search-a-2d-matrix-ii/" target="_blank" rel="noopener">Search a 2D Matrix II</a></td>
+        <td><span class="badge badge--lc">LC 240</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Staircase from top-right</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/diagonal-traverse/" target="_blank" rel="noopener">Diagonal Traverse</a></td>
+        <td><span class="badge badge--lc">LC 498</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Group by i+j</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/game-of-life/" target="_blank" rel="noopener">Game of Life</a></td>
+        <td><span class="badge badge--lc">LC 289</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>In-place bit packing of old/new</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/surrounded-regions/" target="_blank" rel="noopener">Surrounded Regions</a></td>
+        <td><span class="badge badge--lc">LC 130</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>DFS from the border, then flip</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1365/A" target="_blank" rel="noopener">Matrix Game</a></td>
+        <td><span class="badge badge--cf">CF 1365A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Free rows and columns on a grid</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Rotate</strong> = transpose + reverse rows.</li>
+    <li><strong>Spiral</strong> = four bounds; re-check before reverse sides.</li>
+    <li><strong>Set zero</strong> = first row/col as markers, inner first.</li>
+    <li><strong>LC 74</strong> is 1D binary search; <strong>LC 240</strong> is a staircase.</li>
+    <li><strong>Islands / surrounded</strong> flood from the <em>border</em>, then flip the rest.</li>
+  </ul>
+  <div class="recap__oneliner">for (int j = i + 1; j &lt; n; j++) swap(a[i][j], a[j][i]); then reverse each row;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

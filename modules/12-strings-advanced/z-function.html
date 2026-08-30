@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Z-Function &mdash; DSA Course</title>
+<meta name="description" content="Z[i] is the longest substring starting at i that matches the prefix of s. One linear pass maintains a rightmost Z-box.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="z-function">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 12 &middot; Strings, Advanced</span>
+  <h1>Z-Function</h1>
+  <p class="hero__tagline">Z[i] is the longest substring starting at i that matches the prefix of s. One linear pass maintains a rightmost Z-box.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="kmp-and-prefix-function.html">KMP & the Prefix Function</a>,
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Z-function</span>
+      <span class="chip">string</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Many string problems ask "how much of a prefix starts here?": pattern matching (Z of p+'#'+t), distinct substrings via suffixes, and string-period recovery. The Z-array answers every such question after one O(n) pass.</p>
+<p>The algorithm keeps a window [l, r] that is a prefix-match already computed (a Z-box). For a new i inside that box, Z[i] is at least min(Z[i-l], r-i+1), and you only extend when the known copy runs out. That is the same two-pointer idea as Manacher.</p>
+<p>Z and the prefix function determine each other. Prefer Z when the question is phrased as prefix matches at every index; prefer &pi; when you are building failure links.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Inside a Z-box you already know a prefix copy. Reuse Z[i-l] instead of matching from scratch, and only extend when that copy is shorter than the remaining box.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Longest prefix starting at every index</li>
+        <li>Pattern matching via Z of p+'#'+t: hits where Z[i]==|p|</li>
+        <li>Number of distinct substrings in O(n^2) made practical as sum n-Z over suffixes, or with SA</li>
+        <li>You already think in [l,r] windows (Manacher cousin)</li>
+        <li>String compression / period from Z[i]==n-i</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Failure-link automaton &rarr; prefix function</li>
+        <li>Palindromes &rarr; Manacher</li>
+        <li>Many patterns &rarr; Aho-Corasick</li>
+        <li>Substring lexicographic order &rarr; suffix array</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Prefix match at every i</td>
+        <td>Z-array</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>One pattern in a text</td>
+        <td>Z of p+# +t</td>
+        <td>Z or KMP</td>
+      </tr>
+      <tr>
+        <td>Borders / periods</td>
+        <td>Either Z or π</td>
+        <td>Prefix function is the usual write-up</td>
+      </tr>
+      <tr>
+        <td>Palindromic radii</td>
+        <td>Different window</td>
+        <td>Manacher</td>
+      </tr>
+      <tr>
+        <td>Suffix sorting</td>
+        <td>Not Z</td>
+        <td>Suffix array</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Z[i] vs π[i]</td>
+        <td>Z starts at i; π ends at i</td>
+        <td>Convert if you have the other</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8310;</code>. The extend loop is amortised O(n) because r only moves right.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Z[0] is 0 or n by convention (we store 0 and never use it). Maintain [l, r] = rightmost segment that matches a prefix. For i=1..n-1: if i&le;r, Z[i] = min(r-i+1, Z[i-l]). Then while i+Z[i]&lt;n and s[Z[i]]==s[i+Z[i]], increment. If i+Z[i]-1 &gt; r, reset [l,r] to [i, i+Z[i]-1].</p>
+<p>Matching: Z-array of p+'#'+t. Every position in the t-half with Z[i]==|p| is a hit starting at i-(|p|+1).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>[l, r] is a prefix of s, copied at l. For every i in (l, r], the prefix of length Z[i-l] starting at i is already known to match, up to the box edge r.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="z-functionViz"></div>
+  <div class="viz-player" data-viz-target="z-functionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "Z =",
+      "array": [
+        0,
+        0,
+        3,
+        0,
+        1,
+        0
+      ],
+      "indexLabels": [
+        "a",
+        "b",
+        "a",
+        "b",
+        "a",
+        "c"
+      ],
+      "vars": [
+        "i",
+        "l,r",
+        "Z"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "s = ababac. Z[0] unused (=0). i=1 'b'!= 'a'. Z[1]=0. Box empty.",
+          "active": [
+            1
+          ],
+          "values": {
+            "i": 1,
+            "l,r": "0,0",
+            "Z": "[0,0]"
+          }
+        },
+        {
+          "note": "i=2 'a'==s[0]. Extend: abab vs abac, three chars. Z[2]=3. Box [2,4].",
+          "active": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 2,
+            "l,r": "2,4",
+            "Z": "[0,0,3]"
+          }
+        },
+        {
+          "note": "i=3 inside the box. Z[3-2]=Z[1]=0, remaining box is 2. min(2,0)=0. Cannot extend. Z[3]=0.",
+          "active": [
+            3
+          ],
+          "values": {
+            "i": 3,
+            "l,r": "2,4",
+            "Z": "[0,0,3,0]"
+          }
+        },
+        {
+          "note": "i=4 inside. Z[4-2]=Z[2]=3 but remaining is 1, so start with 1. s[1]='b'!=s[5]='c', stay 1. Z[4]=1.",
+          "active": [
+            4
+          ],
+          "values": {
+            "i": 4,
+            "l,r": "2,4",
+            "Z": "[0,0,3,0,1]"
+          }
+        },
+        {
+          "note": "i=5 'c'!= 'a'. Z[5]=0.",
+          "active": [
+            5
+          ],
+          "values": {
+            "i": 5,
+            "l,r": "2,4",
+            "Z": "[0,0,3,0,1,0]"
+          }
+        },
+        {
+          "note": "Done. Z = [0,0,3,0,1,0]. A match of \"aba\" would show Z=3 at that start.",
+          "active": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "i": "done",
+            "l,r": "2,4",
+            "Z": "[0,0,3,0,1,0]"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Rightmost Z-box</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  iNode["i from 1 to n-1"] --&gt; inBox{"i less or equal r?"}
+  inBox -- yes --&gt; reuse["Z i = min of r-i+1 and Z of i-l"]
+  inBox -- no --&gt; zero["Z i starts at 0"]
+  reuse --&gt; ext["extend while s Z equals s i+Z"]
+  zero --&gt; ext
+  ext --&gt; widen{"i+Z-1 greater than r?"}
+  widen -- yes --&gt; box["l=i, r=i+Z-1"]
+  widen -- no --&gt; nextI["next i"]
+  box --&gt; nextI
+  </div>
+  <figcaption>r only increases, so character comparisons that extend the box cost O(n) total.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Z[0]=0</strong> (or n, but then never treat it as a match start).</li>
+  <li><strong>l=r=0</strong>. For i=1..n-1:</li>
+  <li><strong>If i&le;r</strong> set Z[i]=min(r-i+1, Z[i-l]).</li>
+  <li><strong>Extend</strong> while in bounds and characters match.</li>
+  <li><strong>If i+Z[i]-1 &gt; r</strong> set l=i, r=i+Z[i]-1.</li>
+  <li><strong>Match</strong> on p+'#'+t as with KMP.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>l,r</th><th>Z</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td>0,0</td><td>[0,0]</td><td>s = ababac. Z[0] unused (=0). i=1 'b'!= 'a'. Z[1]=0. Box empty.</td></tr>
+      <tr><td>2</td><td>2,4</td><td>[0,0,3]</td><td>i=2 'a'==s[0]. Extend: abab vs abac, three chars. Z[2]=3. Box [2,4].</td></tr>
+      <tr><td>3</td><td>2,4</td><td>[0,0,3,0]</td><td>i=3 inside the box. Z[3-2]=Z[1]=0, remaining box is 2. min(2,0)=0. Cannot extend. Z[3]=0.</td></tr>
+      <tr><td>4</td><td>2,4</td><td>[0,0,3,0,1]</td><td>i=4 inside. Z[4-2]=Z[2]=3 but remaining is 1, so start with 1. s[1]='b'!=s[5]='c', stay 1. Z[4]=1.</td></tr>
+      <tr><td>5</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>i=5 'c'!= 'a'. Z[5]=0.</td></tr>
+      <tr><td>done</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>Done. Z = [0,0,3,0,1,0]. A match of "aba" would show Z=3 at that start.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Z-Function implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Match a prefix from every i. Quadratic.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    public class ZBrute {
+        static int[] z(String s) {
+            int n = s.length();
+            int[] z = new int[n];
+            for (int i = 1; i &lt; n; i++) {
+                while (i + z[i] &lt; n &amp;&amp; s.charAt(z[i]) == s.charAt(i + z[i])) z[i]++;
+            }
+            return z;
+        }
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(z("ababac")));
+        }
+        // Input : ababac
+        // Output: [0, 0, 3, 0, 1, 0]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Linear Z-array via the rightmost box.</p>
+    <div class="code" data-highlight="8-16">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZFunction.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    public class ZFunction {
+        static int[] z(String s) {
+            int n = s.length();
+            int[] z = new int[n];
+            for (int i = 1, l = 0, r = 0; i &lt; n; i++) {
+                if (i &lt;= r) z[i] = Math.min(r - i + 1, z[i - l]);
+                while (i + z[i] &lt; n &amp;&amp; s.charAt(z[i]) == s.charAt(i + z[i])) z[i]++;
+                if (i + z[i] - 1 &gt; r) { l = i; r = i + z[i] - 1; }
+            }
+            return z;
+        }
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(z("ababac")));
+        }
+        // Input : ababac
+        // Output: [0, 0, 3, 0, 1, 0]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Occurrences of p in t.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZMatch.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class ZMatch {
+        static int[] z(String s) {
+            int n = s.length();
+            int[] z = new int[n];
+            for (int i = 1, l = 0, r = 0; i &lt; n; i++) {
+                if (i &lt;= r) z[i] = Math.min(r - i + 1, z[i - l]);
+                while (i + z[i] &lt; n &amp;&amp; s.charAt(z[i]) == s.charAt(i + z[i])) z[i]++;
+                if (i + z[i] - 1 &gt; r) { l = i; r = i + z[i] - 1; }
+            }
+            return z;
+        }
+        static List&lt;Integer&gt; find(String t, String p) {
+            int[] z = z(p + "#" + t);
+            List&lt;Integer&gt; ans = new ArrayList&lt;&gt;();
+            int m = p.length();
+            for (int i = 0; i &lt; t.length(); i++) if (z[m + 1 + i] == m) ans.add(i);
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(find("ababa", "aba"));
+        }
+        // Input : ababa / aba
+        // Output: [0, 2]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each extend comparison that succeeds increases r. r never decreases. Failed comparisons happen at most once per i after the copied value. Total O(n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive prefix match</td><td>O(n^2)</td><td>O(n)</td><td>n <= 3000</td></tr>
+      <tr><td>Z-function</td><td>O(n)</td><td>O(n)</td><td>Prefix-at-i questions</td></tr>
+      <tr><td>Prefix function</td><td>O(n)</td><td>O(n)</td><td>Borders / KMP automaton</td></tr>
+      <tr><td>Rolling hash</td><td>O(n)</td><td>O(n)</td><td>Equality tests, not full Z</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using Z[0]=n in the copy</span>
+    <div class="pitfalls__bug">i-l = 0 copies n and you run off the array.</div>
+    <div class="pitfalls__fix">Leave Z[0]=0, or special-case i=l.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Updating [l,r] with a weaker box</span>
+    <div class="pitfalls__bug">Setting r to a smaller value loses the amortised bound and can even make Z too small if you skip extend.</div>
+    <div class="pitfalls__fix">Only widen when i+Z[i]-1 &gt; r.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">min(r-i+1, Z[i-l]) without extend</span>
+    <div class="pitfalls__bug">When Z[i-l] hits the box edge, the match might continue past r.</div>
+    <div class="pitfalls__fix">Always run the while after the copy.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Sentinel missing</span>
+    <div class="pitfalls__bug">Same as KMP: Z of p+t without '#' can cross the join.</div>
+    <div class="pitfalls__fix">A character outside the alphabet.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparing chars with == on substrings</span>
+    <div class="pitfalls__bug">In Java, <code>s.substring(a)==s.substring(b)</code> is reference equality.</div>
+    <div class="pitfalls__fix">charAt in the extend loop, as written.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Period</td>
+        <td>If Z[i]==n-i and i divides n, period i.</td>
+        <td><code>for i if z[i]==n-i &amp;&amp; n%i==0</code></td>
+        <td>string compression</td>
+      </tr>
+      <tr>
+        <td>Distinct substrings (slow)</td>
+        <td>For each suffix, add n-i-lcp-with-prefix via Z of suffix.</td>
+        <td><code>O(n^2)</code></td>
+        <td>n <= 5000; else SA</td>
+      </tr>
+      <tr>
+        <td>From π to Z</td>
+        <td>Known linear conversion; rarely needed if you can compute Z directly.</td>
+        <td><code>see CP-algorithms</code></td>
+        <td>when you only built π</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why copy min(r-i+1, Z[i-l])?</summary>
+    <div class="followup__body">
+      <p>The box says s[l..r]==s[0..r-l]. Position i corresponds to i-l in the prefix. You cannot claim more than the remaining box, and you cannot claim more than Z[i-l].</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Z vs KMP for matching?</summary>
+    <div class="followup__body">
+      <p>Same complexity. Z is slightly more code for matching and slightly less conceptual load if the problem is already "prefix at i". KMP automata compose better with Aho.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can Z handle wildcards?</summary>
+    <div class="followup__body">
+      <p>Not by itself. Split the pattern on '?', Z-match each chunk, and check gaps. Or use FFT string matching.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Manacher uses the same idea?</summary>
+    <div class="followup__body">
+      <p>Yes: a palindrome box [l,r] and copy the mirrored radius, then extend. Once you can write Z, Manacher is a palindrome-flavoured Z.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-the-index-of-the-first-occurrence-in-a-string/" target="_blank" rel="noopener">Find The Index Of The First Occurrence In A String</a></td>
+        <td><span class="badge badge--lc">LC 28</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Z-matching</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/longest-happy-prefix/" target="_blank" rel="noopener">Longest Happy Prefix</a></td>
+        <td><span class="badge badge--lc">LC 1392</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>max i with Z[n-i]==i</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/432/D" target="_blank" rel="noopener">Prefixes and Suffixes</a></td>
+        <td><span class="badge badge--cf">CF 432D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Z-values that are also suffixes</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/126/B" target="_blank" rel="noopener">Password</a></td>
+        <td><span class="badge badge--cf">CF 126B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Z/KMP border that occurs inside</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1753" target="_blank" rel="noopener">String Matching</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Z or KMP</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://www.spoj.com/problems/QUERYSTR/" target="_blank" rel="noopener">Querystr</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Z on reverse</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/1051/E" target="_blank" rel="noopener">Vasya and Magic Matrix</a></td>
+        <td><span class="badge badge--cf">CF 1051E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Digit DP + Z on numbers as strings</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc141/tasks/abc141_e" target="_blank" rel="noopener">ABC 141 E</a></td>
+        <td><span class="badge badge--atc">ABC 141E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Z / SA for repeated substrings</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Z[i] = longest prefix starting at i.</li>
+    <li>Reuse the rightmost Z-box; only extend when needed.</li>
+    <li>r only moves right → O(n).</li>
+    <li>Match with p+'#'+t, Z[i]==|p|.</li>
+    <li>Cousin of Manacher's mirrored window.</li>
+  </ul>
+  <div class="recap__oneliner">if(i&lt;=r) z[i]=min(r-i+1, z[i-l]); while(match) z[i]++; if(i+z[i]-1&gt;r){l=i;r=i+z[i]-1;}</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modular Arithmetic &mdash; DSA Course</title>
+<meta name="description" content="Work in the ring Z/MZ: add and multiply with % M, invert when gcd(a,M)=1, and never write (a-b)%M in Java without fixing a negative remainder.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="modular-arithmetic">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Modular Arithmetic</h1>
+  <p class="hero__tagline">Work in the ring Z/MZ: add and multiply with <code>% M</code>, invert when gcd(a,M)=1, and never write <code>(a-b)%M</code> in Java without fixing a negative remainder.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">mod</span>
+      <span class="chip">inverse</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Contest answers are almost always needed modulo 1e9+7 or 998244353. Those are primes, so every non-zero residue has an inverse and you may divide. Composite moduli lose inverses and need CRT / phi.</p>
+<p>Java's <code>%</code> on negatives is negative. Hashing, prefix differences, and <code>a-b</code> all hit this. The one-liner <code>x%=M; if(x<0)x+=M;</code> belongs in muscle memory.</p>
+<p>Fermat: a^{M-2} ≡ a^{-1} (mod M) for prime M. Binary exponentiation is O(log M). The next pages add sieves, phi, and CRT.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>(a+b) mod M = (a mod M + b mod M) mod M. Subtraction needs a +M. Division is multiply by the inverse, not Java /. </p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Output modulo a prime (1e9+7, 998244353)</li>
+        <li>Need a/b mod P, i.e. a * b^{P-2}</li>
+        <li>Prevent overflow of n! or a^b</li>
+        <li>Binomial coefficients mod a prime</li>
+        <li>Prefix hashes and differences in a modular ring</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Modulo a composite when you need inverses of all residues → not a field</li>
+        <li>Actual integer division of the answer, not modular → do not invert</li>
+        <li>n=1e18 exponents with a composite mod → Euler/phi or CRT, not raw Fermat</li>
+        <li>Floating geometry → different page</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>(a+b) mod M</td>
+        <td>Reduce both, add, reduce</td>
+        <td>add</td>
+      </tr>
+      <tr>
+        <td>(a-b) mod M</td>
+        <td>add M before % in Java</td>
+        <td>sub</td>
+      </tr>
+      <tr>
+        <td>a/b mod P prime</td>
+        <td>a * inv(b)</td>
+        <td>Fermat or exgcd</td>
+      </tr>
+      <tr>
+        <td>a^n mod M</td>
+        <td>binary exp</td>
+        <td>O(log n)</td>
+      </tr>
+      <tr>
+        <td>n! mod P, n≥P</td>
+        <td>0</td>
+        <td>obvious</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Java % on negatives</td>
+        <td>(-2)%5 == -2, not 3</td>
+        <td>always normalise</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> M is usually 1e9+7 (prime) or 998244353 (NTT-friendly prime). long for products before %. n in exponents up to 1e18 → O(log n) muls.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Normalise: <code>x %= M; if (x < 0) x += M;</code>. Multiply: <code>(a%M)*(b%M)%M</code> in long. Pow: binary exponentiation. Inverse: <code>pow(a, M-2)</code> if M prime and a%M!=0.</p>
+<p>998244353-1 = 2^23 * 119, so NTT exists. 1e9+7-1 is not a high power of two. Both are fine for inverses.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>All arithmetic is in the residue classes mod M. An inverse of a exists iff gcd(a,M)=1. For prime M that is every a not ≡ 0.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="modular-arithmeticViz"></div>
+  <div class="viz-player" data-viz-target="modular-arithmeticViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "residues mod 5 =",
+      "array": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        0
+      ],
+      "vars": [
+        "op",
+        "raw",
+        "norm"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Field F5. Add 3+4=7 ≡ 2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "op": "3+4",
+            "raw": 7,
+            "norm": 2
+          }
+        },
+        {
+          "note": "Sub 1-4 = -3. Java % gives -3. +5 → 2. Check: 4+2=6≡1.",
+          "active": [
+            2
+          ],
+          "values": {
+            "op": "1-4",
+            "raw": -3,
+            "norm": 2
+          }
+        },
+        {
+          "note": "Mul 3*4=12 ≡ 2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "op": "3*4",
+            "raw": 12,
+            "norm": 2
+          }
+        },
+        {
+          "note": "Inv of 3: 3*2=6≡1, so inv=2. Fermat: 3^{3} = 27 ≡ 2 (p-2=3).",
+          "active": [
+            2
+          ],
+          "values": {
+            "op": "inv 3",
+            "raw": 27,
+            "norm": 2
+          }
+        },
+        {
+          "note": "Div 4/3 ≡ 4*2 ≡ 3 mod 5.",
+          "active": [
+            3
+          ],
+          "values": {
+            "op": "4/3",
+            "raw": 8,
+            "norm": 3
+          }
+        },
+        {
+          "note": "pow(2,7) mod 5: 128 ≡ 3. Binary: 2^4=16≡1, 2^2=4, 2^1=2 → 1*4*2 wait 7=4+2+1 → 1*4*2=8≡3.",
+          "active": [
+            3
+          ],
+          "values": {
+            "op": "2^7",
+            "raw": 128,
+            "norm": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Normalise, then multiply, then invert</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  x["x maybe negative"] --&gt; rem["x %= M"]
+  rem --&gt; neg{"x less than 0?"}
+  neg -- yes --&gt; addM["x += M"]
+  neg -- no --&gt; ok["in 0..M-1"]
+  addM --&gt; ok
+  ok --&gt; mul["products in long"]
+  mul --&gt; inv{"need divide?"}
+  inv -- "P prime" --&gt; fermat["pow a P-2"]
+  </div>
+  <figcaption>Java remainder is not the mathematical mod. Fix it before hashing or subtracting.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Store everything in long</strong> when M ~ 1e9.</li>
+  <li><strong>add:</strong> (a+b)%M with a,b already in 0..M-1 (sum fits long).</li>
+  <li><strong>sub:</strong> (a-b+M)%M.</li>
+  <li><strong>mul:</strong> (a*b)%M in long.</li>
+  <li><strong>pow(a,e):</strong> binary, O(log e).</li>
+  <li><strong>inv(a):</strong> pow(a, M-2) if M prime; else extended Euclid.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>op</th><th>raw</th><th>norm</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>3+4</td><td>7</td><td>2</td><td>Field F5. Add 3+4=7 ≡ 2.</td></tr>
+      <tr><td>1-4</td><td>-3</td><td>2</td><td>Sub 1-4 = -3. Java % gives -3. +5 → 2. Check: 4+2=6≡1.</td></tr>
+      <tr><td>3*4</td><td>12</td><td>2</td><td>Mul 3*4=12 ≡ 2.</td></tr>
+      <tr><td>inv 3</td><td>27</td><td>2</td><td>Inv of 3: 3*2=6≡1, so inv=2. Fermat: 3^{3} = 27 ≡ 2 (p-2=3).</td></tr>
+      <tr><td>4/3</td><td>8</td><td>3</td><td>Div 4/3 ≡ 4*2 ≡ 3 mod 5.</td></tr>
+      <tr><td>2^7</td><td>128</td><td>3</td><td>pow(2,7) mod 5: 128 ≡ 3. Binary: 2^4=16≡1, 2^2=4, 2^1=2 → 1*4*2 wait 7=4+2+1 → 1*4*2=8≡3.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Modular Arithmetic implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Wrong: Java % on a-b.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ModNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ModNaive {
+        public static void main(String[] args) {
+            int M = 5;
+            System.out.println((1 - 4) % M);
+        }
+        // Input : 1-4 mod 5
+        // Output: -3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Safe add/sub/mul/pow/inv for a prime M.</p>
+    <div class="code" data-highlight="8-20">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Modulo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Modulo {
+        static final long M = 1_000_000_007L;
+        static long add(long a, long b) { a += b; if (a &gt;= M) a -= M; return a; }
+        static long sub(long a, long b) { a -= b; if (a &lt; 0) a += M; return a; }
+        static long mul(long a, long b) { return (a * b) % M; }
+        static long pow(long a, long e) {
+            long r = 1;
+            while (e &gt; 0) {
+                if ((e &amp; 1) == 1) r = mul(r, a);
+                a = mul(a, a);
+                e &gt;&gt;= 1;
+            }
+            return r;
+        }
+        static long inv(long a) { return pow(a, M - 2); }
+        public static void main(String[] args) {
+            System.out.println(sub(1, 4));
+            System.out.println(mul(4, inv(3)));
+        }
+        // Input : 1-4 and 4/3 mod 1e9+7
+        // Output: 1000000004
+        //         333333338
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Generic a^e % m, m not necessarily prime.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Binpow.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Binpow {
+        static long pow(long a, long e, long m) {
+            a %= m;
+            long r = 1 % m;
+            while (e &gt; 0) {
+                if ((e &amp; 1) == 1) r = (r * a) % m;
+                a = (a * a) % m;
+                e &gt;&gt;= 1;
+            }
+            return r;
+        }
+        public static void main(String[] args) {
+            System.out.println(pow(2, 7, 5));
+        }
+        // Input : 2^7 mod 5
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(1) add/mul, O(log e) pow</span>
+    <span class="badge badge--space">Space O(1)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Binary exponentiation does ⌊ log e ⌋ squarings. Inverse is one pow. Factorials need O(n) preprocess for n &lt; M.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive a^e loop</td><td>O(e)</td><td>O(1)</td><td>e tiny</td></tr>
+      <tr><td>Binary pow</td><td>O(log e)</td><td>O(1)</td><td>Default</td></tr>
+      <tr><td>Fermat inv</td><td>O(log M)</td><td>O(1)</td><td>Prime M</td></tr>
+      <tr><td>Exgcd inv</td><td>O(log a)</td><td>O(1)</td><td>Any coprime a,M</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Negative remainder</span>
+    <div class="pitfalls__bug">Hash or index becomes -3, AIOOB or missed equality.</div>
+    <div class="pitfalls__fix">Always +M after sub.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int multiply</span>
+    <div class="pitfalls__bug">1e9*1e9 overflows int before %.</div>
+    <div class="pitfalls__fix">Cast to long first: <code>(long)a * b % M</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">inv(0)</span>
+    <div class="pitfalls__bug">pow(0, M-2)=0, and you silently "divide by zero".</div>
+    <div class="pitfalls__fix">Guard a%M==0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Fermat on composite M</span>
+    <div class="pitfalls__bug">a^{M-2} is not inv(a). Euler needs a^{phi(M)-1} and gcd=1.</div>
+    <div class="pitfalls__fix">Extended Euclid, or factor M.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">pow(a, n) with n=1e18 written as a loop</span>
+    <div class="pitfalls__bug">TLE. Or using double Math.pow and rounding.</div>
+    <div class="pitfalls__fix">Binary exp in the integer ring.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Factorial + invFact</td>
+        <td>O(n) preprocess for C(n,k) mod P.</td>
+        <td><code>fact[i]=fact[i-1]*i; invF[n]=inv(fact[n])</code></td>
+        <td>combinatorics page</td>
+      </tr>
+      <tr>
+        <td>998244353</td>
+        <td>NTT modulus. Same inverses.</td>
+        <td><code>M=998244353</code></td>
+        <td>convolution</td>
+      </tr>
+      <tr>
+        <td>Two mods</td>
+        <td>CRT later, or double hash.</td>
+        <td><code>mod1 and mod2</code></td>
+        <td>rolling hash</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why 1e9+7?</summary>
+    <div class="followup__body">
+      <p>Prime, fits in 32-bit, product of two residues fits in 64-bit, traditional. 998244353 is preferred when you might NTT.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Does (a/b)%M == (a%M)/(b%M)?</summary>
+    <div class="followup__body">
+      <p>No. Integer division is not modular division. 8/2=4, but 8 * inv(2) mod 5 = 4*3=12≡2, and 8/2 as ints is 4≡4, already different stories. Always multiply by inv.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Overflow of a+b before %?</summary>
+    <div class="followup__body">
+      <p>If a,b &lt; M &lt; 2^62, a+b fits in long. If M is 2^63-ish, subtract M instead of %.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Wilson's theorem?</summary>
+    <div class="followup__body">
+      <p>(P-1)! ≡ -1 mod P. Cute check, not a primality test you should ship (too slow, and MR is better).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/powx-n/" target="_blank" rel="noopener">Powx N</a></td>
+        <td><span class="badge badge--lc">LC 50</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Binary exp (floats, same idea)</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/super-pow/" target="_blank" rel="noopener">Super Pow</a></td>
+        <td><span class="badge badge--lc">LC 372</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>a^b mod 1337, Euler</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://cses.fi/problemset/task/1095" target="_blank" rel="noopener">Exponentiation</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>a^b mod 1e9+7</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://cses.fi/problemset/task/1712" target="_blank" rel="noopener">Exponentiation II</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>a^(b^c) phi</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://atcoder.jp/contests/abc173/tasks/abc173_c" target="_blank" rel="noopener">ABC 173 C</a></td>
+        <td><span class="badge badge--atc">ABC 173C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Not mod — skip; use ABC 156 D</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/abc156/tasks/abc156_d" target="_blank" rel="noopener">ABC 156 D</a></td>
+        <td><span class="badge badge--atc">ABC 156D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>pow and nCk mod</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/615/D" target="_blank" rel="noopener">Multipliers</a></td>
+        <td><span class="badge badge--cf">CF 615D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Product of divisors, exponents mod phi</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/17/D" target="_blank" rel="noopener">Notepad</a></td>
+        <td><span class="badge badge--cf">CF 17D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Big exponents, Euler</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Normalise negatives after %.</li>
+    <li>Products in long.</li>
+    <li>Division = mul by inv. Fermat if P prime.</li>
+    <li>pow is binary, O(log e).</li>
+    <li>0 has no inverse.</li>
+  </ul>
+  <div class="recap__oneliner">x%=M; if(x&lt;0)x+=M;  inv=pow(a,M-2);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

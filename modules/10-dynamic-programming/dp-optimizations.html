@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DP Optimisations &mdash; DSA Course</title>
+<meta name="description" content="When the naive transition is O(n) per state, convexity or monotonicity of the argmin lets you drop a log or a full factor of n.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="dp-optimizations">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>DP Optimisations</h1>
+  <p class="hero__tagline">When the naive transition is O(n) per state, convexity or monotonicity of the argmin lets you drop a log or a full factor of n.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">28 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="knapsack-family.html">Knapsack Family</a>,
+      <a href="interval-dp.html">Interval DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">CHT</span>
+      <span class="chip">D&amp;C opt</span>
+      <span class="chip">Knuth</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A huge family of DPs looks like dp[i] = min_{j &lt; i} dp[j] + C(j, i), or the 2D form dp[i][j] = min_{i ≤ k &lt; j} dp[i][k] + dp[k+1][j] + C(i, j). Naive is O(n&sup2;) or O(n&sup3;). When C satisfies a quadrangle inequality or the opt pointer is monotone, Knuth, divide-and-conquer optimisation, and Convex Hull Trick cut this to O(n&sup2;) or O(n log n).</p>
+<p>You do not invent the inequality in an interview. You recognise the shape (layered DP on a line, MCM-like, or min of linear functions) and name the tool. The implementation is a hull of lines or a recursive split of the opt range.</p>
+<p>P2 because the proofs are short if you already believe the quadrangle inequality, and because the hull must be maintained carefully (slopes monotone → deque; otherwise a Li Chao tree / multiset).</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>If the best j for i does not decrease as i grows (or the best k for [l,r] sits between the bests of the two smaller intervals), you may restrict the search window and the extra factor of n disappears.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>dp[i] = min_{j<i} dp[j] + C(j,i) with C satisfying QI, n = 1e5</li>
+        <li>Layered: dp[k][i] = min_{j<i} dp[k-1][j] + C(j,i), k layers, n=3000..1e5</li>
+        <li>MCM-like dp[l][r] with monotone argmin (Knuth)</li>
+        <li>C(j,i) = b[j] * a[i] + extra(j) — lines of slope b[j]</li>
+        <li>CF / AtCoder problems tagged cht, d&c opt, knuth</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>C is an arbitrary table with no inequality → you cannot drop the inner loop</li>
+        <li>n ≤ 400 interval DP without QI → stay O(n&sup3;)</li>
+        <li>The min is over a data-structure query you already have (Fenwick of max) → that is enough</li>
+        <li>Online slopes that are not monotone and n is 1e5 → Li Chao, still this family but heavier</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>opt[i] ≤ opt[i+1] on a 1D rec</td>
+        <td>D&C opt or SMAWK</td>
+        <td>O(n log n) per layer</td>
+      </tr>
+      <tr>
+        <td>opt[l][r-1] ≤ opt[l][r] ≤ opt[l+1][r]</td>
+        <td>Knuth</td>
+        <td>O(n²) interval</td>
+      </tr>
+      <tr>
+        <td>C(j,i) = slope[j] * x[i] + intercept[j]</td>
+        <td>CHT / Li Chao</td>
+        <td>O(n) deque or O(n log)</td>
+      </tr>
+      <tr>
+        <td>Quadrangle inequality on C</td>
+        <td>Implies opt monotone</td>
+        <td>Check C(a,c)+C(b,d) ≤ C(a,d)+C(b,c)</td>
+      </tr>
+      <tr>
+        <td>Layered partitions into k groups</td>
+        <td>D&C opt on the layer</td>
+        <td>CF 321E</td>
+      </tr>
+      <tr>
+        <td>Aliens trick / wqs</td>
+        <td>When k is the layer count and dp is convex in k</td>
+        <td>P2 extra</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Knuth-Morris-Pratt</td>
+        <td>Different Knuth. This Knuth is the MCM opt-pointer trick</td>
+        <td>Name "Knuth optimisation"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n = 3000 with k = 800 is the D&C-opt signature (nk log n). n = 1e5 with line queries is CHT. n = 4000 MCM-like is Knuth O(n&sup2;). Prove or cite QI before coding.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Three tools, one monotone idea</h2>
+<p>Knuth (interval): if opt[l][r] is the best k and opt[l][r-1] ≤ opt[l][r] ≤ opt[l+1][r], then when you fill by length you only walk k in that shrinking range. Total k-iterations become O(n&sup2;).</p>
+<p>D&C opt (layered): for a fixed layer, the opt j as a function of i is monotone. To fill i in [L,R], compute the middle i, brute j in the allowed [jL, jR], then recurse left with jR = that opt and right with jL = that opt. O(n log n) per layer. CHT: dp[i] = min_j (m_j * x_i + b_j) with x increasing and m monotone. Keep a deque of lines, pop back while the new line makes a worse intersection, pop front while the next line is better at x_i. Amortised O(1) per query.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Name which monotonicity you have. Knuth: 2D opt nest. D&C: 1D opt monotone per layer. CHT: the choices are lines and the query x is sorted.</p><span class="eq">dp[i] = min<sub>j &lt; i</sub> dp[j] + C(j, i)</span>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Quadrangle inequality</span>
+    <p>C(a,c)+C(b,d) ≤ C(a,d)+C(b,c) for a≤b≤c≤d. Together with monotonicity of C, this is the usual sufficient condition for Knuth and for D&C opt. On a line with C = cost of a segment, convex costs often satisfy it.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">When slopes are not sorted</span>
+    <p>Li Chao segment tree: each node stores one line, and you recurse on the half where the new line is better. O(n log X) or O(n log n) on compressed x. Heavier constant, no monotonicity needed.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Tiny Knuth-style table: 4 points, C(l,r) = (r-l)^2, dp[l][r] min split cost + C</h3>
+
+<p>Rows l, columns r. We fill by gap. Target is [l,r]; from cells are the two children of the best k. opt pointers only move right as r grows.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="dp-optimizationsViz"></div>
+  <div class="viz-player" data-viz-target="dp-optimizationsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "l\\r",
+      "rowHeads": [
+        "0",
+        "1",
+        "2"
+      ],
+      "colHeads": [
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "l,r",
+        "k-range",
+        "dp"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Gap 1: adjacent, no split. dp = C = 1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "1"
+            }
+          ],
+          "values": {
+            "l,r": "gap1",
+            "k-range": "none",
+            "dp": 1
+          }
+        },
+        {
+          "note": "(0,2): k=1 only. dp = 0+0+C(0,2)=4. Target (0,2).",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "l,r": "0,2",
+            "k-range": "1",
+            "dp": 4
+          }
+        },
+        {
+          "note": "(1,3): similarly 4.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "4",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "l,r": "1,3",
+            "k-range": "2",
+            "dp": 4
+          }
+        },
+        {
+          "note": "(0,3): Knuth says try k from opt[0][2] to opt[1][3], here {1}..{2}. Evaluate k=1 and k=2.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "?",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "4",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "l,r": "0,3",
+            "k-range": "1..2",
+            "dp": "min"
+          }
+        },
+        {
+          "note": "k=1: dp[0][1]+dp[1][3]+C(0,3) = 1+4+9=14. k=2: 4+1+9=14. Write 14.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "14",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "l,r": "0,3",
+            "k-range": "1..2",
+            "dp": 14
+          }
+        },
+        {
+          "note": "Naive would have tried every k in (0,3). Knuth tried two. On n=4000 that is the difference between n^3 and n^2.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "14",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "l,r": "ans",
+            "k-range": "shrunk",
+            "dp": 14
+          }
+        },
+        {
+          "note": "CHT picture (separate rec): each old j is a line. Query at x=i pops a deque front.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "line j"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "query i",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "l,r": "CHT",
+            "k-range": "deque",
+            "dp": "O(1)"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Dummy: dp[i][i]=0, dp[i][i+1]=C. For gap 3 the k-loop is already restricted by opt of the two smaller intervals. Answer sits in dp[0][3].</figcaption>
+</figure>
+
+<h3>Which optimisation?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["min over a range of previous states"]) --&gt; shape{"what is C?"}
+  shape -- "m_j * x_i + b_j, x sorted" --&gt; cht["CHT deque or Li Chao"]
+  shape -- "2D interval, opt nested" --&gt; kn["Knuth: shrink k to [opt L, opt R]"]
+  shape -- "1D / layered, opt[i] monotone" --&gt; dc["D and C opt on mid i"]
+  shape -- "no structure" --&gt; naive["keep n squared / n cubed"]
+  </div>
+  <figcaption>If you cannot name a monotone opt or a line, you do not have a tool yet.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Write the naive rec</strong> and identify C(j, i) or C(l, r).</li>
+  <li><strong>Check QI / opt monotonicity</strong> (prove or trust the editorial).</li>
+  <li><strong>Knuth:</strong> store opt[l][r], loop k only in [opt[l][r-1], opt[l+1][r]].</li>
+  <li><strong>D&C:</strong> compute(layer, iLo, iHi, jLo, jHi): mid i, brute j, recurse.</li>
+  <li><strong>CHT:</strong> lines (m, b) into a deque; query at x_i from the front.</li>
+  <li><strong>Verify on a brute n=30</strong> against the naive DP.</li>
+  <li><strong>Watch long</strong> for costs; mid = lo + (hi-lo)/2 on any binary search inside Li Chao.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>CHT sketch: lines y = m x + b with m decreasing, query x increasing. Lines (m,b) = (3,0), (2,2), (0,7). Queries x = 0, 2, 5.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>action</th><th>deque (m,b)</th><th>x</th><th>best</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>add (3,0)</td><td>[(3,0)]</td><td>—</td><td>—</td><td>First line.</td></tr>
+      <tr><td>add (2,2)</td><td>[(3,0),(2,2)]</td><td>—</td><td>—</td><td>Intersect at x=2.</td></tr>
+      <tr class="trace-table__row--change"><td>query</td><td>same</td><td>0</td><td>0</td><td>Front wins at x=0.</td></tr>
+      <tr><td>query</td><td>same</td><td>2</td><td>4</td><td>Tie at intersection; either line.</td></tr>
+      <tr><td>add (0,7)</td><td>[(2,2),(0,7)]</td><td>—</td><td>—</td><td>(3,0) popped: dominated past x=2.</td></tr>
+      <tr class="trace-table__row--change"><td>query</td><td>same</td><td>5</td><td>7</td><td>Line (0,7) wins.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="DP Optimisations implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion / naive</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo / CHT</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated D&C</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion / naive">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OptNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class OptNaive {
+    
+        static long minCost(int[] a) {
+            int n = a.length;
+            long[] pref = new long[n + 1];
+            for (int i = 0; i &lt; n; i++) {
+                pref[i + 1] = pref[i] + a[i];
+            }
+            long[] dp = new long[n + 1];
+            Arrays.fill(dp, Long.MAX_VALUE / 4);
+            dp[0] = 0;
+            for (int i = 1; i &lt;= n; i++) {
+                for (int j = 0; j &lt; i; j++) {
+                    long d = pref[i] - pref[j];
+                    dp[i] = Math.min(dp[i], dp[j] + d * d);
+                }
+            }
+            return dp[n];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(minCost(new int[] {1, 3, 1, 3}));
+        }
+        // Input : [1, 3, 1, 3]
+        // Output: 20
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo / CHT">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OptCht.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    
+    public class OptCht {
+    
+        static long minCost(int[] a) {
+            int n = a.length;
+            long[] pref = new long[n + 1];
+            for (int i = 0; i &lt; n; i++) {
+                pref[i + 1] = pref[i] + a[i];
+            }
+            long[] dp = new long[n + 1];
+            ArrayDeque&lt;long[]&gt; dq = new ArrayDeque&lt;&gt;(); // {m, b}
+            dq.addLast(new long[] {0, 0});             // dp[0]=0, pref[0]=0
+            for (int i = 1; i &lt;= n; i++) {
+                long x = pref[i];
+                while (dq.size() &gt;= 2) {
+                    long[] p = dq.pollFirst();
+                    long[] q = dq.peekFirst();
+                    if (p[0] * x + p[1] &lt;= q[0] * x + q[1]) {
+                        dq.addFirst(p);
+                        break;
+                    }
+                }
+                long[] best = dq.peekFirst();
+                dp[i] = best[0] * x + best[1] + x * x;
+                long m = -2 * pref[i];
+                long b = dp[i] + pref[i] * pref[i];
+                while (dq.size() &gt;= 2) {
+                    long[] y = dq.pollLast();
+                    long[] z = dq.peekLast();
+                    // pop y if intersection(z,y) &gt;= intersection(y, new)
+                    if ((y[1] - z[1]) * (y[0] - m) &gt;= (b - y[1]) * (z[0] - y[0])) {
+                        continue;
+                    }
+                    dq.addLast(y);
+                    break;
+                }
+                dq.addLast(new long[] {m, b});
+            }
+            return dp[n];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(minCost(new int[] {1, 3, 1, 3}));
+        }
+        // Input : [1, 3, 1, 3]
+        // Output: 20
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated D&C">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OptDc.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class OptDc {
+    
+        static long[] pref, dp0, dp1;
+    
+        static void compute(int iLo, int iHi, int jLo, int jHi) {
+            if (iLo &gt; iHi) {
+                return;
+            }
+            int iMid = iLo + (iHi - iLo) / 2;
+            int bestJ = jLo;
+            long best = Long.MAX_VALUE / 4;
+            int jMax = Math.min(jHi, iMid - 1);
+            for (int j = jLo; j &lt;= jMax; j++) {
+                long d = pref[iMid] - pref[j];
+                long val = dp0[j] + d * d;
+                if (val &lt; best) {
+                    best = val;
+                    bestJ = j;
+                }
+            }
+            dp1[iMid] = best;
+            compute(iLo, iMid - 1, jLo, bestJ);
+            compute(iMid + 1, iHi, bestJ, jHi);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {1, 3, 1, 3};
+            int n = a.length;
+            pref = new long[n + 1];
+            for (int i = 0; i &lt; n; i++) {
+                pref[i + 1] = pref[i] + a[i];
+            }
+            dp0 = new long[n + 1];
+            dp1 = new long[n + 1];
+            compute(1, n, 0, n);
+            System.out.println(dp1[n]);
+        }
+        // Input : [1, 3, 1, 3], one layer
+        // Output: 16
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time CHT O(n); D&C opt O(n log n) per layer; Knuth O(n²)</span>
+    <span class="badge badge--space">Space O(n) or O(n²) for Knuth tables</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>D&C: each recursion level spends O(n) on the j-sweeps (they do not overlap more than a telescoping sum), and there are log n levels of mid-splits:</p>
+    <p><span class="eq">T<sub>D&C</sub> = &Theta;(n log n) per layer</span></p>
+    <p>Knuth: each (l,r) examines a disjoint k-range relative to its neighbours; the standard charging gives O(n&sup2;).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive 1D</td><td>O(n²)</td><td>O(n)</td><td>No structure</td></tr>
+      <tr><td>CHT deque</td><td>O(n)</td><td>O(n)</td><td>Monotone slopes + x</td></tr>
+      <tr><td>Li Chao</td><td>O(n log n)</td><td>O(n)</td><td>Unsorted slopes</td></tr>
+      <tr><td>D&C opt</td><td>O(kn log n)</td><td>O(n)</td><td>k layers, monotone opt</td></tr>
+      <tr><td>Knuth</td><td>O(n²)</td><td>O(n²)</td><td>Interval, nested opt</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Applying Knuth without QI</span>
+    <div class="pitfalls__bug">opt is not monotone; shrinking the k-range misses the real min. Silent WA.</div>
+    <div class="pitfalls__fix">Prove QI or compare against naive on random tests of n=40.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">CHT intersection overflow</span>
+    <div class="pitfalls__bug">(b2-b1)/(m1-m2) computed with longs that wrap, or with doubles that mis-order equal slopes.</div>
+    <div class="pitfalls__fix">Cross-multiply in a careful long (or __int128 in C++). Reject equal slopes by keeping the better intercept.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">D&C iMid with empty j-range</span>
+    <div class="pitfalls__bug">iMid == 0 or jMax < jLo. You write inf and recurse with inverted bounds.</div>
+    <div class="pitfalls__fix">Guard jMax = min(jHi, iMid-1) and if jLo>jMax write inf, still recurse consistently.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Querying CHT with unsorted x</span>
+    <div class="pitfalls__bug">Deque pops are irreversible; a later smaller x is broken.</div>
+    <div class="pitfalls__fix">Sort queries, or use Li Chao / a multiset hull.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int costs</span>
+    <div class="pitfalls__bug">(pref[i]-pref[j])^2 with pref = 1e5*1e9.</div>
+    <div class="pitfalls__fix">long everywhere, including m*x + b.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one on inclusive j</span>
+    <div class="pitfalls__bug">j < i vs j ≤ i, empty segments, C(i,i) not defined.</div>
+    <div class="pitfalls__fix">Match the naive rec exactly; empty prefix j=0 is a legal start.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Li Chao tree</td>
+        <td>Online lines, no slope order. Segment tree over x, one line per node.</td>
+        <td><code>O(n log X)</code></td>
+        <td>When x is not sorted</td>
+      </tr>
+      <tr>
+        <td>Aliens / WQS binary search</td>
+        <td>Add a penalty λ per group, drop the k dimension, search λ so the opt uses k groups.</td>
+        <td><code>Needs convexity in k</code></td>
+        <td>CF 321E can also be D&C</td>
+      </tr>
+      <tr>
+        <td>Lagrange / Knuth on MCM</td>
+        <td>opt[i][j] nest after QI on the matrix-chain cost.</td>
+        <td><code>O(n²) MCM</code></td>
+        <td>AtCoder DP-N sometimes Knuth-able</td>
+      </tr>
+      <tr>
+        <td>SMAWK</td>
+        <td>Totally monotone matrices, O(n) row-minima. Rare in CF, common in papers.</td>
+        <td><code>Heavier to code than D&amp;C</code></td>
+        <td>Same applicability as D&C, faster</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How do I check QI in five minutes?</summary>
+    <div class="followup__body">
+      <p>For a segment cost on a line, convex / concave costs often work. Empirically: compute naive opt[i] on n=50 and assert opt[i] ≤ opt[i+1]. If it fails on random arrays, you do not have the structure. If it holds, you still want a proof for confidence, but CF will accept the code.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>CHT vs D&C for the same rec?</summary>
+    <div class="followup__body">
+      <p>If C(j,i) is a line in i, CHT is faster and simpler. If C is a black-box segment cost with monotone opt but not a line (e.g. a range-cost from a precomputed table), D&C still works and CHT does not.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why does the D&C j-range not explode?</summary>
+    <div class="followup__body">
+      <p>The mid's brute force of length J is charged once per level, and the left and right halves get complementary j-ranges that sum to J plus O(1). Across a level the j-sweeps telescope to O(n).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I combine Knuth with reconstruction?</summary>
+    <div class="followup__body">
+      <p>Yes. Store opt[l][r] = best k. The last split is that k; recurse. Same as interval DP reconstruction, just with a smaller search during the fill.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://codeforces.com/problemset/problem/321/E" target="_blank" rel="noopener">Ciel and Gondolas</a></td>
+        <td><span class="badge badge--cf">CF 321E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>D&C opt, k layers of grouping</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/311/B" target="_blank" rel="noopener">Cats Transport</a></td>
+        <td><span class="badge badge--cf">CF 311B</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>CHT, feed cats by time</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/867/E" target="_blank" rel="noopener">Guards in the Storehouse</a></td>
+        <td><span class="badge badge--cf">CF 867E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>CHT / greedy-heap cousin</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/319/C" target="_blank" rel="noopener">Kalila and Dimna in the Logging Industry</a></td>
+        <td><span class="badge badge--cf">CF 319C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Textbook CHT</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_n" target="_blank" rel="noopener">Slimes</a></td>
+        <td><span class="badge badge--atc">ATC DP-N</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Interval; Knuth optional</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_w" target="_blank" rel="noopener">Task Assignment</a></td>
+        <td><span class="badge badge--atc">ATC DP-W</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Segtree + CHT-ish range add</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/matrix-chain-multiplication0303/1" target="_blank" rel="noopener">Matrix Chain Multiplication</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Naive n^3; Knuth when QI holds</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/minimum-cost-to-cut-a-stick/" target="_blank" rel="noopener">Minimum Cost to Cut a Stick</a></td>
+        <td><span class="badge badge--lc">LC 1547</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Interval; n small so no opt needed</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/split-array-largest-sum/" target="_blank" rel="noopener">Split Array Largest Sum</a></td>
+        <td><span class="badge badge--lc">LC 410</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search; D&C opt also works</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1083/E" target="_blank" rel="noopener">The Fair Nut and Rectangles</a></td>
+        <td><span class="badge badge--cf">CF 1083E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>CHT on rectangles</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 319C</summary>
+  <div class="spoiler__body">
+    <p>dp[i] = min_{j<i} dp[j] + b[j]*a[i] with a increasing, b decreasing. That is a CHT deque. Line j has slope b[j] and intercept dp[j]. Query at x=a[i], then push the new line. long. n=1e5.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 321E</summary>
+  <div class="spoiler__body">
+    <p>Cost of a contiguous group is a precomputed 2D prefix of pairwise ugliness (O(n^2) preprocess). dp[k][i] = min_{j<i} dp[k-1][j] + cost(j+1,i). QI holds, so D&C opt per layer. k,n ≤ 4000, O(kn log n) after O(n^2) prep.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Naive min-over-j is O(n) per state</strong> until you name a monotone opt or a line.</li>
+    <li><strong>CHT:</strong> lines + sorted x → deque, O(n).</li>
+    <li><strong>D&C opt:</strong> monotone opt[i] → mid split, O(n log n) per layer.</li>
+    <li><strong>Knuth:</strong> nested opt on intervals → O(n&sup2;).</li>
+    <li><strong>Prove or empirically check QI</strong> before shrinking a search range.</li>
+  </ul>
+  <div class="recap__oneliner">CHT deque if lines | D&amp;C if opt[i] monotone | Knuth if opt nested | else naive</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

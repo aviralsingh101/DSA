@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Theory &amp; Grundy Numbers &mdash; DSA Course</title>
+<meta name="description" content="Impartial games collapse to a Nim heap: the Grundy / mex number of a position, XOR of the heaps, and a non-zero XOR is a first-player win.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="game-theory-and-grundy">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Game Theory & Grundy Numbers</h1>
+  <p class="hero__tagline">Impartial games collapse to a Nim heap: the Grundy / mex number of a position, XOR of the heaps, and a non-zero XOR is a first-player win.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Grundy</span>
+      <span class="chip">Nim</span>
+      <span class="chip">mex</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Nim is the only impartial game you need, because Sprague-Grundy says every impartial sum of games is equivalent to a Nim heap whose size is the mex of the reachable heaps. Subtraction games, Kayles, turning turtles, and "split a pile into two unequal piles" all become XOR.</p>
+<p>The DP is: grundy[pos] = mex { grundy[q] : pos → q }. mex is the smallest non-negative integer not in the set. Precompute by increasing rank (pile size, remaining squares). Then the position is winning iff the XOR of component grundies is non-zero.</p>
+<p>P1 because the modelling (what are the independent components? what are the moves?) is the interview, and because people XOR the pile sizes instead of the grundy numbers of those piles.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>First player wins iff grundy(position) ≠ 0. For a sum of independent games, XOR the grundies. A single Nim heap of size n has grundy n, which is why plain Nim is XOR of the sizes.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Two players, optimal play, last move wins (normal play) or last move loses (misère)</li>
+        <li>The game is a disjoint sum of smaller boards / piles</li>
+        <li>Moves on one pile do not affect the others</li>
+        <li>"Subtraction set", splitting piles, removing objects with a local rule</li>
+        <li>n piles up to 1e5 values, you need O(maxA) precompute then O(1) per pile</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Scoring games / partizan (Go, chess) → not Sprague-Grundy</li>
+        <li>The winner is decided by a score, not by who moves last</li>
+        <li>Players have different move sets (partizan) → Conway, not this page</li>
+        <li>Misère with large heaps is a minefield; only apply the easy misère Nim rule when all heaps are tiny</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Classic Nim, heaps, remove any from one heap</td>
+        <td>grundy(n)=n</td>
+        <td>XOR of sizes</td>
+      </tr>
+      <tr>
+        <td>Subtraction {s1..sk}</td>
+        <td>grundy[n]=mex of grundy[n-si]</td>
+        <td>Period often appears</td>
+      </tr>
+      <tr>
+        <td>Split into two non-empty</td>
+        <td>XOR of the two parts is the move</td>
+        <td>grundy of a sum</td>
+      </tr>
+      <tr>
+        <td>Several independent boards</td>
+        <td>XOR the board grundies</td>
+        <td>The theorem</td>
+      </tr>
+      <tr>
+        <td>Win/lose only, no parts</td>
+        <td>dp[pos] = exists a losing child</td>
+        <td>Boolean DAG DP</td>
+      </tr>
+      <tr>
+        <td>Misère Nim, all heaps ≤1</td>
+        <td>Flip the usual XOR test</td>
+        <td>Special case</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> XORing pile sizes in a non-Nim game</td>
+        <td>You must XOR grundy(pile), not the size, unless grundy happens to be the identity</td>
+        <td>Compute mex first</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Pile size up to 1e5, precompute grundy in O(maxA * moves). Number of piles 1e5, then one XOR pass. Recursion without memo on a DAG of positions is exponential.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>mex, then XOR</h2>
+<p>A position is losing (second-player, grundy 0) iff every move leads to a winning position for the opponent, i.e. iff there is no move to a grundy-0 position. That is exactly mex of the child grundies being 0 when all children are non-zero.</p>
+<p>Dry-run: subtraction game S = {1, 3}. grundy[0]=0 (no moves). grundy[1]=mex{g[0]}=mex{0}=1. grundy[2]=mex{g[1]}=mex{1}=0. grundy[3]=mex{g[2], g[0]}=mex{0,0}=1. grundy[4]=mex{g[3], g[1]}=mex{1,1}=0. Pattern 0,1,0,1,... Two piles of size 4 and 1: 0 XOR 1 = 1, first player wins. Boolean DP is the special case of a single component: win[pos] = OR over children of !win[child]. Grundy is what you need when there are several components.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The grundy number of a disjoint sum is the XOR of the grundy numbers. Normal play: first player wins iff the total XOR is not 0.</p><span class="eq">g(x) = mex { g(y) : x → y } &nbsp;&nbsp; mex S = min n≥0, n∉S</span>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why XOR?</span>
+    <p>Nim heaps XOR because a move on one heap can set that heap to any smaller size, which is any smaller grundy, which is exactly the moves you need to cancel the total XOR to 0. The theorem says every impartial game is equivalent to one such heap.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Misère is not "flip the winner"</span>
+    <p>Misère Nim: if every heap has size ≤ 1, the winner is the opposite of normal play; otherwise the winner is the same as normal. For other games, misère Sprague-Grundy is hard. Do not invent a rule.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>grundy[n] for subtraction {1, 3}</h3>
+
+<p>One row. Target is n; from cells are n-1 and n-3 when they exist. The mex of those values is the new entry.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="game-theory-and-grundyViz"></div>
+  <div class="viz-player" data-viz-target="game-theory-and-grundyViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "n",
+      "rowHeads": [
+        "g"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "vars": [
+        "n",
+        "children",
+        "mex"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "g[0] = mex{} = 0. Terminal, losing.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "n": 0,
+            "children": "none",
+            "mex": 0
+          }
+        },
+        {
+          "note": "n=1. Only 1-1=0. Children {0}. mex = 1. Target 1, from 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "n": 1,
+            "children": "0",
+            "mex": 1
+          }
+        },
+        {
+          "note": "n=2. Only 2-1=1. Children {1}. mex = 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "0",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "n": 2,
+            "children": "1",
+            "mex": 0
+          }
+        },
+        {
+          "note": "n=3. 3-1=2 and 3-3=0. Children {0, 0}. mex = 1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "n": 3,
+            "children": "2,0",
+            "mex": 1
+          }
+        },
+        {
+          "note": "n=4. 4-1=3 and 4-3=1. Children {1, 1}. mex = 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 4,
+              "val": "0",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "n": 4,
+            "children": "3,1",
+            "mex": 0
+          }
+        },
+        {
+          "note": "n=5. Children g[4], g[2] = {0,0}. mex = 1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 5,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "n": 5,
+            "children": "4,2",
+            "mex": 1
+          }
+        },
+        {
+          "note": "Piles (4, 1): 0 XOR 1 = 1 ≠ 0, first player wins. Move the 1-pile to 0, leaving a single even pile.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 4,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "xor=1",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "n": "4 xor 1",
+            "children": "win",
+            "mex": 1
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>0,1,0,1,0,1. Even n is losing as a single pile. Two piles XOR those bits.</figcaption>
+</figure>
+
+<h3>From a statement to XOR</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["impartial, last move wins"]) --&gt; split{"sum of independent games?"}
+  split -- no --&gt; dag["boolean win[pos] = exists losing child"]
+  split -- yes --&gt; g["grundy[comp] = mex of child grundies"]
+  g --&gt; x["XOR all components"]
+  x --&gt; z{"xor == 0?"}
+  z -- yes --&gt; second["second player wins"]
+  z -- no --&gt; first["first player wins"]
+  </div>
+  <figcaption>If you cannot split into independent games, you only have a win/lose DAG on the whole position.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm impartial + normal play</strong> (or handle misère separately).</li>
+  <li><strong>Decompose</strong> into independent components (piles, boards, chains).</li>
+  <li><strong>List the moves</strong> from a component of size n.</li>
+  <li><strong>Compute grundy[0..max]</strong> in increasing order: mex of reachable grundies.</li>
+  <li><strong>XOR</strong> grundy of every component.</li>
+  <li><strong>Non-zero → first wins</strong>; zero → second.</li>
+  <li><strong>To move:</strong> find a component whose grundy you can change so the new XOR is 0.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Subtraction {1,3}, piles 4 and 1.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>n</th><th>moves to</th><th>child g</th><th>mex = g[n]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>—</td><td>{}</td><td>0</td><td>Lose.</td></tr>
+      <tr><td>1</td><td>0</td><td>{0}</td><td>1</td><td></td></tr>
+      <tr><td>2</td><td>1</td><td>{1}</td><td>0</td><td>Lose as a single pile.</td></tr>
+      <tr><td>3</td><td>2, 0</td><td>{0}</td><td>1</td><td></td></tr>
+      <tr><td>4</td><td>3, 1</td><td>{1}</td><td>0</td><td></td></tr>
+      <tr class="trace-table__row--change"><td>XOR</td><td>g4 xor g1</td><td>0 xor 1</td><td>1</td><td>First player wins.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Game Theory & Grundy Numbers implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo / Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Space-opt Nim</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GrundyRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class GrundyRec {
+    
+        static boolean win(int n, int[] s) {
+            for (int x : s) {
+                if (n &gt;= x &amp;&amp; !win(n - x, s)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            int[] s = {1, 3};
+            System.out.println(win(4, s) + " " + win(1, s));
+        }
+        // Input : S={1,3}, single piles 4 and 1
+        // Output: false true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo / Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GrundyTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class GrundyTab {
+    
+        static int mex(boolean[] seen) {
+            int m = 0;
+            while (m &lt; seen.length &amp;&amp; seen[m]) {
+                m++;
+            }
+            return m;
+        }
+    
+        static int[] grundy(int n, int[] s) {
+            int[] g = new int[n + 1];
+            for (int i = 1; i &lt;= n; i++) {
+                boolean[] seen = new boolean[s.length + 1];
+                for (int x : s) {
+                    if (i &gt;= x) {
+                        seen[g[i - x]] = true;
+                    }
+                }
+                g[i] = mex(seen);
+            }
+            return g;
+        }
+    
+        public static void main(String[] args) {
+            int[] g = grundy(4, new int[] {1, 3});
+            System.out.println(Arrays.toString(g));
+            System.out.println((g[4] ^ g[1]) != 0 ? "first" : "second");
+        }
+        // Input : S={1,3}, piles 4 and 1
+        // Output: [0, 1, 0, 1, 0]
+        //         first
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt Nim">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NimXor.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class NimXor {
+    
+        static boolean firstWins(int[] heaps) {
+            int x = 0;
+            for (int h : heaps) {
+                x ^= h;
+            }
+            return x != 0;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(firstWins(new int[] {3, 4, 5}));
+            System.out.println(firstWins(new int[] {4, 1}));
+        }
+        // Input : heaps [3,4,5] then [4,1] as plain Nim (not subtraction)
+        // Output: true
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(maxA * |S|) precompute + O(piles) XOR</span>
+    <span class="badge badge--space">Space O(maxA)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each pile size computes a mex over |S| children:</p>
+    <p><span class="eq">T = &Theta;(N &middot; |S|) + &Theta;(piles)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Boolean win DAG</td><td>O(states * moves)</td><td>O(states)</td><td>One component</td></tr>
+      <tr><td>Grundy + XOR</td><td>O(N * moves)</td><td>O(N)</td><td>Many piles</td></tr>
+      <tr><td>Plain Nim</td><td>O(piles)</td><td>O(1)</td><td>g(n)=n</td></tr>
+      <tr><td>Misère Nim</td><td>O(piles)</td><td>O(1)</td><td>Special all-small rule</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">XORing sizes in a subtraction game</span>
+    <div class="pitfalls__bug">Piles 4 and 1 in S={1,3}: 4 xor 1 = 5 ≠ 0 would still say first, luckily; other sizes lie.</div>
+    <div class="pitfalls__fix">XOR grundy[size], which for this S is size%2, not size.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">mex of the move sizes instead of child grundies</span>
+    <div class="pitfalls__bug">mex{1,3}=0 always. Nonsense.</div>
+    <div class="pitfalls__fix">The set is { grundy[next] }, not { the subtraction amount }.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">seen[] too small</span>
+    <div class="pitfalls__bug">Grundy can be larger than |S| (not usually, but mex needs an extra slot). If you size seen to max child g without +1 you infinite-loop or miss.</div>
+    <div class="pitfalls__fix">seen of length |S|+2, or a HashSet, or a vis-stamp array of size n+2.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Treating a splitting move as one child</span>
+    <div class="pitfalls__bug">A move to two piles is a move to the XOR of those two grundies, one child value, not two separate games added after the fact.</div>
+    <div class="pitfalls__fix">Child grundy = g[a] XOR g[b] when you split n → (a,b).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Misère by flipping every winner</span>
+    <div class="pitfalls__bug">Wrong as soon as a heap is ≥ 2.</div>
+    <div class="pitfalls__fix">Use the standard misère Nim lemma, or refuse to generalise.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recursive win() without memo on overlapping positions</span>
+    <div class="pitfalls__bug">Exponential, TLE at n=40.</div>
+    <div class="pitfalls__fix">Tabulate grundy bottom-up, or memoize.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Subtraction game</td>
+        <td>Fixed S. Often periodic grundy. Precompute, then O(1) per pile.</td>
+        <td><code>This page's dry run</code></td>
+        <td>Wythoff is the 2-pile cousin, not mex-period</td>
+      </tr>
+      <tr>
+        <td>Kayles / bowling</td>
+        <td>Knock 1 or 2 adjacent, splitting the row into two independent rows.</td>
+        <td><code>Child = g[left] XOR g[right]</code></td>
+        <td>Classic</td>
+      </tr>
+      <tr>
+        <td>Tree games / green Hackenbush</td>
+        <td>Grundy on a tree via DFS: mex of child-xor options, or XOR of (1+child grundy) for some rules.</td>
+        <td><code>CF 839C is expectation, not this</code></td>
+        <td>Model the move set carefully</td>
+      </tr>
+      <tr>
+        <td>Win/lose without XOR</td>
+        <td>If there is only one component, boolean DP is enough and simpler.</td>
+        <td><code>win[i] = exists !win[j]</code></td>
+        <td>Stone games on one pile</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How do I find a winning move?</summary>
+    <div class="followup__body">
+      <p>Let X be the total XOR. For a component with grundy g, you need a move to g' with g' == (g XOR X) wait: you need g' such that (X XOR g XOR g') = 0, i.e. g' = X XOR g, and g' &lt; g in Nim, or generally a child whose grundy equals X XOR g. If X==0 there is no winning move.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is mex, intuitively?</summary>
+    <div class="followup__body">
+      <p>The smallest heap size you cannot mimic with one move. It is the unique Nim heap equivalent of the position. You never need grundy larger than the branching factor + a bit; it is a small integer.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Partizan games?</summary>
+    <div class="followup__body">
+      <p>Left and Right have different moves (Domineering, chess). Sprague-Grundy does not apply. You can still do win/lose DP if the state space is small, but there is no XOR decomposition. Do not force grundy.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is a grundy-0 position losing?</summary>
+    <div class="followup__body">
+      <p>Every move is to a non-zero (winning for the opponent), and there is no move to 0. If there are no moves at all, mex is 0, matching the terminal loss in normal play.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/nim-game/" target="_blank" rel="noopener">Nim Game</a></td>
+        <td><span class="badge badge--lc">LC 292</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>One heap, S={1,2,3}, n%4</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/divisor-game/" target="_blank" rel="noopener">Divisor Game</a></td>
+        <td><span class="badge badge--lc">LC 1025</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Boolean DP, or n even</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/stone-game/" target="_blank" rel="noopener">Stone Game</a></td>
+        <td><span class="badge badge--lc">LC 877</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Interval DP, always first</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/cat-and-mouse/" target="_blank" rel="noopener">Cat and Mouse</a></td>
+        <td><span class="badge badge--lc">LC 913</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Game DP on a graph, not impartial XOR</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1730" target="_blank" rel="noopener">Nim Game I</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>XOR the heaps</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1709" target="_blank" rel="noopener">Stair Game</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Grundy on stairs, XOR odd stairs</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/1382/B" target="_blank" rel="noopener">Sequential Nim</a></td>
+        <td><span class="badge badge--cf">CF 1382B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>First pile >1 decides</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/15/C" target="_blank" rel="noopener">Industrial Nim</a></td>
+        <td><span class="badge badge--cf">CF 15C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>XOR of ranges of heap sizes</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/451/A" target="_blank" rel="noopener">Game With Sticks</a></td>
+        <td><span class="badge badge--cf">CF 451A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>min(n,m) odd/even</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_k" target="_blank" rel="noopener">Stone Game</a></td>
+        <td><span class="badge badge--atc">ATC DP-K</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Boolean win on one pile, S given</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_l" target="_blank" rel="noopener">Dequeue Game</a></td>
+        <td><span class="badge badge--atc">ATC DP-L</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Interval game, score DP</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/nim-game1627/1" target="_blank" rel="noopener">Nim Game</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>XOR</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CSES Stair Game</summary>
+  <div class="spoiler__body">
+    <p>Moving a stone down a stair is like a Nim heap on the odd-indexed stairs (from the bottom). XOR the counts on odd stairs; first wins iff non-zero. The modelling is the whole problem; the XOR is one line.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-K</summary>
+  <div class="spoiler__body">
+    <p>One pile, subtraction set A. win[0]=false. win[x] = true iff some a in A has x>=a and !win[x-a]. Print First/Second for n. That is boolean DP, equivalent to grundy[n]!=0 for a single component.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>grundy = mex of child grundies.</strong> 0 is a losing position.</li>
+    <li><strong>Independent components XOR.</strong> Non-zero total = first player.</li>
+    <li><strong>Plain Nim: grundy[n]=n</strong>, so XOR the sizes.</li>
+    <li><strong>A split is one child</strong> whose value is g[a] XOR g[b].</li>
+    <li><strong>Misère is a special lemma</strong>, not a flipped XOR.</li>
+  </ul>
+  <div class="recap__oneliner">g=mex{g(child)} | XOR components | !=0 first | Nim: xor sizes | split: g[a]^g[b]</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

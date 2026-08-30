@@ -1,9 +1,67 @@
 /* Module 04 — Recursion, Backtracking & D&C */
+import { pack } from "./pack.mjs";
+
+/** Flatten a full-schema topic (why.paras, visuals, recap.bullets, …) into pack() fields. */
+function F(t) {
+  const viz = (t.visuals || []).find((v) => v.kind === "array" || v.kind === "grid") || { data: {} };
+  const mer = (t.visuals || []).find((v) => v.kind === "mermaid") || {};
+  const d = viz.data || {};
+  const rec = t.recognise || {};
+  const core = t.core || {};
+  const recap = t.recap || {};
+  const dry = t.dryRun || {};
+  return {
+    id: t.id,
+    difficulty: t.difficulty,
+    readTime: t.readTime,
+    tagline: t.tagline,
+    tags: t.tags,
+    prereqs: t.prereqs || [],
+    why: t.why.paras,
+    insight: t.why.insight,
+    yes: rec.yes,
+    no: rec.no,
+    table: rec.table,
+    constraint: rec.constraint,
+    coreHeading: core.heading,
+    core: core.paras,
+    invariant: core.invariant,
+    extra: core.extra || [],
+    array: d.array || [0, 1, 2, 3, 4, 5],
+    vars: d.vars,
+    frames: d.frames,
+    grid: viz.kind === "grid"
+      ? { corner: d.corner, rowHeads: d.rowHeads, colHeads: d.colHeads }
+      : undefined,
+    indexLabels: d.indexLabels,
+    arrayLabel: d.label,
+    vizTitle: viz.h3,
+    vizIntro: viz.intro,
+    vizCaption: viz.caption,
+    mermaid: mer.src,
+    merTitle: mer.h3,
+    merCaption: mer.caption,
+    steps: t.steps,
+    dryIntro: dry.intro,
+    dryCols: dry.cols,
+    dryRows: dry.rows,
+    dryAfter: dry.after,
+    code: t.code,
+    complexity: t.complexity,
+    pitfalls: t.pitfalls,
+    variants: t.variants,
+    followups: t.followups,
+    problems: t.problems,
+    spoilers: t.spoilers,
+    recap: recap.bullets,
+    oneliner: recap.oneliner,
+  };
+}
 
 export const topics = [
 
 /* ============================================ 1. recursion-fundamentals == */
-{
+pack(F({
   id: "recursion-fundamentals",
   difficulty: "Easy",
   readTime: "24 min",
@@ -513,10 +571,10 @@ public class RecursionTemplate {
     ],
     oneliner: "if (n<=1) return 1; return n*go(n-1); // depth is space; Java has no TCO",
   },
-},
+})),
 
 /* ============================== 2. subsets-permutations-combinations === */
-{
+pack(F({
   id: "subsets-permutations-combinations",
   difficulty: "Medium",
   readTime: "28 min",
@@ -1048,10 +1106,10 @@ public class CombinationSum {
     ],
     oneliner: "if (i>start && a[i]==a[i-1]) continue; path.add(a[i]); go(i+1); path.remove(path.size()-1);",
   },
-},
+})),
 
 /* ======================================== 3. backtracking-with-pruning == */
-{
+pack(F({
   id: "backtracking-with-pruning",
   difficulty: "Hard",
   readTime: "28 min",
@@ -1156,4 +1214,1407 @@ public class CombinationSum {
           "<code>avail -= bit</code> (or <code>avail &amp;= avail-1</code>) consumes it. " +
           "That loop body is the entire branching.</p>" },
       { kind: "warn", title: "Undo on every exit path",
-        html
+        html: "<p>A successful leaf still shares the same board or bitmasks as its " +
+          "siblings. Restore every mutation after the recursive call, including after a " +
+          "true return if you are enumerating all solutions. The safe shape is apply, " +
+          "recurse, undo as three consecutive lines.</p>" },
+    ],
+  },
+
+  visuals: [
+    {
+      kind: "grid", vizId: "nq4",
+      h3: "N-Queens on a 4 x 4, bitmask view",
+      intro: "Rows top to bottom. Q is a queen, x is rejected by the current masks, a dot " +
+        "is still free. Watch row 2 die with <code>avail = 0</code> &mdash; that is the prune.",
+      caption: "One failed branch, then a complete solution. The prune at row 2 never " +
+        "spawns row 3, which is the whole point of a veto.",
+      data: {
+        corner: "r/c",
+        rowHeads: ["0", "1", "2", "3"],
+        colHeads: ["0", "1", "2", "3"],
+        vars: ["row", "cols", "avail"],
+        speed: 1100,
+        frames: [
+          { note: "Empty board. all = 1111b. Row 0 may place in any column.",
+            cells: [
+              { r: 0, c: 0, val: "." }, { r: 0, c: 1, val: "." },
+              { r: 0, c: 2, val: "." }, { r: 0, c: 3, val: "." },
+              { r: 1, c: 0, val: "." }, { r: 1, c: 1, val: "." },
+              { r: 1, c: 2, val: "." }, { r: 1, c: 3, val: "." },
+              { r: 2, c: 0, val: "." }, { r: 2, c: 1, val: "." },
+              { r: 2, c: 2, val: "." }, { r: 2, c: 3, val: "." },
+              { r: 3, c: 0, val: "." }, { r: 3, c: 1, val: "." },
+              { r: 3, c: 2, val: "." }, { r: 3, c: 3, val: "." },
+            ],
+            values: { row: 0, cols: "0000", avail: "1111" } },
+          { note: "Place row 0, column 1. cols becomes 0010. Diagonals will slide on the next row.",
+            cells: [
+              { r: 0, c: 0, val: "." }, { r: 0, c: 1, val: "Q", cls: "answer" },
+              { r: 0, c: 2, val: "." }, { r: 0, c: 3, val: "." },
+            ],
+            values: { row: 0, cols: "0010", avail: "placed 1" } },
+          { note: "Row 1: column 1 and the two diagonals through (0,1) are blocked. Place column 3.",
+            cells: [
+              { r: 0, c: 1, val: "Q", cls: "filled" },
+              { r: 1, c: 0, val: "." }, { r: 1, c: 1, val: "x", cls: "block" },
+              { r: 1, c: 2, val: "x", cls: "block" }, { r: 1, c: 3, val: "Q", cls: "answer" },
+            ],
+            values: { row: 1, cols: "1010", avail: "placed 3" } },
+          { note: "Row 2: cols 1 and 3 plus sliding diagonals leave nothing. avail = 0000. Prune.",
+            cells: [
+              { r: 0, c: 1, val: "Q", cls: "filled" },
+              { r: 1, c: 3, val: "Q", cls: "filled" },
+              { r: 2, c: 0, val: "x", cls: "block" }, { r: 2, c: 1, val: "x", cls: "block" },
+              { r: 2, c: 2, val: "x", cls: "block" }, { r: 2, c: 3, val: "x", cls: "block" },
+            ],
+            values: { row: 2, cols: "1010", avail: "0000 prune" } },
+          { note: "Undo row 1 column 3. Try row 1 column 0, the other free bit from earlier.",
+            cells: [
+              { r: 0, c: 1, val: "Q", cls: "filled" },
+              { r: 1, c: 0, val: "Q", cls: "answer" }, { r: 1, c: 1, val: "x", cls: "block" },
+              { r: 1, c: 2, val: "x", cls: "block" }, { r: 1, c: 3, val: "." },
+            ],
+            values: { row: 1, cols: "0011", avail: "placed 0" } },
+          { note: "Row 2 is still cramped. This branch dies too. Undo row 0 column 1 entirely.",
+            cells: [
+              { r: 0, c: 1, val: "Q", cls: "filled" },
+              { r: 1, c: 0, val: "Q", cls: "filled" },
+              { r: 2, c: 0, val: "x", cls: "block" }, { r: 2, c: 1, val: "x", cls: "block" },
+              { r: 2, c: 2, val: "x", cls: "block" }, { r: 2, c: 3, val: "." },
+            ],
+            values: { row: 2, cols: "0011", avail: "almost empty" } },
+          { note: "Restart: row 0 column 2, then row 1 column 0. This is the winning branch.",
+            cells: [
+              { r: 0, c: 2, val: "Q", cls: "answer" },
+              { r: 1, c: 0, val: "Q", cls: "answer" },
+            ],
+            values: { row: 1, cols: "0101", avail: "placed 0" } },
+          { note: "A solution of n = 4: queens at (0,2), (1,0), (2,3), (3,1). Two solutions exist; this is one.",
+            cells: [
+              { r: 0, c: 2, val: "Q", cls: "answer" },
+              { r: 1, c: 0, val: "Q", cls: "answer" },
+              { r: 2, c: 3, val: "Q", cls: "answer" },
+              { r: 3, c: 1, val: "Q", cls: "answer" },
+            ],
+            values: { row: 4, cols: "1111", avail: "solved" } },
+        ],
+      },
+    },
+    {
+      kind: "mermaid", vizId: "btFlow",
+      h3: "The assign / veto / undo loop",
+      caption: "Every problem on this page is this flowchart with a different next-decision " +
+        "and a different veto.",
+      src: `flowchart TD
+  pick["pick the next undecided slot"] --> empty{"any slot left?"}
+  empty -- no --> record["record a solution"]
+  empty -- yes --> cand["generate candidates for that slot"]
+  cand --> veto{"does this candidate fight the prefix?"}
+  veto -- yes --> nextCand["skip, try the next candidate"]
+  veto -- no --> apply["apply: set cell, flip bits, mark used"]
+  apply --> rec["recurse on the following slot"]
+  rec --> undoStep["undo the apply"]
+  undoStep --> nextCand
+  nextCand --> more{"candidates remain?"}
+  more -- yes --> veto
+  more -- no --> back["return to the parent slot"]`,
+    },
+  ],
+
+  steps: [
+    "<strong>Name the decision sequence.</strong> One queen per row; next empty Sudoku cell; " +
+      "next cut index; next grid step matching the next letter.",
+    "<strong>Name the veto</strong> as a function of the prefix only. If you cannot check it " +
+      "yet, you do not have a prune.",
+    "<strong>Encode the veto cheaply.</strong> Bitmasks for N-Queens; row/col/box bitsets for " +
+      "Sudoku; a mark on the cell for word search; <code>isPal[i][j]</code> for partitions.",
+    "<strong>Apply, recurse, undo</strong> as three consecutive operations.",
+    "<strong>For find-one</strong>, return a boolean and stop siblings on true. For find-all, " +
+      "collect and keep going.",
+    "<strong>Precompute what you can</strong> &mdash; palindrome table, remaining digit counts.",
+    "<strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or used vertices.",
+    "<strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune.",
+  ],
+
+  dryRun: {
+    intro: "N-Queens n = 4, first successful placement. Bitmasks in binary, bit 0 = column 0. " +
+      "Highlighted rows are prunes.",
+    cols: ["row", "place col", "cols", "avail next", "result"],
+    rows: [
+      { cells: ["0", "1", "0010", "row1: 1001", "try"],
+        action: "First branch. Symmetric to placing column 2." },
+      { cells: ["1", "3", "1010", "row2: 0000", "prune"],
+        action: "No free bit. Undo column 3.", change: true },
+      { cells: ["1", "0", "0011", "row2 cramped", "dies later"],
+        action: "The other child of row 1 also dies.", change: true },
+      { cells: ["0", "2", "0100", "row1: 1001", "try other root"],
+        action: "Undo everything from column 1." },
+      { cells: ["1", "0", "0101", "row2 has a free bit", "extend"],
+        action: "This is the winning branch." },
+      { cells: ["2", "3", "1101", "row3: 0010", "extend"],
+        action: "Only column 1 remains." },
+      { cells: ["3", "1", "1111", "none", "solution"],
+        action: "Queens at columns 2, 0, 3, 1.", change: true },
+      { cells: ["0", "0 or 3", "edge columns", "both die", "one more solution"],
+        action: "The second solution is the left-right mirror." },
+    ],
+  },
+
+  code: [
+    { tab: "Brute", panel: "N-Queens arrays", file: "NQueensBrute.java",
+      intro: "The version you can explain in sixty seconds. Each placement scans column and " +
+        "diagonals in O(n). Fine for n = 8; the bitmask rewrite is the follow-up.",
+      highlight: "18-27",
+      code: `import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class NQueensBrute {
+
+    static List<List<String>> solveNQueens(int n) {
+        char[][] b = new char[n][n];
+        for (char[] row : b) {
+            Arrays.fill(row, '.');
+        }
+        List<List<String>> ans = new ArrayList<>();
+        go(0, b, ans);
+        return ans;
+    }
+
+    static void go(int r, char[][] b, List<List<String>> ans) {
+        int n = b.length;
+        if (r == n) {
+            List<String> pack = new ArrayList<>();
+            for (char[] row : b) {
+                pack.add(new String(row));
+            }
+            ans.add(pack);
+            return;
+        }
+        for (int c = 0; c < n; c++) {
+            if (!safe(b, r, c)) {
+                continue;
+            }
+            b[r][c] = 'Q';
+            go(r + 1, b, ans);
+            b[r][c] = '.';
+        }
+    }
+
+    static boolean safe(char[][] b, int r, int c) {
+        for (int i = 0; i < r; i++) {
+            if (b[i][c] == 'Q') {
+                return false;
+            }
+        }
+        for (int i = r - 1, j = c - 1; i >= 0 && j >= 0; i--, j--) {
+            if (b[i][j] == 'Q') {
+                return false;
+            }
+        }
+        for (int i = r - 1, j = c + 1; i >= 0 && j < b.length; i--, j++) {
+            if (b[i][j] == 'Q') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(solveNQueens(4).size());
+    }
+    // Input : n = 4
+    // Output: 2
+}`,
+    },
+    { tab: "Optimal", panel: "Bitmask N-Queens", file: "NQueensBitmask.java",
+      intro: "Same tree, O(1) veto. <code>avail &amp; -avail</code> peels the lowest free " +
+        "column. Shifts slide the diagonals to the next row.",
+      highlight: "12-20",
+      code: `public class NQueensBitmask {
+
+    static int totalNQueens(int n) {
+        return go(0, 0, 0, 0, n);
+    }
+
+    static int go(int row, int cols, int d1, int d2, int n) {
+        if (row == n) {
+            return 1;
+        }
+        int count = 0;
+        int all = (1 << n) - 1;
+        int avail = all & ~(cols | d1 | d2);
+        while (avail != 0) {
+            int bit = avail & -avail;
+            avail -= bit;
+            count += go(row + 1, cols | bit, (d1 | bit) << 1, (d2 | bit) >> 1, n);
+        }
+        return count;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(totalNQueens(4));
+        System.out.println(totalNQueens(8));
+    }
+    // Input : 4, then 8
+    // Output: 2
+    //         92
+}`,
+    },
+    { tab: "Template", panel: "Word search + palindrome cut", file: "BacktrackTemplate.java",
+      intro: "Two other vetoes on the same skeleton. Word search marks the cell; palindrome " +
+        "partition only recurses from a cut that is already a palindrome.",
+      highlight: "16-28,48-52",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+public class BacktrackTemplate {
+
+    static boolean exist(char[][] b, String word) {
+        for (int r = 0; r < b.length; r++) {
+            for (int c = 0; c < b[0].length; c++) {
+                if (dfs(b, r, c, 0, word)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static boolean dfs(char[][] b, int r, int c, int k, String word) {
+        if (k == word.length()) {
+            return true;
+        }
+        if (r < 0 || c < 0 || r >= b.length || c >= b[0].length) {
+            return false;
+        }
+        if (b[r][c] != word.charAt(k)) {
+            return false;
+        }
+        char saved = b[r][c];
+        b[r][c] = '#';
+        boolean ok = dfs(b, r + 1, c, k + 1, word)
+                || dfs(b, r - 1, c, k + 1, word)
+                || dfs(b, r, c + 1, k + 1, word)
+                || dfs(b, r, c - 1, k + 1, word);
+        b[r][c] = saved;
+        return ok;
+    }
+
+    static List<List<String>> partition(String s) {
+        int n = s.length();
+        boolean[][] pal = new boolean[n][n];
+        for (int i = n - 1; i >= 0; i--) {
+            for (int j = i; j < n; j++) {
+                pal[i][j] = s.charAt(i) == s.charAt(j)
+                        && (j - i < 2 || pal[i + 1][j - 1]);
+            }
+        }
+        List<List<String>> ans = new ArrayList<>();
+        cut(s, 0, pal, new ArrayList<>(), ans);
+        return ans;
+    }
+
+    static void cut(String s, int start, boolean[][] pal, List<String> path,
+                    List<List<String>> ans) {
+        if (start == s.length()) {
+            ans.add(new ArrayList<>(path));
+            return;
+        }
+        for (int end = start; end < s.length(); end++) {
+            if (!pal[start][end]) {
+                continue;
+            }
+            path.add(s.substring(start, end + 1));
+            cut(s, end + 1, pal, path, ans);
+            path.remove(path.size() - 1);
+        }
+    }
+
+    public static void main(String[] args) {
+        char[][] b = {
+            {'A', 'B', 'C', 'E'},
+            {'S', 'F', 'C', 'S'},
+            {'A', 'D', 'E', 'E'},
+        };
+        System.out.println(exist(b, "ABCCED"));
+        System.out.println(partition("aab"));
+    }
+    // Input : board + ABCCED; s = aab
+    // Output: true
+    //         [[a, a, b], [aa, b]]
+}`,
+    },
+  ],
+
+  complexity: {
+    time: "pruned product",
+    space: "O(depth)",
+    derivation: [
+      "<p>Without a prune, N-Queens is at most <code>n!</code>. The diagonal veto removes a " +
+      "large constant; the tree is still super-exponential, which is why interviews stop at " +
+      "n = 9 and contests stop at n = 14 with bitmasks.</p>",
+      "<span class=\"eq\">word search: O(RC &middot; 4<sup>L</sup>) worst case</span>",
+      "<p>Palindrome partition is <code>O(n &middot; 2&#8319;)</code> plus " +
+      "<code>O(n&sup2;)</code> to build <code>isPal</code>. Sudoku is a 9<sup>81</sup> " +
+      "product in theory and a few thousand nodes once row/col/box bitsets veto digits.</p>",
+    ],
+    compare: [
+      ["N-Queens, scan attacks", "O(n!) * O(n)", "O(n)", "Fine for n = 8"],
+      ["N-Queens, bitmasks", "O(n!) pruned", "O(n)", "Same tree, O(1) veto"],
+      ["Sudoku row-major", "huge, pruned", "O(1) extra", "Interview default"],
+      ["Word search", "O(RC 4^L)", "O(L)", "Mark/unmark the cell"],
+      ["Palindrome partition", "O(n 2^n)", "O(n^2) table", "Precompute isPal"],
+    ],
+  },
+
+  pitfalls: [
+    { title: "Checking the constraint only at the leaf",
+      bug: "Fill all n queens, then test the whole board. The tree is n^n, not n!.",
+      fix: "Veto as soon as a queen, digit or letter is placed." },
+    { title: "Forgetting to unmark a cell",
+      bug: "Word search sets <code>board[r][c] = '#'</code> and returns without restoring.",
+      fix: "Restore after the four recursive calls, on every path." },
+    { title: "Shifting diagonals the wrong way",
+      bug: "Illegal placements survive because attacks slide off the wrong side.",
+      fix: "Draw one queen at (0,1) and write the next row's bits by hand. n = 4 (answer 2) is the unit test." },
+    { title: "Substring allocations inside the cut loop",
+      bug: "Calling <code>s.substring</code> before you know the piece is a palindrome.",
+      fix: "Test <code>pal[start][end]</code> first. Only then allocate." },
+    { title: "Sudoku box index off by one",
+      bug: "<code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>.",
+      fix: "Box id is <code>(r / 3) * 3 + (c / 3)</code>. Print it on a solved board once." },
+  ],
+
+  variants: [
+    ["Count solutions only",
+      "Drop the board packing. N-Queens II is the bitmask function on this page.",
+      "return go(...) increment at row==n",
+      "<a href=\"https://leetcode.com/problems/n-queens-ii/\" target=\"_blank\" rel=\"noopener\">LC 52</a>"],
+    ["Word Search II",
+      "Many words. Build a trie and DFS the board once, pruning when the node has no child.",
+      "TrieNode nxt = node.ch[board[r][c]-'a']; if (nxt==null) return;",
+      "<a href=\"https://leetcode.com/problems/word-search-ii/\" target=\"_blank\" rel=\"noopener\">LC 212</a>"],
+    ["Sudoku solver",
+      "Next empty cell, try digits 1-9, veto with row/col/box bitsets, return true on the first complete board.",
+      "int bit = 1 << d; if ((row[r] & bit) != 0) continue;",
+      "<a href=\"https://leetcode.com/problems/sudoku-solver/\" target=\"_blank\" rel=\"noopener\">LC 37</a>"],
+  ],
+
+  followups: [
+    ["Why do the diagonal shifts work?",
+      "<p>A down-right diagonal has constant <code>r - c</code>. Moving to <code>r+1</code> " +
+      "increases the occupied column on that diagonal by 1, which is a left shift if bit 0 " +
+      "is column 0. The other diagonal is constant <code>r + c</code> and slides the other " +
+      "way. Bits that shift off the ends have left the board.</p>"],
+    ["Is word search BFS or DFS?",
+      "<p>DFS with mark/unmark. BFS would need a used-set per path, and there is no " +
+      "shortest-path objective. LC 79 is existence, so backtracking DFS is the default.</p>"],
+    ["When do I switch from backtracking to bitmask DP?",
+      "<p>When you need a count or an optimum over subsets of n &le; 20, and the same " +
+      "subset is reached by many orders. Filling under local constraints with n = 9 " +
+      "(Sudoku) stays backtracking.</p>"],
+    ["Can I prune palindrome partition without the n^2 table?",
+      "<p>Yes: scan the piece at each node. It is correct and slower. The table is the " +
+      "expected interview extra.</p>"],
+  ],
+
+  problemsIntro: "LC 51, LC 37, LC 79 and LC 131 are the four vetoes on this page. The " +
+    "Codeforces problems use the same idea on a grid or a subset mask.",
+
+  problems: [
+    { name: "N-Queens", url: "https://leetcode.com/problems/n-queens/",
+      badge: "lc", tag: "LC 51", level: "Hard", pattern: "Row-by-row + attack veto" },
+    { name: "N-Queens II", url: "https://leetcode.com/problems/n-queens-ii/",
+      badge: "lc", tag: "LC 52", level: "Hard", pattern: "Bitmask count" },
+    { name: "Sudoku Solver", url: "https://leetcode.com/problems/sudoku-solver/",
+      badge: "lc", tag: "LC 37", level: "Hard", pattern: "Next empty + row/col/box bitsets" },
+    { name: "Word Search", url: "https://leetcode.com/problems/word-search/",
+      badge: "lc", tag: "LC 79", level: "Medium", pattern: "DFS mark/unmark" },
+    { name: "Palindrome Partitioning", url: "https://leetcode.com/problems/palindrome-partitioning/",
+      badge: "lc", tag: "LC 131", level: "Medium", pattern: "Cut only when isPal" },
+    { name: "Word Search II", url: "https://leetcode.com/problems/word-search-ii/",
+      badge: "lc", tag: "LC 212", level: "Hard", pattern: "Trie + board DFS" },
+    { name: "Beautiful Arrangement", url: "https://leetcode.com/problems/beautiful-arrangement/",
+      badge: "lc", tag: "LC 526", level: "Medium", pattern: "Permutation with a cheap veto" },
+    { name: "Chessboard and Queens", url: "https://cses.fi/problemset/task/1624",
+      badge: "cf", tag: "CSES", level: "Medium", pattern: "N-Queens with reserved squares" },
+    { name: "Preparing Olympiad", url: "https://codeforces.com/problemset/problem/550/B",
+      badge: "cf", tag: "CF 550B", level: "Easy", pattern: "Bitmask + filter" },
+    { name: "Maze", url: "https://codeforces.com/problemset/problem/377/A",
+      badge: "cf", tag: "CF 377A", level: "Medium", pattern: "DFS empties, turn the last s into walls" },
+    { name: "N-Queen Problem", url: "https://www.geeksforgeeks.org/problems/n-queen-problem0315/1",
+      badge: "gfg", tag: "GfG", level: "Hard", pattern: "Same as LC 51, 1-based columns" },
+    { name: "Rat in a Maze", url: "https://www.geeksforgeeks.org/problems/rat-in-a-maze-problem/1",
+      badge: "gfg", tag: "GfG", level: "Medium", pattern: "Grid DFS, record the path string" },
+  ],
+
+  spoilers: [
+    { summary: "Hint for CF 377A &mdash; Maze",
+      body: "<p>You must leave exactly <code>k</code> empty cells, still connected. DFS the " +
+        "empties from any start; the last <code>s = empties - k</code> cells you finish can " +
+        "become walls. A prefix of the same search stays connected. Do not place walls first.</p>" },
+    { summary: "Hint for LC 212 &mdash; Word Search II",
+      body: "<p>A separate DFS per word dies. Insert every word into a trie. DFS each board " +
+        "cell once, walking the trie; prune when there is no child. Restore the board cell " +
+        "the same way as LC 79.</p>" },
+  ],
+
+  recap: {
+    bullets: [
+      "<strong>Assign, veto, recurse, undo.</strong> The veto is the prune.",
+      "<strong>N-Queens bitmasks:</strong> <code>avail &amp; -avail</code>, then shift the diagonals.",
+      "<strong>Sudoku:</strong> next empty plus row/col/box sets.",
+      "<strong>Word search:</strong> mark, recurse four ways, unmark.",
+      "<strong>Palindrome partition:</strong> precompute <code>isPal</code>, cut only on true.",
+    ],
+    oneliner: "int bit=avail&-avail; avail-=bit; go(row+1, cols|bit, (d1|bit)<<1, (d2|bit)>>1);",
+  },
+})),
+
+/* ============================================== 4. divide-and-conquer === */
+pack(F({
+  id: "divide-and-conquer",
+  difficulty: "Medium",
+  readTime: "26 min",
+  tagline: "Split the input, solve the halves, and spend linear time combining them &mdash; " +
+    "the recipe behind mergesort, inversion counting, majority, and closest pair.",
+  tags: ["divide and conquer", "mergesort", "inversions", "quicksort", "P0"],
+  prereqs: [
+    ["Recursion Fundamentals", "recursion-fundamentals.html"],
+    ["Recurrences &amp; Master Theorem", "../00-foundations/recurrences-and-master-theorem.html"],
+  ],
+
+  why: {
+    paras: [
+      "Divide and conquer is the reason <code>O(n log n)</code> exists as a default target. " +
+      "Split the array in half, recurse, merge the two sorted runs in linear time. The tree " +
+      "has <code>log n</code> levels and each level touches every element once, so the total " +
+      "is <code>n log n</code>. That accounting is case 2 of " +
+      "<a href=\"../00-foundations/recurrences-and-master-theorem.html\">the master theorem</a>.",
+      "The same split produces inversion counts (a merge that also counts split pairs), " +
+      "majority without Boyer-Moore, and the <code>O(n log n)</code> closest-pair algorithm. " +
+      "Quicksort is the same idea with an uneven, data-dependent split and a free combine " +
+      "&mdash; which is why its worst case is quadratic and its expected case is " +
+      "<code>n log n</code>.",
+      "The skill is the <strong>combine</strong>. The recursive calls are boilerplate. The " +
+      "interview is: what must each half return so the cross terms can be counted in linear time?",
+    ],
+    insight: "If the cross-half contribution can be computed in linear time after the halves " +
+      "are sorted, the whole algorithm is <code>O(n log n)</code>.",
+  },
+
+  recognise: {
+    yes: [
+      "\"Count inversions / reverse pairs / smaller elements to the right\"",
+      "A naive double loop that compares <code>i &lt; j</code> with <code>a[i] ? a[j]</code>",
+      "Implement mergesort or quicksort",
+      "Majority element when they want a recursive argument rather than Boyer-Moore",
+      "Closest pair of points, or any geometric pair that splits on x",
+    ],
+    no: [
+      "The combine is quadratic and you cannot sort the halves first &rarr; " +
+        "<code>T(n) = 2T(n/2) + n&sup2; = &Theta;(n&sup2;)</code>, no win",
+      "You need an online answer after each insert &rarr; Fenwick or a balanced tree",
+      "The split is unbalanced and you cannot randomise &rarr; worst-case quadratic quicksort",
+      "n &le; 40 subset-style counting &rarr; " +
+        "<a href=\"meet-in-the-middle.html\">meet in the middle</a>",
+    ],
+    table: [
+      ["\"sort the array\"", "Two sorted halves + linear merge", "Mergesort"],
+      ["\"count inversions\"", "Split pairs are leftover-left on a right-take", "Mergesort + counter"],
+      ["\"reverse pairs\" a[i] > 2*a[j]", "Two-pointer count before the merge", "LC 493"],
+      ["\"majority element\"", "Majority of a half, then combine counts", "D&C majority"],
+      ["\"k-th smallest\"", "Partition, recurse on one side", "Quickselect"],
+      ["\"closest pair of points\"", "Split on x, then a strip combine", "O(n log n) geometry"],
+      ["\"maximum subarray\"", "Best left, best right, best crossing", "O(n log n) Kadane cousin"],
+      ["<strong>Confused with:</strong> binary search on the answer",
+        "That divides the value range, not the array",
+        "<a href=\"../01-arrays-and-windows/binary-search-on-answer.html\">BS on answer</a>"],
+    ],
+    constraint: "<code>n &le; 10&#8309;</code> plus a pair-counting condition is the " +
+      "signature for mergesort-with-a-counter. Shuffle before a hand-rolled quicksort " +
+      "partition; contests will feed you the adversarial permutation.",
+  },
+
+  core: {
+    heading: "Core idea: the combine pays for the split",
+    paras: [
+      "Mergesort: sort <code>a[lo..mid)</code> and <code>a[mid..hi)</code>, then merge into " +
+      "a buffer. Two pointers walk two sorted runs; each step emits the smaller head. " +
+      "Stability comes from preferring the left head on a tie.",
+      "Inversions: a pair (i, j) with i &lt; j and a[i] &gt; a[j] is both-left, both-right, " +
+      "or split. The first two come from the recursive calls. A split inversion is counted " +
+      "when the merge takes a head from the right: every unused left element is greater and " +
+      "to the left, so add <code>leftRemaining</code>.",
+      "Quicksort partitions around a pivot and recurses on both sides; combine is free. " +
+      "Random pivot makes the expected cost n log n. Majority-by-D&C: the majority of n " +
+      "votes, if it exists, is the majority of at least one half; count the two candidates " +
+      "in a linear pass to decide.",
+    ],
+    invariantTitle: "The interview sentence",
+    invariant: "<p>After both halves are solved, every pair inside one half is already " +
+      "counted. The combine exists only to handle pairs that <em>cross the midpoint</em>, " +
+      "and it must do that in linear time.</p>",
+    extra: [
+      { kind: "math", title: "The recurrence you quote",
+        html: "<p><code>T(n) = 2T(n/2) + &Theta;(n) = &Theta;(n log n)</code>. Closest pair " +
+          "is the same class: the strip has a constant number of candidate neighbours per " +
+          "point (the 7-neighbour argument), so the combine stays linear.</p>" },
+      { kind: "warn", title: "mid = lo + (hi - lo) / 2",
+        html: "<p>Left half is <code>[lo, mid)</code>, right is <code>[mid, hi)</code>, stop " +
+          "when <code>hi - lo &le; 1</code>. Inclusive bounds plus <code>mid</code> in both " +
+          "calls is the classic infinite-recursion bug.</p>" },
+      { kind: "tip", title: "Boyer-Moore vs D&C majority",
+        html: "<p>Boyer-Moore is O(n) / O(1) and is what you ship. The D&C version is the " +
+          "proof. Know both; do not confuse them.</p>" },
+    ],
+  },
+
+  visuals: [
+    {
+      kind: "array", vizId: "msMerge",
+      h3: "Merge step, and the inversion counter",
+      intro: "Left run <code>[2, 5, 8]</code>, right run <code>[1, 3, 9]</code>. Taking a " +
+        "right head while left still has leftovers is a batch of split inversions.",
+      caption: "Three right-takes while left is non-empty add 3, 2 and 0. Those five " +
+        "inversions are the split pairs. In-half inversions were already counted below.",
+      data: {
+        label: "two sorted runs",
+        array: [2, 5, 8, 1, 3, 9],
+        indexLabels: ["L", "L", "L", "R", "R", "R"],
+        vars: ["take", "inv add", "inv total"],
+        speed: 950,
+        frames: [
+          { note: "Both runs sorted. Heads are 2 and 1. 1 is smaller, so take right.",
+            active: [0, 3], dim: [1, 2, 4, 5],
+            values: { take: "1 from R", "inv add": 3, "inv total": 3 } },
+          { note: "Taking 1 while [2,5,8] remain on the left adds 3 inversions.",
+            active: [3], x: [], dim: [1, 2, 4, 5],
+            values: { take: "1", "inv add": 3, "inv total": 3 } },
+          { note: "Now 2 vs 3. Take 2 from the left. Left-takes add zero inversions.",
+            active: [0, 4], best: [3], dim: [1, 2, 5],
+            values: { take: "2 from L", "inv add": 0, "inv total": 3 } },
+          { note: "5 vs 3. Take 3 from the right. Two left leftovers: add 2.",
+            active: [1, 4], best: [0, 3], dim: [2, 5],
+            values: { take: "3 from R", "inv add": 2, "inv total": 5 } },
+          { note: "5 vs 9. Take 5, then 8, then 9. No more right-takes with leftovers.",
+            active: [1, 5], best: [0, 3, 4], dim: [2],
+            values: { take: "5 from L", "inv add": 0, "inv total": 5 } },
+          { note: "Flush 8 then 9. Merged array is [1,2,3,5,8,9]. Split inversions = 5.",
+            best: [0, 1, 2, 3, 4, 5],
+            values: { take: "flush", "inv add": 0, "inv total": 5 } },
+          { note: "Drop the counter and this is ordinary mergesort. Closest-pair's strip walk is the geometric analogue of this linear combine.",
+            done: [0, 1, 2, 3, 4, 5],
+            values: { take: "done", "inv add": "\u2014", "inv total": 5 } },
+        ],
+      },
+    },
+    {
+      kind: "mermaid", vizId: "dcTree",
+      h3: "The three inversion buckets",
+      caption: "Every inversion lives in exactly one bucket. Recursive calls return the " +
+        "in-half counts; the merge returns the split count.",
+      src: `flowchart TD
+  root["count all inversions"] --> leftHalf["in-left inversions"]
+  root --> rightHalf["in-right inversions"]
+  root --> mergeStep["merge: split inversions only"]
+  leftHalf --> L1["recurse"]
+  leftHalf --> L2["recurse"]
+  rightHalf --> R1["recurse"]
+  rightHalf --> R2["recurse"]
+  mergeStep --> rule["each right-take adds leftover left length"]`,
+    },
+  ],
+
+  steps: [
+    "<strong>Write the base case:</strong> a run of length 0 or 1 is sorted and has 0 inversions.",
+    "<strong>Split at mid = lo + (hi-lo)/2</strong> with half-open ranges.",
+    "<strong>Recurse on both halves</strong> and keep their returned counts.",
+    "<strong>Combine in linear time.</strong> For inversions: merge and add <code>mid - i</code> " +
+      "on every right take.",
+    "<strong>Copy the buffer back</strong> into <code>a[lo..hi)</code>.",
+    "<strong>For quicksort:</strong> partition, recurse both sides. Shuffle or pick a random pivot.",
+    "<strong>For majority:</strong> recurse both halves, then count the two candidates in one pass.",
+    "<strong>Quote T(n) = 2T(n/2) + O(n)</strong> and name the combine.",
+  ],
+
+  dryRun: {
+    intro: "Inversion count on <code>[2, 5, 8, 1, 3, 9]</code>. Halves are already sorted, " +
+      "so they return 0. Only the root merge is expanded.",
+    cols: ["take", "left leftover", "add", "emitted", "inv"],
+    rows: [
+      { cells: ["1 (R)", "2,5,8", "3", "[1]", "3"],
+        action: "First right-take.", change: true },
+      { cells: ["2 (L)", "5,8", "0", "[1,2]", "3"],
+        action: "Left-take, no add." },
+      { cells: ["3 (R)", "5,8", "2", "[1,2,3]", "5"],
+        action: "Second right-take.", change: true },
+      { cells: ["5 (L)", "8", "0", "[1,2,3,5]", "5"],
+        action: "Left-take." },
+      { cells: ["8 (L)", "none", "0", "[1,2,3,5,8]", "5"],
+        action: "Left-take." },
+      { cells: ["9 (R)", "none", "0", "[1,2,3,5,8,9]", "5"],
+        action: "Right-take with empty left adds 0." },
+      { cells: ["done", "\u2014", "\u2014", "sorted", "5"],
+        action: "Plus 0 from each half = 5 inversions." },
+    ],
+  },
+
+  code: [
+    { tab: "Brute", panel: "Double loop", file: "InversionsBrute.java",
+      intro: "The O(n^2) oracle.",
+      code: `public class InversionsBrute {
+
+    static long count(int[] a) {
+        long inv = 0;
+        for (int i = 0; i < a.length; i++) {
+            for (int j = i + 1; j < a.length; j++) {
+                if (a[i] > a[j]) {
+                    inv++;
+                }
+            }
+        }
+        return inv;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(count(new int[] {2, 5, 8, 1, 3, 9}));
+    }
+    // Input : [2, 5, 8, 1, 3, 9]
+    // Output: 5
+}`,
+    },
+    { tab: "Optimal", panel: "Mergesort + inversions", file: "InversionsMerge.java",
+      intro: "Left leftover on a right-take is the split count. Use <code>long</code>: " +
+        "n = 1e5 can produce ~5e9 inversions.",
+      highlight: "18-21",
+      code: `public class InversionsMerge {
+
+    static long sortCount(int[] a) {
+        return go(a, new int[a.length], 0, a.length);
+    }
+
+    static long go(int[] a, int[] buf, int lo, int hi) {
+        if (hi - lo <= 1) {
+            return 0;
+        }
+        int mid = lo + (hi - lo) / 2;
+        long inv = go(a, buf, lo, mid) + go(a, buf, mid, hi);
+        int i = lo, j = mid, k = lo;
+        while (i < mid && j < hi) {
+            if (a[j] < a[i]) {
+                buf[k++] = a[j++];
+                inv += mid - i;
+            } else {
+                buf[k++] = a[i++];
+            }
+        }
+        while (i < mid) {
+            buf[k++] = a[i++];
+        }
+        while (j < hi) {
+            buf[k++] = a[j++];
+        }
+        System.arraycopy(buf, lo, a, lo, hi - lo);
+        return inv;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(sortCount(new int[] {2, 5, 8, 1, 3, 9}));
+    }
+    // Input : [2, 5, 8, 1, 3, 9]
+    // Output: 5
+}`,
+    },
+    { tab: "Template", panel: "Quicksort + majority", file: "DivideConquerTemplate.java",
+      intro: "Two other combines: a no-op after partition, and a linear recount of two " +
+        "majority candidates.",
+      highlight: "8-12,36-46",
+      code: `import java.util.Random;
+
+public class DivideConquerTemplate {
+
+    static final Random RND = new Random(1);
+
+    static void quicksort(int[] a, int lo, int hi) {
+        if (hi - lo <= 1) {
+            return;
+        }
+        int p = partition(a, lo, hi);
+        quicksort(a, lo, p);
+        quicksort(a, p + 1, hi);
+    }
+
+    static int partition(int[] a, int lo, int hi) {
+        int pivotAt = lo + RND.nextInt(hi - lo);
+        swap(a, pivotAt, hi - 1);
+        int pivot = a[hi - 1];
+        int store = lo;
+        for (int i = lo; i < hi - 1; i++) {
+            if (a[i] < pivot) {
+                swap(a, store++, i);
+            }
+        }
+        swap(a, store, hi - 1);
+        return store;
+    }
+
+    static void swap(int[] a, int i, int j) {
+        int t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+    }
+
+    static int majority(int[] a, int lo, int hi) {
+        if (hi - lo == 1) {
+            return a[lo];
+        }
+        int mid = lo + (hi - lo) / 2;
+        int left = majority(a, lo, mid);
+        int right = majority(a, mid, hi);
+        if (left == right) {
+            return left;
+        }
+        return count(a, lo, hi, left) >= count(a, lo, hi, right) ? left : right;
+    }
+
+    static int count(int[] a, int lo, int hi, int v) {
+        int c = 0;
+        for (int i = lo; i < hi; i++) {
+            if (a[i] == v) {
+                c++;
+            }
+        }
+        return c;
+    }
+
+    public static void main(String[] args) {
+        int[] a = {2, 5, 8, 1, 3, 9};
+        quicksort(a, 0, a.length);
+        System.out.println(java.util.Arrays.toString(a));
+        System.out.println(majority(new int[] {2, 2, 1, 2, 3}, 0, 5));
+    }
+    // Input : [2,5,8,1,3,9] and [2,2,1,2,3]
+    // Output: [1, 2, 3, 5, 8, 9]
+    //         2
+}`,
+    },
+  ],
+
+  complexity: {
+    time: "O(n log n)",
+    space: "O(n) mergesort / O(log n) quicksort expected",
+    derivation: [
+      "<p>Mergesort and inversion count share the same recurrence.</p>",
+      "<span class=\"eq\">T(n) = 2T(n/2) + &Theta;(n) = &Theta;(n log n)</span>",
+      "<p>Quicksort expected: a random pivot produces a uniform split and expected depth " +
+      "<code>O(log n)</code>. Worst case: <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>.</p>",
+      "<p>D&amp;C majority is <code>O(n log n)</code>, strictly worse than Boyer-Moore.</p>",
+    ],
+    compare: [
+      ["Double loop inversions", "O(n^2)", "O(1)", "Oracle / n <= 4000"],
+      ["Mergesort + count", "O(n log n)", "O(n)", "The default"],
+      ["Fenwick on ranks", "O(n log n)", "O(n)", "Online / streaming variant"],
+      ["Quicksort, random pivot", "O(n log n) expected", "O(log n)", "In-place; worst n^2"],
+      ["Boyer-Moore majority", "O(n)", "O(1)", "What you ship"],
+      ["D&C majority", "O(n log n)", "O(log n)", "The proof version"],
+    ],
+  },
+
+  pitfalls: [
+    { title: "Inclusive bounds that recurse forever",
+      bug: "<code>go(lo, mid)</code> and <code>go(mid, hi)</code> with both ends inclusive " +
+        "and <code>mid == lo</code> on a two-element run.",
+      fix: "Half-open <code>[lo, hi)</code>, base <code>hi - lo &le; 1</code>." },
+    { title: "Counting inversions with an int",
+      bug: "n = 1e5 reverse-sorted produces ~5e9 inversions. A signed 32-bit counter wraps.",
+      fix: "<code>long inv</code>. Same for reverse-pairs." },
+    { title: "Adding leftover on a left-take",
+      bug: "You add <code>hi - j</code> when taking from the left, which counts non-inversions.",
+      fix: "Add when the right head loses the comparison." },
+    { title: "Unstable merge",
+      bug: "On a tie, taking the right head. Interviews ask for stability.",
+      fix: "<code>if (a[j] &lt; a[i])</code> take right; on equal, take left." },
+    { title: "Quicksort without shuffling",
+      bug: "Pivot = first element on a sorted array. Quadratic, plus a stack overflow.",
+      fix: "Swap a random index into the pivot slot." },
+  ],
+
+  variants: [
+    ["Reverse pairs (a[i] > 2*a[j])",
+      "Two-pointer count before merging. Need longs: 2*a[j] overflows int.",
+      "while (j < hi && (long) a[i] > 2L * a[j]) j++; inv += j - mid;",
+      "<a href=\"https://leetcode.com/problems/reverse-pairs/\" target=\"_blank\" rel=\"noopener\">LC 493</a>"],
+    ["Count of smaller numbers after self",
+      "Mergesort on (value, index). When a right value is taken it is smaller than every " +
+      "leftover left index.",
+      "ans[leftIndex] += rightTakenSoFar;",
+      "<a href=\"https://leetcode.com/problems/count-of-smaller-numbers-after-self/\" target=\"_blank\" rel=\"noopener\">LC 315</a>"],
+    ["Closest pair of points",
+      "Sort by x, recurse, d = min(left, right). Strip of points with |x-midX| less than d, " +
+      "already sorted by y; check a constant number of neighbours.",
+      "for i: for j=i+1; j<n && yj-yi < d; j++ update d",
+      "The 7-neighbour lemma keeps the inner loop O(1) amortised"],
+  ],
+
+  followups: [
+    ["Why is the closest-pair strip linear, not quadratic?",
+      "<p>Points closer than d cannot pack tightly in the strip. Walking the y-sorted strip " +
+      "and looking a constant number of steps ahead is enough. That constant is why the " +
+      "combine stays linear.</p>"],
+    ["Mergesort or Fenwick for inversions?",
+      "<p>Same complexity. Mergesort is self-contained. Fenwick on compressed ranks also " +
+      "does online queries. If the problem is only inversions, merge.</p>"],
+    ["Is Java's Arrays.sort a mergesort?",
+      "<p>Primitives: Dual-Pivot Quicksort. Objects: TimSort. Write inversion count yourself.</p>"],
+    ["How do I explain majority D&C in thirty seconds?",
+      "<p>If a value owns more than half the range, it owns more than half of at least one " +
+      "half. The only two candidates are the majorities of the two halves. Count both and " +
+      "pick the winner.</p>"],
+  ],
+
+  problemsIntro: "Implement mergesort once; inversion count is a five-line edit. LC 315 and " +
+    "LC 493 are the same edit with a different inequality.",
+
+  problems: [
+    { name: "Sort an Array", url: "https://leetcode.com/problems/sort-an-array/",
+      badge: "lc", tag: "LC 912", level: "Medium", pattern: "Implement mergesort or heapsort" },
+    { name: "Count Inversions", url: "https://www.geeksforgeeks.org/problems/inversion-of-array-1587115620/1",
+      badge: "gfg", tag: "GfG", level: "Medium", pattern: "The merge counter, use long" },
+    { name: "INVCNT", url: "https://www.spoj.com/problems/INVCNT/",
+      badge: "gfg", tag: "SPOJ", level: "Medium", pattern: "Same, large n, many tests" },
+    { name: "Count of Smaller Numbers After Self",
+      url: "https://leetcode.com/problems/count-of-smaller-numbers-after-self/",
+      badge: "lc", tag: "LC 315", level: "Hard", pattern: "Mergesort on (value, index)" },
+    { name: "Reverse Pairs", url: "https://leetcode.com/problems/reverse-pairs/",
+      badge: "lc", tag: "LC 493", level: "Hard", pattern: "Count a[i] > 2*a[j] during merge" },
+    { name: "Majority Element", url: "https://leetcode.com/problems/majority-element/",
+      badge: "lc", tag: "LC 169", level: "Easy", pattern: "Boyer-Moore; also write the D&C version" },
+    { name: "Maximum Subarray", url: "https://leetcode.com/problems/maximum-subarray/",
+      badge: "lc", tag: "LC 53", level: "Medium", pattern: "Crossing-sum D&C, then Kadane" },
+    { name: "Beautiful Array", url: "https://leetcode.com/problems/beautiful-array/",
+      badge: "lc", tag: "LC 932", level: "Medium", pattern: "Odd/even split construction" },
+    { name: "Enemy is Weak", url: "https://codeforces.com/problemset/problem/61/E",
+      badge: "cf", tag: "CF 61E", level: "Hard", pattern: "Two-layer inversion / Fenwick" },
+    { name: "Pashmak and Parmida's problem", url: "https://codeforces.com/problemset/problem/459/D",
+      badge: "cf", tag: "CF 459D", level: "Medium", pattern: "Prefix/suffix frequency pairs" },
+  ],
+
+  spoilers: [
+    { summary: "Hint for LC 315 &mdash; smaller after self",
+      body: "<p>Mergesort pairs <code>(a[i], i)</code> by value. When the merge takes a " +
+        "right value, it is smaller than every leftover left element and originally sat to " +
+        "its right. Increment those left indices. Same tree as inversions, answers hang off " +
+        "the original indices.</p>" },
+    { summary: "Hint for CF 61E &mdash; Enemy is Weak",
+      body: "<p>A triple i &lt; j &lt; k with a[i] &gt; a[j] &gt; a[k] is a length-3 inversion. " +
+        "For each j, multiply (greater to the left) by (smaller to the right). Two Fenwick " +
+        "trees on compressed ranks. Use 64-bit answers.</p>" },
+  ],
+
+  recap: {
+    bullets: [
+      "<strong>T(n) = 2T(n/2) + O(n)</strong> once the cross terms are linear.",
+      "<strong>Inversions:</strong> add leftover-left on every right-take.",
+      "<strong>Use long</strong> for any n^2-style counter.",
+      "<strong>Quicksort:</strong> randomise the pivot; worst case is n^2.",
+      "<strong>Majority D&C</strong> is the proof; Boyer-Moore is the algorithm.",
+    ],
+    oneliner: "if (a[j] < a[i]) { buf[k++]=a[j++]; inv += mid-i; } else buf[k++]=a[i++];",
+  },
+})),
+
+/* ============================================== 5. meet-in-the-middle === */
+pack(F({
+  id: "meet-in-the-middle",
+  difficulty: "Hard",
+  readTime: "24 min",
+  tagline: "When n is 40, 2^n is dead and n/2 is 20: enumerate both halves, then match in " +
+    "the middle with a sort and a binary search.",
+  tags: ["meet in the middle", "subset sum", "4-sum", "P2"],
+  prereqs: [
+    ["Subsets, Permutations, Combinations", "subsets-permutations-combinations.html"],
+    ["Binary Search Basics", "../01-arrays-and-windows/binary-search-basics.html"],
+  ],
+
+  why: {
+    paras: [
+      "Subset sum on n = 40 is the poster child. <code>2<sup>40</sup></code> is a trillion. " +
+      "<code>2<sup>20</sup></code> is a million. Split the array, enumerate every subset sum " +
+      "of each half, and ask whether a left sum plus a right sum hits the target. The ask is " +
+      "a sort plus a binary search, which is how 2<sup>n/2</sup> becomes the running time.",
+      "The same split turns 4-sum into two 2-sums: all pairwise sums of the first half of " +
+      "the variables versus all pairwise sums of the second. It also solves closest " +
+      "subsequence sum (LC 1755) and the Codeforces problems whose constraint line is " +
+      "n &le; 40.",
+      "Meet-in-the-middle is not a clever search. It is the observation that a Cartesian " +
+      "product A &times; B can be enumerated from both sides when each factor is about the " +
+      "square root of a product you cannot afford.",
+    ],
+    insight: "2<sup>n</sup> = 2<sup>n/2</sup> &times; 2<sup>n/2</sup>. Enumerate each factor, " +
+      "then join. The join, not the enumeration, is where the bugs live.",
+  },
+
+  recognise: {
+    yes: [
+      "<code>n &le; 40</code> (or 36, 42) and a subset / assignment whose naive cost is 2^n",
+      "4-sum over four independent arrays when n^3 is too slow and n^2 is fine",
+      "\"Closest subsequence sum to a target\" with n &le; 40",
+      "Two independent choices (left path / right path) that combine with XOR or addition",
+      "The statement offers n &le; 20 as a special case and n &le; 40 as the full constraint",
+    ],
+    no: [
+      "n &le; 20 &rarr; plain bitmask; MITM is extra code for no gain",
+      "n &le; 80 with small sums &rarr; knapsack DP on the value",
+      "You need the subset reconstructed and have not planned how to store the witness",
+      "The combine is not a group operation and you cannot sort either half",
+    ],
+    table: [
+      ["subset sum, n <= 40", "Split, 2^{n/2} sums each side", "sort one side, lower_bound target-y"],
+      ["closest subsequence sum", "Same, keep the closest rather than exact", "LC 1755"],
+      ["4-sum of four arrays", "All a[i]+b[j] vs all c[k]+d[l]", "hash map or sort + two pointers"],
+      ["XOR path meeting in the middle of a grid", "Walk each half, join on the middle column", "CF 1006F"],
+      ["assign each item to 3 groups, n=20", "3^{n/2} per half", "still MITM, larger alphabet"],
+      ["count subsets with sum in [L,R]", "sorted left, two binary searches per right sum", "prefix counts"],
+      ["n = 20, exact sum", "Do not split", "plain bitmask"],
+      ["<strong>Confused with:</strong> divide and conquer",
+        "D&C recurses; MITM enumerates both halves fully and joins once",
+        "No recurrence, just 2 * 2^{n/2} plus a join"],
+    ],
+    constraint: "n &le; 40 with a subset-sum flavour is the tell. 2<sup>20</sup> &asymp; 1e6, " +
+      "times a log, fits in a second. 2<sup>25</sup> is the edge; 2<sup>30</sup> is a memory " +
+      "problem (an <code>int[]</code> of length 2<sup>30</sup> is 4&nbsp;GB).",
+  },
+
+  core: {
+    heading: "Core idea: enumerate halves, then join",
+    paras: [
+      "Split <code>a[0..n)</code> into <code>L = a[0..n/2)</code> and " +
+      "<code>R = a[n/2..n)</code>. Enumerate every subset sum of L with a bitmask loop, " +
+      "same for R. Sort the left sums. For each right sum <code>y</code>, binary-search " +
+      "<code>target - y</code> (exact) or the closest values (closest-sum).",
+      "4-sum over four arrays is the same picture with pairwise sums in place of subset " +
+      "sums. 4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool " +
+      "when you have four <em>independent</em> arrays of size n &asymp; 400.",
+      "Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB. " +
+      "Store witnesses only when the problem asks for the subset.",
+    ],
+    invariantTitle: "The interview sentence",
+    invariant: "<p>Every subset of the whole array is a subset of the left half plus a " +
+      "subset of the right half, including the two empty ones. Enumerate both families and " +
+      "join a pair of sums in log time, and you have enumerated 2^n subsets in " +
+      "2^{n/2} log time.</p>",
+    extra: [
+      { kind: "tip", title: "Two pointers for a range join",
+        html: "<p>Sorted left sums, walk right sums, maintain a window of left values in " +
+          "<code>[L - y, R - y]</code>. Total join is linear after the sort. Use this when " +
+          "you count subsets with sum in a range.</p>" },
+      { kind: "warn", title: "Empty subsets are real",
+        html: "<p>Mask 0 is sum 0 on each half. Forgetting it drops \"the target lives " +
+          "entirely in one half\" and the empty-empty case for target 0. Start the bitmask " +
+          "loop at 0, not 1.</p>" },
+      { kind: "math", title: "Why not three-way split?",
+        html: "<p>A 3-way split is 3 &times; 2^{n/3} plus a harder join. Two-way is the " +
+          "default; three-way shows up when 2^{n/2} does not fit and the join can be hashed.</p>" },
+    ],
+  },
+
+  visuals: [
+    {
+      kind: "array", vizId: "mitmJoin",
+      h3: "Subset sum n = 6, target 10, split 3 + 3",
+      intro: "<code>a = [2, 4, 5, 1, 3, 7]</code>. Left sums of <code>[2,4,5]</code>, right " +
+        "sums of <code>[1,3,7]</code>. Each right value asks for <code>10 - y</code> in the " +
+        "sorted left array.",
+      caption: "Eight left sums, eight right sums. After sorting the left, each right value " +
+        "is one binary search. Hits include empty-left + {3,7}, which is why 0 stays in the array.",
+      data: {
+        label: "left subset sums, sorted",
+        array: [0, 2, 4, 5, 6, 7, 9, 11],
+        vars: ["y right", "need", "found"],
+        speed: 950,
+        frames: [
+          { note: "Left sums of {2,4,5} already sorted. Right starts at y = 0 (empty). Need 10: miss.",
+            dim: [0, 1, 2, 3, 4, 5, 6, 7],
+            values: { "y right": 0, need: 10, found: "no" } },
+          { note: "y = 1 (right {1}), need 9. 9 is in the left array (4+5).",
+            active: [6], values: { "y right": 1, need: 9, found: "yes {4,5,1}" } },
+          { note: "Hit. Existence could return true here. We continue to see the join.",
+            best: [6], values: { "y right": 1, need: 9, found: "yes" } },
+          { note: "y = 3, need 7. 7 is in left (2+5).",
+            active: [5], values: { "y right": 3, need: 7, found: "yes {2,5,3}" } },
+          { note: "y = 7, need 3. 3 is not a left sum. Miss.",
+            x: [0, 1, 2, 3, 4, 5, 6, 7],
+            values: { "y right": 7, need: 3, found: "no" } },
+          { note: "y = 11 (all of the right), need -1. Impossible.",
+            dim: [0, 1, 2, 3, 4, 5, 6, 7],
+            values: { "y right": 11, need: -1, found: "no" } },
+          { note: "y = 10 ({3,7}), need 0. 0 is the empty left subset. This is why mask 0 must stay.",
+            best: [0], values: { "y right": 10, need: 0, found: "yes {3,7}" } },
+          { note: "Existence is true. A count would tally every (x,y) with x+y=10. Closest-sum would track min |x+y-target| instead.",
+            done: [0, 1, 2, 3, 4, 5, 6, 7],
+            values: { "y right": "all 8", need: "\u2014", found: "several hits" } },
+        ],
+      },
+    },
+    {
+      kind: "mermaid", vizId: "mitmFlow",
+      h3: "The split-enumerate-join pipeline",
+      caption: "Two bitmask loops, one sort, then a join. Nothing here is recursive. That " +
+        "is the difference from divide and conquer.",
+      src: `flowchart TD
+  splitA["split a into L and R of size n/2"] --> enumL["bitmask all subset sums of L"]
+  splitA --> enumR["bitmask all subset sums of R"]
+  enumL --> sortL["sort left sums"]
+  enumR --> joinQ{"what is asked?"}
+  sortL --> joinQ
+  joinQ -- "exists target" --> bsearch["for each y, binary search target-y"]
+  joinQ -- "closest" --> close["for each y, find closest to target-y"]
+  joinQ -- "count in a range" --> twoPtr["two pointers or two lower_bounds per y"]
+  joinQ -- "4-sum of four arrays" --> pairs["same join, but the sums are pairwise"]`,
+    },
+  ],
+
+  steps: [
+    "<strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible.",
+    "<strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine.",
+    "<strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0. Use " +
+      "<code>long</code> for sums.",
+    "<strong>Sort one side</strong>, usually the left sums.",
+    "<strong>Join.</strong> For each right sum y, search <code>target - y</code>.",
+    "<strong>Keep the empty-empty case.</strong> Target 0 is true because of it.",
+    "<strong>If you need the subset</strong>, store the mask next to the sum, or re-enumerate " +
+      "the winning half.",
+    "<strong>Mind memory:</strong> 2^{n/2} longs plus a sort. Boxed HashMap keys are optional " +
+      "only at n &le; 36.",
+  ],
+
+  dryRun: {
+    intro: "Existence of subset sum 10 on <code>[2, 4, 5, 1, 3, 7]</code>. Each row is one " +
+      "right-hand mask against sorted left sums <code>[0, 2, 4, 5, 6, 7, 9, 11]</code>.",
+    cols: ["right mask", "y", "need 10-y", "in left?", "subset"],
+    rows: [
+      { cells: ["000", "0", "10", "no", "\u2014"],
+        action: "Empty right." },
+      { cells: ["001", "1", "9", "yes", "{4,5} + {1}"],
+        action: "First hit.", change: true },
+      { cells: ["010", "3", "7", "yes", "{2,5} + {3}"],
+        action: "Second hit." },
+      { cells: ["100", "7", "3", "no", "\u2014"],
+        action: "3 is not a left sum." },
+      { cells: ["011", "4", "6", "yes", "{2,4} + {1,3}"],
+        action: "6 = 2+4." },
+      { cells: ["101", "8", "2", "yes", "{2} + {1,7}"],
+        action: "Hit." },
+      { cells: ["110", "10", "0", "yes", "{} + {3,7}"],
+        action: "Empty left. This is why 0 stays in the array.", change: true },
+      { cells: ["111", "11", "-1", "no", "\u2014"],
+        action: "Need negative; skip." },
+    ],
+    after: "<p>Four distinct subsets hit 10. Existence would have returned true on the " +
+      "second row.</p>",
+  },
+
+  code: [
+    { tab: "Brute", panel: "Full 2^n", file: "MitmBrute.java",
+      intro: "The oracle. Correct, and the reason n = 40 is impossible.",
+      code: `public class MitmBrute {
+
+    static boolean subsetSum(int[] a, long target) {
+        int n = a.length;
+        for (int m = 0; m < (1 << n); m++) {
+            long s = 0;
+            for (int i = 0; i < n; i++) {
+                if ((m & (1 << i)) != 0) {
+                    s += a[i];
+                }
+            }
+            if (s == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+    }
+    // Input : [2, 4, 5, 1, 3, 7], target 10
+    // Output: true
+}`,
+    },
+    { tab: "Optimal", panel: "Meet in the middle", file: "MitmOptimal.java",
+      intro: "Enumerate halves, sort the left, binary-search each complement. " +
+        "<code>Arrays.binarySearch</code> returns a non-negative index on a hit.",
+      highlight: "22-28",
+      code: `import java.util.Arrays;
+
+public class MitmOptimal {
+
+    static boolean subsetSum(int[] a, long target) {
+        int n = a.length;
+        int mid = n / 2;
+        long[] left = enumSums(a, 0, mid);
+        long[] right = enumSums(a, mid, n);
+        Arrays.sort(left);
+        for (long y : right) {
+            if (Arrays.binarySearch(left, target - y) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static long[] enumSums(int[] a, int from, int to) {
+        int m = to - from;
+        long[] sums = new long[1 << m];
+        for (int mask = 0; mask < (1 << m); mask++) {
+            long s = 0;
+            for (int i = 0; i < m; i++) {
+                if ((mask & (1 << i)) != 0) {
+                    s += a[from + i];
+                }
+            }
+            sums[mask] = s;
+        }
+        return sums;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+        System.out.println(subsetSum(new int[] {2, 4, 5, 1, 3, 7}, 8));
+    }
+    // Input : [2,4,5,1,3,7] targets 10 and 8
+    // Output: true
+    //         true
+}`,
+    },
+    { tab: "Template", panel: "Closest + 4-sum halves", file: "MitmTemplate.java",
+      intro: "Closest subsequence sum, and 4-sum over four arrays via pairwise halves.",
+      highlight: "14-24,40-52",
+      code: `import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+public class MitmTemplate {
+
+    static int closestSum(int[] a, int target) {
+        int n = a.length, mid = n / 2;
+        long[] left = enumSums(a, 0, mid);
+        long[] right = enumSums(a, mid, n);
+        Arrays.sort(left);
+        long best = Long.MAX_VALUE / 4;
+        int ans = 0;
+        for (long y : right) {
+            int i = lowerBound(left, target - y);
+            for (int k = i - 1; k <= i; k++) {
+                if (k < 0 || k >= left.length) {
+                    continue;
+                }
+                long s = left[k] + y;
+                long d = Math.abs(s - target);
+                if (d < best) {
+                    best = d;
+                    ans = (int) s;
+                }
+            }
+        }
+        return ans;
+    }
+
+    static int lowerBound(long[] a, long x) {
+        int lo = 0, hi = a.length;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            if (a[mid] < x) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
+    static long[] enumSums(int[] a, int from, int to) {
+        int m = to - from;
+        long[] sums = new long[1 << m];
+        for (int mask = 0; mask < (1 << m); mask++) {
+            long s = 0;
+            for (int i = 0; i < m; i++) {
+                if ((mask & (1 << i)) != 0) {
+                    s += a[from + i];
+                }
+            }
+            sums[mask] = s;
+        }
+        return sums;
+    }
+
+    /** Four independent arrays: exists a+b+c+d == target? */
+    static boolean fourSumHalves(int[] A, int[] B, int[] C, int[] D, int target) {
+        Map<Integer, Integer> left = new HashMap<>();
+        for (int a : A) {
+            for (int b : B) {
+                left.merge(a + b, 1, Integer::sum);
+            }
+        }
+        for (int c : C) {
+            for (int d : D) {
+                if (left.containsKey(target - c - d)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(closestSum(new int[] {2, 4, 5, 1, 3, 7}, 10));
+        System.out.println(fourSumHalves(
+                new int[] {1, 2}, new int[] {-2, -1},
+                new int[] {-1, 2}, new int[] {0, 2}, 0));
+    }
+    // Input : closest to 10; four arrays target 0
+    // Output: 10
+    //         true
+}`,
+    },
+  ],
+
+  complexity: {
+    time: "O(2^{n/2} * n)",
+    space: "O(2^{n/2})",
+    derivation: [
+      "<p>Each half has size n/2, so each bitmask loop is " +
+      "<code>O(2^{n/2} &middot; n/2)</code> if you walk bits, or " +
+      "<code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds.</p>",
+      "<span class=\"eq\">sort 2^{n/2} sums + 2^{n/2} binary searches = O(2^{n/2} n)</span>",
+      "<p>4-sum over four arrays of length m is <code>O(m&sup2;)</code> time and memory " +
+      "for the map of pairwise sums. That is why m &le; 400 is the usual constraint.</p>",
+    ],
+    compare: [
+      ["Full 2^n bitmask", "O(n 2^n)", "O(1)", "n <= 22"],
+      ["MITM + sort + binary search", "O(n 2^{n/2})", "O(2^{n/2})", "n <= 42"],
+      ["MITM + two pointers", "O(n 2^{n/2})", "O(2^{n/2})", "range counts"],
+      ["Knapsack DP", "O(n * sum)", "O(sum)", "When sums are small"],
+      ["4-sum, one array, 3 pointers", "O(n^3)", "O(1)", "Classic LC 18"],
+      ["4-sum, four arrays, MITM", "O(m^2)", "O(m^2)", "LC 454"],
+    ],
+  },
+
+  pitfalls: [
+    { title: "Forgetting mask 0",
+      bug: "Looping <code>mask = 1 .. 2^m-1</code>, so sum 0 is missing. Target that lives " +
+        "in one half, or target 0, is reported absent.",
+      fix: "Start at 0. The empty subset is a legitimate half." },
+    { title: "int sums on large values",
+      bug: "n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses.",
+      fix: "<code>long[]</code> sums, <code>long</code> target." },
+    { title: "binarySearch confusion",
+      bug: "Treating a negative <code>Arrays.binarySearch</code> return as a valid index, " +
+        "or using it as \"closest\" without decoding the insertion point.",
+      fix: "Existence: <code>&gt;= 0</code> is a hit. Closest: write your own lower_bound " +
+        "and inspect both neighbours." },
+    { title: "HashMap of 2^{20} boxed Longs",
+      bug: "Memory and GC explode. An <code>long[]</code> plus a sort is smaller and faster.",
+      fix: "Prefer sorted arrays. Hash only the pairwise 4-sum side, where m^2 is ~1e5." },
+    { title: "Splitting 4-sum on one array the MITM way without handling index reuse",
+      bug: "Pairwise sums from the same array can pick the same index twice.",
+      fix: "Either use four independent arrays (LC 454), or generate pairs as (i, j) with " +
+        "i &lt; j and reject overlapping index pairs at join time." },
+  ],
+
+  variants: [
+    ["Closest subsequence sum",
+      "Same split. For each y, look at the left values around target-y and keep the closest.",
+      "inspect left[lb] and left[lb-1]; track min |x+y-target|",
+      "<a href=\"https://leetcode.com/problems/closest-subsequence-sum/\" target=\"_blank\" rel=\"noopener\">LC 1755</a>"],
+    ["4-sum over four arrays",
+      "Pairwise sums instead of subset sums. HashMap on A+B, probe with target-(C+D).",
+      "left.merge(a+b, 1, Integer::sum);",
+      "<a href=\"https://leetcode.com/problems/4sum-ii/\" target=\"_blank\" rel=\"noopener\">LC 454</a>"],
+    ["XOR / path MITM",
+      "Walk from both ends of a path or both sides of a grid, meet on the middle vertex " +
+      "or column, join on XOR or remaining length.",
+      "map[xorAtMid]++ from the left; probe from the right",
+      "CF 1006F Xor-Paths"],
+  ],
+
+  followups: [
+    ["Why not just knapsack DP?",
+      "<p>If the sums are bounded by S and nS fits, DP is simpler and often faster. MITM " +
+      "wins when S is 40 * 1e9 and n is 40: the value dimension is unusable, the index " +
+      "dimension splits cleanly.</p>"],
+    ["Can I recover the subset?",
+      "<p>Store (sum, mask) pairs. On a hit, the two masks translate back to indices in " +
+      "each half. Or, once you know the two sums, re-enumerate the half (2^{20}) to find " +
+      "a mask that produces them. The second uses no extra memory.</p>"],
+    ["What is the 4-sum-over-halves trick on one array?",
+      "<p>Generate all pair sums with i &lt; j from the left n/2 indices, all pair sums " +
+      "from the right n/2 indices, and join. Pairs that need two left and two right " +
+      "indices are covered; pairs that sit entirely in one half must be counted inside " +
+      "that half. It is messier than four arrays, which is why LC 18 stays n^3.</p>"],
+    ["Gray codes and incremental sums?",
+      "<p>Walking masks in Gray-code order adds or removes one element per step, so each " +
+      "half is O(2^{n/2}) instead of O(n 2^{n/2}). Worth it at n = 42; unnecessary at n = 36.</p>"],
+  ],
+
+  problemsIntro: "CSES Meet in the Middle and CF 888E are the two problems that teach the " +
+    "pattern. LC 1755 is the closest-sum variant; LC 454 is the 4-sum-over-halves variant.",
+
+  problems: [
+    { name: "Meet in the Middle", url: "https://cses.fi/problemset/task/1628",
+      badge: "cf", tag: "CSES", level: "Medium", pattern: "Count subsets with sum x, n <= 40" },
+    { name: "Maximum Subsequence", url: "https://codeforces.com/problemset/problem/888/E",
+      badge: "cf", tag: "CF 888E", level: "Medium", pattern: "Max subset sum modulo m, n <= 35" },
+    { name: "Xor-Paths", url: "https://codeforces.com/problemset/problem/1006/F",
+      badge: "cf", tag: "CF 1006F", level: "Medium", pattern: "Walk both halves of a grid, join XOR" },
+    { name: "Closest Subsequence Sum", url: "https://leetcode.com/problems/closest-subsequence-sum/",
+      badge: "lc", tag: "LC 1755", level: "Hard", pattern: "MITM + closest, not exact" },
+    { name: "4Sum II", url: "https://leetcode.com/problems/4sum-ii/",
+      badge: "lc", tag: "LC 454", level: "Medium", pattern: "Pairwise halves + HashMap" },
+    { name: "4Sum", url: "https://leetcode.com/problems/4sum/",
+      badge: "lc", tag: "LC 18", level: "Medium", pattern: "n^3 two-pointers; contrast with MITM" },
+    { name: "Partition Array Into Two Arrays to Minimize Sum Difference",
+      url: "https://leetcode.com/problems/partition-array-into-two-arrays-to-minimize-sum-difference/",
+      badge: "lc", tag: "LC 2035", level: "Hard", pattern: "MITM by size of the left pick" },
+    { name: "Apple Division", url: "https://cses.fi/problemset/task/1623",
+      badge: "cf", tag: "CSES", level: "Easy", pattern: "n <= 20, so plain 2^n; the warmup" },
+    { name: "Lizard Era: Beginning", url: "https://codeforces.com/problemset/problem/585/D",
+      badge: "cf", tag: "CF 585D", level: "Hard", pattern: "3^{n/2} MITM on three stats" },
+    { name: "Switches", url: "https://atcoder.jp/contests/abc128/tasks/abc128_c",
+      badge: "atc", tag: "ABC 128C", level: "Easy", pattern: "n <= 10, bitmask; contrast with n=40" },
+    { name: "Programming Contest", url: "https://atcoder.jp/contests/abc184/tasks/abc184_f",
+      badge: "atc", tag: "ABC 184F", level: "Medium", pattern: "Classic MITM subset sum with a cap T" },
+    { name: "Subset Sums", url: "https://www.geeksforgeeks.org/problems/subset-sums2234/1",
+      badge: "gfg", tag: "GfG", level: "Easy", pattern: "List all subset sums, n <= 15" },
+  ],
+
+  spoilers: [
+    { summary: "Hint for CF 888E &mdash; Maximum Subsequence",
+      body: "<p>Maximise a subset sum modulo m, n &le; 35. Enumerate left and right sums " +
+        "already reduced modulo m, sort the left. For each right value y, the best left x " +
+        "is the largest x &le; m-1-y (so x+y &lt; m), or the largest x at all (wrap). Two " +
+        "binary searches per y, plus the two empty-half candidates.</p>" },
+    { summary: "Hint for LC 2035 &mdash; minimise partition difference",
+      body: "<p>You must pick exactly n/2 elements into one side. Split the array in half; " +
+        "for each half enumerate sums <em>grouped by how many items you picked</em>. Join a " +
+        "left pick of k with a right pick of n/2-k. Closest total to sum/2 wins. This is " +
+        "MITM with an extra size coordinate.</p>" },
+  ],
+
+  recap: {
+    bullets: [
+      "<strong>n &le; 40 subset-sum &rarr; split, enumerate, join.</strong>",
+      "<strong>Include mask 0</strong> on both halves.",
+      "<strong>Sums are long.</strong> Sort one side; binary-search the complement.",
+      "<strong>4-sum over four arrays</strong> is pairwise sums, same join.",
+      "<strong>This is not divide and conquer.</strong> No recurrence, one join.",
+    ],
+    oneliner: "for (long y : right) if (Arrays.binarySearch(left, target-y) >= 0) return true;",
+  },
+})),
+
+];

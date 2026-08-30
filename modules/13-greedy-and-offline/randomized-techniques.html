@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Randomised Techniques &mdash; DSA Course</title>
+<meta name="description" content="Randomised algorithms in contests: hashing bases, Miller-Rabin, treaps, random shuffle + greedy, and Monte-Carlo fingerprints &mdash; plus how to bound the failure probability.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="randomized-techniques">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 13 &middot; Greedy & Offline Techniques</span>
+  <h1>Randomised Techniques</h1>
+  <p class="hero__tagline">Randomised algorithms in contests: hashing bases, Miller-Rabin, treaps, random shuffle + greedy, and Monte-Carlo fingerprints &mdash; plus how to bound the failure probability.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../12-strings-advanced/rolling-hash.html">Rolling Hash</a>,
+      <a href="../11-math-and-number-theory/modular-arithmetic.html">Modular Arithmetic</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">random</span>
+      <span class="chip">hashing</span>
+      <span class="chip">treap</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A lot of deterministic-looking problems become short with a random hash or a random partition. Rolling hashes, Zobrist hashing of sets, and randomised incremental construction (Delaunay, treaps) are standard. Interviews may ask Miller-Rabin or "why shuffle then greedy".</p>
+<p>Monte-Carlo algorithms can be wrong with tiny probability (hash collision). Las Vegas algorithms are always correct and only the runtime is random (randomised quicksort, treap). Know which one you shipped.</p>
+<p>CF anti-hash tests punish fixed bases. Randomise on startup from a high-resolution clock. Never seed with 0 only.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>If a random fingerprint collides with probability 1/2^{64}, q = 1e5 comparisons still fail with probability ~ 1e5/2^{64}. That is the calculation you recite.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Rolling hash / Zobrist set equality</li>
+        <li>Miller-Rabin primality, Pollard Rho factoring</li>
+        <li>Treap / implicit treap as a randomised BST</li>
+        <li>Shuffle the array then a greedy that is correct in expectation or w.h.p.</li>
+        <li>Randomised incremental: random order of insertion</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The judge is adversarial and you used a fixed hash → still randomise, or go deterministic (KMP, SA)</li>
+        <li>Need a guaranteed worst-case O(n log n) BST → splay / scapegoat / policy_rbtree, not a treap without care</li>
+        <li>Cryptographic randomness → java.security.SecureRandom, not contest RNG</li>
+        <li>Derandomisation required by the statement → method of conditional probabilities, rare</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Substring equality</td>
+        <td>Polynomial hash, random base</td>
+        <td>Rolling hash</td>
+      </tr>
+      <tr>
+        <td>Multiset equality</td>
+        <td>Zobrist XOR of random 64-bit ids</td>
+        <td>Zobrist</td>
+      </tr>
+      <tr>
+        <td>Primality n ~ 1e18</td>
+        <td>Miller-Rabin</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>Split/merge a sequence</td>
+        <td>Implicit treap, random priority</td>
+        <td>Treap</td>
+      </tr>
+      <tr>
+        <td>Quickselect expected n</td>
+        <td>Random pivot</td>
+        <td>kth</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> random test generation</td>
+        <td>That's fuzzing your solution; here randomness is in the solution</td>
+        <td>Different</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Failure 2^{-64} is enough for 1e9 operations. Miller-Rabin: 7-13 bases for 64-bit, or random witnesses. Java <code>ThreadLocalRandom</code> / <code>Random</code> with nanoTime seed.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Zobrist: each value (or each (position,value)) gets a random 64-bit mask. XOR is the set hash; add/remove is XOR again. Collisions like 2^64 hashes.</p>
+<p>Miller-Rabin: write n-1 = 2^s * d. For a witness a, compute a^d and square s times; if you never see 1 or n-1 at the right time, n is composite. Random a, or a fixed list that is deterministic for 64-bit integers.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>A Monte-Carlo fingerprint is a homomorphism from the object (string, set) to a ring. Distinct objects collide with probability about 1/|ring| per comparison if the map is pairwise independent / polynomial.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="randomized-techniquesViz"></div>
+  <div class="viz-player" data-viz-target="randomized-techniquesViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "n tested =",
+      "array": [
+        7,
+        13,
+        15,
+        17,
+        21
+      ],
+      "vars": [
+        "n",
+        "MR",
+        "verdict"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "7 is prime. Miller-Rabin with a=2: 7-1=2^1*3, 2^3=8equiv1 mod 7. Pass.",
+          "active": [
+            0
+          ],
+          "values": {
+            "n": 7,
+            "MR": "a=2",
+            "verdict": "prime"
+          }
+        },
+        {
+          "note": "13 prime. Pass.",
+          "active": [
+            1
+          ],
+          "values": {
+            "n": 13,
+            "MR": "pass",
+            "verdict": "prime"
+          }
+        },
+        {
+          "note": "15=3*5 composite. a=2: 15-1=2^1*7, 2^7=128equiv8 mod 15, not 1 or 14. Fail → composite.",
+          "active": [
+            2
+          ],
+          "values": {
+            "n": 15,
+            "MR": "a=2",
+            "verdict": "composite"
+          }
+        },
+        {
+          "note": "17 prime. Pass.",
+          "active": [
+            3
+          ],
+          "values": {
+            "n": 17,
+            "MR": "pass",
+            "verdict": "prime"
+          }
+        },
+        {
+          "note": "Zobrist: set {1,2} XOR {2,1} same masks, equal. {1,2} vs {1,3} differ w.h.p.",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "n": "zobrist",
+            "MR": "xor",
+            "verdict": "equal sets"
+          }
+        },
+        {
+          "note": "Shuffle then \"first that works\": expected few trials if a constant fraction of permutations are good.",
+          "active": [
+            4
+          ],
+          "values": {
+            "n": "shuffle",
+            "MR": "Las Vegas",
+            "verdict": "retry"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Name the error model</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  kind{"Monte-Carlo or Las Vegas?"}
+  kind -- "may be wrong" --&gt; mc["hash / MR fingerprint"]
+  kind -- "always correct" --&gt; lv["treap / rand quicksort"]
+  mc --&gt; bound["fail ~ q / 2^64"]
+  lv --&gt; exp["expected time"]
+  </div>
+  <figcaption>Monte-Carlo: bound the failure. Las Vegas: bound the expected time. Do not mix them in the analysis.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Pick the model:</strong> fingerprint (MC) or random structure (LV).</li>
+  <li><strong>Seed</strong> RNG from nanoTime xor identityHash, not a constant.</li>
+  <li><strong>Hash:</strong> random base / Zobrist table of 64-bit values.</li>
+  <li><strong>MR:</strong> deterministic bases for 64-bit, or k random witnesses.</li>
+  <li><strong>Treap:</strong> random priority per node, rotate to heap-order.</li>
+  <li><strong>State the bound</strong> in a comment if the blog / interview asks.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>n</th><th>MR</th><th>verdict</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>7</td><td>a=2</td><td>prime</td><td>7 is prime. Miller-Rabin with a=2: 7-1=2^1*3, 2^3=8equiv1 mod 7. Pass.</td></tr>
+      <tr><td>13</td><td>pass</td><td>prime</td><td>13 prime. Pass.</td></tr>
+      <tr><td>15</td><td>a=2</td><td>composite</td><td>15=3*5 composite. a=2: 15-1=2^1*7, 2^7=128equiv8 mod 15, not 1 or 14. Fail → composite.</td></tr>
+      <tr><td>17</td><td>pass</td><td>prime</td><td>17 prime. Pass.</td></tr>
+      <tr><td>zobrist</td><td>xor</td><td>equal sets</td><td>Zobrist: set {1,2} XOR {2,1} same masks, equal. {1,2} vs {1,3} differ w.h.p.</td></tr>
+      <tr><td>shuffle</td><td>Las Vegas</td><td>retry</td><td>Shuffle then "first that works": expected few trials if a constant fraction of permutations are good.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Randomised Techniques implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Trial division up to sqrt(n). Fine for n ≤ 1e12 if careful, slow at 1e18.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">IsPrimeBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class IsPrimeBrute {
+        static boolean prime(long n) {
+            if (n &lt; 2) return false;
+            for (long i = 2; i * i &lt;= n; i++) if (n % i == 0) return false;
+            return true;
+        }
+        public static void main(String[] args) {
+            System.out.println(prime(15) + " " + prime(17));
+        }
+        // Input : 15, 17
+        // Output: false true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Deterministic Miller-Rabin for 64-bit (known witness set).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MillerRabin.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MillerRabin {
+        static long mul(long a, long b, long m) {
+            return (long) ((a * (double) b) % m); // demo only; use BigInteger or int128 mulMod in real contests
+        }
+        static long pow(long a, long e, long m) {
+            long r = 1 % m;
+            while (e &gt; 0) {
+                if ((e &amp; 1) == 1) r = mul(r, a, m);
+                a = mul(a, a, m);
+                e &gt;&gt;= 1;
+            }
+            return r;
+        }
+        static boolean check(long n, long a) {
+            if (n % a == 0) return n == a;
+            long d = n - 1, s = 0;
+            while ((d &amp; 1) == 0) { d &gt;&gt;= 1; s++; }
+            long x = pow(a, d, n);
+            if (x == 1 || x == n - 1) return true;
+            for (int i = 1; i &lt; s; i++) {
+                x = mul(x, x, n);
+                if (x == n - 1) return true;
+            }
+            return false;
+        }
+        static boolean prime(long n) {
+            if (n &lt; 2) return false;
+            for (int p : new int[] {2, 3, 5, 7, 11, 13, 17}) if (n == p) return true;
+            for (int a : new int[] {2, 3, 5, 7, 11, 13, 17}) if (!check(n, a)) return false;
+            return true;
+        }
+        public static void main(String[] args) {
+            System.out.println(prime(15) + " " + prime(17));
+        }
+        // Input : 15, 17
+        // Output: false true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Set hash: XOR of random masks. Toggle membership.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Zobrist.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Random;
+    public class Zobrist {
+        static final long[] MASK = new long[64];
+        static {
+            Random rng = new Random(1_000_000_007L);
+            for (int i = 0; i &lt; MASK.length; i++) MASK[i] = rng.nextLong();
+        }
+        static long toggle(long h, int x) { return h ^ MASK[x]; }
+        public static void main(String[] args) {
+            long a = 0, b = 0;
+            a = toggle(a, 1); a = toggle(a, 2);
+            b = toggle(b, 2); b = toggle(b, 1);
+            System.out.println(a == b);
+        }
+        // Input : {1,2} vs {2,1}
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time MR O(k log n mul); hash O(1); treap O(log n) expected</span>
+    <span class="badge badge--space">Space O(1) to O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Miller-Rabin is k modular exponentiations. Each mulMod is O(1) with 128-bit, O(log m) with BigInteger. Collision bound: union bound over comparisons.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Trial division</td><td>O(sqrt n)</td><td>O(1)</td><td>n <= 1e12</td></tr>
+      <tr><td>Miller-Rabin</td><td>O(k log n)</td><td>O(1)</td><td>n <= 2^64</td></tr>
+      <tr><td>Deterministic SA / KMP</td><td>O(n)</td><td>O(n)</td><td>When you refuse MC</td></tr>
+      <tr><td>Treap</td><td>O(log n) expected</td><td>O(n)</td><td>Split/merge sequences</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Fixed hash base on CF</span>
+    <div class="pitfalls__bug">Anti-hash tests. WA on test 67.</div>
+    <div class="pitfalls__fix">Random base, two moduli, or 2^61-1 + unsigned.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">mul overflow in MR</span>
+    <div class="pitfalls__bug">a*b % m for 1e18 wraps long and the witness is wrong: primes declared composite.</div>
+    <div class="pitfalls__fix">BigInteger, or long mulMod via split, or Math.multiplyHigh / unsigned.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Seeding Random with 0</span>
+    <div class="pitfalls__bug">Reproducible collisions the setter can target if they know the seed.</div>
+    <div class="pitfalls__fix">nanoTime, or accept determinism for local debug only.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Treap without unique priorities</span>
+    <div class="pitfalls__bug">Equal priorities can unbalance or infinite-rotate if you are not careful.</div>
+    <div class="pitfalls__fix">Random long priorities; on equal, treat as heap-tie by pointer.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Calling a Monte-Carlo algorithm Las Vegas in an interview</span>
+    <div class="pitfalls__bug">You claim "always correct" about hashing.</div>
+    <div class="pitfalls__fix">Say "error 2^{-64}" or verify with a deterministic compare on collision.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Pollard Rho</td>
+        <td>Random walk to factor 64-bit. Pair with MR.</td>
+        <td><code>CF factoring</code></td>
+        <td>n <= 1e18</td>
+      </tr>
+      <tr>
+        <td>Implicit treap</td>
+        <td>Array split/merge, lazy reverse.</td>
+        <td><code>sequence operations</code></td>
+        <td>alternative to splay</td>
+      </tr>
+      <tr>
+        <td>Randomised incremental geometry</td>
+        <td>Insert points in random order; expected O(n log n) hull/Delaunay.</td>
+        <td><code>convex hull next module</code></td>
+        <td>Clarkson</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Monte-Carlo vs Las Vegas?</summary>
+    <div class="followup__body">
+      <p>MC: bounded error, usually fast worst-case (hash). LV: always correct, expected fast (random pivot). Quicksort is LV. Hashing without verify is MC.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why do 7 MR bases suffice for 64-bit?</summary>
+    <div class="followup__body">
+      <p>There is a proven finite set of witnesses that jointly catch every 64-bit composite. Using them makes MR deterministic for that range.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Zobrist vs polynomial hash for sets?</summary>
+    <div class="followup__body">
+      <p>Polynomial cares about order. XOR of random ids is commutative — it hashes sets/multisets (multiset needs a counter-dependent mask or 2D table).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you derandomise hashing?</summary>
+    <div class="followup__body">
+      <p>Universal hashing with a random draw from a 2-universal family is already the theoretical version. Worst-case deterministic substring equality is KMP/SA/Z.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Kth Largest Element In An Array</a></td>
+        <td><span class="badge badge--lc">LC 215</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Randomised quickselect</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/shuffle-an-array/" target="_blank" rel="noopener">Shuffle An Array</a></td>
+        <td><span class="badge badge--lc">LC 384</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Fisher-Yates</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/random-pick-index/" target="_blank" rel="noopener">Random Pick Index</a></td>
+        <td><span class="badge badge--lc">LC 398</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reservoir sampling</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/17/E" target="_blank" rel="noopener">Palisection</a></td>
+        <td><span class="badge badge--cf">CF 17E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Hash palindromes (heavy)</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/702/F" target="_blank" rel="noopener">T-Shirts</a></td>
+        <td><span class="badge badge--cf">CF 702F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Implicit treap</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/776/D" target="_blank" rel="noopener">The Door Problem</a></td>
+        <td><span class="badge badge--cf">CF 776D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>2-SAT, not random</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/insert-delete-getrandom-o1/" target="_blank" rel="noopener">Insert Delete Getrandom O1</a></td>
+        <td><span class="badge badge--lc">LC 380</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Hash + array swap</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/random-pick-with-weight/" target="_blank" rel="noopener">Random Pick With Weight</a></td>
+        <td><span class="badge badge--lc">LC 528</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix + binary search</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Monte-Carlo: bound q/2^{64}. Las Vegas: expected time.</li>
+    <li>Randomise hash bases. Never a famous fixed 31 + 1e9+7 alone on CF.</li>
+    <li>Miller-Rabin for 64-bit primality; mulMod carefully.</li>
+    <li>Zobrist XOR for sets.</li>
+    <li>Treap = BST + random heap priorities.</li>
+  </ul>
+  <div class="recap__oneliner">seed RNG; fingerprint or random priority; state the failure/expectation bound;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

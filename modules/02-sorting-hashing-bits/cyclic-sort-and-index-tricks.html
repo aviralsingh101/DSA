@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyclic Sort &amp; Index Tricks &mdash; DSA Course</title>
+<meta name="description" content="When the array is a permutation of a known range, the value is the address: swap each number toward index value-1 until every cycle closes.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="cyclic-sort-and-index-tricks">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Cyclic Sort & Index Tricks</h1>
+  <p class="hero__tagline">When the array is a permutation of a known range, the value is the address: swap each number toward index value-1 until every cycle closes.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="sorting-and-comparators.html">Sorting & Comparators</a>,
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">cyclic sort</span>
+      <span class="chip">permutation</span>
+      <span class="chip">index as hash</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>If every value lies in <code>1..n</code> (or <code>0..n-1</code>) and you are allowed to mutate, the array is its own hash table. The number <code>x</code> belongs at index <code>x-1</code>. Swapping along that rule sorts in linear time with O(1) extra memory, and the leftover mismatches are exactly the missing, duplicate, or disappeared numbers.</p>
+<p>This is the native language of a whole LC cluster: missing number, first missing positive, find all duplicates, set mismatch, find the duplicate without modifying (Floyd on the functional graph). Interviewers like it because it looks like a magic trick until you say "the value is the index".</p>
+<p>The same idea without swaps is "index as a sign bit": negate <code>a[|x|-1]</code> to mark that x was seen. It needs the array to be writable and the range to be <code>1..n</code>. When you cannot write, the functional graph of <code>i → a[i]</code> still has a cycle you can find with Floyd.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A permutation is a set of cycles on indices. Putting each value at its index is walking those cycles with swaps. What refuses to sit still is the duplicate or the missing.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Array of length n, values in 1..n or 0..n, possibly with one duplicate / one missing</li>
+        <li>"Find all numbers that disappeared", "first missing positive"</li>
+        <li>"Find the duplicate without extra memory" (cycle in the functional graph)</li>
+        <li>You may mutate the array and O(1) extra space is required</li>
+        <li>"Place each number at index num-1" is a legal operation on the input</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Arbitrary integers with a huge range &rarr; hash set or sort, not index placement</li>
+        <li>You must not mutate and you may use O(n) space &rarr; HashSet / boolean[]</li>
+        <li>The graph is a general directed graph, not a functional graph of outdegree 1 → DFS on a real graph, not cyclic sort</li>
+        <li>You need full sorted order of arbitrary keys → comparison sort</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Values are a permutation of 1..n</td>
+        <td>Swap a[i] toward a[i]-1</td>
+        <td>Cyclic sort</td>
+      </tr>
+      <tr>
+        <td>One missing from 0..n</td>
+        <td>XOR all indices and values, or place 1..n</td>
+        <td>LC 268</td>
+      </tr>
+      <tr>
+        <td>All disappeared from 1..n</td>
+        <td>Place, then collect indices still wrong</td>
+        <td>LC 448</td>
+      </tr>
+      <tr>
+        <td>Find the duplicate, may mutate</td>
+        <td>Place; the one that collides is the duplicate</td>
+        <td>LC 287 mutate</td>
+      </tr>
+      <tr>
+        <td>Find the duplicate, no mutate</td>
+        <td>Floyd: i → a[i] has a cycle</td>
+        <td>LC 287 Floyd</td>
+      </tr>
+      <tr>
+        <td>First missing positive</td>
+        <td>Ignore out of 1..n, cyclic-sort the rest</td>
+        <td>LC 41</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> counting sort</td>
+        <td>Counting uses extra R memory; cyclic sort uses the array as the table</td>
+        <td>Use cyclic when O(1) extra is required</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with values in a range of length n is the signature. First-missing-positive allows values outside 1..n: skip those, they cannot be placed. Floyd needs the array to encode a function on 1..n with no zeros.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Cyclic sort: for i from 0 to n-1, while <code>a[i]</code> is in range and not already at home (<code>a[i] != a[a[i]-1]</code>), swap it there. Each swap homes at least one value, so the inner while is amortised O(n). Afterward, index i should hold i+1; any break is the answer.</p>
+<p>First missing positive: treat anything ≤ 0 or &gt; n as garbage that cannot occupy a slot. After placement, the first i with <code>a[i] != i+1</code> is the answer; if none, the answer is n+1. Floyd for the duplicate: interpret the array as <code>next(i) = a[i]</code> (1-based), run tortoise and hare, then find the cycle entrance.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After the swaps, every in-range value <code>x</code> that appeared sits at index <code>x-1</code>, unless a duplicate already occupies that slot.</p><span class="eq">a[x-1] == x &nbsp;for every x that could be placed uniquely</span><p>Interview sentence: <em>"The value is the address; I swap until every cycle of the permutation is rotated into place, then I read the holes."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="cyclic-sort-and-index-tricksViz"></div>
+  <div class="viz-player" data-viz-target="cyclic-sort-and-index-tricksViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        3,
+        1,
+        3,
+        4,
+        2
+      ],
+      "vars": [
+        "i",
+        "a[i]",
+        "home",
+        "action"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Cyclic sort on [3,1,3,4,2], looking for the duplicate. i=0, a[0]=3 belongs at index 2.",
+          "active": [
+            0,
+            2
+          ],
+          "dim": [
+            1,
+            3,
+            4
+          ],
+          "values": {
+            "i": 0,
+            "a[i]": 3,
+            "home": 2,
+            "action": "swap 0 ↔ 2"
+          }
+        },
+        {
+          "note": "After swap: [3,1,3,4,2] wait, a[2] was 3, so [3,1,3,4,2] — collision. Actually start [3,1,4,2,2] as LC 287 sample. Use [3,1,3,4,2]. Swap 3 with index 2: [3,1,3,4,2] → [3,1,3,4,2] if a[2] is already 3.",
+          "active": [
+            0,
+            2
+          ],
+          "values": {
+            "i": 0,
+            "a[i]": 3,
+            "home": 2,
+            "action": "a[2] already 3, stop swaps"
+          }
+        },
+        {
+          "note": "Rewind to a clean trace on [3,1,4,2,5] a true permutation. i=0, 3 goes to index 2: [4,1,3,2,5].",
+          "active": [
+            0,
+            2
+          ],
+          "values": {
+            "i": 0,
+            "a[i]": 3,
+            "home": 2,
+            "action": "swap → [4,1,3,2,5]"
+          }
+        },
+        {
+          "note": "i still 0, a[0]=4 belongs at 3: [2,1,3,4,5]. Then a[0]=2 belongs at 1: [1,2,3,4,5].",
+          "window": [
+            0,
+            4
+          ],
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 0,
+            "a[i]": 1,
+            "home": 0,
+            "action": "homed"
+          }
+        },
+        {
+          "note": "Remaining indices already home. For [3,1,3,4,2]: after placement index 0 still holds 3, so 1 is missing and 3 is duplicate.",
+          "x": [
+            0
+          ],
+          "done": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": "scan",
+            "a[i]": 3,
+            "home": 0,
+            "action": "missing 1, dup 3"
+          }
+        },
+        {
+          "note": "First missing positive on [3,4,-1,1]: ignore -1, place 3 and 4 and 1 → first hole is 2.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": "LC41",
+            "a[i]": "—",
+            "home": "—",
+            "action": "answer 2"
+          }
+        },
+        {
+          "note": "Floyd view of [1,3,4,2,2]: next(i)=a[i] has a cycle at 2. Meeting point then entrance = duplicate.",
+          "best": [
+            4
+          ],
+          "values": {
+            "i": "floyd",
+            "a[i]": 2,
+            "home": 2,
+            "action": "cycle entrance"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Place, mark, or chase the cycle</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  range["values sit in 1..n"] --&gt; mutate{"may I mutate?"}
+  mutate -- yes --&gt; place["swap a[i] to index a[i]-1"]
+  mutate -- no extra mem --&gt; floyd["Floyd on i maps to a[i]"]
+  mutate -- extra O(n) ok --&gt; set["HashSet, skip this page"]
+  place --&gt; scan["read holes: missing / duplicate / first positive"]
+  floyd --&gt; scan
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm the range</strong> is length n (or 1..n after ignoring garbage).</li>
+  <li><strong>For each i</strong>, while <code>a[i]</code> is in range and <code>a[i] != a[a[i]-1]</code>, swap.</li>
+  <li><strong>Stop the while</strong> when a duplicate already sits at the home index, or the value is out of range.</li>
+  <li><strong>Scan i = 0..n-1.</strong> If <code>a[i] != i+1</code>, i+1 is missing and a[i] may be the duplicate.</li>
+  <li><strong>First missing positive:</strong> skip ≤ 0 and &gt; n; if every slot is home, return n+1.</li>
+  <li><strong>No-mutate duplicate:</strong> Floyd tortoise/hare on <code>f(x)=a[x]</code> (careful with 0-based vs 1-based).</li>
+  <li><strong>Never use a[a[i]]</strong> without checking range, or you index out of bounds.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>a[i]</th><th>home</th><th>action</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>3</td><td>2</td><td>swap 0 ↔ 2</td><td>Cyclic sort on [3,1,3,4,2], looking for the duplicate. i=0, a[0]=3 belongs at index 2.</td></tr>
+      <tr><td>0</td><td>3</td><td>2</td><td>a[2] already 3, stop swaps</td><td>After swap: [3,1,3,4,2] wait, a[2] was 3, so [3,1,3,4,2] — collision. Actually start [3,1,4,2,2] as LC 287 sample. Use [3,1,3,4,2]. Swap 3 with index 2: [3,1,3,4,2] → [3,1,3,4,2] if a[2] is already 3.</td></tr>
+      <tr><td>0</td><td>3</td><td>2</td><td>swap → [4,1,3,2,5]</td><td>Rewind to a clean trace on [3,1,4,2,5] a true permutation. i=0, 3 goes to index 2: [4,1,3,2,5].</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>1</td><td>0</td><td>homed</td><td>i still 0, a[0]=4 belongs at 3: [2,1,3,4,5]. Then a[0]=2 belongs at 1: [1,2,3,4,5].</td></tr>
+      <tr><td>scan</td><td>3</td><td>0</td><td>missing 1, dup 3</td><td>Remaining indices already home. For [3,1,3,4,2]: after placement index 0 still holds 3, so 1 is missing and 3 is duplicate.</td></tr>
+      <tr><td>LC41</td><td>—</td><td>—</td><td>answer 2</td><td>First missing positive on [3,4,-1,1]: ignore -1, place 3 and 4 and 1 → first hole is 2.</td></tr>
+      <tr class="trace-table__row--change"><td>floyd</td><td>2</td><td>2</td><td>cycle entrance</td><td>Floyd view of [1,3,4,2,2]: next(i)=a[i] has a cycle at 2. Meeting point then entrance = duplicate.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Cyclic Sort & Index Tricks implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>HashSet of seen values. Correct, O(n) extra, what cyclic sort avoids.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CyclicBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashSet;
+    import java.util.Set;
+    
+    public class CyclicBrute {
+        static int firstMissingPositive(int[] a) {
+            Set&lt;Integer&gt; s = new HashSet&lt;&gt;();
+            for (int v : a) {
+                if (v &gt; 0) {
+                    s.add(v);
+                }
+            }
+            int x = 1;
+            while (s.contains(x)) {
+                x++;
+            }
+            return x;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(firstMissingPositive(new int[] {3, 4, -1, 1}));
+            System.out.println(firstMissingPositive(new int[] {1, 2, 0}));
+        }
+        // Input : [3, 4, -1, 1] then [1, 2, 0]
+        // Output: 2
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Place each in-range value at index value-1, then read the first hole.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CyclicSort.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class CyclicSort {
+        static int firstMissingPositive(int[] a) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                while (a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n &amp;&amp; a[a[i] - 1] != a[i]) {
+                    swap(a, i, a[i] - 1);
+                }
+            }
+            for (int i = 0; i &lt; n; i++) {
+                if (a[i] != i + 1) {
+                    return i + 1;
+                }
+            }
+            return n + 1;
+        }
+    
+        static int findDuplicate(int[] a) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                while (a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n &amp;&amp; a[a[i] - 1] != a[i]) {
+                    swap(a, i, a[i] - 1);
+                }
+            }
+            for (int i = 0; i &lt; n; i++) {
+                if (a[i] != i + 1) {
+                    return a[i];
+                }
+            }
+            return -1;
+        }
+    
+        static void swap(int[] a, int i, int j) {
+            int t = a[i];
+            a[i] = a[j];
+            a[j] = t;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(firstMissingPositive(new int[] {3, 4, -1, 1}));
+            System.out.println(findDuplicate(new int[] {1, 3, 4, 2, 2}));
+        }
+        // Input : [3, 4, -1, 1] then [1, 3, 4, 2, 2]
+        // Output: 2
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Find the duplicate with Floyd when mutation is forbidden. Array is f(x)=a[x].</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FloydDup.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FloydDup {
+        static int findDuplicate(int[] a) {
+            int slow = a[0];
+            int fast = a[0];
+            do {
+                slow = a[slow];
+                fast = a[a[fast]];
+            } while (slow != fast);
+            slow = a[0];
+            while (slow != fast) {
+                slow = a[slow];
+                fast = a[fast];
+            }
+            return slow;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(findDuplicate(new int[] {1, 3, 4, 2, 2}));
+            System.out.println(findDuplicate(new int[] {3, 1, 3, 4, 2}));
+        }
+        // Input : [1, 3, 4, 2, 2] then [3, 1, 3, 4, 2]
+        // Output: 2
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) amortised swaps + O(n) scan</span>
+    <span class="badge badge--space">Space O(1) extra (Floyd also O(1); HashSet is O(n))</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each swap places at least one new value into its home (or proves a duplicate). A value already home is never swapped again, so the inner while runs ≤ n times across the whole array: <span class="eq">T(n) = Θ(n)</span>.</p>
+    <p>Floyd is the linked-list cycle proof on a functional graph of n+1 nodes and n+1 edges (indices 0 unused, values 1..n). Two O(n) pointer walks.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>HashSet</td><td>O(n)</td><td>O(n)</td><td>Simplest; extra memory</td></tr>
+      <tr><td>Sort then scan</td><td>O(n log n)</td><td>O(1) or O(n)</td><td>Allowed when they do not want the trick</td></tr>
+      <tr><td>Cyclic sort</td><td>O(n)</td><td>O(1)</td><td>May mutate; range is 1..n</td></tr>
+      <tr><td>Negate-as-mark</td><td>O(n)</td><td>O(1)</td><td>Writable array, values 1..n</td></tr>
+      <tr><td>Floyd cycle</td><td>O(n)</td><td>O(1)</td><td>Duplicate, no mutate</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Infinite swap on a duplicate</span>
+    <div class="pitfalls__bug"><code>while (a[i] != i+1) swap(i, a[i]-1)</code> loops forever when two copies of x both want index x-1.</div>
+    <div class="pitfalls__fix">Stop when <code>a[a[i]-1] == a[i]</code>, i.e. home already holds this value.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Placing 0 or n+1</span>
+    <div class="pitfalls__bug"><code>a[a[i]-1]</code> with a[i]=0 indexes -1. First missing positive must skip out-of-range values.</div>
+    <div class="pitfalls__fix">Guard <code>a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n</code> before any home access.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Floyd 0-based off-by-one</span>
+    <div class="pitfalls__bug">Starting at index 0 when 0 is not a node of f(x)=a[x] on a 1-based permutation.</div>
+    <div class="pitfalls__fix">LC 287 stores values 1..n in an array of length n+1; start at a[0], follow a[·].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Negate mark colliding with already-negative input</span>
+    <div class="pitfalls__bug">LC 448 input is 1..n so negation is safe; LC 41 has negatives already.</div>
+    <div class="pitfalls__fix">Cyclic-sort LC 41; do not negate unless you first sanitise the range.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Returning n instead of n+1</span>
+    <div class="pitfalls__bug">Array [1,2,3] as first missing positive should return 4, not a hole inside.</div>
+    <div class="pitfalls__fix">After a clean scan, the missing is n+1.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Find all disappeared</td>
+        <td>Place or negate; collect i+1 where slot i is wrong / still positive.</td>
+        <td><code>if (a[i] != i+1) ans.add(i+1);</code></td>
+        <td>LC 448.</td>
+      </tr>
+      <tr>
+        <td>Set mismatch (one dup, one missing)</td>
+        <td>Place; the slot with the wrong value is the dup, i+1 is missing.</td>
+        <td><code>return new int[] {a[i], i+1};</code></td>
+        <td>LC 645.</td>
+      </tr>
+      <tr>
+        <td>Index as hash without full placement</td>
+        <td>For each x, mark a[abs(x)-1] negative; a second negative means duplicate.</td>
+        <td><code>if (a[idx] &lt; 0) dup = abs(x); else a[idx] = -a[idx];</code></td>
+        <td>LC 442.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the inner while O(n) total, not O(n²)?</summary>
+    <div class="followup__body">
+      <p>A swap that does not immediately home a[i] still homes the other slot. Each index becomes home at most once. Duplicates stop the loop via the <code>a[home]==value</code> guard, so no cycle of swaps among equals.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you recover the original array after cyclic sort?</summary>
+    <div class="followup__body">
+      <p>No, unless you stored the permutation. The algorithm is in-place destructive. If the caller needs the input, clone first (and then you have O(n) extra anyway, so a HashSet was simpler).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why does Floyd apply to finding a duplicate?</summary>
+    <div class="followup__body">
+      <p>n+1 slots holding values in 1..n is a pigeonhole: the map x → a[x] has a node with two incoming edges (the duplicate). That node is the entrance of a cycle. Same proof as linked-list cycle II.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>First missing positive when n=1?</summary>
+    <div class="followup__body">
+      <p>[1] → 2; [0] → 1; [2] → 1. The out-of-range 2 is ignored, slot 0 is not 1, answer 1. Always include these three unit tests.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/missing-number/" target="_blank" rel="noopener">Missing Number</a></td>
+        <td><span class="badge badge--lc">LC 268</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>XOR or place 0..n-1</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/find-all-numbers-disappeared-in-an-array/" target="_blank" rel="noopener">Find All Numbers Disappeared</a></td>
+        <td><span class="badge badge--lc">LC 448</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Place or negate-mark</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/find-the-duplicate-number/" target="_blank" rel="noopener">Find the Duplicate Number</a></td>
+        <td><span class="badge badge--lc">LC 287</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Floyd or cyclic sort</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/find-all-duplicates-in-an-array/" target="_blank" rel="noopener">Find All Duplicates</a></td>
+        <td><span class="badge badge--lc">LC 442</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Negate-mark, second hit is dup</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/set-mismatch/" target="_blank" rel="noopener">Set Mismatch</a></td>
+        <td><span class="badge badge--lc">LC 645</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Place; hole + colliding value</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/first-missing-positive/" target="_blank" rel="noopener">First Missing Positive</a></td>
+        <td><span class="badge badge--lc">LC 41</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Ignore out of 1..n, then place</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/285/C" target="_blank" rel="noopener">Building Permutation</a></td>
+        <td><span class="badge badge--cf">CF 285C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort, match to 1..n, long cost</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1367/B" target="_blank" rel="noopener">Even Array</a></td>
+        <td><span class="badge badge--cf">CF 1367B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Index parity vs value parity</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Value is the address</strong> when the range is 1..n.</li>
+    <li><strong>Guard the home index</strong> so duplicates do not infinite-loop.</li>
+    <li><strong>Skip out-of-range</strong> values in first-missing-positive.</li>
+    <li><strong>Floyd</strong> when you cannot mutate: cycle entrance is the duplicate.</li>
+    <li><strong>After placement, scan holes</strong>: a[i] should equal i+1.</li>
+  </ul>
+  <div class="recap__oneliner">while (a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n &amp;&amp; a[a[i] - 1] != a[i]) swap(a, i, a[i] - 1);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

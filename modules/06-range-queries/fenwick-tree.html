@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fenwick Tree (BIT) &mdash; DSA Course</title>
+<meta name="description" content="Point update and prefix sum in O(log n) each, using the lowest set bit to jump responsibility ranges &mdash; the smallest structure that beats a prefix array once updates appear.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="fenwick-tree">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 06 &middot; Range Query Structures</span>
+  <h1>Fenwick Tree (BIT)</h1>
+  <p class="hero__tagline">Point update and prefix sum in <code>O(log n)</code> each, using the lowest set bit to jump responsibility ranges &mdash; the smallest structure that beats a prefix array once updates appear.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>,
+      <a href="../00-foundations/constraints-to-complexity.html">Constraints to Complexity</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Fenwick</span>
+      <span class="chip">BIT</span>
+      <span class="chip">prefix</span>
+      <span class="chip">inversions</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A prefix array answers range sums in O(1) and dies the moment you change an element: every prefix to the right is stale. A Fenwick tree (Binary Indexed Tree) keeps the same prefix-sum algebra but stores each value in <code>O(log n)</code> buckets so an update touches <code>O(log n)</code> of them and a prefix query adds <code>O(log n)</code> of them. That is the cheapest dynamic range-sum structure.</p>
+<p>The addressing trick is the lowest set bit. Index i is responsible for a range of length <code>lsb(i) = i &amp; -i</code> ending at i. Walking <code>i += lsb(i)</code> climbs to every bucket that contains i (the update). Walking <code>i -= lsb(i)</code> drops to a disjoint cover of [1, i] (the query). Two loops, no recursion, tiny constants.</p>
+<p>Almost every "count inversions / count smaller to the left / range-sum with updates" interview problem is this page plus optional coordinate compression. Segment trees are more general; Fenwick is what you write when the operation is prefix-shaped.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>lsb(i) is the length of i's bucket. Update climbs by adding it; query drops by subtracting it. Both walks are O(log n) because each step clears or sets a bit.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Point add / point set mixed with prefix or range sums</li>
+        <li>"Count inversions", "count smaller elements to the left / right"</li>
+        <li>Frequency queries on compressed values (order-statistic tree)</li>
+        <li>The two-BIT trick: range add + range sum</li>
+        <li><code>n, q &le; 2&times;10&#8309;</code> with updates, operation is sum or XOR</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>No updates, only range sums &rarr; <a href="../01-arrays-and-windows/prefix-sums.html">prefix array</a></li>
+        <li>Range minimum (no inverse) &rarr; <a href="sparse-table-and-rmq.html">sparse table</a> or <a href="segment-tree.html">segment tree</a></li>
+        <li>Range add and range min together &rarr; <a href="segment-tree-lazy.html">lazy segtree</a></li>
+        <li>Arbitrary associative combine that is not prefix-invertible &rarr; segment tree</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"point add, prefix sum"</td>
+        <td>The BIT primitive</td>
+        <td>Fenwick</td>
+      </tr>
+      <tr>
+        <td>"point add, range sum"</td>
+        <td>prefix(r) - prefix(l-1)</td>
+        <td>Fenwick</td>
+      </tr>
+      <tr>
+        <td>"count inversions"</td>
+        <td>Query how many seen values are greater, then add</td>
+        <td>BIT on compressed ranks</td>
+      </tr>
+      <tr>
+        <td>"range add, point query"</td>
+        <td>Difference array in a BIT</td>
+        <td>One Fenwick</td>
+      </tr>
+      <tr>
+        <td>"range add, range sum"</td>
+        <td>Two BITs, B1 and B2</td>
+        <td>Identity: sum[1..i] = b1*i - b2</td>
+      </tr>
+      <tr>
+        <td>"range min, point update"</td>
+        <td>No inverse, BIT is awkward</td>
+        <td>Segment tree</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> segment tree</td>
+        <td>A BIT is a compressed segment tree for prefix operations; it cannot easily store min</td>
+        <td>Use a segtree when the op is not a prefix sum / XOR</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> point-update range-sum is Fenwick's home. Values that are 10&#8313; with n of 10&#8309; need <code>long</code>. Coordinate-compress if the value universe is 10&#8313; but n is 10&#8309;.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Index the tree 1-based. <code>bit[i]</code> stores the sum of <code>a[i - lsb(i) + 1 .. i]</code>, a half-open-length bucket ending at i. <code>lsb(i) = i &amp; -i</code> works because Java ints are two's complement: <code>-i</code> is <code>~i + 1</code>, so the conjunction isolates the lowest 1.</p>
+<p>Prefix sum of the first i elements is the sum of the disjoint buckets you land on while repeatedly subtracting the lsb, which peels off the lowest 1 each time and so terminates in O(popcount(i)) &le; O(log n) steps. An update at i adds delta to every bucket that contains i, found by repeatedly adding the lsb (setting the next higher bit of the current suffix).</p>
+<p>Range sum [l, r] is two prefixes. Range add [l, r] += v on a point-query structure is the difference-array trick inside the BIT: add v at l, add -v at r+1. Two BITs give range add and range sum together, which is the usual contest upgrade before reaching for a lazy segment tree.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>With 1-based indexing and <code>lsb(i) = i &amp; -i</code>:</p><span class="eq">bit[i] = sum(a[i - lsb(i) + 1 .. i])</span><p>Interview sentence: <em>"Update adds lsb, query subtracts lsb; both are walking the binary representation of the index."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why i &amp; -i is the lowest set bit</span>
+    <p>In two's complement, <code>-i</code> flips every bit of i and adds one, which leaves the lowest 1 of i in place and turns every lower 0 into 0 in the conjunction. Example: i = 12 = 1100<sub>2</sub>, -i = ...0100<sub>2</sub>, conjunction 0100<sub>2</sub> = 4, and bit[12] covers four entries.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Always 1-based</span>
+    <p><code>i &amp; -i</code> on 0 is 0, so <code>i += 0</code> is an infinite loop. The tree starts at index 1. Translate 0-based array index i to Fenwick index i+1.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Prefix(7) on an 8-element Fenwick tree</h3>
+
+<p>Array <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> (1-based indices 1..8). After the build, <code>bit = [3, 4, 4, 9, 5, 14, 2, 31]</code>. Watch prefix(7) add the buckets it touches.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="fenwick-treeViz"></div>
+  <div class="viz-player" data-viz-target="fenwick-treeViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "bit[1..8]",
+      "array": [
+        3,
+        4,
+        4,
+        9,
+        5,
+        14,
+        2,
+        31
+      ],
+      "indexLabels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ],
+      "vars": [
+        "i",
+        "lsb",
+        "added",
+        "acc"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Built tree. bit[i] holds the sum of lsb(i) entries ending at i. Query prefix(7).",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": 7,
+            "lsb": "?",
+            "added": 0,
+            "acc": 0
+          }
+        },
+        {
+          "note": "i = 7 = 111b, lsb = 1. Add bit[7] = 2. acc = 2. Next i = 7 - 1 = 6.",
+          "active": [
+            6
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "values": {
+            "i": 7,
+            "lsb": 1,
+            "added": 2,
+            "acc": 2
+          }
+        },
+        {
+          "note": "i = 6 = 110b, lsb = 2. Add bit[6] = 14. acc = 16. Next i = 6 - 2 = 4.",
+          "active": [
+            5
+          ],
+          "done": [
+            6
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            7
+          ],
+          "values": {
+            "i": 6,
+            "lsb": 2,
+            "added": 14,
+            "acc": 16
+          }
+        },
+        {
+          "note": "i = 4 = 100b, lsb = 4. Add bit[4] = 9. acc = 25. Next i = 4 - 4 = 0. Stop.",
+          "active": [
+            3
+          ],
+          "done": [
+            5,
+            6
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            4,
+            7
+          ],
+          "values": {
+            "i": 4,
+            "lsb": 4,
+            "added": 9,
+            "acc": 25
+          }
+        },
+        {
+          "note": "Prefix(7) = 25. The query touched three nodes: 7, 6, 4. Range sum [3, 7] would be prefix(7) - prefix(2).",
+          "best": [
+            3,
+            5,
+            6
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            4,
+            7
+          ],
+          "values": {
+            "i": 0,
+            "lsb": "—",
+            "added": "—",
+            "acc": 25
+          }
+        },
+        {
+          "note": "Update index 3 by +2 would climb 3, 4, 8 (add lsb each time) and leave the other buckets alone.",
+          "active": [
+            2,
+            3,
+            7
+          ],
+          "dim": [
+            0,
+            1,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "i": "upd 3",
+            "lsb": "climb",
+            "added": 2,
+            "acc": "touches 3,4,8"
+          }
+        },
+        {
+          "note": "After that update, prefix(7) would reread the same three nodes and get 27, because bit[4] now holds 11.",
+          "best": [
+            3,
+            5,
+            6
+          ],
+          "values": {
+            "i": 7,
+            "lsb": "same path",
+            "added": "—",
+            "acc": 27
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Query i=7 adds bit[7]=2, drops to 6, adds bit[6]=14, drops to 4, adds bit[4]=9, drops to 0. Total 25 = sum of a[1..7]. Those three slots are the whole query.</figcaption>
+</figure>
+
+<h3>Responsibility tree over the 8-element array</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  f8["bit8 covers 1-8"] --&gt; f4["bit4 covers 1-4"]
+  f8 --&gt; f6["bit6 covers 5-6"]
+  f8 --&gt; f7["bit7 covers 7"]
+  f4 --&gt; f2["bit2 covers 1-2"]
+  f4 --&gt; f3["bit3 covers 3"]
+  f2 --&gt; f1["bit1 covers 1"]
+  f6 --&gt; f5["bit5 covers 5"]
+  </div>
+  <figcaption>Each node covers a power-of-two range ending at its index. Prefix(7) reads the three highlighted leaves of this walk: 7, then 6, then 4.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate <code>long[] bit</code> of length <code>n + 1</code>.</strong> Index 0 is unused.</li>
+  <li><strong>lsb:</strong> <code>i &amp; -i</code>. Never call it on 0.</li>
+  <li><strong>add(i, v):</strong> for <code>(; i &lt; bit.length; i += i &amp; -i) bit[i] += v</code>. Translate 0-based array index x to <code>i = x + 1</code>.</li>
+  <li><strong>prefix(i):</strong> for <code>(; i &gt; 0; i -= i &amp; -i) acc += bit[i]</code>.</li>
+  <li><strong>range(l, r)</strong> (1-based inclusive) is <code>prefix(r) - prefix(l - 1)</code>.</li>
+  <li><strong>Build</strong> by adding each a[i] once, or in O(n) by filling bit[i] = a[i] then pushing to the parent <code>i + lsb(i)</code>.</li>
+  <li><strong>Compress coordinates</strong> before using the BIT as a frequency tree over large values.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Prefix(7) on the built tree <code>bit = [_, 3, 4, 4, 9, 5, 14, 2, 31]</code>. Then range [3, 7] via two prefixes.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>lsb</th><th>added</th><th>acc</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>7</td><td>?</td><td>0</td><td>0</td><td>Built tree. bit[i] holds the sum of lsb(i) entries ending at i. Query prefix(7).</td></tr>
+      <tr><td>7</td><td>1</td><td>2</td><td>2</td><td>i = 7 = 111b, lsb = 1. Add bit[7] = 2. acc = 2. Next i = 7 - 1 = 6.</td></tr>
+      <tr><td>6</td><td>2</td><td>14</td><td>16</td><td>i = 6 = 110b, lsb = 2. Add bit[6] = 14. acc = 16. Next i = 6 - 2 = 4.</td></tr>
+      <tr><td>4</td><td>4</td><td>9</td><td>25</td><td>i = 4 = 100b, lsb = 4. Add bit[4] = 9. acc = 25. Next i = 4 - 4 = 0. Stop.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>—</td><td>—</td><td>25</td><td>Prefix(7) = 25. The query touched three nodes: 7, 6, 4. Range sum [3, 7] would be prefix(7) - prefix(2).</td></tr>
+      <tr><td>upd 3</td><td>climb</td><td>2</td><td>touches 3,4,8</td><td>Update index 3 by +2 would climb 3, 4, 8 (add lsb each time) and leave the other buckets alone.</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td>same path</td><td>—</td><td>27</td><td>After that update, prefix(7) would reread the same three nodes and get 27, because bit[4] now holds 11.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>a[3..7] = 4, 1, 5, 9, 2 sums to 21. Two prefix walks, five bucket reads total.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Fenwick Tree (BIT) implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute array</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Fenwick</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Inversions</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Point update is O(1), range sum is O(n). The Fenwick swaps those to O(log n) each.</p>
+    <div class="code" data-highlight="10-14">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BruteRangeSum.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BruteRangeSum {
+    
+        static int[] a;
+    
+        static void add(int i, int v) { a[i] += v; }
+    
+        static long range(int l, int r) {
+            long s = 0;
+            for (int i = l; i &lt;= r; i++) s += a[i];
+            return s;
+        }
+    
+        public static void main(String[] args) {
+            a = new int[] {0, 3, 1, 4, 1, 5, 9, 2, 6};   // 1-based
+            System.out.println(range(1, 7));
+            System.out.println(range(3, 7));
+            add(3, 2);
+            System.out.println(range(1, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6] 1-based, then +2 at index 3
+        // Output: 25
+        //         21
+        //         27
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>The two loops. Build by adding each element. Same three numbers as the brute tab.</p>
+    <div class="code" data-highlight="12-15,18-23,26-28">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FenwickTree.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FenwickTree {
+    
+        final long[] bit;
+    
+        FenwickTree(int n) { bit = new long[n + 1]; }
+    
+        void add(int i, long v) {
+            for (; i &lt; bit.length; i += i &amp; -i) bit[i] += v;
+        }
+    
+        long prefix(int i) {
+            long s = 0;
+            for (; i &gt; 0; i -= i &amp; -i) s += bit[i];
+            return s;
+        }
+    
+        long range(int l, int r) { return prefix(r) - prefix(l - 1); }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            FenwickTree ft = new FenwickTree(a.length);
+            for (int i = 0; i &lt; a.length; i++) ft.add(i + 1, a[i]);
+            System.out.println(ft.prefix(7));
+            System.out.println(ft.range(3, 7));
+            ft.add(3, 2);
+            System.out.println(ft.prefix(7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], then +2 at index 3
+        // Output: 25
+        //         21
+        //         27
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Coordinate-compress, scan left to right, query how many already-inserted ranks are strictly larger, then insert. Classic O(n log n) inversion count.</p>
+    <div class="code" data-highlight="24-32,35-43">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">InversionBit.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.HashMap;
+    import java.util.Map;
+    
+    public class InversionBit {
+    
+        static class Fenwick {
+            long[] bit;
+            Fenwick(int n) { bit = new long[n + 1]; }
+            void add(int i, long v) { for (; i &lt; bit.length; i += i &amp; -i) bit[i] += v; }
+            long prefix(int i) {
+                long s = 0;
+                for (; i &gt; 0; i -= i &amp; -i) s += bit[i];
+                return s;
+            }
+            long range(int l, int r) { return prefix(r) - prefix(l - 1); }
+        }
+    
+        static int[] compress(int[] a) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            Map&lt;Integer, Integer&gt; rk = new HashMap&lt;&gt;();
+            int r = 1;
+            for (int v : b) if (!rk.containsKey(v)) rk.put(v, r++);
+            int[] out = new int[a.length];
+            for (int i = 0; i &lt; a.length; i++) out[i] = rk.get(a[i]);
+            return out;
+        }
+    
+        static long inversions(int[] a) {
+            int[] rk = compress(a);
+            Fenwick ft = new Fenwick(a.length);
+            long inv = 0;
+            for (int i = 0; i &lt; rk.length; i++) {
+                inv += ft.range(rk[i] + 1, a.length);   // seen ranks strictly larger
+                ft.add(rk[i], 1);
+            }
+            return inv;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(inversions(new int[] {3, 1, 4, 1, 5, 9, 2, 6}));
+            System.out.println(inversions(new int[] {1, 2, 3, 4}));
+            System.out.println(inversions(new int[] {4, 3, 2, 1}));
+        }
+        // Input : [3,1,4,1,5,9,2,6]
+        // Output: 8
+        //         0
+        //         6
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(log n) per update or prefix query</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each step of either loop changes i by its lowest set bit, which either clears that bit (query) or carries into a higher bit (update). At most <code>log<sub>2</sub> n</code> bits exist:</p>
+    <p><span class="eq">T<sub>op</sub>(n) = O(log n),&nbsp;&nbsp; T<sub>build</sub> = O(n log n) naive / O(n) linear build</span></p>
+    <p>A segment tree is the same bound with a larger constant and more memory (4n vs n). Fenwick wins when the query is a prefix of an invertible op. At <code>n = q = 2&times;10&#8309;</code> both pass; Fenwick is shorter to type.</p>
+    <p>Inversion counting is n updates and n queries on a compressed universe of size n, so <code>O(n log n)</code>, matching merge-sort inversions with a reusable structure.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Prefix array</td><td><code>O(1)</code> query, <code>O(n)</code> update</td><td><code>O(n)</code></td><td>No updates</td></tr>
+      <tr><td>Fenwick</td><td><code>O(log n)</code> both</td><td><code>O(n)</code></td><td>Point update, prefix/range sum</td></tr>
+      <tr><td>Segment tree</td><td><code>O(log n)</code> both</td><td><code>O(n)</code></td><td>Any associative op, easier range min</td></tr>
+      <tr><td>Lazy segtree</td><td><code>O(log n)</code> both</td><td><code>O(n)</code></td><td>Range updates</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">0-based index in a 1-based tree</span>
+    <div class="pitfalls__bug"><code>add(0, v)</code> does <code>i += 0</code> forever, or immediately ArrayIndexOutOfBounds. The most common Fenwick crash.</div>
+    <div class="pitfalls__fix">Array index i maps to Fenwick index i+1. Assert <code>i &gt;= 1</code> in add.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>int</code> overflow in the buckets</span>
+    <div class="pitfalls__bug">n = 10&#8309;, values 10&#8313;, prefixes 10&sup1;&#8308;. Wrapping buckets still look vaguely plausible after a subtraction.</div>
+    <div class="pitfalls__fix"><code>long[] bit</code> always.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">range(l, r) with l = 1 calling prefix(0) incorrectly</span>
+    <div class="pitfalls__bug">Writing <code>prefix(r) - prefix(l)</code> drops a[l]. Or calling prefix(-1) when someone passed 0-based l = 0.</div>
+    <div class="pitfalls__fix"><code>prefix(r) - prefix(l - 1)</code> with l, r 1-based. prefix(0) is 0 because the loop never runs.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using a BIT for range minimum</span>
+    <div class="pitfalls__bug">There is no inverse, so you cannot peel a left prefix off a right prefix. People still try, get a number, and fail hidden tests.</div>
+    <div class="pitfalls__fix">Segment tree, or a sparse table if static. Fenwick min-trees exist only for very restricted updates (you can update a value downward, not arbitrarily).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to compress before a frequency BIT</span>
+    <div class="pitfalls__bug">Values up to 10&#8313;, allocating <code>new long[1_000_000_001]</code>, OOM. Or using the raw value as an index and throwing.</div>
+    <div class="pitfalls__fix">Sort unique values, rank them 1..n, BIT of size n. Ties need a stable policy (strictly greater vs greater-or-equal) matching the inversion definition.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Range add, point query</td>
+        <td>Difference array in the BIT: add v at l, add -v at r+1. Point query is prefix(i).</td>
+        <td><code>add(l, v); add(r+1, -v);  query = prefix(i)</code></td>
+        <td>Dual of point-add range-sum</td>
+      </tr>
+      <tr>
+        <td>Two BITs for range add + range sum</td>
+        <td>Maintain B1, B2 so prefix(i) = i * sum(B1, i) - sum(B2, i). Range add [l,r] += v updates four entries. Smaller constant than a lazy segtree.</td>
+        <td><code>B1.add(l,v); B1.add(r+1,-v); B2.add(l,v*(l-1)); B2.add(r+1,-v*r);</code></td>
+        <td>Contest staple</td>
+      </tr>
+      <tr>
+        <td>XOR Fenwick</td>
+        <td>Replace += with ^=. XOR is its own inverse, so range XOR is prefix(r) ^ prefix(l-1). Same loops.</td>
+        <td><code>bit[i] ^= v;  acc ^= bit[i];</code></td>
+        <td>LC 1442-style XOR counts, or CF 242E without lazy</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How do you build in O(n) instead of O(n log n)?</summary>
+    <div class="followup__body">
+      <p>Set <code>bit[i] = a[i]</code> (1-based), then for i = 1..n push <code>bit[i]</code> onto <code>j = i + lsb(i)</code> if j &le; n. Each index is written a constant number of times. Useful when n is 10&#8311; and the log in the build actually shows up.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is a Fenwick unable to do range minimum cleanly?</summary>
+    <div class="followup__body">
+      <p>Querying [l, r] as a difference of prefixes needs an inverse. Min has none. You can store mins of the buckets, but combining an arbitrary [l, r] from those buckets needs the same disjoint-dyadic cover a segment tree already gives you, and the BIT addressing does not produce that cover for an arbitrary inner range. Write a segment tree.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does inversion count handle duplicates?</summary>
+    <div class="followup__body">
+      <p>For strictly-greater inversions, query ranks <code>&gt; current</code> then insert. Equal values are not inversions. If you insert before querying you count equals as inversions. The order of query-then-insert (or insert-then-query with rank+1) is the whole policy. Coordinate compression must keep duplicates as the <em>same</em> rank.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When do you pick Fenwick over a segment tree in an interview?</summary>
+    <div class="followup__body">
+      <p>When the interviewer asked for range sums with point updates, or inversions. It is twenty lines and the lsb trick is a talking point. If they then say "now make it range min" you have a reason to rewrite as a segment tree, which is the next page.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener">Range Sum Query - Mutable</a></td>
+        <td><span class="badge badge--lc">LC 307</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The BIT drill</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener">Count of Smaller Numbers After Self</a></td>
+        <td><span class="badge badge--lc">LC 315</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Scan right to left, query smaller, insert</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/reverse-pairs/" target="_blank" rel="noopener">Reverse Pairs</a></td>
+        <td><span class="badge badge--lc">LC 493</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Query count of ranks > 2*val, compress longs</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/count-of-range-sum/" target="_blank" rel="noopener">Count of Range Sum</a></td>
+        <td><span class="badge badge--lc">LC 327</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Prefix sums + BIT of compressed prefixes</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/create-sorted-array-through-instructions/" target="_blank" rel="noopener">Create Sorted Array through Instructions</a></td>
+        <td><span class="badge badge--lc">LC 1649</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>min(count-smaller, count-larger) per insert</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/61/E" target="_blank" rel="noopener">Enemy is weak</a></td>
+        <td><span class="badge badge--cf">CF 61E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two BITs, count inversions of triples</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/597/C" target="_blank" rel="noopener">Subsequences</a></td>
+        <td><span class="badge badge--cf">CF 597C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>k nested BITs counting increasing subsequences</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/459/D" target="_blank" rel="noopener">Pashmak and Parmida's Problem</a></td>
+        <td><span class="badge badge--cf">CF 459D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix/suffix frequencies + BIT</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener">Dynamic Range Sum Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Point set, range sum</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1354/D" target="_blank" rel="noopener">List Removals</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Order-statistic BIT, find k-th remaining</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 315 &mdash; scan from the right</summary>
+  <div class="spoiler__body">
+    <p>"Smaller to the right" means: process a[n-1], then a[n-2], ... At a[i] the BIT already holds the ranks of everything to the right, so <code>prefix(rank(a[i]) - 1)</code> is the answer for i. Then insert rank(a[i]). Compress first. Duplicates: ranks are equal, and prefix(rank-1) correctly ignores equals if you assigned a unique rank per value (not per occurrence).</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 493 &mdash; reverse pairs with 2*val</summary>
+  <div class="spoiler__body">
+    <p>A reverse pair is i &lt; j and a[i] &gt; 2*a[j]. Scan from the right: query how many inserted values are &gt; 2*a[i] wait no &mdash; when i is current and j's already in (to the right), you want count of inserted values v with a[i] &gt; 2v, i.e. v &lt; a[i]/2. Easier: compress all a[i] and all 2*a[i] together as longs, query the count of ranks strictly above rank(2*a[i]), then insert a[i]. Overflow: 2*a[i] is a long.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>1-based.</strong> <code>i &amp; -i</code> on 0 is an infinite loop.</li>
+    <li><strong>Update adds lsb, query subtracts lsb.</strong> Both O(log n).</li>
+    <li><strong>Range = prefix(r) - prefix(l-1).</strong> Use long[].</li>
+    <li><strong>Compress values</strong> before a frequency BIT.</li>
+    <li><strong>Not for min.</strong> That is a segment tree.</li>
+  </ul>
+  <div class="recap__oneliner">add: for(;i&lt;n;i+=i&amp;-i) bit[i]+=v | prefix: for(;i&gt;0;i-=i&amp;-i) s+=bit[i] | range=pref(r)-pref(l-1)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

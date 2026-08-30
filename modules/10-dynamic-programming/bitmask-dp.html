@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitmask DP &mdash; DSA Course</title>
+<meta name="description" content="When n ≤ 20 the subset is the state: dp[mask] (and maybe a last vertex) enumerates 2n subsets in a DAG of popcounts.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bitmask-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Bitmask DP</h1>
+  <p class="hero__tagline">When n ≤ 20 the subset <em>is</em> the state: <code>dp[mask]</code> (and maybe a last vertex) enumerates 2<sup>n</sup> subsets in a DAG of popcounts.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>,
+      <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">bitmask</span>
+      <span class="chip">TSP</span>
+      <span class="chip">subset</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>n ≤ 20 is not a suggestion of brute force permutations. It is a signature for 2<sup>n</sup> n or 2<sup>n</sup> n&sup2; DP over subsets. Held-Karp TSP, assignment, "smallest team covering all skills", and "number of Hamiltonian paths" all live here.</p>
+<p>The mask is an integer whose bits remember which items / vertices / skills are used. Transitions turn a bit off (or on) and maybe record who was last. Iterating masks in order of popcount (or by the natural 0..2^n-1 increasing order, which adds bits) is the topo order.</p>
+<p>P1 because the bit tricks (iterate submasks, lowest set bit, popcount) are as much the topic as the recurrence, and because a missed bit means a silent wrong count.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>dp[mask] is the answer for exactly the subset whose bits are set. A transition names one element of the subset as "the one we added last".</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>n ≤ 16 .. 22, and the state must remember an arbitrary subset</li>
+        <li>TSP / shortest Hamiltonian path in a dense small graph</li>
+        <li>Assignment: n jobs, n workers, min cost bijection</li>
+        <li>Cover all skills / all remaining with a smallest team</li>
+        <li>Count Hamiltonian paths, or DP over used vertices plus last</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>n = 40 subset-sum → meet-in-the-middle, not 2^n n DP on one side only if n=40 full</li>
+        <li>n = 1e5 → the subset cannot be the state</li>
+        <li>SOS over all submasks of all masks is a different (next) page</li>
+        <li>The graph is a DAG of n=1e5 → DAG DP, not a mask</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>TSP min cost</td>
+        <td>dp[mask][u] last vertex u</td>
+        <td>Held-Karp O(2^n n²)</td>
+      </tr>
+      <tr>
+        <td>Assignment</td>
+        <td>dp[mask] = min cost pairing used workers</td>
+        <td>O(2^n n)</td>
+      </tr>
+      <tr>
+        <td>Count Hamiltonian paths</td>
+        <td>+= along unused vertices</td>
+        <td>mod often</td>
+      </tr>
+      <tr>
+        <td>Min team covering bits</td>
+        <td>OR skills, min size</td>
+        <td>LC 1125</td>
+      </tr>
+      <tr>
+        <td>Iterate all submasks</td>
+        <td>s = (s-1) & mask</td>
+        <td>SOS cousin</td>
+      </tr>
+      <tr>
+        <td>n=20, 3^n</td>
+        <td>each item: skip / A / B</td>
+        <td>split into two groups</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> 2^n brute of permutations</td>
+        <td>n! is 2e18 at n=20; 2^n n^2 is 4e8</td>
+        <td>Always DP the subset, never permute n=20</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 20</code> for O(2^n n^2) (~4e8, tight in Java). <code>n &le; 24</code> only for O(2^n n) with tiny constants. Allocate <code>int[1<<n]</code> or <code>int[1<<n][n]</code>; 2^24 ints is 64 MB.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Masks as vertices of a DAG</h2>
+<p>Assignment dry-run: n = 3 workers, costs[i][j] = cost of worker i doing job j, jobs are bits. dp[mask] = min cost to assign the workers 0..popcount(mask)-1 to the job subset mask (or: workers are bits). We take the second convention: bits = used jobs, and we assign workers in order 0,1,2,... so dp[mask] uses the first popcount(mask) workers.</p>
+<p>Held-Karp: dp[mask][u] = min cost of a path that visits exactly the vertices in mask and ends at u. Transition: for v in mask, v != u, dp[mask][u] = min dp[mask^(1<<u)][v] + w[v][u]. Start dp[1<<s][s] = 0. Iterate mask from 0 to (1<<n)-1; a submask with one fewer bit is a smaller integer, so it is already filled. That is the free topo order.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>dp[mask][u]</code> is the best cost (or ways) of visiting exactly the set <code>mask</code>, currently sitting at <code>u</code> (u's bit is on).</p><span class="eq">dp[mask][u] = min_v dp[mask without u][v] + w[v][u]</span>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Iterate set bits</span>
+    <p><code>for (int s = mask; s != 0; s &= s-1) { int v = Integer.numberOfTrailingZeros(s); }</code> visits each set bit of mask in O(popcount). Do not loop v = 0..n-1 if n is 20 and you are inside another n loop unless you must.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Java int sign bit</span>
+    <p>1&lt;&lt;31 is negative. Keep n ≤ 30 for int masks, or use long and 1L&lt;&lt;i. Iterate with <code>s = (s-1)&amp;mask</code> on ints only when mask is non-negative.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Mini TSP, n = 3, undirected weights 0-1:5, 0-2:1, 1-2:2, start at 0</h3>
+
+<p>Rows are masks 1..7; columns are last vertex 0,1,2. inf = unreachable. Target is the cell we write; from is the previous last vertex.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="bitmask-dpViz"></div>
+  <div class="viz-player" data-viz-target="bitmask-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "mask\\last",
+      "rowHeads": [
+        "001",
+        "010",
+        "011",
+        "100",
+        "101",
+        "110",
+        "111"
+      ],
+      "colHeads": [
+        "u=0",
+        "u=1",
+        "u=2"
+      ],
+      "vars": [
+        "mask",
+        "u",
+        "dp"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start: mask 001, at 0, cost 0. Other singletons from 0 are inf (we fix start = 0).",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "inf"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "inf"
+            }
+          ],
+          "values": {
+            "mask": "001",
+            "u": 0,
+            "dp": 0
+          }
+        },
+        {
+          "note": "mask 011 (0 and 1), last=1. From {0} at 0 plus w=5. Write 5. Target last=1, from last=0.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 1,
+              "val": "5",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "mask": "011",
+            "u": 1,
+            "dp": 5
+          }
+        },
+        {
+          "note": "mask 101 (0 and 2), last=2. From {0} at 0 plus w=1. Write 1.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 2,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "mask": "101",
+            "u": 2,
+            "dp": 1
+          }
+        },
+        {
+          "note": "mask 111, last=1. Previous is mask 101 last=2, plus w[2][1]=2. Write 1+2=3.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 1,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "mask": "111",
+            "u": 1,
+            "dp": 3
+          }
+        },
+        {
+          "note": "mask 111, last=2. Previous mask 011 last=1, plus w[1][2]=2. Write 5+2=7.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 2,
+              "val": "7",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "5",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "mask": "111",
+            "u": 2,
+            "dp": 7
+          }
+        },
+        {
+          "note": "Close the cycle: 3+w(1,0)=8 vs 7+w(2,0)=8. Answer 8.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 1,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "7",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "8",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "mask": "close",
+            "u": "back to 0",
+            "dp": 8
+          }
+        },
+        {
+          "note": "Without returning, shortest Hamiltonian path from 0 is min(dp[111][1], dp[111][2]) = 3.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 1,
+              "val": "3",
+              "cls": "answer"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "7"
+            }
+          ],
+          "values": {
+            "mask": "path",
+            "u": 1,
+            "dp": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Hamiltonian cycles back to 0: path 0-2-1-0 costs 1+2+5=8. dp[7][1]+w[1][0] and dp[7][2]+w[2][0] compete.</figcaption>
+</figure>
+
+<h3>Popcount layers for n = 3</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  m0["000"] --&gt; m1["001"]
+  m0 --&gt; m2["010"]
+  m0 --&gt; m4["100"]
+  m1 --&gt; m3["011"]
+  m1 --&gt; m5["101"]
+  m2 --&gt; m3
+  m2 --&gt; m6["110"]
+  m4 --&gt; m5
+  m4 --&gt; m6
+  m3 --&gt; m7["111"]
+  m5 --&gt; m7
+  m6 --&gt; m7
+  </div>
+  <figcaption>Edges add one bit. Any increasing-mask loop respects this DAG.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm n ≤ 20</strong> and that the forgotten information is exactly a subset.</li>
+  <li><strong>Allocate dp[1<<n]</strong> or dp[1<<n][n], fill with inf / 0.</li>
+  <li><strong>Base:</strong> empty mask 0, or singletons 1<<s.</li>
+  <li><strong>For mask = 0 .. (1<<n)-1:</strong> for each set bit u, for each previous v, relax.</li>
+  <li><strong>Use n &amp; -n / trailing zeros</strong> to iterate set bits.</li>
+  <li><strong>Answer</strong> is min over endings, plus the return edge for a cycle.</li>
+  <li><strong>Reconstruct</strong> with a parent pair (prev mask, prev u).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Held-Karp from 0 on the 3-vertex graph. inf omitted.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>mask</th><th>u</th><th>from</th><th>w</th><th>dp</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>001</td><td>0</td><td>—</td><td>0</td><td>0</td><td>Start.</td></tr>
+      <tr class="trace-table__row--change"><td>011</td><td>1</td><td>001,u0</td><td>5</td><td>5</td><td>Visit 1.</td></tr>
+      <tr class="trace-table__row--change"><td>101</td><td>2</td><td>001,u0</td><td>1</td><td>1</td><td>Visit 2.</td></tr>
+      <tr><td>111</td><td>1</td><td>101,u2</td><td>2</td><td>3</td><td>0-2-1.</td></tr>
+      <tr><td>111</td><td>2</td><td>011,u1</td><td>2</td><td>7</td><td>0-1-2.</td></tr>
+      <tr class="trace-table__row--change"><td>cycle</td><td>0</td><td>111,u1 or u2</td><td>5 or 1</td><td>8</td><td>Both closes cost 8.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Bitmask DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TspRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class TspRec {
+    
+        static int rec(int[][] w, int used, int u, int n) {
+            if (used == (1 &lt;&lt; n) - 1) {
+                return w[u][0];
+            }
+            int best = Integer.MAX_VALUE / 4;
+            for (int v = 0; v &lt; n; v++) {
+                if ((used &amp; (1 &lt;&lt; v)) == 0) {
+                    best = Math.min(best, w[u][v] + rec(w, used | (1 &lt;&lt; v), v, n));
+                }
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            int[][] w = {{0, 5, 1}, {5, 0, 2}, {1, 2, 0}};
+            System.out.println(rec(w, 1, 0, 3));
+        }
+        // Input : n=3, weights as in the figure, start 0, return to 0
+        // Output: 8
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TspMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class TspMemo {
+    
+        static int rec(int[][] w, int used, int u, int n, int[][] memo) {
+            if (used == (1 &lt;&lt; n) - 1) {
+                return w[u][0];
+            }
+            if (memo[used][u] != -1) {
+                return memo[used][u];
+            }
+            int best = Integer.MAX_VALUE / 4;
+            for (int v = 0; v &lt; n; v++) {
+                if ((used &amp; (1 &lt;&lt; v)) == 0) {
+                    best = Math.min(best, w[u][v] + rec(w, used | (1 &lt;&lt; v), v, n, memo));
+                }
+            }
+            return memo[used][u] = best;
+        }
+    
+        public static void main(String[] args) {
+            int[][] w = {{0, 5, 1}, {5, 0, 2}, {1, 2, 0}};
+            int n = 3;
+            int[][] memo = new int[1 &lt;&lt; n][n];
+            for (int[] row : memo) {
+                Arrays.fill(row, -1);
+            }
+            System.out.println(rec(w, 1, 0, n, memo));
+        }
+        // Input : same
+        // Output: 8
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TspTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class TspTab {
+    
+        static int tsp(int[][] w) {
+            int n = w.length;
+            int inf = Integer.MAX_VALUE / 4;
+            int[][] dp = new int[1 &lt;&lt; n][n];
+            for (int[] row : dp) {
+                Arrays.fill(row, inf);
+            }
+            dp[1][0] = 0;
+            for (int mask = 1; mask &lt; (1 &lt;&lt; n); mask++) {
+                for (int u = 0; u &lt; n; u++) {
+                    if ((mask &amp; (1 &lt;&lt; u)) == 0) {
+                        continue;
+                    }
+                    for (int v = 0; v &lt; n; v++) {
+                        if ((mask &amp; (1 &lt;&lt; v)) != 0) {
+                            continue;
+                        }
+                        int nmask = mask | (1 &lt;&lt; v);
+                        dp[nmask][v] = Math.min(dp[nmask][v], dp[mask][u] + w[u][v]);
+                    }
+                }
+            }
+            int best = inf;
+            int full = (1 &lt;&lt; n) - 1;
+            for (int u = 1; u &lt; n; u++) {
+                best = Math.min(best, dp[full][u] + w[u][0]);
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            int[][] w = {{0, 5, 1}, {5, 0, 2}, {1, 2, 0}};
+            System.out.println(tsp(w));
+        }
+        // Input : same
+        // Output: 8
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(2^n n²) Held-Karp; O(2^n n) assignment</span>
+    <span class="badge badge--space">Space O(2^n n) or O(2^n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>2<sup>n</sup> masks, n choices for last, n choices for previous:</p>
+    <p><span class="eq">T<sub>TSP</sub> = &Theta;(2<sup>n</sup> n&sup2;)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Held-Karp TSP</td><td>O(2^n n²)</td><td>O(2^n n)</td><td>n≤20</td></tr>
+      <tr><td>Assignment</td><td>O(2^n n)</td><td>O(2^n)</td><td>n≤24</td></tr>
+      <tr><td>n! permute</td><td>O(n! n)</td><td>O(n)</td><td>n≤12</td></tr>
+      <tr><td>Iterate submasks of all masks</td><td>O(3^n)</td><td>O(2^n)</td><td><a href="sos-dp.html">SOS</a></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Starting dp[0][0] = 0 with vertex 0 not in the mask</span>
+    <div class="pitfalls__bug">Last-vertex bit is off. Transitions that require u in mask skip the start.</div>
+    <div class="pitfalls__fix">dp[1<<s][s] = 0. The start bit is on.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Closing the cycle inside the DP instead of at the end</span>
+    <div class="pitfalls__bug">Adding w[u][s] on every mask, including non-full ones.</div>
+    <div class="pitfalls__fix">Return-edge only when mask is full.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow, inf + w wrapping</span>
+    <div class="pitfalls__bug">Integer.MAX_VALUE + w is negative and wins the min.</div>
+    <div class="pitfalls__fix">inf = MAX/4, or skip if dp[mask][u] is still inf.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">1<<n for n=31</span>
+    <div class="pitfalls__bug">Sign bit, negative array size or infinite loop.</div>
+    <div class="pitfalls__fix">n ≤ 30 for int, or long masks.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting u's bit is set in mask</span>
+    <div class="pitfalls__bug">Transition from mask including u, still iterating u as previous.</div>
+    <div class="pitfalls__fix">Previous mask is mask ^ (1<<u), and v iterates bits of that.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">O(2^n n^2) at n=24 in Java</span>
+    <div class="pitfalls__bug">TLE. 2^24 * 576 is billions.</div>
+    <div class="pitfalls__fix">Shrink n, or drop a dimension (assignment is 2^n n).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Assignment / min cost matching</td>
+        <td>dp[mask] = min over unused job j of dp[mask^(1<<j)] + cost[popcount][j].</td>
+        <td><code>O(2^n n)</code></td>
+        <td>n workers in order</td>
+      </tr>
+      <tr>
+        <td>Count Hamiltonian paths</td>
+        <td>+= instead of min, often mod 1e9+7.</td>
+        <td><code>AtCoder DP-O matching is related</code></td>
+        <td>long + modulus</td>
+      </tr>
+      <tr>
+        <td>Min OR-cover of skills</td>
+        <td>Each person is a bitmask of skills. dp[mask] min people to reach at least mask.</td>
+        <td><code>LC 1125</code></td>
+        <td>OR transitions</td>
+      </tr>
+      <tr>
+        <td>3^n split</td>
+        <td>Each item in A, B, or neither. Loop trit masks or SOS-style.</td>
+        <td><code>Meet in the middle cousin</code></td>
+        <td>n≤14</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is 2^n n^2 better than n!?</summary>
+    <div class="followup__body">
+      <p>n! paths remember the whole order. DP remembers only the set and the last vertex, which is enough for the next edge. That is optimal substructure: the best path through a set ending at u does not care about the order before u, only the cost.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I iterate all submasks of a mask?</summary>
+    <div class="followup__body">
+      <p><code>for (int s = mask; ; s = (s-1) & mask) { ... if (s==0) break; }</code>. Across all masks that is 3^n, which is SOS without the smart order. Prefer the SOS page when you need F[mask] = sum over submasks.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I bitmask a grid of 8x8?</summary>
+    <div class="followup__body">
+      <p>If the state is one row's occupancy, n = number of columns ≤ 8 is classic "profile DP" / broken profile. That is bitmask DP on a sliding row, still this family, with extra care for vertical constraints.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>TSP approximation?</summary>
+    <div class="followup__body">
+      <p>Held-Karp is exact. For n &gt; 20 you need Christofides / local search / ILP, which are not this course. In contests, n &gt; 20 means the graph is special (metric on a line, bitonic, DAG).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/shortest-path-visiting-all-nodes/" target="_blank" rel="noopener">Shortest Path Visiting All Nodes</a></td>
+        <td><span class="badge badge--lc">LC 847</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>BFS on (mask, u), unweighted TSP</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/smallest-sufficient-team/" target="_blank" rel="noopener">Smallest Sufficient Team</a></td>
+        <td><span class="badge badge--lc">LC 1125</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>OR-cover of skill bits</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/maximum-students-taking-exam/" target="_blank" rel="noopener">Maximum Students Taking Exam</a></td>
+        <td><span class="badge badge--lc">LC 1349</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Profile DP, row masks</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/partition-to-k-equal-sum-subsets/" target="_blank" rel="noopener">Partition to K Equal Sum Subsets</a></td>
+        <td><span class="badge badge--lc">LC 698</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>mask of used, or backtrack</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_o" target="_blank" rel="noopener">Matching</a></td>
+        <td><span class="badge badge--atc">ATC DP-O</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Count perfect matchings, 2^n n</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/travelling-salesman-problem2732/1" target="_blank" rel="noopener">Travelling Salesman</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Held-Karp implement</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/580/D" target="_blank" rel="noopener">Kefa and Dishes</a></td>
+        <td><span class="badge badge--cf">CF 580D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>dp[mask][last] + bonus edges</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1316/E" target="_blank" rel="noopener">Team</a></td>
+        <td><span class="badge badge--cf">CF 1316E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>People as mask of positions</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_u" target="_blank" rel="noopener">Harmony</a></td>
+        <td><span class="badge badge--atc">ATC DP-U</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Grouping, 3^n submask enum</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://cses.fi/problemset/task/1690" target="_blank" rel="noopener">Shortest Hamiltonian Path</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Count paths visiting all, mod</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 580D</summary>
+  <div class="spoiler__body">
+    <p>n ≤ 18 dishes, m extra satisfaction pairs (x,y,z) if y is eaten immediately after x. dp[mask][last] = max satisfaction. Transition: add a new dish v, add a[v] plus z if (last,v) is a bonus. Answer max over masks with popcount m and all last. long.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-O Matching</summary>
+  <div class="spoiler__body">
+    <p>n men, n women, compatibility matrix. dp[mask] = ways to match the first popcount(mask) men to the woman-subset mask. For each unused woman, add. Mod 1e9+7. O(2^n n). n=21 is the upper end; write tight Java.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>n ≤ 20 ⇒ 2<sup>n</sup> subset states</strong>, never n!.</li>
+    <li><strong>dp[mask][u]</strong> = best for this set, currently at u.</li>
+    <li><strong>Increasing mask is a topo order</strong> (bits only turn on).</li>
+    <li><strong>inf = MAX/4</strong>, start with the start bit on.</li>
+    <li><strong>Iterate set bits with s &= s-1</strong>.</li>
+  </ul>
+  <div class="recap__oneliner">dp[mask][u] | start 1&lt;&lt;s | add unused v | close cycle on full mask | n&lt;=20</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

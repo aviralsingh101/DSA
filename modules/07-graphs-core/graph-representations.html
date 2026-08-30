@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graph Representations &mdash; DSA Course</title>
+<meta name="description" content="Pick the encoding before you pick the algorithm &mdash; adjacency list, matrix and edge list are not interchangeable, and the wrong one turns an O(n + m) walk into an O(n&sup2;) ti">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="graph-representations">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 07 &middot; Graphs: Core</span>
+  <h1>Graph Representations</h1>
+  <p class="hero__tagline">Pick the encoding before you pick the algorithm &mdash; adjacency list, matrix and edge list are not interchangeable, and the wrong one turns an <code>O(n + m)</code> walk into an <code>O(n&sup2;)</code> timeout.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">graphs</span>
+      <span class="chip">adjacency list</span>
+      <span class="chip">adjacency matrix</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Every graph algorithm is written against an encoding, not against a picture. The same four-node drawing becomes a list of neighbour arrays, an <code>n &times; n</code> boolean matrix, or a flat list of edges, and each of those answers a different question in constant time. Choosing the encoding is therefore the first algorithmic decision, not a bookkeeping detail you sort out after the idea is clear.</p>
+<p>Interviews and contests punish the wrong choice immediately. Iterating neighbours of <code>u</code> is <code>O(deg(u))</code> on a list and <code>O(n)</code> on a matrix. Testing whether <code>(u, v)</code> exists is the opposite. On <code>n = 10&#8309;</code>, <code>m = 10&#8309;</code> a matrix is a memory error before it is a timeout; on <code>n = 400</code> a matrix is the faster, simpler structure. The constraint line tells you which world you are in.</p>
+<p>A second, quieter reason this page exists: off-by-one indexing, forgotten reverse edges, and mixing 0-based code with 1-based input account for more wrong answers on easy graph problems than the algorithms themselves. Get the encoding mechanical, then BFS and DFS are twenty lines.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>An adjacency list is the default because most graphs you meet are sparse (<code>m = O(n)</code> or <code>O(n log n)</code>). Reach for a matrix only when <code>n</code> is a few hundred <em>and</em> you need <code>O(1)</code> edge tests or dense all-pairs work.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>The input is <code>n</code> and a list of <code>m</code> pairs <code>(u, v)</code>, possibly with a weight</li>
+        <li>You will iterate every neighbour of a vertex many times (BFS, DFS, Dijkstra)</li>
+        <li>You need a constant-time "is this edge present?" test (Floyd-Warshall, some DP)</li>
+        <li>The graph is undirected and you must add both directions yourself</li>
+        <li>Nodes arrive 1-indexed from the judge and your arrays are 0-indexed</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The "graph" is an implicit grid and moves are <code>(dr, dc)</code> &mdash; do not materialise <code>n&sup2;</code> adjacency lists</li>
+        <li>You only need to sort the edges once (Kruskal) &mdash; keep an edge list, skip the adjacency structure</li>
+        <li>The structure is a tree given as parent pointers &mdash; that already is the encoding</li>
+        <li>You need range queries on a path &mdash; that is a <a href="../09-decompositions/heavy-light-decomposition.html">decomposition</a>, not a representation choice</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Iterate all neighbours of u</td>
+        <td>Most graph algorithms</td>
+        <td>Adjacency list</td>
+      </tr>
+      <tr>
+        <td>Test whether (u, v) exists in O(1)</td>
+        <td>Dense DP, Floyd-Warshall, some matching</td>
+        <td>Adjacency matrix</td>
+      </tr>
+      <tr>
+        <td>Sort edges by weight once</td>
+        <td>Kruskal, some offline queries</td>
+        <td>Edge list</td>
+      </tr>
+      <tr>
+        <td>Undirected input, pair (u, v)</td>
+        <td>Must store both directions</td>
+        <td>list: add twice; matrix: set two cells</td>
+      </tr>
+      <tr>
+        <td>Weighted edges</td>
+        <td>Dijkstra, 0-1 BFS, Bellman-Ford</td>
+        <td>Store (v, w) pairs, not bare ints</td>
+      </tr>
+      <tr>
+        <td>Grid / maze with 4- or 8-neighbour moves</td>
+        <td>Implicit graph</td>
+        <td>On-the-fly neighbours, no adj list</td>
+      </tr>
+      <tr>
+        <td>n &le; 400 and m is huge</td>
+        <td>Dense graph</td>
+        <td>Matrix is smaller and faster</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "I built a list, so edge tests are free"</td>
+        <td>Membership on a list is O(deg), not O(1)</td>
+        <td>Keep a matrix, a HashSet of pairs, or accept the scan</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> forces lists (<code>n&sup2;</code> memory dies). <code>n &le; 400</code> is the matrix signature. Always store vertices as <code>int</code> and weights as <code>int</code> or <code>long</code> if sums of weights can overflow.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Three encodings and when each wins</h2>
+<p>An <strong>adjacency list</strong> is an array of lists: <code>g.get(u)</code> holds every neighbour of <code>u</code>. Building it from an edge list is one pass. Walking the whole graph is <code>O(n + m)</code>, because each edge is stored a constant number of times. This is the encoding every BFS, DFS, Dijkstra and 0-1 BFS on this module assumes.</p>
+<p>An <strong>adjacency matrix</strong> is an <code>n &times; n</code> array where <code>mat[u][v]</code> is 1, a weight, or a sentinel. Edge tests and updates are <code>O(1)</code>; iterating neighbours is always <code>O(n)</code>. Memory is <code>O(n&sup2;)</code>, which at <code>n = 10&#8309;</code> is impossible and at <code>n = 400</code> is a comfortable 160&nbsp;000 cells.</p>
+<p>An <strong>edge list</strong> is just the input: an array of <code>(u, v, w)</code>. Kruskal and Bellman-Ford iterate edges, not vertices, so they want this form. Converting between the three is always linear in the size of the source.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The interview sentence</span>
+    <p>Default to an adjacency list of size <code>n</code> (or <code>n + 1</code> if the input is 1-indexed). For every undirected edge <code>(u, v)</code> push <code>v</code> onto <code>u</code> and <code>u</code> onto <code>v</code>. Then every neighbour scan is <code>for (int v : g.get(u))</code>, and the whole graph costs <code>O(n + m)</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">1-index the arrays, do not remap the input</span>
+    <p>If vertices arrive as <code>1..n</code>, allocate <code>n + 1</code> lists and ignore index 0. Remapping every edge to 0-based is an extra source of off-by-one bugs and saves nothing. The unused slot is one pointer.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Undirected means two writes</span>
+    <p>The single most common graph-building bug is adding <code>(u, v)</code> and forgetting <code>(v, u)</code>. BFS then reports the graph as disconnected, and the sample that happens to start at the right end still passes. Write both pushes as a single habit, and write a directed-only path as an explicit <code>if (undirected)</code> so the intent is visible.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">When the matrix is actually smaller</span>
+    <p>A list of <code>ArrayList</code> objects plus boxed <code>Integer</code>s costs far more than <code>4</code> bytes per edge. On a dense graph <code>m &asymp; n&sup2;/2</code>, a boolean matrix is both smaller and faster. Rule of thumb: if you would store more than about <code>n/4</code> neighbours per vertex, consider a matrix.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>The running example</h3>
+
+<p>Four vertices, five undirected edges. Every encoding on this page stores exactly this graph. Node 3 is a leaf; the triangle 0-1-2 is the dense part.</p>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  n0["0"] --- n1["1"]
+  n0 --- n2["2"]
+  n1 --- n2["2"]
+  n1 --- n3["3"]
+  n2 --- n3["3"]
+  </div>
+  <figcaption>Undirected graph used by the dry run and the Java. Adjacency lists store each undirected edge twice; the matrix stores it in both triangles.</figcaption>
+</figure>
+
+<h3>Degrees and a neighbour walk of vertex 1</h3>
+
+<p>The array is the degree of each vertex. Stepping through it is how you verify the list was built correctly: the handshaking lemma says the sum of degrees is <code>2m</code>.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="repDeg"></div>
+  <div class="viz-player" data-viz-target="repDeg">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "deg[u]",
+      "array": [
+        2,
+        3,
+        3,
+        2
+      ],
+      "indexLabels": [
+        "u=0",
+        "u=1",
+        "u=2",
+        "u=3"
+      ],
+      "vars": [
+        "u",
+        "deg[u]",
+        "neighbours"
+      ],
+      "speed": 900,
+      "frames": [
+        {
+          "note": "After inserting both directions of every edge, deg[0] = 2 because 0 meets 1 and 2.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": 0,
+            "deg[u]": 2,
+            "neighbours": "1, 2"
+          }
+        },
+        {
+          "note": "deg[1] = 3: edges to 0, 2 and 3. This is the highest-degree vertex.",
+          "active": [
+            1
+          ],
+          "dim": [
+            0,
+            2,
+            3
+          ],
+          "values": {
+            "u": 1,
+            "deg[u]": 3,
+            "neighbours": "0, 2, 3"
+          }
+        },
+        {
+          "note": "deg[2] = 3: edges to 0, 1 and 3.",
+          "active": [
+            2
+          ],
+          "dim": [
+            0,
+            1,
+            3
+          ],
+          "values": {
+            "u": 2,
+            "deg[u]": 3,
+            "neighbours": "0, 1, 3"
+          }
+        },
+        {
+          "note": "deg[3] = 2: edges to 1 and 2. Sum of degrees = 10 = 2m. The list is consistent.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": 3,
+            "deg[u]": 2,
+            "neighbours": "1, 2"
+          }
+        },
+        {
+          "note": "Neighbour walk of u = 1, first neighbour 0. This is one iteration of for (int v : g.get(1)).",
+          "active": [
+            1
+          ],
+          "best": [
+            0
+          ],
+          "values": {
+            "u": 1,
+            "deg[u]": 3,
+            "neighbours": "visiting 0"
+          }
+        },
+        {
+          "note": "Second neighbour 2.",
+          "active": [
+            1
+          ],
+          "best": [
+            2
+          ],
+          "values": {
+            "u": 1,
+            "deg[u]": 3,
+            "neighbours": "visiting 2"
+          }
+        },
+        {
+          "note": "Third neighbour 3. Walk complete: three iterations, matching deg[1]. BFS and DFS are this loop plus a queue or a stack.",
+          "active": [
+            1
+          ],
+          "best": [
+            3
+          ],
+          "done": [
+            0,
+            2
+          ],
+          "values": {
+            "u": 1,
+            "deg[u]": 3,
+            "neighbours": "visiting 3"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Degrees [2, 3, 3, 2] sum to 10 = 2 &times; 5 edges. The last frames walk <code>g.get(1)</code> = [0, 2, 3] the way BFS will later consume it.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Read <code>n</code> and <code>m</code></strong> and decide 0-based versus 1-based. If vertices are <code>1..n</code>, allocate <code>n + 1</code> slots.</li>
+  <li><strong>Allocate the structure.</strong> List: <code>n</code> empty <code>ArrayList</code>s. Matrix: <code>new int[n][n]</code> filled with 0 or a sentinel.</li>
+  <li><strong>For each of the <code>m</code> edges</strong> read <code>u, v</code> (and <code>w</code> if weighted).</li>
+  <li><strong>Insert the forward edge:</strong> <code>g.get(u).add(v)</code> or <code>mat[u][v] = w</code>.</li>
+  <li><strong>If undirected, insert the reverse</strong> in the same iteration. Never do it in a second pass &mdash; you will forget.</li>
+  <li><strong>Sanity-check:</strong> sum of list sizes equals <code>m</code> (directed) or <code>2m</code> (undirected).</li>
+  <li><strong>Iterate with <code>for (int v : g.get(u))</code></strong>, never with a nested loop over all <code>n</code> vertices unless you chose a matrix on purpose.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Build the list and the matrix for the four-node graph, then read the neighbours of vertex 1 from each encoding.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>step</th><th>edge</th><th>g.get(u) after</th><th>mat cells set</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>alloc</td><td>—</td><td>4 empty lists</td><td>4	imes4 zeros</td><td>n = 4, 0-based.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>0-1</td><td>0:[1]  1:[0]</td><td>mat[0][1]=mat[1][0]=1</td><td>First undirected edge, two writes.</td></tr>
+      <tr><td>2</td><td>0-2</td><td>0:[1,2]  2:[0]</td><td>mat[0][2]=mat[2][0]=1</td><td>Vertex 0 now has two neighbours.</td></tr>
+      <tr><td>3</td><td>1-2</td><td>1:[0,2]  2:[0,1]</td><td>mat[1][2]=mat[2][1]=1</td><td>The triangle closes.</td></tr>
+      <tr><td>4</td><td>1-3</td><td>1:[0,2,3]  3:[1]</td><td>mat[1][3]=mat[3][1]=1</td><td>Leaf 3 appears.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>2-3</td><td>2:[0,1,3]  3:[1,2]</td><td>mat[2][3]=mat[3][2]=1</td><td>Build complete. Sum of list sizes = 10 = 2m.</td></tr>
+      <tr><td>read</td><td>neigh(1)</td><td>0, 2, 3</td><td>scan row 1: four cells</td><td>List answers in O(deg)=O(3). Matrix scans all n=4 columns.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Graph Representations implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Adjacency list</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Adjacency matrix</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="List">
+    <p>The default encoding. Weighted edges store a pair; unweighted store a bare <code>int</code>. The dry-run graph is built and printed.</p>
+    <div class="code" data-highlight="18-21">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GraphList.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class GraphList {
+    
+        static List&lt;List&lt;Integer&gt;&gt; build(int n, int[][] edges, boolean undirected) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            for (int[] e : edges) {
+                int u = e[0], v = e[1];
+                g.get(u).add(v);
+                if (undirected) {
+                    g.get(v).add(u);
+                }
+            }
+            return g;
+        }
+    
+        static int[] degrees(List&lt;List&lt;Integer&gt;&gt; g) {
+            int n = g.size();
+            int[] deg = new int[n];
+            for (int u = 0; u &lt; n; u++) {
+                deg[u] = g.get(u).size();
+            }
+            return deg;
+        }
+    
+        public static void main(String[] args) {
+            int[][] edges = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
+            List&lt;List&lt;Integer&gt;&gt; g = build(4, edges, true);
+            int[] deg = degrees(g);
+            for (int u = 0; u &lt; g.size(); u++) {
+                System.out.println(u + ": " + g.get(u) + " deg=" + deg[u]);
+            }
+        }
+        // Input : n=4, edges (0-1)(0-2)(1-2)(1-3)(2-3), undirected
+        // Output: 0: [1, 2] deg=2
+        //         1: [0, 2, 3] deg=3
+        //         2: [0, 1, 3] deg=3
+        //         3: [1, 2] deg=2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Matrix">
+    <p>Use this when <code>n</code> is small and you need <code>O(1)</code> edge tests. Sentinel <code>0</code> means missing; store a weight if the graph is weighted.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GraphMatrix.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class GraphMatrix {
+    
+        static int[][] build(int n, int[][] edges, boolean undirected) {
+            int[][] mat = new int[n][n];
+            for (int[] e : edges) {
+                int u = e[0], v = e[1];
+                int w = e.length &gt; 2 ? e[2] : 1;
+                mat[u][v] = w;
+                if (undirected) {
+                    mat[v][u] = w;
+                }
+            }
+            return mat;
+        }
+    
+        static boolean hasEdge(int[][] mat, int u, int v) {
+            return mat[u][v] != 0;
+        }
+    
+        public static void main(String[] args) {
+            int[][] edges = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
+            int[][] mat = build(4, edges, true);
+            System.out.println("1-3? " + hasEdge(mat, 1, 3) + "  0-3? " + hasEdge(mat, 0, 3));
+            System.out.print("row 1:");
+            for (int v = 0; v &lt; 4; v++) {
+                System.out.print(" " + mat[1][v]);
+            }
+            System.out.println();
+        }
+        // Input : n=4, same five undirected edges
+        // Output: 1-3? true  0-3? false
+        //         row 1: 1 0 1 1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Weighted list plus an edge-list copy. Copy this into a solution and delete the encoding you do not need.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GraphTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class GraphTemplate {
+    
+        static final class Edge {
+            final int to, w;
+            Edge(int to, int w) { this.to = to; this.w = w; }
+        }
+    
+        int n;
+        List&lt;List&lt;Edge&gt;&gt; g;
+        int[][] raw;                       // edge list kept for Kruskal / Bellman-Ford
+    
+        GraphTemplate(int n, int[][] edges, boolean undirected) {
+            this.n = n;
+            this.raw = edges;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            for (int[] e : edges) {
+                int u = e[0], v = e[1], w = e.length &gt; 2 ? e[2] : 1;
+                g.get(u).add(new Edge(v, w));
+                if (undirected) {
+                    g.get(v).add(new Edge(u, w));
+                }
+            }
+        }
+    
+        public static void main(String[] args) {
+            int[][] edges = {{0, 1, 2}, {0, 2, 5}, {1, 2, 1}, {1, 3, 4}, {2, 3, 1}};
+            GraphTemplate gt = new GraphTemplate(4, edges, true);
+            System.out.println("n=" + gt.n + " edges=" + gt.raw.length
+                    + " deg(1)=" + gt.g.get(1).size());
+        }
+        // Input : n=4, five weighted undirected edges
+        // Output: n=4 edges=5 deg(1)=3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m) to build a list; O(n²) to allocate a matrix</span>
+    <span class="badge badge--space">Space O(n + m) list; O(n²) matrix</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each edge is stored a constant number of times in a list (once if directed, twice if undirected), so build and a full walk are both linear in the input size:</p>
+    <p><span class="eq">T<sub>list</sub> = &Theta;(n + m)</span></p>
+    <p>A matrix pays <code>n&sup2;</code> regardless of <code>m</code>. That is the right price only when you will look at a constant fraction of the cells, or when <code>n</code> is small enough that <code>n&sup2;</code> fits and <code>O(1)</code> edge tests matter.</p>
+    <p><span class="eq">T<sub>matrix neighbour scan</sub> = &Theta;(n) per vertex, &Theta;(n&sup2;) globally</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Adjacency list</td><td>O(n + m) build / walk</td><td>O(n + m)</td><td>Default. Sparse graphs, BFS, DFS, Dijkstra</td></tr>
+      <tr><td>Adjacency matrix</td><td>O(n²) alloc, O(1) test</td><td>O(n²)</td><td>n ≤ ~400, Floyd-Warshall, dense DP</td></tr>
+      <tr><td>Edge list</td><td>O(m)</td><td>O(m)</td><td>Kruskal, Bellman-Ford, just sorting edges</td></tr>
+      <tr><td>Implicit grid</td><td>O(1) per move</td><td>O(1) extra</td><td>Mazes; never materialise n² lists</td></tr>
+      <tr><td>HashSet of pairs</td><td>O(1) expected test</td><td>O(m)</td><td>Need both neighbour iteration and tests</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting the reverse edge</span>
+    <div class="pitfalls__bug">Inserting <code>(u, v)</code> only, on an undirected graph. BFS from one end reaches everyone; BFS from the other end reports a disconnected graph.</div>
+    <div class="pitfalls__fix">Always write both pushes in the same loop body. Treat "directed" as the explicit special case, not the default.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">0-based arrays, 1-based input</span>
+    <div class="pitfalls__bug"><code>g.get(u)</code> on a vertex labelled <code>n</code> throws, or vertex 0 is a phantom that you later iterate.</div>
+    <div class="pitfalls__fix">Allocate <code>n + 1</code> and ignore index 0, <em>or</em> subtract one from every id on the way in. Pick one convention per file and do not mix them.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Scanning all n vertices to find neighbours</span>
+    <div class="pitfalls__bug"><code>for (v = 0; v &lt; n; v++) if (mat[u][v] == 1)</code> inside BFS on a list problem with <code>n = 10&#8309;</code>. That is <code>O(n&sup2;)</code>.</div>
+    <div class="pitfalls__fix">If you built a list, iterate the list. The matrix scan is only legal when you chose a matrix because <code>n</code> is small.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Self-loops and multi-edges</span>
+    <div class="pitfalls__bug">Assuming simple graphs. A self-loop in an undirected cycle check is a cycle of length 1; a multi-edge is a cycle of length 2. Some problems include both.</div>
+    <div class="pitfalls__fix">Decide up front whether they count. If they do not, skip <code>u == v</code> and deduplicate, or use a matrix which naturally collapses multi-edges.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Storing weights as a parallel array of lists</span>
+    <div class="pitfalls__bug">Two lists <code>to</code> and <code>w</code> that you must keep in lockstep. One missed add desynchronises them permanently.</div>
+    <div class="pitfalls__fix">Store a small pair / inner class, or pack <code>(to, w)</code> into a <code>long</code>. One structure, one append.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Materialising an implicit graph</span>
+    <div class="pitfalls__bug">Building adjacency lists for every cell of a 1000&times;1000 grid. That is a million lists and four million edges you can generate with four additions.</div>
+    <div class="pitfalls__fix">Write a <code>neighbours(r, c)</code> helper that yields the legal moves. BFS never needs the lists to exist.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Weighted list</td>
+        <td>Each neighbour is a (to, weight) pair instead of a bare int.</td>
+        <td><code>g.get(u).add(new Edge(v, w));</code></td>
+        <td><a href="dijkstra.html">Dijkstra</a></td>
+      </tr>
+      <tr>
+        <td>1-indexed contest template</td>
+        <td>Allocate n+1 lists, read u and v as given, never subtract one.</td>
+        <td><code>for (i = 0; i &lt;= n; i++) g.add(new ArrayList&lt;&gt;());</code></td>
+        <td>CSES / Codeforces default</td>
+      </tr>
+      <tr>
+        <td>Forward-star / CSR</td>
+        <td>Two arrays head[u] and next[e], to[e], w[e]. Faster constants, no boxing.</td>
+        <td><code>to[e]=v; next[e]=head[u]; head[u]=e++;</code></td>
+        <td>Hot inner loops in Java contests</td>
+      </tr>
+      <tr>
+        <td>Functional / immutable snapshot</td>
+        <td>Copy-on-write lists so a recursive search can add a temporary edge and backtrack.</td>
+        <td><code>Not needed for BFS/DFS; used in some backtracking on graphs.</code></td>
+        <td><a href="../04-recursion-and-dnc/backtracking-with-pruning.html">Backtracking</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>When is a matrix faster than a list even on a sparse graph?</summary>
+    <div class="followup__body">
+      <p>When the inner loop is an edge test, not a neighbour walk. Floyd-Warshall looks at every triple <code>(k, i, j)</code> and wants <code>mat[i][j]</code> in one array read. A list would turn each test into a scan. Also, when <code>n &le; 400</code> the matrix fits in cache and beats pointer-chasing <code>ArrayList</code>s.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I represent a graph that changes (edges inserted and deleted)?</summary>
+    <div class="followup__body">
+      <p>Lists support insert in <code>O(1)</code> and delete in <code>O(deg)</code> unless you store iterators or a set. A matrix supports both in <code>O(1)</code>. For fully-dynamic connectivity you need a much heavier structure; for "add a few edges then BFS" just append to the lists.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Should I use <code>List&lt;int[]&gt;</code> or a tiny static class for weighted edges?</summary>
+    <div class="followup__body">
+      <p>A static class <code>Edge { int to, w; }</code> is clearer and not slower. <code>int[]{to, w}</code> allocates the same object and loses the names. Do not use <code>ArrayList&lt;Integer&gt;</code> pairs of lists.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What changes for a multigraph or a graph with self-loops?</summary>
+    <div class="followup__body">
+      <p>Lists store them naturally: two entries for a multi-edge, one <code>u</code> in <code>g.get(u)</code> for a loop. A matrix collapses multi-edges unless you store a count. Cycle detection and Euler tours care; shortest paths usually do not (keep the minimum weight).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-the-town-judge/" target="_blank" rel="noopener">Find the Town Judge</a></td>
+        <td><span class="badge badge--lc">LC 997</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Degree count, no lists needed</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/find-center-of-star-graph/" target="_blank" rel="noopener">Find Center of Star Graph</a></td>
+        <td><span class="badge badge--lc">LC 1791</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The centre appears in the first two edges</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/find-if-path-exists-in-graph/" target="_blank" rel="noopener">Find if Path Exists in Graph</a></td>
+        <td><span class="badge badge--lc">LC 1971</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Build list, then BFS/DFS/DSU</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/keys-and-rooms/" target="_blank" rel="noopener">Keys and Rooms</a></td>
+        <td><span class="badge badge--lc">LC 841</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The list is already the adjacency list</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/all-paths-from-source-to-target/" target="_blank" rel="noopener">All Paths From Source to Target</a></td>
+        <td><span class="badge badge--lc">LC 797</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>DAG given as a list; backtracking walk</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener">Number of Provinces</a></td>
+        <td><span class="badge badge--lc">LC 547</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Input is a matrix; convert or scan rows</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/500/A" target="_blank" rel="noopener">New Year Transportation</a></td>
+        <td><span class="badge badge--cf">CF 500A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Functional graph, one outgoing edge each</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://cses.fi/problemset/task/1666" target="_blank" rel="noopener">Building Roads</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Build undirected list, then components</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/print-adjacency-list-1587115620/1" target="_blank" rel="noopener">Print adjacency list</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Construct and emit the lists</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/abc075/tasks/abc075_c" target="_blank" rel="noopener">Bridges</a></td>
+        <td><span class="badge badge--atc">ABC 075C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Build, then drop each edge and re-check connectivity</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 547 &mdash; do not convert the matrix if you do not need to</summary>
+  <div class="spoiler__body">
+    <p>The input <em>is</em> an adjacency matrix. DFS from an unvisited city <code>i</code> scans row <code>i</code> for <code>1</code>s. Converting to a list first is correct and costs <code>O(n&sup2;)</code>, which you pay anyway. The lesson: <em>walk the encoding you were given unless another algorithm demands a different one.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 500A &mdash; a functional graph is already a list of length 1</summary>
+  <div class="spoiler__body">
+    <p>Each portal <code>i</code> goes only to <code>i + a[i]</code>. You do not need <code>ArrayList</code>s. Walk from cell 1, jumping, until you pass <code>t</code> or the end. Representation insight: <em>when out-degree is 1, an <code>int[] next</code> is the adjacency list.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Adjacency list is the default</strong> for sparse graphs and for every algorithm on the rest of this module.</li>
+    <li><strong>Matrix when <code>n</code> is small and you need <code>O(1)</code> edge tests</strong>.</li>
+    <li><strong>Undirected means two writes</strong> in the same loop body.</li>
+    <li><strong>1-indexed input: allocate <code>n + 1</code></strong> and ignore slot 0.</li>
+    <li><strong>Do not materialise implicit graphs</strong> (grids, functional graphs, word-ladder vertices).</li>
+  </ul>
+  <div class="recap__oneliner">list default O(n+m) | matrix n&lt;=400 O(1) test | undirected: push both | 1-index: alloc n+1</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix Exponentiation &mdash; DSA Course</title>
+<meta name="description" content="A linear recurrence xn = &Sigma; ai xn-i is one matrix multiply. Binary exponentiation of that matrix jumps n steps in O(k&sup3; log n).">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="matrix-exponentiation">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Matrix Exponentiation</h1>
+  <p class="hero__tagline">A linear recurrence <code>x<sub>n</sub> = &Sigma; a<sub>i</sub> x<sub>n-i</sub></code> is one matrix multiply. Binary exponentiation of that matrix jumps <code>n</code> steps in <code>O(k&sup3; log n)</code>.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="modular-arithmetic.html">Modular Arithmetic</a>,
+      <a href="../00-foundations/recurrences-and-master-theorem.html">Recurrences</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">matrix expo</span>
+      <span class="chip">linear recurrence</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Fibonacci in O(log n), "number of ways to tile a 2×n after 10^18 steps", and graph walks of length n are the same object: a vector of last-k states times a companion / adjacency matrix.</p>
+<p>If you can write S_{t+1} = A S_t, then S_n = A^n S_0. Binary exponentiation of A is the only extra skill: multiply k×k matrices, square, multiply-by-A when the bit is on.</p>
+<p>n ≤ 10^18 is the tell. k is the state size (2 for Fib, 3–6 for many tilings, |V| for walks). k³ log n must fit; k = 100 is already 1e6 * 60 multiplies — borderline.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>The companion matrix of a linear recurrence is unique once you write the state as a column of the last k terms. After that it is only fast pow.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>n-th Fibonacci / Tribonacci / linear recurrence, n ≤ 10^18</li>
+        <li>Ways to tile / hop with a fixed profile after n steps</li>
+        <li>Number of walks of length n in a small graph (A^n[u][v])</li>
+        <li>Sum of a linear recurrence, or "first n Fibonaccis" via a larger matrix</li>
+        <li>DP transition is a fixed linear map, you need the n-th iterate</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Non-linear recurrences (x_n = x_{n-1}^2) — matrix expo does not apply</li>
+        <li>n ≤ 1e6 and k huge — just iterate the recurrence</li>
+        <li>Shortest path — min-plus "multiplication" is a different semiring (and usually not what they want)</li>
+        <li>Arbitrary DP with max / min that is not a linear combination</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Fibonacci n</td>
+        <td>[[1,1],[1,0]]^n</td>
+        <td>2×2 expo</td>
+      </tr>
+      <tr>
+        <td>k-term recurrence</td>
+        <td>companion k×k</td>
+        <td>O(k³ log n)</td>
+      </tr>
+      <tr>
+        <td>Walks of length n</td>
+        <td>adjacency^n</td>
+        <td>A[u][v] ways</td>
+      </tr>
+      <tr>
+        <td>Sum of first n terms</td>
+        <td>augment the state with the prefix</td>
+        <td>(k+1)×(k+1)</td>
+      </tr>
+      <tr>
+        <td>Mod P</td>
+        <td>every multiply % P</td>
+        <td>same code</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> binary expo of a scalar</td>
+        <td>Same loop, matrices instead of longs</td>
+        <td>modPow is the 1×1 case</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10^{18}</code>, <code>k &le; 80</code> in Java if you are careful; <code>k &le; 20</code> is comfortable. Always take the answer modulo the required prime.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Fibonacci: state [F_n, F_{n-1}]^T = [[1,1],[1,0]] [F_{n-1}, F_{n-2}]^T. Then [F_n, F_{n-1}] = A^{n-1} [F_1, F_0].</p>
+<p>Multiply two k×k matrices in O(k³). Fast pow: res = I, while n>0: if n odd res = res*A; A = A*A; n >>= 1. Use long and reduce mod P every multiply.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>If S_{t+1} = A S_t for every t, then S_{t+n} = A^n S_t. Binary exponentiation uses A^{2m} = (A^m)² and A^{2m+1} = A · A^{2m}.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="matrix-exponentiationViz"></div>
+  <div class="viz-player" data-viz-target="matrix-exponentiationViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "F =",
+      "array": [
+        0,
+        1,
+        1,
+        2,
+        3,
+        5,
+        8
+      ],
+      "vars": [
+        "n",
+        "bit",
+        "Fn"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Want F_10. A = [[1,1],[1,0]], start from [F1,F0]=[1,0].",
+          "active": [
+            1
+          ],
+          "values": {
+            "n": 10,
+            "bit": "init",
+            "Fn": "—"
+          }
+        },
+        {
+          "note": "10 = 1010₂. Square to A², A⁴, A⁸. Multiply A² and A⁸.",
+          "active": [
+            2
+          ],
+          "values": {
+            "n": 10,
+            "bit": "1010",
+            "Fn": "pow"
+          }
+        },
+        {
+          "note": "A² gives F_2,F_1. A⁴ gives F_4,F_3. A⁸ gives F_8,F_7.",
+          "active": [
+            4
+          ],
+          "values": {
+            "n": 8,
+            "bit": "A8",
+            "Fn": 21
+          }
+        },
+        {
+          "note": "A^10 = A^8 A^2 → F_10 = 55.",
+          "active": [
+            6
+          ],
+          "values": {
+            "n": 10,
+            "bit": "done",
+            "Fn": 55
+          }
+        },
+        {
+          "note": "Same A^n[0][1] or A^n[0][0] depending on the base vector — pick one convention and test F_10.",
+          "active": [
+            6
+          ],
+          "values": {
+            "n": 10,
+            "bit": "check",
+            "Fn": 55
+          }
+        },
+        {
+          "note": "For walks, A is the adjacency matrix; A^n[u][v] is walks u→v of length n.",
+          "best": [
+            6
+          ],
+          "values": {
+            "n": "n",
+            "bit": "graph",
+            "Fn": "A^n"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  rec["S t+1 = A S t"] --&gt; pow["S n = A to the n times S 0"]
+  pow --&gt; bin["binary exponentiation"]
+  bin --&gt; sq["square A"]
+  bin --&gt; mul["multiply into result when bit is on"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Write the state vector</strong> of size k (last k terms, or |V| nodes).</li>
+  <li><strong>Write A</strong> so that S_{t+1} = A S_t. Check one step by hand.</li>
+  <li><strong>Identity</strong> res = I. Fast-pow A^n with O(k³) multiplies.</li>
+  <li><strong>Reduce mod P</strong> after every cell multiply. Use long.</li>
+  <li><strong>Multiply</strong> A^n by S_0 to read the answer cell.</li>
+  <li><strong>Off-by-one:</strong> Fib A^{n-1} vs A^n — test n=0,1,10.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>n</th><th>bit</th><th>Fn</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>10</td><td>init</td><td>—</td><td>Want F_10. A = [[1,1],[1,0]], start from [F1,F0]=[1,0].</td></tr>
+      <tr><td>10</td><td>1010</td><td>pow</td><td>10 = 1010₂. Square to A², A⁴, A⁸. Multiply A² and A⁸.</td></tr>
+      <tr><td>8</td><td>A8</td><td>21</td><td>A² gives F_2,F_1. A⁴ gives F_4,F_3. A⁸ gives F_8,F_7.</td></tr>
+      <tr><td>10</td><td>done</td><td>55</td><td>A^10 = A^8 A^2 → F_10 = 55.</td></tr>
+      <tr><td>10</td><td>check</td><td>55</td><td>Same A^n[0][1] or A^n[0][0] depending on the base vector — pick one convention and test F_10.</td></tr>
+      <tr class="trace-table__row--change"><td>n</td><td>graph</td><td>A^n</td><td>For walks, A is the adjacency matrix; A^n[u][v] is walks u→v of length n.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Matrix Exponentiation implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FibLoop.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FibLoop {
+        static long fib(int n) {
+            if (n &lt;= 1) return n;
+            long a = 0, b = 1;
+            for (int i = 2; i &lt;= n; i++) { long c = a + b; a = b; b = c; }
+            return b;
+        }
+        public static void main(String[] args) {
+            System.out.println(fib(10));
+        }
+        // Input : n=10
+        // Output: 55
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>2×2 matrix expo, O(log n).</p>
+    <div class="code" data-highlight="14-24">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FibMat.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FibMat {
+        static final long MOD = 1_000_000_007L;
+        static long[][] mul(long[][] a, long[][] b) {
+            long[][] c = new long[2][2];
+            for (int i = 0; i &lt; 2; i++)
+                for (int k = 0; k &lt; 2; k++)
+                    for (int j = 0; j &lt; 2; j++)
+                        c[i][j] = (c[i][j] + a[i][k] * b[k][j]) % MOD;
+            return c;
+        }
+        static long[][] pow(long[][] a, long n) {
+            long[][] r = {{1, 0}, {0, 1}};
+            while (n &gt; 0) {
+                if ((n &amp; 1) == 1) r = mul(r, a);
+                a = mul(a, a);
+                n &gt;&gt;= 1;
+            }
+            return r;
+        }
+        static long fib(long n) {
+            if (n == 0) return 0;
+            return pow(new long[][] {{1, 1}, {1, 0}}, n - 1)[0][0];
+        }
+        public static void main(String[] args) {
+            System.out.println(fib(10));
+        }
+        // Input : n=10
+        // Output: 55
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>k×k multiply + pow. Plug any companion / adjacency matrix.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MatPow.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MatPow {
+        static long[][] mul(long[][] a, long[][] b, long MOD) {
+            int n = a.length;
+            long[][] c = new long[n][n];
+            for (int i = 0; i &lt; n; i++)
+                for (int k = 0; k &lt; n; k++) if (a[i][k] != 0)
+                    for (int j = 0; j &lt; n; j++)
+                        c[i][j] = (c[i][j] + a[i][k] * b[k][j]) % MOD;
+            return c;
+        }
+        static long[][] pow(long[][] a, long e, long MOD) {
+            int n = a.length;
+            long[][] r = new long[n][n];
+            for (int i = 0; i &lt; n; i++) r[i][i] = 1;
+            while (e &gt; 0) {
+                if ((e &amp; 1) == 1) r = mul(r, a, MOD);
+                a = mul(a, a, MOD);
+                e &gt;&gt;= 1;
+            }
+            return r;
+        }
+        public static void main(String[] args) {
+            long[][] A = {{1, 1}, {1, 0}};
+            System.out.println(pow(A, 9, 1_000_000_007L)[0][0]);
+        }
+        // Input : Fib companion ^ 9 → F_10
+        // Output: 55
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(k³ log n)</span>
+    <span class="badge badge--space">Space O(k²)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>log n squarings, each a k×k multiply of k³ cell products. Sparse A (adjacency of a path) can drop a factor.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Loop the recurrence</td><td>O(n k)</td><td>O(k)</td><td>n ≤ 1e7</td></tr>
+      <tr><td>Matrix expo</td><td>O(k³ log n)</td><td>O(k²)</td><td>n ≤ 1e18</td></tr>
+      <tr><td>Doubling Fibonacci identities</td><td>O(log n)</td><td>O(1)</td><td>Fib only</td></tr>
+      <tr><td>NTT / generating functions</td><td>heavier</td><td>heavier</td><td>many recurrences at once</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">n = 0 or n = 1</span>
+    <div class="pitfalls__bug">You pow(A, n-1) and n-1 underflows, or you return A[0][0] for F_0.</div>
+    <div class="pitfalls__fix">Special-case 0. Test F_0=0, F_1=1, F_10=55.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow before mod</span>
+    <div class="pitfalls__bug">a[i][k]*b[k][j] exceeds 2^63 if MOD ~ 1e9 and you accumulated wrong.</div>
+    <div class="pitfalls__fix">Both factors already % MOD; 1e9*1e9 fits in long. Bigger MOD needs care.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Result matrix vs base vector</span>
+    <div class="pitfalls__bug">You print A^n[0][0] but the identity you proved was A^{n-1} v.</div>
+    <div class="pitfalls__fix">Write one step on paper; match the textbook pair (F_n, F_{n-1}).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the modulus on the identity</span>
+    <div class="pitfalls__bug">I is fine; intermediate cells exceed MOD and you only reduce at the end.</div>
+    <div class="pitfalls__fix">Reduce in mul, every cell.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Min-plus for shortest paths of length n</span>
+    <div class="pitfalls__bug">You +/* instead of min/+. That counts walks, not shortest paths.</div>
+    <div class="pitfalls__fix">Walks = ordinary (+, *). Shortest k-edge path = (min, +) semiring — different code, rarely needed.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Prefix sums of Fib</td>
+        <td>State [F_n, F_{n-1}, S_n]; one extra row/column adds F_n into S.</td>
+        <td><code>3×3</code></td>
+        <td>sum of first n</td>
+      </tr>
+      <tr>
+        <td>Periodic / Pisano</td>
+        <td>Fib mod P is periodic; matrix expo still wins for 1e18.</td>
+        <td><code>same code</code></td>
+        <td>CSES</td>
+      </tr>
+      <tr>
+        <td>Graph walks</td>
+        <td>A = adjacency (0/1 or weighted). A^n[u][v] ways.</td>
+        <td><code>k = |V|</code></td>
+        <td>CF walks</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why companion matrix looks like that?</summary>
+    <div class="followup__body">
+      <p>The first row is the coefficients. The remaining rows are shifts: they copy F_{n-1} down to F_{n-2}, and so on. That is what "remember the last k-1 terms" means in linear algebra.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you do better than k³?</summary>
+    <div class="followup__body">
+      <p>Strassen helps only for huge k. For a linear recurrence, Berlekamp-Massey + Kitamasa is O(k² log n) or better — overkill unless k ~ 1000.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you get the sum of a geometric of matrices?</summary>
+    <div class="followup__body">
+      <p>I + A + … + A^{n-1} has a closed doubling: if n even, (I+A^{n/2})(I+…+A^{n/2-1}). Or augment the matrix.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Interview: Fib O(log n) without matrices?</summary>
+    <div class="followup__body">
+      <p>F(2n)=F(n)(F(n+1)+F(n-1)), F(2n+1)=F(n)²+F(n+1)². Same log n, no arrays. Matrices generalise; identities are Fib-only.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/climbing-stairs/" target="_blank" rel="noopener">Climbing Stairs</a></td>
+        <td><span class="badge badge--lc">LC 70</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Fib, n small — contrast</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/fibonacci-number/" target="_blank" rel="noopener">Fibonacci Number</a></td>
+        <td><span class="badge badge--lc">LC 509</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Implement expo or loop</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/n-th-tribonacci-number/" target="_blank" rel="noopener">N Th Tribonacci Number</a></td>
+        <td><span class="badge badge--lc">LC 1137</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>3×3 companion</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/count-vowels-permutation/" target="_blank" rel="noopener">Count Vowels Permutation</a></td>
+        <td><span class="badge badge--lc">LC 1220</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>5×5 adjacency expo</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/number-of-ways-to-paint-n-x-3-grid/" target="_blank" rel="noopener">Number Of Ways To Paint N X 3 Grid</a></td>
+        <td><span class="badge badge--lc">LC 1411</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Profile + expo</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1722" target="_blank" rel="noopener">Fibonacci Numbers</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Fib mod 1e9+7, n ≤ 1e18</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/166/E" target="_blank" rel="noopener">Tetrahedron</a></td>
+        <td><span class="badge badge--cf">CF 166E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>4-state walks, A^n</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1117/D" target="_blank" rel="noopener">Magic Gems</a></td>
+        <td><span class="badge badge--cf">CF 1117D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Linear recurrence + matrix expo</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_r" target="_blank" rel="noopener">Walk</a></td>
+        <td><span class="badge badge--atc">AtCoder DP-R</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Adjacency^n, count walks</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Linear map S→AS, then S_n = A^n S_0.</li>
+    <li>Companion matrix for a k-term recurrence.</li>
+    <li>Binary expo of matrices, O(k³ log n).</li>
+    <li>Mod every multiply; test n=0,1,10.</li>
+    <li>Walks of length n are the same A^n on the graph.</li>
+  </ul>
+  <div class="recap__oneliner">while (n&gt;0) { if ((n&amp;1)==1) r=mul(r,A); A=mul(A,A); n&gt;&gt;=1; }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

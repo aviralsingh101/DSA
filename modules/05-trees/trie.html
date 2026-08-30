@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trie &mdash; DSA Course</title>
+<meta name="description" content="A tree of prefixes: each edge is a character, insert/search/startsWith are O(|s|), and the same walk powers word-search II and autocomplete.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="trie">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Trie</h1>
+  <p class="hero__tagline">A tree of prefixes: each edge is a character, insert/search/startsWith are <code>O(|s|)</code>, and the same walk powers word-search II and autocomplete.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">trie</span>
+      <span class="chip">prefix tree</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>HashSet.contains is O(|s|) expected for exact strings and cannot answer "is there a stored word that starts with this prefix" without scanning everything. A trie shares prefixes: n words of length L use O(total characters) nodes, and a prefix query walks one path of length |prefix|.</p>
+<p>LC 208 is the API. Word Search II is "DFS the board, walk the trie in lockstep, prune when the node is null". Autocomplete, replace-words, and longest-word-in-dictionary are the same walk with a different payload on terminal nodes.</p>
+<p>The implementation choice is next[26] vs HashMap&lt;Character,Node&gt;. Interviews want the array for lowercase English. Count how many words share a node if you must delete.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A trie node is the set of strings with a given prefix. Child c is that prefix extended by c. Terminal flag (or count) marks a complete word.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>implement-trie: insert, search, startsWith</li>
+        <li>Search a board for many words (Word Search II)</li>
+        <li>Replace words with the shortest dictionary prefix / root</li>
+        <li>Count words with a given prefix, autocomplete</li>
+        <li>XOR of numbers &rarr; next page (binary trie), not this 26-way trie</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Exact lookup of a few strings, no prefixes &rarr; HashSet</li>
+        <li>Suffix queries / longest palindrome &rarr; suffix array, Manacher, not a prefix trie</li>
+        <li>Maximum XOR pair &rarr; XOR trie</li>
+        <li>n*L too big to store every node and you only need equality &rarr; hashing</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>insert / search / startsWith</td>
+        <td>Walk |s| edges, create on insert</td>
+        <td>LC 208</td>
+      </tr>
+      <tr>
+        <td>Many words in a grid</td>
+        <td>Board DFS + trie pointer, prune dead nodes</td>
+        <td>LC 212</td>
+      </tr>
+      <tr>
+        <td>Shortest root that prefixes the word</td>
+        <td>Walk until a terminal</td>
+        <td>Replace Words</td>
+      </tr>
+      <tr>
+        <td>Count prefix occurrences</td>
+        <td>cnt on each node, ++ on insert</td>
+        <td>freq[node]</td>
+      </tr>
+      <tr>
+        <td>Max XOR / bit greedy</td>
+        <td>Binary children 0/1</td>
+        <td>XOR trie page</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> suffix tree</td>
+        <td>Suffix tree is compressed suffixes, much heavier</td>
+        <td>This page is a prefix tree of a dictionary</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Total characters &le; 1e5 typical. Node arrays of size 26 are fine. Alphabet size &sigma; multiplies memory; HashMap children for huge alphabets. Word Search II: 4^L board DFS pruned by the trie, L up to 10.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Node { Node[] next = new Node[26]; boolean term; int cnt; }. insert: cur = root, for ch in s: i=ch-'a'; if next[i]==null next[i]=new Node(); cur=next[i]; cur.cnt++. Then cur.term=true. search: walk, fail on null, then term. startsWith: walk, fail on null.</p>
+<p>Word Search II: build a trie of the word list. DFS the board; if next[cell]==null return; if term, emit word and optionally unmark term (dedup). Restore the cell after DFS. Delete dead leaves to prune (optional speed).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The path from the root to a node spells a prefix of at least one inserted word. term (or cntEnd) is true iff that prefix is a complete word.</p><span class="eq">search(s) = walk(s) lands on a node with term=true</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Insert app, ape; search ape; startsWith ap</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="trieViz"></div>
+  <div class="viz-player" data-viz-target="trieViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "nodes visited inserting \"app\" then \"ape\" (letter indices)",
+      "array": [
+        "",
+        "a",
+        "p",
+        "p",
+        "e"
+      ],
+      "vars": [
+        "word",
+        "ch",
+        "node",
+        "term"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Empty root. Insert app: create a, p, p. Mark term on last p.",
+          "active": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "word": "app",
+            "ch": "p",
+            "node": "app",
+            "term": true
+          }
+        },
+        {
+          "note": "Insert ape: reuse a,p, create e, mark term. Shared prefix ap.",
+          "active": [
+            1,
+            2,
+            4
+          ],
+          "values": {
+            "word": "ape",
+            "ch": "e",
+            "node": "ape",
+            "term": true
+          }
+        },
+        {
+          "note": "search(\"ape\"): walk a-p-e, term true.",
+          "best": [
+            4
+          ],
+          "values": {
+            "word": "ape",
+            "ch": "e",
+            "node": "ape",
+            "term": "found"
+          }
+        },
+        {
+          "note": "search(\"ap\"): land on p, term false (unless you also inserted ap).",
+          "active": [
+            2
+          ],
+          "values": {
+            "word": "ap",
+            "ch": "p",
+            "node": "ap",
+            "term": false
+          }
+        },
+        {
+          "note": "startsWith(\"ap\"): same walk, no term needed. true.",
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "word": "ap",
+            "ch": "p",
+            "node": "ap",
+            "term": "prefix ok"
+          }
+        },
+        {
+          "note": "search(\"apple\"): after app the next l is null. false.",
+          "dim": [
+            4
+          ],
+          "values": {
+            "word": "apple",
+            "ch": "l",
+            "node": "null",
+            "term": false
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Trie of app and ape</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  root["root"] --&gt; na["a"]
+  na --&gt; np["p"]
+  np --&gt; npp["p term app"]
+  np --&gt; ne["e term ape"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Node:</strong> next[26], term, optional cnt.</li>
+  <li><strong>insert:</strong> create missing children, mark term at the end, bump cnt.</li>
+  <li><strong>search:</strong> walk, null &rarr; false, else return term.</li>
+  <li><strong>startsWith:</strong> walk, null &rarr; false, else true.</li>
+  <li><strong>Board search:</strong> DFS 4-way, trie pointer, emit on term, restore cell.</li>
+  <li><strong>Do not</strong> store the whole string on every node unless you need it for output.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>word</th><th>ch</th><th>node</th><th>term</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>app</td><td>p</td><td>app</td><td>true</td><td>Empty root. Insert app: create a, p, p. Mark term on last p.</td></tr>
+      <tr><td>ape</td><td>e</td><td>ape</td><td>true</td><td>Insert ape: reuse a,p, create e, mark term. Shared prefix ap.</td></tr>
+      <tr class="trace-table__row--change"><td>ape</td><td>e</td><td>ape</td><td>found</td><td>search("ape"): walk a-p-e, term true.</td></tr>
+      <tr><td>ap</td><td>p</td><td>ap</td><td>false</td><td>search("ap"): land on p, term false (unless you also inserted ap).</td></tr>
+      <tr><td>ap</td><td>p</td><td>ap</td><td>prefix ok</td><td>startsWith("ap"): same walk, no term needed. true.</td></tr>
+      <tr><td>apple</td><td>l</td><td>null</td><td>false</td><td>search("apple"): after app the next l is null. false.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Trie implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HashDict.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashSet;
+    public class HashDict {
+        public static void main(String[] args) {
+            HashSet&lt;String&gt; s = new HashSet&lt;&gt;();
+            s.add("app"); s.add("ape");
+            System.out.println(s.contains("ape"));
+            boolean pref = false;
+            for (String w : s) if (w.startsWith("ap")) pref = true;
+            System.out.println(pref);
+        }
+        // Input : dict app, ape; query ape and prefix ap
+        // Output: true
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Trie.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Trie {
+        static class Node {
+            Node[] next = new Node[26];
+            boolean term;
+        }
+        final Node root = new Node();
+    
+        void insert(String w) {
+            Node cur = root;
+            for (int i = 0; i &lt; w.length(); i++) {
+                int c = w.charAt(i) - 'a';
+                if (cur.next[c] == null) cur.next[c] = new Node();
+                cur = cur.next[c];
+            }
+            cur.term = true;
+        }
+        boolean walk(String w, boolean needTerm) {
+            Node cur = root;
+            for (int i = 0; i &lt; w.length(); i++) {
+                int c = w.charAt(i) - 'a';
+                if (cur.next[c] == null) return false;
+                cur = cur.next[c];
+            }
+            return needTerm ? cur.term : true;
+        }
+        public static void main(String[] args) {
+            Trie t = new Trie();
+            t.insert("app");
+            t.insert("ape");
+            System.out.println(t.walk("ape", true));
+            System.out.println(t.walk("ap", true) + " " + t.walk("ap", false));
+        }
+        // Input : insert app, ape; search ape, search ap, startsWith ap
+        // Output: true
+        //         false true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ReplaceWords.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ReplaceWords {
+        static class Node {
+            Node[] next = new Node[26];
+            String word;
+        }
+        static String replace(String[] dict, String sentence) {
+            Node root = new Node();
+            for (String w : dict) {
+                Node cur = root;
+                for (int i = 0; i &lt; w.length(); i++) {
+                    int c = w.charAt(i) - 'a';
+                    if (cur.next[c] == null) cur.next[c] = new Node();
+                    cur = cur.next[c];
+                }
+                cur.word = w;
+            }
+            StringBuilder sb = new StringBuilder();
+            for (String tok : sentence.split(" ")) {
+                Node cur = root;
+                String use = tok;
+                for (int i = 0; i &lt; tok.length(); i++) {
+                    int c = tok.charAt(i) - 'a';
+                    if (cur.next[c] == null) break;
+                    cur = cur.next[c];
+                    if (cur.word != null) { use = cur.word; break; }
+                }
+                if (sb.length() &gt; 0) sb.append(' ');
+                sb.append(use);
+            }
+            return sb.toString();
+        }
+        public static void main(String[] args) {
+            System.out.println(replace(new String[]{"cat", "bat", "rat"}, "the cattle was rattled by the battery"));
+        }
+        // Input : LC 648 sample
+        // Output: the cat was rat by the bat
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(L) per insert/search/startsWith</span>
+    <span class="badge badge--space">Space O(total characters * &sigma;) worst, typically O(total chars)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each character of each word creates at most one new node. Shared prefixes share nodes.</p>
+    <p><span class="eq">T(insert) = O(|s|), S = O(&Sigma; |s_i|)</span></p>
+    <p>HashSet search is also O(|s|) but startsWith is O(n |s|) over the set. Trie makes prefix O(|s|).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>HashSet of words</td><td>O(L) exact</td><td>O(total)</td><td>No prefix API</td></tr>
+      <tr><td>Trie 26-array</td><td>O(L)</td><td>O(total * 26) worst</td><td>Default lowercase</td></tr>
+      <tr><td>Trie HashMap children</td><td>O(L) expected</td><td>O(total)</td><td>Large alphabet</td></tr>
+      <tr><td>Aho-Corasick</td><td>O(text + dict + matches)</td><td>O(total)</td><td>Many patterns in one text</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting term vs prefix</span>
+    <div class="pitfalls__bug">search("ap") true after inserting apple. startsWith and search mixed up.</div>
+    <div class="pitfalls__fix">search requires term; startsWith does not.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Not creating nodes on insert</span>
+    <div class="pitfalls__bug">NPE on next[c].field, or silent drop of the suffix.</div>
+    <div class="pitfalls__fix">if (cur.next[c]==null) cur.next[c]=new Node();</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Word Search II without marking the cell</span>
+    <div class="pitfalls__bug">The same cell is reused in one word (loop).</div>
+    <div class="pitfalls__fix">board[r][c]='#'; rec; restore.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">26 vs 'A'</span>
+    <div class="pitfalls__bug">Uppercase or extra characters, negative index.</div>
+    <div class="pitfalls__fix">Normalise, or a map. Guard c in 0..25.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Storing List&lt;String&gt; on every node</span>
+    <div class="pitfalls__bug">Memory explodes; copying lists is O(n) per insert.</div>
+    <div class="pitfalls__fix">term + reconstruct the word, or store one String at terminals only.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Count / delete</td>
+        <td>cnt words passing through the node; delete decrements and drops cnt==0 children.</td>
+        <td><code>cur.cnt++; if (--cur.cnt==0) parent.next[c]=null;</code></td>
+        <td>Memory-conscious dict</td>
+      </tr>
+      <tr>
+        <td>Word Search II prune</td>
+        <td>After emitting, set term false; drop a node with no children.</td>
+        <td><code>if (all next null) parent.next[c]=null;</code></td>
+        <td>LC 212 TLE otherwise</td>
+      </tr>
+      <tr>
+        <td>XOR / bits</td>
+        <td>next[2], MSB first.</td>
+        <td><code>See xor-trie</code></td>
+        <td>Next page</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not a HashMap of all prefixes?</summary>
+    <div class="followup__body">
+      <p>You can: insert every prefix of every word into a HashSet for startsWith, and a set of words for search. Memory is worse (every prefix stored as a String) and Word Search II still wants a walk that can prune. The trie is the compressed form of that map.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Aho-Corasick vs trie DFS on a text?</summary>
+    <div class="followup__body">
+      <p>Aho adds failure links so you scan the text once for all patterns. If the "text" is a 2-D board with 4-way moves, board DFS + trie is the right shape (LC 212). If the text is a string, Aho is linear.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Autocomplete top-k?</summary>
+    <div class="followup__body">
+      <p>At the prefix node, the subtree holds candidates. Precompute a small heap of best words at each node, or DFS the subtree (fine if small).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Unicode?</summary>
+    <div class="followup__body">
+      <p>HashMap&lt;Character,Node&gt; or a UTF-8 byte trie (256). Do not allocate next[Character.MAX_VALUE].</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/implement-trie-prefix-tree/" target="_blank" rel="noopener">Implement Trie Prefix Tree</a></td>
+        <td><span class="badge badge--lc">LC 208</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The API</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/design-add-and-search-words-data-structure/" target="_blank" rel="noopener">Design Add And Search Words Data Structure</a></td>
+        <td><span class="badge badge--lc">LC 211</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Wildcard DFS</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/word-search-ii/" target="_blank" rel="noopener">Word Search Ii</a></td>
+        <td><span class="badge badge--lc">LC 212</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Board + trie</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/replace-words/" target="_blank" rel="noopener">Replace Words</a></td>
+        <td><span class="badge badge--lc">LC 648</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Shortest terminal prefix</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/map-sum-pairs/" target="_blank" rel="noopener">Map Sum Pairs</a></td>
+        <td><span class="badge badge--lc">LC 677</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>cnt on nodes</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/longest-word-in-dictionary/" target="_blank" rel="noopener">Longest Word In Dictionary</a></td>
+        <td><span class="badge badge--lc">LC 720</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>All prefixes present</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/search-suggestions-system/" target="_blank" rel="noopener">Search Suggestions System</a></td>
+        <td><span class="badge badge--lc">LC 1268</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix + first 3</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/" target="_blank" rel="noopener">Maximum Xor Of Two Numbers In An Array</a></td>
+        <td><span class="badge badge--lc">LC 421</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>XOR trie, next page</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>next[26] + term</strong> is the whole node.</li>
+    <li><strong>insert creates, search needs term, startsWith does not.</strong></li>
+    <li><strong>Share prefixes</strong> &mdash; that is the memory win.</li>
+    <li><strong>Word Search II:</strong> board DFS locked to the trie pointer.</li>
+    <li><strong>XOR is a 2-child trie</strong> on the next page.</li>
+  </ul>
+  <div class="recap__oneliner">for ch in s: create next[ch-'a'] if missing; at end term=true</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

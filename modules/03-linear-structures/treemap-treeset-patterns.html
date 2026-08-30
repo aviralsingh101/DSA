@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TreeMap / TreeSet Patterns &mdash; DSA Course</title>
+<meta name="description" content="Java's red-black tree in a box: floor, ceiling, first/last and subMap turn &quot;nearest key&quot; and &quot;live set of intervals&quot; into O(log n) per operation.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="treemap-treeset-patterns">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>TreeMap / TreeSet Patterns</h1>
+  <p class="hero__tagline">Java's red-black tree in a box: floor, ceiling, first/last and subMap turn "nearest key" and "live set of intervals" into O(log n) per operation.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="heaps-and-priority-queue.html">Heaps & Priority Queue</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">TreeMap</span>
+      <span class="chip">TreeSet</span>
+      <span class="chip">floor</span>
+      <span class="chip">ceiling</span>
+      <span class="chip">intervals</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A HashMap answers "is this exact key present?" and cannot tell you the next key to the left. A heap answers "what is the min?" and cannot tell you the predecessor of an arbitrary value. A balanced BST answers both: floor, ceiling, higher, lower, first, last, and a view of a key range. Java ships that tree as TreeMap / TreeSet.</p>
+<p>The second cluster is interval bookkeeping. My Calendar, overlapping-range counts, "can I book [s, e)?": store start → end in a TreeMap, and the predecessor / successor of a query start are the only two intervals that can conflict. Sweep-line problems (covered points, skyline) are the same tree with a running counter as the payload.</p>
+<p>This is P1 because it is how you write the O(n log n) solution when a deque is too specialised and a heap is too weak, and because Codeforces uses it constantly. The Java API is the whole skill: floorKey vs lowerKey is closed vs open intervals.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>HashMap is exact match. Heap is current extreme. TreeMap is nearest key and ordered range. Floor / ceiling / subMap are the three methods that justify the log n.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Closest element to x", "contains nearby almost-duplicate", "next interval that starts after t"</li>
+        <li>Booking / calendar: "does [s, e) overlap an existing booking?"</li>
+        <li>A live ordered set of values with insert, erase, and "what is the nearest"</li>
+        <li>Sweep line: events at coordinates, need the current min/max/count of active items</li>
+        <li>Sliding window that needs max and min and you would rather write a TreeMap than two deques</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Exact-key lookup only → HashMap, faster and simpler</li>
+        <li>Only the current min or max, never a predecessor of an arbitrary value → a <a href="heaps-and-priority-queue.html">heap</a></li>
+        <li>Window maximum of a fixed array range → <a href="queues-and-monotonic-deque.html">monotonic deque</a> in O(n)</li>
+        <li>Static range min after build, no updates → sparse table, not a tree</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>largest key ≤ x</td>
+        <td>Predecessor, inclusive</td>
+        <td>floorKey(x) / floor(x)</td>
+      </tr>
+      <tr>
+        <td>smallest key ≥ x</td>
+        <td>Successor, inclusive</td>
+        <td>ceilingKey(x) / ceiling(x)</td>
+      </tr>
+      <tr>
+        <td>strictly less / strictly greater</td>
+        <td>Open neighbour</td>
+        <td>lowerKey / higherKey</td>
+      </tr>
+      <tr>
+        <td>book [s, e) if no overlap</td>
+        <td>Conflict is floor's end and ceiling's start</td>
+        <td>TreeMap start → end</td>
+      </tr>
+      <tr>
+        <td>count of covered points on the line</td>
+        <td>Sweep + running coverage</td>
+        <td>TreeMap coord → delta</td>
+      </tr>
+      <tr>
+        <td>max - min of a window ≤ limit</td>
+        <td>Ordered window</td>
+        <td>TreeMap of frequencies, or two deques</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> HashMap</td>
+        <td>HashMap has no floor/ceiling; TreeMap has no O(1) expected get</td>
+        <td>Need nearest? Tree. Need exact? Hash.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n ≤ 10&#8309;</code> with n ordered inserts plus n predecessor queries is the TreeMap signature: O(n log n) is the budget. Null-check floor/ceiling before unboxing.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>TreeMap&lt;K,V&gt; is a red-black tree of keys. floorKey(x) is the greatest key ≤ x, or null. ceilingKey(x) is the least key ≥ x. lowerKey / higherKey are the strict versions. TreeSet is a TreeMap with dummy values. Null return is "no such key"; unboxing it is an NPE.</p>
+<p>Interval bookkeeping: store each booked interval as map.put(start, end) with half-open [start, end). To test [s, e): prev = floorKey(s), next = ceilingKey(s). Overlap iff prev exists and map.get(prev) > s, or next exists and next < e. Two lookups, not a scan. subMap is a live view, not a copy.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The map's keys are totally ordered. After every put / remove:</p><span class="eq">floor(x) = max { k in keys | k ≤ x }  (or none)</span><p>For intervals stored as start → end, the only intervals that can overlap a query [s, e) are the predecessor of s and the successor of s. Checking those two is complete.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Floor and ceiling on a live ordered set</h3>
+
+<p>TreeSet after inserting 1, 3, 5, 8, 12. Queries look up 6, then 5, then 0, then 13.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="treemap-treeset-patternsViz"></div>
+  <div class="viz-player" data-viz-target="treemap-treeset-patternsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "sorted keys in the tree",
+      "array": [
+        1,
+        3,
+        5,
+        8,
+        12
+      ],
+      "vars": [
+        "query",
+        "floor",
+        "ceiling"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Set is {1, 3, 5, 8, 12}. No query yet.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "query": "—",
+            "floor": "—",
+            "ceiling": "—"
+          }
+        },
+        {
+          "note": "Query 6. Floor is 5 (greatest ≤ 6). Ceiling is 8 (least ≥ 6).",
+          "active": [
+            2,
+            3
+          ],
+          "dim": [
+            0,
+            1,
+            4
+          ],
+          "values": {
+            "query": 6,
+            "floor": 5,
+            "ceiling": 8
+          }
+        },
+        {
+          "note": "Query 5. Floor and ceiling are both 5: the key is present. lower(5)=3, higher(5)=8.",
+          "best": [
+            2
+          ],
+          "dim": [
+            0,
+            1,
+            3,
+            4
+          ],
+          "values": {
+            "query": 5,
+            "floor": 5,
+            "ceiling": 5
+          }
+        },
+        {
+          "note": "Query 0. Floor is null (nothing ≤ 0). Ceiling is 1. Unboxing floor is an NPE.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "query": 0,
+            "floor": "null",
+            "ceiling": 1
+          }
+        },
+        {
+          "note": "Query 12. Floor is 12. Ceiling is 12. higher(12) is null.",
+          "active": [
+            4
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "query": 12,
+            "floor": 12,
+            "ceiling": 12
+          }
+        },
+        {
+          "note": "Query 13. Floor is 12. Ceiling is null. Remove 5 and query 6 again: floor becomes 3.",
+          "best": [
+            4
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "query": 13,
+            "floor": 12,
+            "ceiling": "null"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Floor is the rightmost key on or left of the query; ceiling is the leftmost on or right.</figcaption>
+</figure>
+
+<h3>HashMap, heap, or TreeMap?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["ordered inserts plus queries"] --&gt; query{"what is the query?"}
+  query -- "exact key" --&gt; hash["HashMap / HashSet"]
+  query -- "current min or max only" --&gt; heap["PriorityQueue"]
+  query -- "nearest key, floor or ceiling" --&gt; tree["TreeMap / TreeSet"]
+  query -- "all keys in a range" --&gt; sub["TreeMap.subMap"]
+  query -- "does interval [s, e) overlap?" --&gt; cal["TreeMap start to end, two probes"]
+  query -- "running coverage of the line" --&gt; sweep["TreeMap coord to delta, then scan"]
+  tree --&gt; nullCheck["null-check floor/ceiling before unboxing"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the key.</strong> What is ordered? Values, start-times, coordinates?</li>
+  <li><strong>Pick TreeSet vs TreeMap.</strong> Set if you only need presence and neighbours; map if each key carries a payload.</li>
+  <li><strong>Choose floor/ceiling vs lower/higher</strong> from whether equality counts. Null-check before unboxing.</li>
+  <li><strong>For intervals:</strong> store [s, e) as start → end. Probe floorKey(s) and ceilingKey(s).</li>
+  <li><strong>For a window of values:</strong> merge(+1) on enter, decrement-and-remove on leave, then lastKey() - firstKey().</li>
+  <li><strong>For a sweep:</strong> TreeMap of coordinate → delta, then iterate entrySet in order.</li>
+  <li><strong>Do not iterate the whole map</strong> to find a neighbour.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>My Calendar on an empty map. Book [10,20), [15,25), [20,30). Half-open: the third touches the first and is legal if the second was rejected.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>book</th><th>floor</th><th>ceiling</th><th>decision</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>[10, 20)</td><td>null</td><td>null</td><td>put 10→20</td><td>Empty map, always ok.</td></tr>
+      <tr class="trace-table__row--change"><td>[15, 25)</td><td>10 (end 20)</td><td>null</td><td>reject</td><td>floor's end 20 > 15.</td></tr>
+      <tr class="trace-table__row--change"><td>[20, 30)</td><td>10 (end 20)</td><td>null</td><td>put 20→30</td><td>20 is not > 20; touching is legal.</td></tr>
+      <tr><td>[20, 25)</td><td>20 (end 30)</td><td>null</td><td>reject</td><td>Same start as an existing interval.</td></tr>
+      <tr class="trace-table__row--change"><td>[0, 10)</td><td>null</td><td>10</td><td>put 0→10</td><td>ceiling 10 is not < 10.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="TreeMap / TreeSet Patterns implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute scan</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal TreeMap</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute scan">
+    <p>Store intervals in a list and scan them all. Correct, O(n) per book.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CalendarBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class CalendarBrute {
+        static class Cal {
+            final List&lt;int[]&gt; a = new ArrayList&lt;&gt;();
+            boolean book(int s, int e) {
+                for (int[] iv : a) {
+                    if (s &lt; iv[1] &amp;&amp; iv[0] &lt; e) return false;
+                }
+                a.add(new int[] {s, e});
+                return true;
+            }
+        }
+    
+        public static void main(String[] args) {
+            Cal c = new Cal();
+            System.out.println(c.book(10, 20));
+            System.out.println(c.book(15, 25));
+            System.out.println(c.book(20, 30));
+        }
+        // Input : book [10,20), [15,25), [20,30)
+        // Output: true
+        //         false
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal TreeMap">
+    <p>Two probes per book. The same skeleton is My Calendar, Exam Room, and most range-conflict questions.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CalendarTree.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.TreeMap;
+    
+    public class CalendarTree {
+        static class MyCalendar {
+            final TreeMap&lt;Integer, Integer&gt; map = new TreeMap&lt;&gt;();
+    
+            boolean book(int s, int e) {
+                Integer prev = map.floorKey(s);
+                if (prev != null &amp;&amp; map.get(prev) &gt; s) return false;
+                Integer next = map.ceilingKey(s);
+                if (next != null &amp;&amp; next &lt; e) return false;
+                map.put(s, e);
+                return true;
+            }
+        }
+    
+        public static void main(String[] args) {
+            MyCalendar c = new MyCalendar();
+            System.out.println(c.book(10, 20));
+            System.out.println(c.book(15, 25));
+            System.out.println(c.book(20, 30));
+            System.out.println(c.book(0, 10));
+        }
+        // Input : [10,20), [15,25), [20,30), [0,10)
+        // Output: true
+        //         false
+        //         true
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Floor/ceiling on a TreeSet (contains-nearby-duplicate) and a frequency TreeMap for a window's max-min.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TreeMapTemplates.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.TreeMap;
+    import java.util.TreeSet;
+    
+    public class TreeMapTemplates {
+        static boolean nearbyAlmostDuplicate(int[] a, int k, int t) {
+            TreeSet&lt;Long&gt; set = new TreeSet&lt;&gt;();
+            for (int i = 0; i &lt; a.length; i++) {
+                long x = a[i];
+                Long ceil = set.ceiling(x);
+                if (ceil != null &amp;&amp; ceil - x &lt;= t) return true;
+                Long floor = set.floor(x);
+                if (floor != null &amp;&amp; x - floor &lt;= t) return true;
+                set.add(x);
+                if (i &gt;= k) set.remove((long) a[i - k]);
+            }
+            return false;
+        }
+    
+        static int longestSubarray(int[] a, int limit) {
+            TreeMap&lt;Integer, Integer&gt; freq = new TreeMap&lt;&gt;();
+            int l = 0, best = 0;
+            for (int r = 0; r &lt; a.length; r++) {
+                freq.merge(a[r], 1, Integer::sum);
+                while (freq.lastKey() - freq.firstKey() &gt; limit) {
+                    if (freq.merge(a[l], -1, Integer::sum) == 0) freq.remove(a[l]);
+                    l++;
+                }
+                best = Math.max(best, r - l + 1);
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(nearbyAlmostDuplicate(new int[] {1, 2, 3, 1}, 3, 0));
+            System.out.println(nearbyAlmostDuplicate(new int[] {1, 5, 9, 1, 5, 9}, 2, 3));
+            System.out.println(longestSubarray(new int[] {8, 2, 4, 7}, 4));
+            System.out.println(longestSubarray(new int[] {10, 1, 2, 4, 7, 2}, 5));
+        }
+        // Input : nearby ([1,2,3,1], k=3, t=0) and ([1,5,9,1,5,9], k=2, t=3)
+        //         longest ([8,2,4,7], 4) and ([10,1,2,4,7,2], 5)
+        // Output: true
+        //         false
+        //         2
+        //         4
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(log n) per insert / floor / ceiling; O(n log n) for n operations</span>
+    <span class="badge badge--space">Space O(n) keys in the tree</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>A red-black tree of n keys has height O(log n). Each API call walks a root-to-leaf path:</p><span class="eq">T(n ops) = n · O(log n) = O(n log n)</span>
+    <p>The brute interval scan is O(n) per book, O(n²) total. Two TreeMap probes replace that scan. A window as a TreeMap of frequencies is O(n log n) versus O(n) for two deques.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Scan all intervals</td><td>O(n) / book</td><td>O(n)</td><td>n a few thousand</td></tr>
+      <tr><td>TreeMap start → end</td><td>O(log n) / book</td><td>O(n)</td><td>Calendar / no-overlap booking</td></tr>
+      <tr><td>TreeSet of a window</td><td>O(n log k)</td><td>O(k)</td><td>Nearby duplicates, max-min window</td></tr>
+      <tr><td>Two monotonic deques</td><td>O(n)</td><td>O(n)</td><td>Max-min window when you want linear</td></tr>
+      <tr><td>HashMap</td><td>O(1) expected</td><td>O(n)</td><td>Exact keys only; no floor</td></tr>
+      <tr><td>Heap</td><td>O(log n)</td><td>O(n)</td><td>Extreme only; no predecessor of x</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Unboxing a null floor/ceiling</span>
+    <div class="pitfalls__bug">int f = set.floor(x); when x is smaller than every key. NPE, often only on the minimum query.</div>
+    <div class="pitfalls__fix">Assign to Integer / Long, null-check, then unbox. Same for floorKey.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">floor vs lower on a closed interval</span>
+    <div class="pitfalls__bug">Using lowerKey(s) when an interval that starts at s should count as a conflict.</div>
+    <div class="pitfalls__fix">Conflict with an interval that starts at s is a floor (inclusive).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Closed vs half-open overlap test</span>
+    <div class="pitfalls__bug">prev.end >= s on a half-open spec rejects a legal touch.</div>
+    <div class="pitfalls__fix">LC 729 is [s, e) so overlap is end > s and next < e.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">TreeSet.remove of duplicate values in a window</span>
+    <div class="pitfalls__bug">A set cannot hold two equal values. Nearby-duplicate with t=0 silently drops one.</div>
+    <div class="pitfalls__fix">If duplicates of the values themselves matter, store indices or use a TreeMap of counts.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mutating a map while iterating entrySet</span>
+    <div class="pitfalls__bug">ConcurrentModificationException, or skipped entries, during a sweep.</div>
+    <div class="pitfalls__fix">Build the delta map first, then iterate. Or snapshot keySet into an ArrayList.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparator inconsistent with equals</span>
+    <div class="pitfalls__bug">A TreeMap with (a,b) → a.x - b.x treats two objects with the same x as the same key.</div>
+    <div class="pitfalls__fix">If keys can tie on the sort field, add a unique id. Never subtract ints.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>My Calendar II (at most two overlaps)</td>
+        <td>TreeMap of deltas: d[s]++, d[e]--. Reject if any prefix would exceed 2.</td>
+        <td><code>map.merge(s, 1, Integer::sum); map.merge(e, -1, Integer::sum); then scan coverage.</code></td>
+        <td>LC 731</td>
+      </tr>
+      <tr>
+        <td>Sweep coverage (Covered Points Count)</td>
+        <td>Delta map of +1 at L and -1 at R+1 (closed), then walk keys in order.</td>
+        <td><code>for (entry : map.entrySet()) { cov += e.getValue(); ans[cov] += next - coord; }</code></td>
+        <td>CF 1000C</td>
+      </tr>
+      <tr>
+        <td>Exam room / max gap</td>
+        <td>TreeSet of taken seats. Next seat is the midpoint of the largest gap.</td>
+        <td><code>Integer lo = taken.lower(p); Integer hi = taken.higher(p);</code></td>
+        <td>LC 855</td>
+      </tr>
+      <tr>
+        <td>Range module (LC 715)</td>
+        <td>TreeMap of disjoint intervals; split on add/remove using floor and ceiling, then merge.</td>
+        <td><code>The calendar two-probe, plus a merge-run of touching intervals.</code></td>
+        <td>LC 715</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>floorKey vs lowerKey: which one for interval overlap?</summary>
+    <div class="followup__body">
+      <p>You need the interval that starts at or before s, so floor (inclusive). If an interval starts at s it overlaps [s, e) for any e > s. Stick to floor + ceiling on the start.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When do you prefer two deques over a TreeMap for max-min of a window?</summary>
+    <div class="followup__body">
+      <p>When they want O(n) and the window is on an array you scan once. A TreeMap of frequencies is O(log n) per step, shorter to write. LC 1438 accepts both. Say both, write the TreeMap unless they push for linear.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does this relate to a policy-based tree on Codeforces?</summary>
+    <div class="followup__body">
+      <p>TreeMap cannot answer "k-th key" in log n without walking, because Java's red-black tree does not store subtree sizes. headMap(x).size() is O(n), not log n. Use Fenwick / segment tree on compressed keys, or accept linear for order statistics.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can a TreeMap replace a heap?</summary>
+    <div class="followup__body">
+      <p>Yes, with worse constants: firstKey is min, pollFirstEntry is delete-min, and you also get floor/ceiling and arbitrary delete in log n. Stay with PriorityQueue when you only ever need the extreme. A TreeMap of counts is the cleanest multiset Java has.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-i/" target="_blank" rel="noopener">My Calendar I</a></td>
+        <td><span class="badge badge--lc">LC 729</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>TreeMap start→end, two probes</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-ii/" target="_blank" rel="noopener">My Calendar II</a></td>
+        <td><span class="badge badge--lc">LC 731</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Delta map, reject coverage > 2</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/contains-duplicate-iii/" target="_blank" rel="noopener">Contains Duplicate III</a></td>
+        <td><span class="badge badge--lc">LC 220</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>TreeSet of last k, floor/ceiling vs t</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/longest-continuous-subarray-with-absolute-diff-less-than-or-equal-to-limit/" target="_blank" rel="noopener">Longest Subarray abs(max-min) <= Limit</a></td>
+        <td><span class="badge badge--lc">LC 1438</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>TreeMap of window frequencies (or two deques)</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/exam-room/" target="_blank" rel="noopener">Exam Room</a></td>
+        <td><span class="badge badge--lc">LC 855</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>TreeSet of taken seats, max gap</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/data-stream-as-disjoint-intervals/" target="_blank" rel="noopener">Data Stream as Disjoint Intervals</a></td>
+        <td><span class="badge badge--lc">LC 352</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>TreeMap of intervals, merge on insert</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/range-module/" target="_blank" rel="noopener">Range Module</a></td>
+        <td><span class="badge badge--lc">LC 715</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Split + merge disjoint intervals in a TreeMap</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/odd-even-jump/" target="_blank" rel="noopener">Odd Even Jump</a></td>
+        <td><span class="badge badge--lc">LC 975</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>TreeMap of suffix values, ceiling/floor jumps</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/702/C" target="_blank" rel="noopener">Cellular Network</a></td>
+        <td><span class="badge badge--cf">CF 702C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>For each city, floor/ceiling of tower positions</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1000/C" target="_blank" rel="noopener">Covered Points Count</a></td>
+        <td><span class="badge badge--cf">CF 1000C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Delta TreeMap, sweep coverage</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/1353/D" target="_blank" rel="noopener">Constructing the Array</a></td>
+        <td><span class="badge badge--cf">CF 1353D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>TreeSet / heap of empty segments by length</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 702C — one ceiling per city</summary>
+  <div class="spoiler__body">
+    <p>Sort the tower positions (or put them in a TreeSet). For each city at x the nearest tower is min(x - floor(x), ceiling(x) - x), missing neighbour treated as infinity. The answer is the max over cities of that distance. Binary search on a static array is the same algorithm without a tree.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 1000C — coverage by how many segments</summary>
+  <div class="spoiler__body">
+    <p>Each segment [L, R] contributes +1 at L and -1 at R+1 (closed integer segments). Walk adjacent keys of the TreeMap: between coord and nextCoord there are (next-coord) points with the current coverage. Off-by-one on R vs R+1 is the whole problem.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Floor ≤ x ≤ ceiling; lower &lt; x &lt; higher.</strong> Null-check before unboxing.</li>
+    <li><strong>Intervals:</strong> TreeMap start → end, two probes, half-open unless the spec says otherwise.</li>
+    <li><strong>Window bag:</strong> TreeMap of frequencies; firstKey/lastKey are min and max.</li>
+    <li><strong>Sweep:</strong> TreeMap of coordinate deltas, then iterate in key order.</li>
+    <li><strong>Not a heap and not a HashMap:</strong> you are here because you need a nearest key or an ordered range.</li>
+  </ul>
+  <div class="recap__oneliner">Integer prev = map.floorKey(s); if (prev != null &amp;&amp; map.get(prev) &gt; s) return false;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

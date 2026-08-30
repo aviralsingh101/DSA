@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manacher's Algorithm &mdash; DSA Course</title>
+<meta name="description" content="Manacher computes the longest palindromic radius at every centre in O(n) by mirroring inside a rightmost palindrome box &mdash; the palindrome cousin of the Z-function.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="manacher">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 12 &middot; Strings, Advanced</span>
+  <h1>Manacher's Algorithm</h1>
+  <p class="hero__tagline">Manacher computes the longest palindromic radius at every centre in <code>O(n)</code> by mirroring inside a rightmost palindrome box &mdash; the palindrome cousin of the Z-function.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="z-function.html">Z-Function</a>,
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Manacher</span>
+      <span class="chip">palindrome</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Expand-around-centre is O(n^2). Manacher reuses palindromes already found: if a palindrome covers i, the mirrored index 2c-i already has a radius you can copy (capped by the box edge), then extend only if needed. r only moves right, so total time is linear.</p>
+<p>The usual implementation inserts sentinels so odd and even palindromes share one array: T = ^#a#b#a#$ has a centre for every gap. d[i] is the radius in T; the original-string length is d[i]-1.</p>
+<p>LC 5 (longest palindromic substring) is the interview problem. Contest follow-ups count palindromic substrings, find the longest palindromic prefix, or build a palindrome tree (a different structure).</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Inside the rightmost palindrome, palindromes mirror. Copy the mirrored radius, clip to the box, then extend. Same amortised argument as Z.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Longest palindromic substring in O(n)</li>
+        <li>Count of palindromic substrings</li>
+        <li>All palindromic radii (odd and even) for later queries</li>
+        <li>Longest palindromic prefix / suffix</li>
+        <li>n = 1e6 so O(n^2) expand is dead</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Palindrome queries on a mutable string &rarr; hashes + Fenwick, or a palindromic tree with updates</li>
+        <li>One palindrome check of the whole string &rarr; two pointers</li>
+        <li>Pattern matching &rarr; KMP / Z</li>
+        <li>You need every distinct palindrome as a node with suffix links &rarr; eertree, not Manacher</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Longest palindromic substring</td>
+        <td>Max radius, decode the centre</td>
+        <td>Manacher</td>
+      </tr>
+      <tr>
+        <td>Count palindromic substrings</td>
+        <td>Sum of radii (careful with sentinels)</td>
+        <td>Manacher</td>
+      </tr>
+      <tr>
+        <td>Whole-string palindrome</td>
+        <td>Two pointers</td>
+        <td>Not this</td>
+      </tr>
+      <tr>
+        <td>Palindrome after one change</td>
+        <td>Expand or hash</td>
+        <td>Usually not Manacher</td>
+      </tr>
+      <tr>
+        <td>Online palindromes</td>
+        <td>eertree / palindromic tree</td>
+        <td>Different structure</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Z-function</td>
+        <td>Z copies prefix boxes; Manacher copies palindrome boxes</td>
+        <td>Same two-pointer skeleton</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8310;</code>. The sentinel string has length 2n+3. Integer radii; do not use Java substring in the inner loop.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Build T with a unique border and '#' between letters so every palindrome in s is an odd palindrome in T. d[i] = radius (how far you can go from i in T, counting the centre).</p>
+<p>Maintain [l, r] = rightmost palindrome (centre c = (l+r)/2 conceptually). For i: if i < r, d[i] = min(d[2*c - i], r-i). Then extend while T[i-d]==T[i+d]. If i+d > r, move the box.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>T[l..r] is a palindrome. For i in (c, r), the mirror j = 2c-i has a known radius, so d[i] is at least min(d[j], r-i) and at most that until you extend past r.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="manacherViz"></div>
+  <div class="viz-player" data-viz-target="manacherViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "d (radii on #a#b#a#) =",
+      "array": [
+        0,
+        1,
+        2,
+        1,
+        4,
+        1,
+        2,
+        1,
+        0
+      ],
+      "indexLabels": [
+        "^",
+        "#",
+        "a",
+        "#",
+        "b",
+        "#",
+        "a",
+        "#",
+        "$"
+      ],
+      "vars": [
+        "i",
+        "box",
+        "d"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "T = ^#a#b#a#$. Centres on '#' handle even palindromes of s.",
+          "active": [
+            0
+          ],
+          "values": {
+            "i": 0,
+            "box": "none",
+            "d": "init"
+          }
+        },
+        {
+          "note": "i at first 'a'. Extend to #a#. d=2. Box covers that palindrome.",
+          "active": [
+            2
+          ],
+          "values": {
+            "i": "a",
+            "box": "[1,3]",
+            "d": 2
+          }
+        },
+        {
+          "note": "i at 'b'. Expand #a#b#a# — the whole string is a palindrome of radius 4 around b.",
+          "active": [
+            4
+          ],
+          "values": {
+            "i": "b",
+            "box": "[0,8]",
+            "d": 4
+          }
+        },
+        {
+          "note": "i at second 'a'. Mirror of first 'a'. Copy min(d[mirror], remaining box)=2. Matches.",
+          "active": [
+            6
+          ],
+          "values": {
+            "i": "a2",
+            "box": "[0,8]",
+            "d": 2
+          }
+        },
+        {
+          "note": "Longest in s is length d-1 at centre b: 4-1=3, \"aba\".",
+          "active": [
+            2,
+            4,
+            6
+          ],
+          "values": {
+            "i": "ans",
+            "box": "done",
+            "d": "len 3"
+          }
+        },
+        {
+          "note": "Even palindrome \"aa\" would show up as a large d on a '#' centre between the two a's.",
+          "active": [
+            3,
+            5
+          ],
+          "values": {
+            "i": "even centres",
+            "box": "#",
+            "d": "gaps"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Mirror, clip, extend</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  iN["next centre i"] --&gt; inside{"i less than r?"}
+  inside -- yes --&gt; copy["d i = min of d mirror and r-i"]
+  inside -- no --&gt; one["d i = 1"]
+  copy --&gt; exp["while T i-d equals T i+d, d plus 1"]
+  one --&gt; exp
+  exp --&gt; move{"i+d greater than r?"}
+  move -- yes --&gt; boxN["c=i, r=i+d"]
+  move -- no --&gt; nextC["next i"]
+  boxN --&gt; nextC
+  </div>
+  <figcaption>r only increases. Every successful extend comparison is charged to r.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Build T</strong> with '^', '$' borders and '#' between characters.</li>
+  <li><strong>d[]</strong> size |T|, c=0, r=0.</li>
+  <li><strong>For each i</strong>: mirror = 2*c-i; if i<r, d[i]=min(d[mirror], r-i); else d[i]=1 (or 0 depending on counting).</li>
+  <li><strong>Extend</strong> while ipm d in bounds and T matches.</li>
+  <li><strong>If i+d > r</strong> set c=i, r=i+d.</li>
+  <li><strong>Decode:</strong> palindrome length in s is d[i]-1; start = (i-d[i])/2 in original indexing with this T.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>box</th><th>d</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>none</td><td>init</td><td>T = ^#a#b#a#$. Centres on '#' handle even palindromes of s.</td></tr>
+      <tr><td>a</td><td>[1,3]</td><td>2</td><td>i at first 'a'. Extend to #a#. d=2. Box covers that palindrome.</td></tr>
+      <tr><td>b</td><td>[0,8]</td><td>4</td><td>i at 'b'. Expand #a#b#a# — the whole string is a palindrome of radius 4 around b.</td></tr>
+      <tr><td>a2</td><td>[0,8]</td><td>2</td><td>i at second 'a'. Mirror of first 'a'. Copy min(d[mirror], remaining box)=2. Matches.</td></tr>
+      <tr><td>ans</td><td>done</td><td>len 3</td><td>Longest in s is length d-1 at centre b: 4-1=3, "aba".</td></tr>
+      <tr><td>even centres</td><td>#</td><td>gaps</td><td>Even palindrome "aa" would show up as a large d on a '#' centre between the two a's.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Manacher's Algorithm implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Expand around 2n-1 centres. O(n^2).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PalExpand.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class PalExpand {
+        static String longest(String s) {
+            int n = s.length(), bestL = 0, bestR = 0;
+            for (int c = 0; c &lt; n; c++) {
+                int[] odd = expand(s, c, c), even = expand(s, c, c + 1);
+                if (odd[1] - odd[0] &gt; bestR - bestL) { bestL = odd[0]; bestR = odd[1]; }
+                if (even[1] - even[0] &gt; bestR - bestL) { bestL = even[0]; bestR = even[1]; }
+            }
+            return s.substring(bestL, bestR);
+        }
+        static int[] expand(String s, int l, int r) {
+            while (l &gt;= 0 &amp;&amp; r &lt; s.length() &amp;&amp; s.charAt(l) == s.charAt(r)) { l--; r++; }
+            return new int[] {l + 1, r};
+        }
+        public static void main(String[] args) {
+            System.out.println(longest("babad"));
+        }
+        // Input : babad
+        // Output: bab
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Linear radii on the sentinel string. Returns the longest piece of s.</p>
+    <div class="code" data-highlight="14-22">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Manacher.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Manacher {
+        static String longest(String s) {
+            StringBuilder sb = new StringBuilder("^");
+            for (int i = 0; i &lt; s.length(); i++) sb.append('#').append(s.charAt(i));
+            sb.append("#$");
+            char[] t = sb.toString().toCharArray();
+            int m = t.length;
+            int[] d = new int[m];
+            int c = 0, r = 0, best = 0, centre = 0;
+            for (int i = 1; i &lt; m - 1; i++) {
+                if (i &lt; r) d[i] = Math.min(d[2 * c - i], r - i);
+                else d[i] = 1;
+                while (t[i - d[i]] == t[i + d[i]]) d[i]++;
+                if (i + d[i] &gt; r) { c = i; r = i + d[i]; }
+                if (d[i] &gt; best) { best = d[i]; centre = i; }
+            }
+            int start = (centre - best) / 2;
+            return s.substring(start, start + best - 1);
+        }
+        public static void main(String[] args) {
+            System.out.println(longest("babad"));
+            System.out.println(longest("cbbd"));
+        }
+        // Input : babad, then cbbd
+        // Output: bab
+        //         bb
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Count palindromic substrings: each radius contributes d[i]/2 centres in s.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ManacherCount.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ManacherCount {
+        static int count(String s) {
+            StringBuilder sb = new StringBuilder("^");
+            for (int i = 0; i &lt; s.length(); i++) sb.append('#').append(s.charAt(i));
+            sb.append("#$");
+            char[] t = sb.toString().toCharArray();
+            int[] d = new int[t.length];
+            int c = 0, r = 0, ans = 0;
+            for (int i = 1; i &lt; t.length - 1; i++) {
+                if (i &lt; r) d[i] = Math.min(d[2 * c - i], r - i);
+                else d[i] = 1;
+                while (t[i - d[i]] == t[i + d[i]]) d[i]++;
+                if (i + d[i] &gt; r) { c = i; r = i + d[i]; }
+                ans += d[i] / 2;
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(count("aaa"));
+        }
+        // Input : aaa
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each extend step that succeeds increases r. r never decreases. The mirror copy is O(1) per centre. |T| = 2n+3 so still linear.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Expand 2n centres</td><td>O(n^2)</td><td>O(1)</td><td>n <= 3000</td></tr>
+      <tr><td>Manacher</td><td>O(n)</td><td>O(n)</td><td>All radii</td></tr>
+      <tr><td>Hash + binary search</td><td>O(n log n)</td><td>O(n)</td><td>Longest palindrome only</td></tr>
+      <tr><td>eertree</td><td>O(n)</td><td>O(n)</td><td>Distinct palindromes as nodes</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting sentinels ^ and $</span>
+    <div class="pitfalls__bug">The while loop walks off the array when a palindrome hits an end.</div>
+    <div class="pitfalls__fix">Guaranteed-mismatch borders, or explicit bounds checks.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">d counting vs expand-by-1</span>
+    <div class="pitfalls__bug">Mixing "d is the length in T" with "d is the number of extra steps". Off-by-one on the substring start.</div>
+    <div class="pitfalls__fix">Pick one convention; the code above uses d=1 meaning just the centre, extend while equal.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using substring inside the extend loop</span>
+    <div class="pitfalls__bug">Java substring copies (older JDKs) and you go quadratic plus allocations.</div>
+    <div class="pitfalls__fix">char[] and indices only.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Even palindromes without '#'</span>
+    <div class="pitfalls__bug">You only computed odd lengths. "abba" is missed.</div>
+    <div class="pitfalls__fix">Sentinel string, or two arrays dOdd/dEven.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Decoding start index wrong</span>
+    <div class="pitfalls__bug">(centre-best)/2 vs (centre-best+1)/2 depending on T's first '#'.</div>
+    <div class="pitfalls__fix">Derive once from T = ^#s0#s1#...#$ and test on "a", "aa", "aba".</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Two arrays, no sentinels</td>
+        <td>d1[i] odd radius, d2[i] even radius. Same box idea twice.</td>
+        <td><code>CP-algorithms manacher</code></td>
+        <td>slightly faster constants</td>
+      </tr>
+      <tr>
+        <td>Longest palindromic prefix</td>
+        <td>The palindrome that touches index 0; or KMP on s + rev(s).</td>
+        <td><code>d[i] with i-d+1==0</code></td>
+        <td>CF 1326D</td>
+      </tr>
+      <tr>
+        <td>Count / sum of palindromes</td>
+        <td>Sum of (d[i]/2) on the sentinel string.</td>
+        <td><code>LC 647</code></td>
+        <td>this page's template</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is this linear like Z?</summary>
+    <div class="followup__body">
+      <p>Potential r. Mirror copies cost O(1). Extending past r is paid for by increasing r, at most |T| times.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you support updates?</summary>
+    <div class="followup__body">
+      <p>Not with a static d[]. Rebuild is O(n). Online insertion at the end is an eertree. Hashes handle "is [l,r] a palindrome" with updates via a Fenwick of polynomial coefficients, which is heavier.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Longest palindromic subsequence vs substring?</summary>
+    <div class="followup__body">
+      <p>Subsequence is DP O(n^2) (LCS of s and reverse). Manacher is substrings only — contiguous.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you list all palindromic substrings without O(n^2) memory?</summary>
+    <div class="followup__body">
+      <p>The O(n) radii already represent them. Iterate centres and emit ranges on demand; do not materialise every string.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/longest-palindromic-substring/" target="_blank" rel="noopener">Longest Palindromic Substring</a></td>
+        <td><span class="badge badge--lc">LC 5</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The interview Manacher / expand</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/palindromic-substrings/" target="_blank" rel="noopener">Palindromic Substrings</a></td>
+        <td><span class="badge badge--lc">LC 647</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count via radii</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/shortest-palindrome/" target="_blank" rel="noopener">Shortest Palindrome</a></td>
+        <td><span class="badge badge--lc">LC 214</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>KMP on s+#+rev, or Manacher prefix</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/13262/D" target="_blank" rel="noopener">Prefix-Suffix Palindrome</a></td>
+        <td><span class="badge badge--cf">CF 1326D2</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Longest palindromic prefix after a pair of borders</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/7/D" target="_blank" rel="noopener">Palindrome Degree</a></td>
+        <td><span class="badge badge--cf">CF 7D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix palindromes; hash is common, Manacher works</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/abc122/tasks/abc122_d" target="_blank" rel="noopener">ABC 122 D</a></td>
+        <td><span class="badge badge--atc">ABC 122D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Not Manacher — palindrome-avoiding DP</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://www.spoj.com/problems/LPS/" target="_blank" rel="noopener">Longest Palindromic Substring</a></td>
+        <td><span class="badge badge--gfg">SPOJ LPS</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Length only</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/17/E" target="_blank" rel="noopener">Palisection</a></td>
+        <td><span class="badge badge--cf">CF 17E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>All palindromes intersecting</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Sentinel string unifies odd and even centres.</li>
+    <li>Mirror radius inside the rightmost palindrome box.</li>
+    <li>Clip to the box, then extend. r only grows.</li>
+    <li>Length in s is d[i]-1 with the '#' construction.</li>
+    <li>Substrings, not subsequences.</li>
+  </ul>
+  <div class="recap__oneliner">if(i&lt;r) d[i]=min(d[2*c-i], r-i); while(t[i-d]==t[i+d]) d[i]++; if(i+d&gt;r){c=i;r=i+d;}</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

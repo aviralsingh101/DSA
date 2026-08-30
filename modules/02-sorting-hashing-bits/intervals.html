@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intervals &mdash; DSA Course</title>
+<meta name="description" content="Sort intervals by start (or by end), then a linear scan merges, punches holes, or counts how many overlap a point &mdash; the geometry is one-dimensional.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="intervals">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Intervals</h1>
+  <p class="hero__tagline">Sort intervals by start (or by end), then a linear scan merges, punches holes, or counts how many overlap a point &mdash; the geometry is one-dimensional.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="sorting-and-comparators.html">Sorting & Comparators</a>,
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">intervals</span>
+      <span class="chip">sweep</span>
+      <span class="chip">merge</span>
+      <span class="chip">greedy</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>An interval is a pair <code>[l, r]</code>. Naive "compare every pair" is <code>O(n&sup2;)</code> and dies at <code>n = 10&#8309;</code>. After sorting by start, overlaps are contiguous: if the current interval does not touch the previous merged end, nothing later with a larger start will touch it either. That single observation is merge intervals, insert interval, and coverage.</p>
+<p>The other sort, by end, is the greedy for "how many can I keep if they must not overlap": always keep the one that finishes first. Meeting rooms, arrows bursting balloons, and non-overlapping removal are the same proof with a flipped sign.</p>
+<p>Sweep-line is the same idea with an explicit event queue: +1 at l, &minus;1 at r, walk left to right, and the running sum is how many intervals cover this point. That answers "maximum concurrent meetings" without building the merged list.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>In one dimension, sorting turns geometry into adjacency. After the sort, every decision looks at the current interval and a single running endpoint (or a running count).</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Merge overlapping intervals", "insert an interval into a sorted list"</li>
+        <li>"Minimum arrows / meetings / rooms" &mdash; concurrent overlap or greedy keep-by-end</li>
+        <li>"Employee free time", "covered points", "range module" as a list of disjoint intervals</li>
+        <li>A set of segments on a line; queries about union length or maximum overlap</li>
+        <li>"Can you attend all meetings?" &mdash; sort by start, check adjacent overlap</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>2D rectangles with both axes mattering &rarr; sweep + a tree on the other axis, not this page</li>
+        <li>Intervals that you must update online as a balanced tree of ranges &rarr; TreeMap or a segment tree</li>
+        <li>Circular intervals on a clock without a cut &rarr; duplicate the array or pick a cut point</li>
+        <li>Graph intervals as edges of a constraint graph &rarr; 2-SAT / difference constraints</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"merge all overlapping"</td>
+        <td>Sort by start, extend running end</td>
+        <td>LC 56</td>
+      </tr>
+      <tr>
+        <td>"insert one interval"</td>
+        <td>Copy before, merge through, copy after</td>
+        <td>LC 57</td>
+      </tr>
+      <tr>
+        <td>"erase overlap, keep max number"</td>
+        <td>Sort by end, greedy take</td>
+        <td>LC 435</td>
+      </tr>
+      <tr>
+        <td>"min arrows to burst balloons"</td>
+        <td>Same greedy as 435, arrows at ends</td>
+        <td>LC 452</td>
+      </tr>
+      <tr>
+        <td>"meeting rooms II"</td>
+        <td>Sweep +1/−1, max running</td>
+        <td>LC 253</td>
+      </tr>
+      <tr>
+        <td>"interval intersection of two lists"</td>
+        <td>Two pointers on sorted disjoint lists</td>
+        <td>LC 986</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sliding window on an array</td>
+        <td>Windows are index ranges on a sequence; intervals are values on a line</td>
+        <td><a href="../01-arrays-and-windows/sliding-window.html">Sliding window</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> intervals forces <code>O(n log n)</code> sort plus a linear scan. Coordinates up to <code>10&#8313;</code> need <code>long</code> for union length. Inclusive vs exclusive ends is a spec question: check whether <code>[1,2]</code> and <code>[2,3]</code> overlap.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Merge: sort by start. Keep a running <code>[curL, curR]</code>. If the next start is <code>&le; curR</code> (or <code>&lt;</code> if ends are exclusive), extend <code>curR = max(curR, nextR)</code>; else emit <code>cur</code> and start a new one. The sort is what makes "next" the only candidate that can overlap.</p>
+<p>Non-overlap greedy: sort by <em>end</em>. Keep the interval that finishes first; skip anything that starts before that end. Proof: any kept set can replace its last interval with this earlier finish without losing feasibility, so the greedy stays ahead. Sweep for rooms: emit start events before end events at a tied time if a meeting can reuse a room that just freed (depends on the statement).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After sorting by start, a single running end <code>curR</code> satisfies:</p><span class="eq">every emitted interval is disjoint from the later ones, and curR is the max end of the open merge</span><p>Interview sentence: <em>"I sort so overlaps become adjacent, then I only track one running endpoint."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="intervalsViz"></div>
+  <div class="viz-player" data-viz-target="intervalsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        1,
+        3,
+        2,
+        6,
+        8,
+        10,
+        15,
+        18
+      ],
+      "indexLabels": [
+        "l0",
+        "r0",
+        "l1",
+        "r1",
+        "l2",
+        "r2",
+        "l3",
+        "r3"
+      ],
+      "vars": [
+        "i",
+        "curL",
+        "curR",
+        "action"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Sorted by start: [1,3], [2,6], [8,10], [15,18]. Flattened as [1,3,2,6,8,10,15,18]. Open [1,3].",
+          "window": [
+            0,
+            1
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": 0,
+            "curL": 1,
+            "curR": 3,
+            "action": "open first"
+          }
+        },
+        {
+          "note": "Next [2,6]: 2 ≤ 3, overlap. Extend curR = max(3,6) = 6. Current merge [1,6].",
+          "window": [
+            0,
+            3
+          ],
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "i": 1,
+            "curL": 1,
+            "curR": 6,
+            "action": "extend"
+          }
+        },
+        {
+          "note": "Next [8,10]: 8 > 6, no overlap. Emit [1,6] and open [8,10].",
+          "best": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "active": [
+            4,
+            5
+          ],
+          "dim": [
+            6,
+            7
+          ],
+          "values": {
+            "i": 2,
+            "curL": 8,
+            "curR": 10,
+            "action": "emit + open"
+          }
+        },
+        {
+          "note": "Next [15,18]: 15 > 10. Emit [8,10], open [15,18].",
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "best": [
+            4,
+            5
+          ],
+          "active": [
+            6,
+            7
+          ],
+          "values": {
+            "i": 3,
+            "curL": 15,
+            "curR": 18,
+            "action": "emit + open"
+          }
+        },
+        {
+          "note": "End of list. Emit [15,18]. Merged: [1,6], [8,10], [15,18].",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "best": [
+            6,
+            7
+          ],
+          "values": {
+            "i": "done",
+            "curL": 15,
+            "curR": 18,
+            "action": "emit last"
+          }
+        },
+        {
+          "note": "Same data, rooms-greedy would sort by end and count a new room whenever start < lastEnd.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": "alt",
+            "curL": "—",
+            "curR": "—",
+            "action": "sort by end"
+          }
+        },
+        {
+          "note": "Sweep view: +1 at 1, +1 at 2, −1 at 3, −1 at 6 → max overlap 2 in [2,3].",
+          "window": [
+            0,
+            3
+          ],
+          "values": {
+            "i": "sweep",
+            "curL": 2,
+            "curR": 3,
+            "action": "max cover = 2"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Which interval sort?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["interval question"] --&gt; goal{"union, select, or overlap count?"}
+  goal -- union / merge --&gt; byStart["sort by start, extend running end"]
+  goal -- max keep / min arrows --&gt; byEnd["sort by end, greedy take"]
+  goal -- max concurrent --&gt; sweep["+1 at start, -1 at end, max running"]
+  goal -- two sorted lists --&gt; twoPtr["two pointers, advance the one that ends first"]
+  byStart --&gt; out["linear scan after n log n sort"]
+  byEnd --&gt; out
+  sweep --&gt; out
+  twoPtr --&gt; out
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Decide inclusive vs exclusive</strong> ends. It changes <code>&le;</code> vs <code>&lt;</code>.</li>
+  <li><strong>Union / merge:</strong> sort by start, extend a running end, emit when a gap appears.</li>
+  <li><strong>Max non-overlapping:</strong> sort by end, take if start &ge; lastEnd.</li>
+  <li><strong>Rooms / concurrent:</strong> events +1/−1, sort by time, max the running sum.</li>
+  <li><strong>Two lists of disjoint intervals:</strong> two pointers; advance the earlier end.</li>
+  <li><strong>Insert:</strong> copy strictly-before, merge all that overlap the new one, copy after.</li>
+  <li><strong>Use long</strong> for union length: ends up to 1e9, n up to 1e5.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>curL</th><th>curR</th><th>action</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>1</td><td>3</td><td>open first</td><td>Sorted by start: [1,3], [2,6], [8,10], [15,18]. Flattened as [1,3,2,6,8,10,15,18]. Open [1,3].</td></tr>
+      <tr><td>1</td><td>1</td><td>6</td><td>extend</td><td>Next [2,6]: 2 ≤ 3, overlap. Extend curR = max(3,6) = 6. Current merge [1,6].</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>8</td><td>10</td><td>emit + open</td><td>Next [8,10]: 8 > 6, no overlap. Emit [1,6] and open [8,10].</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>15</td><td>18</td><td>emit + open</td><td>Next [15,18]: 15 > 10. Emit [8,10], open [15,18].</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>15</td><td>18</td><td>emit last</td><td>End of list. Emit [15,18]. Merged: [1,6], [8,10], [15,18].</td></tr>
+      <tr><td>alt</td><td>—</td><td>—</td><td>sort by end</td><td>Same data, rooms-greedy would sort by end and count a new room whenever start < lastEnd.</td></tr>
+      <tr><td>sweep</td><td>2</td><td>3</td><td>max cover = 2</td><td>Sweep view: +1 at 1, +1 at 2, −1 at 3, −1 at 6 → max overlap 2 in [2,3].</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Intervals implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Pairwise overlap checks. Correct, quadratic, only for n ≤ 2000.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">IntervalBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class IntervalBrute {
+        static boolean anyOverlap(int[][] a) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = i + 1; j &lt; n; j++) {
+                    if (a[i][0] &lt;= a[j][1] &amp;&amp; a[j][0] &lt;= a[i][1]) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    
+        public static void main(String[] args) {
+            int[][] a = {{1, 3}, {2, 6}, {8, 10}};
+            System.out.println(anyOverlap(a));
+        }
+        // Input : [1,3], [2,6], [8,10]
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Sort by start, merge in one pass. Also the min-arrows greedy (sort by end).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MergeIntervals.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class MergeIntervals {
+        static int[][] merge(int[][] a) {
+            Arrays.sort(a, (u, v) -&gt; Integer.compare(u[0], v[0]));
+            List&lt;int[]&gt; out = new ArrayList&lt;&gt;();
+            int curL = a[0][0], curR = a[0][1];
+            for (int i = 1; i &lt; a.length; i++) {
+                if (a[i][0] &lt;= curR) {
+                    curR = Math.max(curR, a[i][1]);
+                } else {
+                    out.add(new int[] {curL, curR});
+                    curL = a[i][0];
+                    curR = a[i][1];
+                }
+            }
+            out.add(new int[] {curL, curR});
+            return out.toArray(new int[0][]);
+        }
+    
+        static int minArrows(int[][] points) {
+            Arrays.sort(points, (u, v) -&gt; Integer.compare(u[1], v[1]));
+            int arrows = 1;
+            int end = points[0][1];
+            for (int i = 1; i &lt; points.length; i++) {
+                if (points[i][0] &gt; end) {
+                    arrows++;
+                    end = points[i][1];
+                }
+            }
+            return arrows;
+        }
+    
+        public static void main(String[] args) {
+            int[][] m = merge(new int[][] {{1, 3}, {2, 6}, {8, 10}, {15, 18}});
+            System.out.println(Arrays.deepToString(m));
+            System.out.println(minArrows(new int[][] {{10, 16}, {2, 8}, {1, 6}, {7, 12}}));
+        }
+        // Input : merge [1,3][2,6][8,10][15,18]; arrows [10,16][2,8][1,6][7,12]
+        // Output: [[1, 6], [8, 10], [15, 18]]
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Sweep for maximum overlap (meeting rooms II) and two-list intersection.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">IntervalSweep.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class IntervalSweep {
+        static int minRooms(int[][] meetings) {
+            int n = meetings.length;
+            int[] start = new int[n];
+            int[] end = new int[n];
+            for (int i = 0; i &lt; n; i++) {
+                start[i] = meetings[i][0];
+                end[i] = meetings[i][1];
+            }
+            Arrays.sort(start);
+            Arrays.sort(end);
+            int i = 0, j = 0, cur = 0, best = 0;
+            while (i &lt; n) {
+                if (start[i] &lt; end[j]) {
+                    cur++;
+                    best = Math.max(best, cur);
+                    i++;
+                } else {
+                    cur--;
+                    j++;
+                }
+            }
+            return best;
+        }
+    
+        static int[][] intersect(int[][] a, int[][] b) {
+            List&lt;int[]&gt; out = new ArrayList&lt;&gt;();
+            int i = 0, j = 0;
+            while (i &lt; a.length &amp;&amp; j &lt; b.length) {
+                int l = Math.max(a[i][0], b[j][0]);
+                int r = Math.min(a[i][1], b[j][1]);
+                if (l &lt;= r) {
+                    out.add(new int[] {l, r});
+                }
+                if (a[i][1] &lt; b[j][1]) {
+                    i++;
+                } else {
+                    j++;
+                }
+            }
+            return out.toArray(new int[0][]);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(minRooms(new int[][] {{0, 30}, {5, 10}, {15, 20}}));
+            int[][] x = intersect(new int[][] {{0, 2}, {5, 10}, {13, 23}},
+                new int[][] {{1, 5}, {8, 12}, {15, 24}});
+            System.out.println(Arrays.deepToString(x));
+        }
+        // Input : rooms [0,30][5,10][15,20]; intersect two disjoint lists
+        // Output: 2
+        //         [[1, 2], [5, 5], [8, 10], [15, 23]]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n) sort + O(n) scan</span>
+    <span class="badge badge--space">Space O(n) for the output (and for event arrays)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The sort dominates: <span class="eq">T(n) = Θ(n log n) + Θ(n)</span>. After sorting, each interval is inspected a constant number of times.</p>
+    <p>Sweep with 2n events is the same class. Two-pointer intersection of already-sorted disjoint lists is <code>O(n + m)</code> with no extra sort.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pairwise overlap</td><td>O(n²)</td><td>O(1)</td><td>n ≤ 2000</td></tr>
+      <tr><td>Sort by start + merge</td><td>O(n log n)</td><td>O(n)</td><td>Union / coverage</td></tr>
+      <tr><td>Sort by end + greedy</td><td>O(n log n)</td><td>O(1)</td><td>Max keep / min arrows</td></tr>
+      <tr><td>Sweep +1/−1</td><td>O(n log n)</td><td>O(n)</td><td>Max concurrent rooms</td></tr>
+      <tr><td>TreeMap of ranges</td><td>O(n log n) online</td><td>O(n)</td><td>Range module / calendars</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Inclusive ends treated as exclusive</span>
+    <div class="pitfalls__bug">[1,2] and [2,3] should merge on LC 56 but a <code>&lt;</code> test leaves a gap.</div>
+    <div class="pitfalls__fix">Read the statement. LC 56 overlaps at a shared endpoint; LC 452 arrows too.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Sorting by the wrong coordinate</span>
+    <div class="pitfalls__bug">Merging after sorting by end misses an overlap that starts late and stretches far.</div>
+    <div class="pitfalls__fix">Union → sort by start. Greedy keep → sort by end. Do not mix.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on union length</span>
+    <div class="pitfalls__bug"><code>r - l + 1</code> with l, r up to 1e9 and n up to 1e5, summed in int.</div>
+    <div class="pitfalls__fix">Accumulate in <code>long</code>. Subtract as long before adding one.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to emit the last interval</span>
+    <div class="pitfalls__bug">The loop only emits when a gap appears, so the final running merge is dropped.</div>
+    <div class="pitfalls__fix">Always <code>out.add(cur)</code> after the loop.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Start and end events at the same time</span>
+    <div class="pitfalls__bug">Processing a start before an end at time t counts an extra room that just freed.</div>
+    <div class="pitfalls__fix">If a room can be reused at time t, process ends first. Match the problem's "touching is OK" rule.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Insert interval</td>
+        <td>Walk until overlap, merge the overlapping run, copy the tail.</td>
+        <td><code>three phases: before, merge-while-overlap, after.</code></td>
+        <td>LC 57.</td>
+      </tr>
+      <tr>
+        <td>Covered points / union length</td>
+        <td>Merge then sum (r-l) of disjoint pieces; or sweep with a counter.</td>
+        <td><code>long union = 0; for merged: union += (long) r - l;</code></td>
+        <td>CF 1000C is the online version with a map.</td>
+      </tr>
+      <tr>
+        <td>Video stitching / jump-on-intervals</td>
+        <td>Sort by start, among intervals that cover currentEnd pick the farthest end.</td>
+        <td><code>Same as jump game II on a line of segments.</code></td>
+        <td>LC 1024, LC 1326.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why sort by end for "remove minimum overlapping"?</summary>
+    <div class="followup__body">
+      <p>The interval that finishes first leaves the most room for the rest. If an optimal solution keeps a later-ending interval in that slot, swap it for the greedy choice: the end only moves left, so later intervals that fitted still fit.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you list points covered by exactly k intervals?</summary>
+    <div class="followup__body">
+      <p>Sweep with +1 at l and −1 at r. Whenever the running count changes, close the previous segment at this x and open a new one. Group by the count value.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Intervals arrive online and you must merge on the fly?</summary>
+    <div class="followup__body">
+      <p>A TreeMap from start to end, or a balanced tree of disjoint ranges. Lower-bound the start, walk neighbours that overlap, delete them, insert the union. See TreeMap patterns.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What changes on a circle?</summary>
+    <div class="followup__body">
+      <p>Cut at 0, or duplicate the array shifted by the circumference so a wrap-around interval becomes a linear one. Take care not to double-count the cut point.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/merge-intervals/" target="_blank" rel="noopener">Merge Intervals</a></td>
+        <td><span class="badge badge--lc">LC 56</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by start, extend end</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/insert-interval/" target="_blank" rel="noopener">Insert Interval</a></td>
+        <td><span class="badge badge--lc">LC 57</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Copy / merge / copy</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/non-overlapping-intervals/" target="_blank" rel="noopener">Non-overlapping Intervals</a></td>
+        <td><span class="badge badge--lc">LC 435</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by end, greedy keep</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/minimum-number-of-arrows-to-burst-balloons/" target="_blank" rel="noopener">Min Arrows to Burst Balloons</a></td>
+        <td><span class="badge badge--lc">LC 452</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same greedy as 435</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/meeting-rooms/" target="_blank" rel="noopener">Meeting Rooms</a></td>
+        <td><span class="badge badge--lc">LC 252</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort by start, check adjacent</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/meeting-rooms-ii/" target="_blank" rel="noopener">Meeting Rooms II</a></td>
+        <td><span class="badge badge--lc">LC 253</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sweep max overlap</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/interval-list-intersections/" target="_blank" rel="noopener">Interval List Intersections</a></td>
+        <td><span class="badge badge--lc">LC 986</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two pointers on sorted lists</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/remove-covered-intervals/" target="_blank" rel="noopener">Remove Covered Intervals</a></td>
+        <td><span class="badge badge--lc">LC 1288</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort start asc, end desc</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Sort by start</strong> to merge / take union.</li>
+    <li><strong>Sort by end</strong> to keep the maximum non-overlapping set.</li>
+    <li><strong>Sweep +1/−1</strong> for maximum concurrent overlap.</li>
+    <li><strong>Emit the last interval</strong> after the merge loop.</li>
+    <li><strong>Inclusive vs exclusive</strong> ends change the comparison.</li>
+  </ul>
+  <div class="recap__oneliner">if (a[i][0] &lt;= curR) curR = Math.max(curR, a[i][1]); else emit and restart;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

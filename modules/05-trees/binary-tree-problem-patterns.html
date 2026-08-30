@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Tree Problem Patterns &mdash; DSA Course</title>
+<meta name="description" content="Diameter, path sum, LCA of two nodes, serialise, and construct-from-orders are all a postorder combine or a preorder emit with a payload attached to the walk you already own.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="binary-tree-problem-patterns">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Binary Tree Problem Patterns</h1>
+  <p class="hero__tagline">Diameter, path sum, LCA of two nodes, serialise, and construct-from-orders are all a postorder combine or a preorder emit with a payload attached to the walk you already own.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">binary tree</span>
+      <span class="chip">diameter</span>
+      <span class="chip">path sum</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Once the four walks are mechanical, interview tree problems stop being unique puzzles. Diameter is "height of both children, plus maybe the path through me". Path-sum is "carry a remaining target, or return a list of leftover contributions". LCA in a general binary tree is "if I sit in different subtrees of u, u is the answer".</p>
+<p>The pattern language is: return a struct from a postorder (height + diameter, or (hasP, hasQ)), or emit on the way down (serialise, construct). If you reach for a global ArrayList of all root-to-leaf paths and then scan, you are a generation behind.</p>
+<p>This page is the cluster: diameter, max path sum, path sum I/II/III, invert, flatten, serialise, construct, lowest common ancestor, subtree of another tree.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Almost every "hard" binary-tree question is a postorder that returns more than one number, plus maybe a global best. Name the struct before you code.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Diameter / maximum path sum / binary tree cameras (postorder struct + global)</li>
+        <li>Path sum I/II/III, path with a given sum anywhere</li>
+        <li>Lowest common ancestor of two nodes in a general binary tree</li>
+        <li>Serialise / deserialise, construct from preorder+inorder</li>
+        <li>Invert, flatten to linked list, subtree of another tree</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The tree is a BST and you can use the ordered invariant &rarr; BST page</li>
+        <li>You need all-pairs on a static tree with n=1e5 &rarr; LCA / rerooting / Euler</li>
+        <li>n-ary general graph &rarr; graph DFS</li>
+        <li>You are matching prefixes of strings &rarr; trie</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Diameter of a binary tree</td>
+        <td>Through-me = hL+hR, vs best in a child</td>
+        <td>Postorder, global best</td>
+      </tr>
+      <tr>
+        <td>Max path sum (any node to any)</td>
+        <td>Gain from a child is max(0, childGain)</td>
+        <td>LC 124, same shape</td>
+      </tr>
+      <tr>
+        <td>Path sum to a leaf / list of paths</td>
+        <td>Carry remaining, push/pop the path</td>
+        <td>LC 112 / 113</td>
+      </tr>
+      <tr>
+        <td>LCA of p and q</td>
+        <td>If p and q in different sides, node is LCA</td>
+        <td>Postorder pair of booleans</td>
+      </tr>
+      <tr>
+        <td>Construct from two orders</td>
+        <td>Pre gives root, inorder splits</td>
+        <td>Map + indices, O(n)</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> tree DP on a general n-ary tree with rerooting</td>
+        <td>Binary-tree interviews usually want one DFS; rerooting is the next page</td>
+        <td>This page = interview cluster; next = CP tree DP</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5, values can be negative (max path sum). Recursion depth is h; if unbounded, the iterative rewrite is rarely asked for diameter but is asked for traversals.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Diameter: a function height(u) that also updates ans = max(ans, hL+hR). The longest path counted in edges is that global ans. Max path sum is the same with a twist: a child that contributes a negative gain is dropped (max(0, gain)), and the through-me candidate is val+gainL+gainR, while the value you return upward is val+max(gainL,gainR).</p>
+<p>LCA: rec returns null if the subtree has neither; returns the node if it is p or q or if both sides returned non-null. Path-sum III is prefix sums on the root-to-here path with a hashmap of leftover prefixes (same as subarray-sum-k on the unique path to the root).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After both children return, you know everything about the two subtrees. The only new paths are those that go through the current node.</p><span class="eq">ans = max(ans, combine(left, me, right)); return a summary upward</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Diameter on the sample: through node 2 the path 4-2-5 has length 2</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="binary-tree-problem-patternsViz"></div>
+  <div class="viz-player" data-viz-target="binary-tree-problem-patternsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "height[] written in postorder on values [1,2,4,5,3]",
+      "array": [
+        3,
+        2,
+        1,
+        1,
+        1
+      ],
+      "indexLabels": [
+        "1",
+        "2",
+        "4",
+        "5",
+        "3"
+      ],
+      "vars": [
+        "u",
+        "hL",
+        "hR",
+        "diam"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Leaves 4,5,3 have height 1 (nodes) / 0 (edges). Start at 4.",
+          "active": [
+            2
+          ],
+          "values": {
+            "u": 4,
+            "hL": 0,
+            "hR": 0,
+            "diam": 0
+          }
+        },
+        {
+          "note": "Node 5 same. Node 2: hL=hR=1 (edges: 0+0, wait in edges null=-1+1=0). Using edges: leaves 0, node 2 through-me = 0+0=0? Sample 4-2-5 is 2 edges. Leaves height 0 in edges, 2 has hL=hR=0? No: leaf height in edges is 0, but the edge to the leaf is counted at the parent: through-me = hL+hR+2 if heights are in edges of subtrees... Standard: height(null)=-1, height(leaf)=0, through = hL+hR+2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 2,
+            "hL": 0,
+            "hR": 0,
+            "diam": 2
+          }
+        },
+        {
+          "note": "Convention used in code: height in nodes, through-me = hL+hR (edges = hL+hR of node-heights minus something). LC 543: height in edges, ans = max(hL+hR) with leaf height 0.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 2,
+            "hL": 1,
+            "hR": 1,
+            "diam": 2
+          }
+        },
+        {
+          "note": "Node 1: hL=2, hR=1, through-me=3 (path 4-2-1-3). Global diam=3 edges? 4-2-1-3 is 3 edges. Path 4-2-5 is 2. Answer 3.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 1,
+            "hL": 2,
+            "hR": 1,
+            "diam": 3
+          }
+        },
+        {
+          "note": "Return height 3 for the root. Diameter 3 is the global, not the height.",
+          "best": [
+            0,
+            1,
+            2,
+            4
+          ],
+          "values": {
+            "u": 1,
+            "hL": 2,
+            "hR": 1,
+            "diam": 3
+          }
+        },
+        {
+          "note": "Max path sum would drop negative children and compare val+L+R against a global.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "u": "124",
+            "hL": "gain",
+            "hR": "gain",
+            "diam": "max path"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Diameter path 4-2-1-3</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t1["1"] --&gt; t2["2"]
+  t1 --&gt; t3["3"]
+  t2 --&gt; t4["4"]
+  t2 --&gt; t5["5"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the struct</strong> returned upward (height, gain, (foundP, foundQ)).</li>
+  <li><strong>Postorder:</strong> rec left, rec right, combine, maybe update a global ans.</li>
+  <li><strong>Diameter:</strong> ans = max(ans, hL+hR); return 1+max(hL,hR) with null = 0 or -1.</li>
+  <li><strong>Max path:</strong> gain = val+max(0,gainL,gainR); ans = max(ans, val+max(0,gL)+max(0,gR)).</li>
+  <li><strong>LCA:</strong> if both sides non-null, return u; else return the non-null side.</li>
+  <li><strong>Construct:</strong> preorder index advances; inorder lo..hi split at the root value.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>hL</th><th>hR</th><th>diam</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>4</td><td>0</td><td>0</td><td>0</td><td>Leaves 4,5,3 have height 1 (nodes) / 0 (edges). Start at 4.</td></tr>
+      <tr><td>2</td><td>0</td><td>0</td><td>2</td><td>Node 5 same. Node 2: hL=hR=1 (edges: 0+0, wait in edges null=-1+1=0). Using edges: leaves 0, node 2 through-me = 0+0=0? Sample 4-2-5 is 2 edges. Leaves height 0 in edges, 2 has hL=hR=0? No: leaf height in edges is 0, but the edge to the leaf is counted at the parent: through-me = hL+hR+2 if heights are in edges of subtrees... Standard: height(null)=-1, height(leaf)=0, through = hL+hR+2.</td></tr>
+      <tr><td>2</td><td>1</td><td>1</td><td>2</td><td>Convention used in code: height in nodes, through-me = hL+hR (edges = hL+hR of node-heights minus something). LC 543: height in edges, ans = max(hL+hR) with leaf height 0.</td></tr>
+      <tr><td>1</td><td>2</td><td>1</td><td>3</td><td>Node 1: hL=2, hR=1, through-me=3 (path 4-2-1-3). Global diam=3 edges? 4-2-1-3 is 3 edges. Path 4-2-5 is 2. Answer 3.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>2</td><td>1</td><td>3</td><td>Return height 3 for the root. Diameter 3 is the global, not the height.</td></tr>
+      <tr><td>124</td><td>gain</td><td>gain</td><td>max path</td><td>Max path sum would drop negative children and compare val+L+R against a global.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Binary Tree Problem Patterns implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AllLeafPaths.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class AllLeafPaths {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static int diam = 0;
+        static int height(Node n) {
+            if (n == null) return 0;
+            int L = height(n.left), R = height(n.right);
+            diam = Math.max(diam, L + R);
+            return 1 + Math.max(L, R);
+        }
+        public static void main(String[] args) {
+            Node r = new Node(1);
+            r.left = new Node(2); r.right = new Node(3);
+            r.left.left = new Node(4); r.left.right = new Node(5);
+            diam = 0;
+            height(r);
+            System.out.println(diam);
+        }
+        // Input : sample tree
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DiameterLca.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class DiameterLca {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static int ans;
+        static int height(Node n) {
+            if (n == null) return 0;
+            int L = height(n.left), R = height(n.right);
+            ans = Math.max(ans, L + R);
+            return 1 + Math.max(L, R);
+        }
+        static Node lca(Node n, Node p, Node q) {
+            if (n == null || n == p || n == q) return n;
+            Node L = lca(n.left, p, q), R = lca(n.right, p, q);
+            if (L != null &amp;&amp; R != null) return n;
+            return L != null ? L : R;
+        }
+        public static void main(String[] args) {
+            Node r = new Node(1);
+            r.left = new Node(2); r.right = new Node(3);
+            r.left.left = new Node(4); r.left.right = new Node(5);
+            ans = 0;
+            height(r);
+            System.out.println(ans);
+            System.out.println(lca(r, r.left.left, r.right).val);
+        }
+        // Input : sample, LCA of 4 and 3
+        // Output: 3
+        //         1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MaxPathSum.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MaxPathSum {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static int best;
+        static int gain(Node n) {
+            if (n == null) return 0;
+            int L = Math.max(0, gain(n.left));
+            int R = Math.max(0, gain(n.right));
+            best = Math.max(best, n.val + L + R);
+            return n.val + Math.max(L, R);
+        }
+        public static void main(String[] args) {
+            Node r = new Node(-10);
+            r.left = new Node(9);
+            r.right = new Node(20);
+            r.right.left = new Node(15);
+            r.right.right = new Node(7);
+            best = Integer.MIN_VALUE / 4;
+            gain(r);
+            System.out.println(best);
+        }
+        // Input : LC 124 sample
+        // Output: 42
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(h)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>One DFS, constant work per node. Construction from two arrays is O(n) with a hashmap, O(n^2) if you scan inorder each time.</p>
+    <p><span class="eq">T = &Theta;(n)</span></p>
+    <p>Path sum III with a hashmap is still O(n) expected if you add/remove on the way down/up (backtracking the prefix count).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive all-pairs paths</td><td>O(n^2)</td><td>O(h)</td><td>Tiny n</td></tr>
+      <tr><td>Postorder struct</td><td>O(n)</td><td>O(h)</td><td>Diameter, max path, LCA</td></tr>
+      <tr><td>Prefix + hashmap on the path</td><td>O(n)</td><td>O(h)</td><td>Path sum III</td></tr>
+      <tr><td>Binary lifting LCA</td><td>O(n log n) prep</td><td>O(n log n)</td><td>Many queries, next pages</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Returning the through-me path as height</span>
+    <div class="pitfalls__bug">Height must be one side only. Using L+R as the returned height double-counts.</div>
+    <div class="pitfalls__fix">Return 1+max(L,R). Store L+R only in the global ans.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Max path sum without dropping negatives</span>
+    <div class="pitfalls__bug">A child with gain -5 is forced into the parent. The parent would be better alone.</div>
+    <div class="pitfalls__fix">max(0, childGain) when contributing upward and through-me.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">LCA comparing values instead of references</span>
+    <div class="pitfalls__bug">Duplicate values, or nodes that are not the given p,q instances.</div>
+    <div class="pitfalls__fix">Compare node identity (or a unique id), not val, unless the statement says values are unique.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Construct without a map, O(n^2)</span>
+    <div class="pitfalls__bug">indexOf in inorder at every node.</div>
+    <div class="pitfalls__fix">HashMap val -> inorder index, pass lo/hi.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Path sum III double-counting with a global map not backtracked</span>
+    <div class="pitfalls__bug">A prefix from another branch still sits in the map.</div>
+    <div class="pitfalls__fix">map.merge(prefix, 1, add) going down, subtract going up.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Serialise</td>
+        <td>Preorder with explicit nulls, or BFS with queue.</td>
+        <td><code>if (n==null) { out.add("#"); return; }</code></td>
+        <td>LC 297</td>
+      </tr>
+      <tr>
+        <td>Flatten to linked list</td>
+        <td>Postorder: stitch left tail to right, hang left on right.</td>
+        <td><code>n.right = left; tail.right = oldRight;</code></td>
+        <td>LC 114</td>
+      </tr>
+      <tr>
+        <td>Cameras / house robber III</td>
+        <td>Return a 3-state / 2-state struct from postorder.</td>
+        <td><code>int[] {rob, skip}</code></td>
+        <td>LC 968 / 337</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Diameter in nodes vs edges?</summary>
+    <div class="followup__body">
+      <p>LC 543 is edges. A single node is 0. If height is in nodes (leaf=1), diameter in edges is hL+hR of those heights... actually with node-heights leaf=1, through-me edges = hL+hR. With edge-heights leaf=0, through-me = hL+hR. Pick one and match the statement.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>LCA when one node is ancestor of the other?</summary>
+    <div class="followup__body">
+      <p>The first time you hit p (or q), you return it. The other node sits below, so the other side returns null, and you propagate p upward. That is correct: p is the LCA.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why max(0, gain) in LC 124?</summary>
+    <div class="followup__body">
+      <p>You may choose not to extend the path into a child. The path has to be non-empty (at least the node). Negative children cannot help a path that is allowed to stop at you.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Subtree of another tree?</summary>
+    <div class="followup__body">
+      <p>Either serialise both and substring-search, or for each node of A try "same tree" with B. Same-tree is a simultaneous walk. O(n m) naive; hashing serialisations is O(n+m).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/diameter-of-binary-tree/" target="_blank" rel="noopener">Diameter Of Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 543</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Postorder + global</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-maximum-path-sum/" target="_blank" rel="noopener">Binary Tree Maximum Path Sum</a></td>
+        <td><span class="badge badge--lc">LC 124</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Drop negative gains</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/path-sum/" target="_blank" rel="noopener">Path Sum</a></td>
+        <td><span class="badge badge--lc">LC 112</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Carry remaining to a leaf</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/path-sum-ii/" target="_blank" rel="noopener">Path Sum Ii</a></td>
+        <td><span class="badge badge--lc">LC 113</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Push/pop the path</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/path-sum-iii/" target="_blank" rel="noopener">Path Sum Iii</a></td>
+        <td><span class="badge badge--lc">LC 437</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix map on the root-path</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/" target="_blank" rel="noopener">Lowest Common Ancestor Of A Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 236</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Postorder both-sides</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/serialize-and-deserialize-binary-tree/" target="_blank" rel="noopener">Serialize And Deserialize Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 297</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Preorder with nulls</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/" target="_blank" rel="noopener">Construct Binary Tree From Preorder And Inorder Traversal</a></td>
+        <td><span class="badge badge--lc">LC 105</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Split inorder</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Name the struct</strong> returned from postorder.</li>
+    <li><strong>Global ans</strong> for through-me candidates (diameter, max path).</li>
+    <li><strong>LCA:</strong> both sides non-null &rarr; this node.</li>
+    <li><strong>Path sum III:</strong> prefix + hashmap, backtrack.</li>
+    <li><strong>Construct:</strong> map + shrinking inorder window.</li>
+  </ul>
+  <div class="recap__oneliner">hL,hR = rec; ans=max(ans,combine); return summary(hL,hR,val)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

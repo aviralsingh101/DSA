@@ -417,8 +417,9 @@ const contentFiles = fs.existsSync(contentDir)
 
 let written = 0;
 for (const cf of contentFiles) {
-  const modId = cf.replace(/\.mjs$/, "");
-  if (wanted.length && !wanted.includes(modId)) continue;
+  const stem = cf.replace(/\.mjs$/, "");
+  const modId = (stem.match(/^m\d+/) || [])[0] || stem;
+  if (wanted.length && !wanted.some((w) => w === stem || w === modId || stem.startsWith(w + "-"))) continue;
   const mod = modById.get(modId);
   if (!mod) { console.log(`skip ${cf}: no module ${modId} in nav-data`); continue; }
 

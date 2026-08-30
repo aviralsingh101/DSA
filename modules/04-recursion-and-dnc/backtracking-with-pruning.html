@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backtracking with Pruning &mdash; DSA Course</title>
+<meta name="description" content="Backtracking is generation plus a veto: the moment a partial assignment cannot extend to a solution, you pop and try the next sibling instead of finishing the branch.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="backtracking-with-pruning">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 04 &middot; Recursion, Backtracking & D&C</span>
+  <h1>Backtracking with Pruning</h1>
+  <p class="hero__tagline">Backtracking is generation plus a veto: the moment a partial assignment cannot extend to a solution, you pop and try the next sibling instead of finishing the branch.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">28 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="subsets-permutations-combinations.html">Subsets, Permutations, Combinations</a>,
+      <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">backtracking</span>
+      <span class="chip">pruning</span>
+      <span class="chip">N-Queens</span>
+      <span class="chip">Sudoku</span>
+      <span class="chip">bitmask</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The previous page enumerates a Cartesian product. This page survives products that do not fit in memory by <strong>pruning</strong>: a constraint checked on the prefix that proves every completion is illegal. N-Queens without pruning is 16! board fillings; with column and diagonal bitmasks it is a few thousand leaves on n = 8 and a standard interview.</p>
+<p>The same skeleton covers Sudoku (cell, row, column, box uniqueness), word search (grid DFS that unmarks on the way back), and palindrome partitioning (only cut when the piece is already a palindrome). The skill is not the skeleton &mdash; you already have it &mdash; it is choosing a cheap, complete veto.</p>
+<p>Bitmasks turn the N-Queens veto into a few bitwise operations and make n = 14 solvable. That encoding is the one piece of this page that transfers to <a href="../10-dynamic-programming/bitmask-dp.html">bitmask DP</a> and to several Codeforces constructive searches.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A prune is a proof that the current path is dead. If the check can wait until the leaf, it is not a prune, it is a filter, and the tree will still explode.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Place n non-attacking pieces, fill a grid under uniqueness constraints, or cut a string under a local predicate</li>
+        <li>"Restore" / "solve" / "find all valid boards / partitions"</li>
+        <li>The search space is a product (cells &times; choices) that is illegal for n without early rejection</li>
+        <li>You can name a constraint that depends only on the prefix: used columns, used characters, remaining unmatched opens</li>
+        <li>Word search / path-in-a-grid that must not reuse a cell</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the count of configurations and n is large enough that DP over subsets or profile DP exists &rarr; do not backtrack</li>
+        <li>Any feasible solution is fine and a greedy choice property holds &rarr; <a href="../13-greedy-and-offline/greedy-foundations.html">greedy</a></li>
+        <li>The constraint is a numeric knapsack on n &le; 40 &rarr; <a href="meet-in-the-middle.html">meet in the middle</a></li>
+        <li>You are searching a real graph for a shortest path &rarr; BFS, not backtracking</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>N-Queens / n rooks / n knights</td>
+        <td>One piece per row, attack columns</td>
+        <td>Row-by-row + column/diag bitmasks</td>
+      </tr>
+      <tr>
+        <td>Sudoku / Latin square</td>
+        <td>Row, col, box uniqueness</td>
+        <td>Next-empty cell; bitsets of remaining digits</td>
+      </tr>
+      <tr>
+        <td>Word search</td>
+        <td>Path of letters, no cell reuse</td>
+        <td>DFS + mark/unmark; prune on mismatch</td>
+      </tr>
+      <tr>
+        <td>Palindrome partition</td>
+        <td>Every piece must be a palindrome</td>
+        <td>Only recurse from cuts that already pass</td>
+      </tr>
+      <tr>
+        <td>Restore IP / split string</td>
+        <td>Each piece must match a regex</td>
+        <td>Same cut-and-prune shape</td>
+      </tr>
+      <tr>
+        <td>Hamiltonian path on n <= 12</td>
+        <td>Visit every vertex once</td>
+        <td>used-mask backtrack, or bitmask DP</td>
+      </tr>
+      <tr>
+        <td>Maze: knock down walls / leave k empty</td>
+        <td>Grid DFS with a remaining budget</td>
+        <td>CF 377A shape</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> BFS / Dijkstra on a grid</td>
+        <td>Those find shortest paths; they do not enumerate constrained fillings</td>
+        <td>If the question is "does a filling exist / list them", it is backtracking</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n = 8 or 9 (N-Queens, Sudoku) is the interview signature. n = 14 N-Queens needs bitmasks. A 4&times;4 word-search board is fine; a 50&times;50 board with a long dictionary is a trie + pruning problem (LC 212), not a naive DFS.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: assign, veto, undo</h2>
+<p>The template is four lines of control flow. Pick the next decision (next row, next empty cell, next cut). Iterate the candidates. If a candidate fails the veto, skip it. Otherwise apply it, recurse, then undo. The undo is the difference between backtracking and "just recurse": the same <code>used</code> structure is shared across siblings, so it must be restored.</p>
+<p>N-Queens bitmasks: row <code>r</code> tries every free bit of <code>avail = all &amp; ~(cols | d1 | d2)</code>. Placing bit <code>b</code> updates <code>cols | b</code>, <code>(d1 | b) &lt;&lt; 1</code>, <code>(d2 | b) &gt;&gt; 1</code>. The shifts slide the diagonals as you move to the next row. No arrays, no <code>O(n)</code> attack scan.</p>
+<p>Word search marks <code>board[r][c] = '#'</code> (or a <code>used[][]</code>) before the four recursive calls and restores the letter after. Palindrome partition precomputes <code>isPal[i][j]</code> in <code>O(n&sup2;)</code> so every cut is <code>O(1)</code> to validate; without that, you re-scan the piece at every node.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The interview sentence</span>
+    <p>A candidate is legal if and only if it does not violate a constraint with the prefix already chosen. Check that <em>before</em> the recursive call. Undo every mutation (cell, bitmask, mark) on the way back, including after a successful leaf if you are enumerating all solutions.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Pick the most constrained decision next</span>
+    <p>Sudoku is dramatically faster if you fill the cell with the fewest remaining digits, not "the next empty in row-major order". The same heuristic (minimum-remaining-values) applies to any filling problem. Interviewers love hearing the words even if they only wanted the row-major version.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why bitmasks are enough for n <= 31</span>
+    <p>Columns and diagonals of an n-Queen board are n-bit sets. An <code>int</code> holds 32 bits; use a <code>long</code> for n up to 63. <code>avail &amp; -avail</code> isolates the lowest set bit; <code>avail -= bit</code> (or <code>avail &amp;= avail-1</code>) consumes it. That loop body is the entire branching.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Undo on every exit path</span>
+    <p>A successful leaf still shares the same board or bitmasks as its siblings. Restore every mutation after the recursive call, including after a true return if you are enumerating all solutions. The safe shape is apply, recurse, undo as three consecutive lines.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>N-Queens on a 4 x 4, bitmask view</h3>
+
+<p>Rows top to bottom. Q is a queen, x is rejected by the current masks, a dot is still free. Watch row 2 die with <code>avail = 0</code> &mdash; that is the prune.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="nq4"></div>
+  <div class="viz-player" data-viz-target="nq4">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "r/c",
+      "rowHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "row",
+        "cols",
+        "avail"
+      ],
+      "speed": 1100,
+      "frames": [
+        {
+          "note": "Empty board. all = 1111b. Row 0 may place in any column.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "."
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "."
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "."
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "."
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "."
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "."
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "."
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "."
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "."
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "."
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "."
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "."
+            }
+          ],
+          "values": {
+            "row": 0,
+            "cols": "0000",
+            "avail": "1111"
+          }
+        },
+        {
+          "note": "Place row 0, column 1. cols becomes 0010. Diagonals will slide on the next row.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "."
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "."
+            }
+          ],
+          "values": {
+            "row": 0,
+            "cols": "0010",
+            "avail": "placed 1"
+          }
+        },
+        {
+          "note": "Row 1: column 1 and the two diagonals through (0,1) are blocked. Place column 3.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "."
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "Q",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "row": 1,
+            "cols": "1010",
+            "avail": "placed 3"
+          }
+        },
+        {
+          "note": "Row 2: cols 1 and 3 plus sliding diagonals leave nothing. avail = 0000. Prune.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "x",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "row": 2,
+            "cols": "1010",
+            "avail": "0000 prune"
+          }
+        },
+        {
+          "note": "Undo row 1 column 3. Try row 1 column 0, the other free bit from earlier.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "."
+            }
+          ],
+          "values": {
+            "row": 1,
+            "cols": "0011",
+            "avail": "placed 0"
+          }
+        },
+        {
+          "note": "Row 2 is still cramped. This branch dies too. Undo row 0 column 1 entirely.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "Q",
+              "cls": "filled"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "x",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "."
+            }
+          ],
+          "values": {
+            "row": 2,
+            "cols": "0011",
+            "avail": "almost empty"
+          }
+        },
+        {
+          "note": "Restart: row 0 column 2, then row 1 column 0. This is the winning branch.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "Q",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "row": 1,
+            "cols": "0101",
+            "avail": "placed 0"
+          }
+        },
+        {
+          "note": "A solution of n = 4: queens at (0,2), (1,0), (2,3), (3,1). Two solutions exist; this is one.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "Q",
+              "cls": "answer"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "Q",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "row": 4,
+            "cols": "1111",
+            "avail": "solved"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>One failed branch, then a complete solution. The prune at row 2 never spawns row 3, which is the whole point of a veto.</figcaption>
+</figure>
+
+<h3>The assign / veto / undo loop</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  pick["pick the next undecided slot"] --&gt; empty{"any slot left?"}
+  empty -- no --&gt; record["record a solution"]
+  empty -- yes --&gt; cand["generate candidates for that slot"]
+  cand --&gt; veto{"does this candidate fight the prefix?"}
+  veto -- yes --&gt; nextCand["skip, try the next candidate"]
+  veto -- no --&gt; apply["apply: set cell, flip bits, mark used"]
+  apply --&gt; rec["recurse on the following slot"]
+  rec --&gt; undoStep["undo the apply"]
+  undoStep --&gt; nextCand
+  nextCand --&gt; more{"candidates remain?"}
+  more -- yes --&gt; veto
+  more -- no --&gt; back["return to the parent slot"]
+  </div>
+  <figcaption>Every problem on this page is this flowchart with a different next-decision and a different veto.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the decision sequence.</strong> One queen per row; next empty Sudoku cell; next cut index; next grid step matching the next letter.</li>
+  <li><strong>Name the veto</strong> as a function of the prefix only. If you cannot check it yet, you do not have a prune.</li>
+  <li><strong>Encode the veto cheaply.</strong> Bitmasks for N-Queens; row/col/box bitsets for Sudoku; a mark on the cell for word search; <code>isPal[i][j]</code> for partitions.</li>
+  <li><strong>Apply, recurse, undo</strong> as three consecutive operations.</li>
+  <li><strong>For find-one</strong>, return a boolean and stop siblings on true. For find-all, collect and keep going.</li>
+  <li><strong>Precompute what you can</strong> &mdash; palindrome table, remaining digit counts.</li>
+  <li><strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or used vertices.</li>
+  <li><strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>N-Queens n = 4, first successful placement. Bitmasks in binary, bit 0 = column 0. Highlighted rows are prunes.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>row</th><th>place col</th><th>cols</th><th>avail next</th><th>result</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>1</td><td>0010</td><td>row1: 1001</td><td>try</td><td>First branch. Symmetric to placing column 2.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>3</td><td>1010</td><td>row2: 0000</td><td>prune</td><td>No free bit. Undo column 3.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>0</td><td>0011</td><td>row2 cramped</td><td>dies later</td><td>The other child of row 1 also dies.</td></tr>
+      <tr><td>0</td><td>2</td><td>0100</td><td>row1: 1001</td><td>try other root</td><td>Undo everything from column 1.</td></tr>
+      <tr><td>1</td><td>0</td><td>0101</td><td>row2 has a free bit</td><td>extend</td><td>This is the winning branch.</td></tr>
+      <tr><td>2</td><td>3</td><td>1101</td><td>row3: 0010</td><td>extend</td><td>Only column 1 remains.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>1</td><td>1111</td><td>none</td><td>solution</td><td>Queens at columns 2, 0, 3, 1.</td></tr>
+      <tr><td>0</td><td>0 or 3</td><td>edge columns</td><td>both die</td><td>one more solution</td><td>The second solution is the left-right mirror.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Backtracking with Pruning implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="N-Queens arrays">
+    <p>The version you can explain in sixty seconds. Each placement scans column and diagonals in O(n). Fine for n = 8; the bitmask rewrite is the follow-up.</p>
+    <div class="code" data-highlight="18-27">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NQueensBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class NQueensBrute {
+    
+        static List&lt;List&lt;String&gt;&gt; solveNQueens(int n) {
+            char[][] b = new char[n][n];
+            for (char[] row : b) {
+                Arrays.fill(row, '.');
+            }
+            List&lt;List&lt;String&gt;&gt; ans = new ArrayList&lt;&gt;();
+            go(0, b, ans);
+            return ans;
+        }
+    
+        static void go(int r, char[][] b, List&lt;List&lt;String&gt;&gt; ans) {
+            int n = b.length;
+            if (r == n) {
+                List&lt;String&gt; pack = new ArrayList&lt;&gt;();
+                for (char[] row : b) {
+                    pack.add(new String(row));
+                }
+                ans.add(pack);
+                return;
+            }
+            for (int c = 0; c &lt; n; c++) {
+                if (!safe(b, r, c)) {
+                    continue;
+                }
+                b[r][c] = 'Q';
+                go(r + 1, b, ans);
+                b[r][c] = '.';
+            }
+        }
+    
+        static boolean safe(char[][] b, int r, int c) {
+            for (int i = 0; i &lt; r; i++) {
+                if (b[i][c] == 'Q') {
+                    return false;
+                }
+            }
+            for (int i = r - 1, j = c - 1; i &gt;= 0 &amp;&amp; j &gt;= 0; i--, j--) {
+                if (b[i][j] == 'Q') {
+                    return false;
+                }
+            }
+            for (int i = r - 1, j = c + 1; i &gt;= 0 &amp;&amp; j &lt; b.length; i--, j++) {
+                if (b[i][j] == 'Q') {
+                    return false;
+                }
+            }
+            return true;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(solveNQueens(4).size());
+        }
+        // Input : n = 4
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Bitmask N-Queens">
+    <p>Same tree, O(1) veto. <code>avail &amp; -avail</code> peels the lowest free column. Shifts slide the diagonals to the next row.</p>
+    <div class="code" data-highlight="12-20">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NQueensBitmask.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class NQueensBitmask {
+    
+        static int totalNQueens(int n) {
+            return go(0, 0, 0, 0, n);
+        }
+    
+        static int go(int row, int cols, int d1, int d2, int n) {
+            if (row == n) {
+                return 1;
+            }
+            int count = 0;
+            int all = (1 &lt;&lt; n) - 1;
+            int avail = all &amp; ~(cols | d1 | d2);
+            while (avail != 0) {
+                int bit = avail &amp; -avail;
+                avail -= bit;
+                count += go(row + 1, cols | bit, (d1 | bit) &lt;&lt; 1, (d2 | bit) &gt;&gt; 1, n);
+            }
+            return count;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(totalNQueens(4));
+            System.out.println(totalNQueens(8));
+        }
+        // Input : 4, then 8
+        // Output: 2
+        //         92
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Word search + palindrome cut">
+    <p>Two other vetoes on the same skeleton. Word search marks the cell; palindrome partition only recurses from a cut that is already a palindrome.</p>
+    <div class="code" data-highlight="16-28,48-52">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BacktrackTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class BacktrackTemplate {
+    
+        static boolean exist(char[][] b, String word) {
+            for (int r = 0; r &lt; b.length; r++) {
+                for (int c = 0; c &lt; b[0].length; c++) {
+                    if (dfs(b, r, c, 0, word)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    
+        static boolean dfs(char[][] b, int r, int c, int k, String word) {
+            if (k == word.length()) {
+                return true;
+            }
+            if (r &lt; 0 || c &lt; 0 || r &gt;= b.length || c &gt;= b[0].length) {
+                return false;
+            }
+            if (b[r][c] != word.charAt(k)) {
+                return false;
+            }
+            char saved = b[r][c];
+            b[r][c] = '#';
+            boolean ok = dfs(b, r + 1, c, k + 1, word)
+                    || dfs(b, r - 1, c, k + 1, word)
+                    || dfs(b, r, c + 1, k + 1, word)
+                    || dfs(b, r, c - 1, k + 1, word);
+            b[r][c] = saved;
+            return ok;
+        }
+    
+        static List&lt;List&lt;String&gt;&gt; partition(String s) {
+            int n = s.length();
+            boolean[][] pal = new boolean[n][n];
+            for (int i = n - 1; i &gt;= 0; i--) {
+                for (int j = i; j &lt; n; j++) {
+                    pal[i][j] = s.charAt(i) == s.charAt(j)
+                            &amp;&amp; (j - i &lt; 2 || pal[i + 1][j - 1]);
+                }
+            }
+            List&lt;List&lt;String&gt;&gt; ans = new ArrayList&lt;&gt;();
+            cut(s, 0, pal, new ArrayList&lt;&gt;(), ans);
+            return ans;
+        }
+    
+        static void cut(String s, int start, boolean[][] pal, List&lt;String&gt; path,
+                        List&lt;List&lt;String&gt;&gt; ans) {
+            if (start == s.length()) {
+                ans.add(new ArrayList&lt;&gt;(path));
+                return;
+            }
+            for (int end = start; end &lt; s.length(); end++) {
+                if (!pal[start][end]) {
+                    continue;
+                }
+                path.add(s.substring(start, end + 1));
+                cut(s, end + 1, pal, path, ans);
+                path.remove(path.size() - 1);
+            }
+        }
+    
+        public static void main(String[] args) {
+            char[][] b = {
+                {'A', 'B', 'C', 'E'},
+                {'S', 'F', 'C', 'S'},
+                {'A', 'D', 'E', 'E'},
+            };
+            System.out.println(exist(b, "ABCCED"));
+            System.out.println(partition("aab"));
+        }
+        // Input : board + ABCCED; s = aab
+        // Output: true
+        //         [[a, a, b], [aa, b]]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time pruned product</span>
+    <span class="badge badge--space">Space O(depth)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Without a prune, N-Queens is at most <code>n!</code>. The diagonal veto removes a large constant; the tree is still super-exponential, which is why interviews stop at n = 9 and contests stop at n = 14 with bitmasks.</p>
+    <p><span class="eq">word search: O(RC &middot; 4<sup>L</sup>) worst case</span></p>
+    <p>Palindrome partition is <code>O(n &middot; 2&#8319;)</code> plus <code>O(n&sup2;)</code> to build <code>isPal</code>. Sudoku is a 9<sup>81</sup> product in theory and a few thousand nodes once row/col/box bitsets veto digits.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>N-Queens, scan attacks</td><td>O(n!) * O(n)</td><td>O(n)</td><td>Fine for n = 8</td></tr>
+      <tr><td>N-Queens, bitmasks</td><td>O(n!) pruned</td><td>O(n)</td><td>Same tree, O(1) veto</td></tr>
+      <tr><td>Sudoku row-major</td><td>huge, pruned</td><td>O(1) extra</td><td>Interview default</td></tr>
+      <tr><td>Word search</td><td>O(RC 4^L)</td><td>O(L)</td><td>Mark/unmark the cell</td></tr>
+      <tr><td>Palindrome partition</td><td>O(n 2^n)</td><td>O(n^2) table</td><td>Precompute isPal</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Checking the constraint only at the leaf</span>
+    <div class="pitfalls__bug">Fill all n queens, then test the whole board. The tree is n^n, not n!.</div>
+    <div class="pitfalls__fix">Veto as soon as a queen, digit or letter is placed.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to unmark a cell</span>
+    <div class="pitfalls__bug">Word search sets <code>board[r][c] = '#'</code> and returns without restoring.</div>
+    <div class="pitfalls__fix">Restore after the four recursive calls, on every path.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Shifting diagonals the wrong way</span>
+    <div class="pitfalls__bug">Illegal placements survive because attacks slide off the wrong side.</div>
+    <div class="pitfalls__fix">Draw one queen at (0,1) and write the next row's bits by hand. n = 4 (answer 2) is the unit test.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Substring allocations inside the cut loop</span>
+    <div class="pitfalls__bug">Calling <code>s.substring</code> before you know the piece is a palindrome.</div>
+    <div class="pitfalls__fix">Test <code>pal[start][end]</code> first. Only then allocate.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Sudoku box index off by one</span>
+    <div class="pitfalls__bug"><code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>.</div>
+    <div class="pitfalls__fix">Box id is <code>(r / 3) * 3 + (c / 3)</code>. Print it on a solved board once.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Count solutions only</td>
+        <td>Drop the board packing. N-Queens II is the bitmask function on this page.</td>
+        <td><code>return go(...) increment at row==n</code></td>
+        <td><a href="https://leetcode.com/problems/n-queens-ii/" target="_blank" rel="noopener">LC 52</a></td>
+      </tr>
+      <tr>
+        <td>Word Search II</td>
+        <td>Many words. Build a trie and DFS the board once, pruning when the node has no child.</td>
+        <td><code>TrieNode nxt = node.ch[board[r][c]-'a']; if (nxt==null) return;</code></td>
+        <td><a href="https://leetcode.com/problems/word-search-ii/" target="_blank" rel="noopener">LC 212</a></td>
+      </tr>
+      <tr>
+        <td>Sudoku solver</td>
+        <td>Next empty cell, try digits 1-9, veto with row/col/box bitsets, return true on the first complete board.</td>
+        <td><code>int bit = 1 &lt;&lt; d; if ((row[r] &amp; bit) != 0) continue;</code></td>
+        <td><a href="https://leetcode.com/problems/sudoku-solver/" target="_blank" rel="noopener">LC 37</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why do the diagonal shifts work?</summary>
+    <div class="followup__body">
+      <p>A down-right diagonal has constant <code>r - c</code>. Moving to <code>r+1</code> increases the occupied column on that diagonal by 1, which is a left shift if bit 0 is column 0. The other diagonal is constant <code>r + c</code> and slides the other way. Bits that shift off the ends have left the board.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is word search BFS or DFS?</summary>
+    <div class="followup__body">
+      <p>DFS with mark/unmark. BFS would need a used-set per path, and there is no shortest-path objective. LC 79 is existence, so backtracking DFS is the default.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When do I switch from backtracking to bitmask DP?</summary>
+    <div class="followup__body">
+      <p>When you need a count or an optimum over subsets of n &le; 20, and the same subset is reached by many orders. Filling under local constraints with n = 9 (Sudoku) stays backtracking.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I prune palindrome partition without the n^2 table?</summary>
+    <div class="followup__body">
+      <p>Yes: scan the piece at each node. It is correct and slower. The table is the expected interview extra.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>LC 51, LC 37, LC 79 and LC 131 are the four vetoes on this page. The Codeforces problems use the same idea on a grid or a subset mask.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/n-queens/" target="_blank" rel="noopener">N-Queens</a></td>
+        <td><span class="badge badge--lc">LC 51</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Row-by-row + attack veto</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/n-queens-ii/" target="_blank" rel="noopener">N-Queens II</a></td>
+        <td><span class="badge badge--lc">LC 52</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bitmask count</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/sudoku-solver/" target="_blank" rel="noopener">Sudoku Solver</a></td>
+        <td><span class="badge badge--lc">LC 37</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Next empty + row/col/box bitsets</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/word-search/" target="_blank" rel="noopener">Word Search</a></td>
+        <td><span class="badge badge--lc">LC 79</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>DFS mark/unmark</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/palindrome-partitioning/" target="_blank" rel="noopener">Palindrome Partitioning</a></td>
+        <td><span class="badge badge--lc">LC 131</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Cut only when isPal</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/word-search-ii/" target="_blank" rel="noopener">Word Search II</a></td>
+        <td><span class="badge badge--lc">LC 212</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Trie + board DFS</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/beautiful-arrangement/" target="_blank" rel="noopener">Beautiful Arrangement</a></td>
+        <td><span class="badge badge--lc">LC 526</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Permutation with a cheap veto</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://cses.fi/problemset/task/1624" target="_blank" rel="noopener">Chessboard and Queens</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>N-Queens with reserved squares</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/550/B" target="_blank" rel="noopener">Preparing Olympiad</a></td>
+        <td><span class="badge badge--cf">CF 550B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Bitmask + filter</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/377/A" target="_blank" rel="noopener">Maze</a></td>
+        <td><span class="badge badge--cf">CF 377A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>DFS empties, turn the last s into walls</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/n-queen-problem0315/1" target="_blank" rel="noopener">N-Queen Problem</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Same as LC 51, 1-based columns</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/rat-in-a-maze-problem/1" target="_blank" rel="noopener">Rat in a Maze</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Grid DFS, record the path string</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 377A &mdash; Maze</summary>
+  <div class="spoiler__body">
+    <p>You must leave exactly <code>k</code> empty cells, still connected. DFS the empties from any start; the last <code>s = empties - k</code> cells you finish can become walls. A prefix of the same search stays connected. Do not place walls first.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 212 &mdash; Word Search II</summary>
+  <div class="spoiler__body">
+    <p>A separate DFS per word dies. Insert every word into a trie. DFS each board cell once, walking the trie; prune when there is no child. Restore the board cell the same way as LC 79.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Assign, veto, recurse, undo.</strong> The veto is the prune.</li>
+    <li><strong>N-Queens bitmasks:</strong> <code>avail &amp; -avail</code>, then shift the diagonals.</li>
+    <li><strong>Sudoku:</strong> next empty plus row/col/box sets.</li>
+    <li><strong>Word search:</strong> mark, recurse four ways, unmark.</li>
+    <li><strong>Palindrome partition:</strong> precompute <code>isPal</code>, cut only on true.</li>
+  </ul>
+  <div class="recap__oneliner">int bit=avail&amp;-avail; avail-=bit; go(row+1, cols|bit, (d1|bit)&lt;&lt;1, (d2|bit)&gt;&gt;1);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

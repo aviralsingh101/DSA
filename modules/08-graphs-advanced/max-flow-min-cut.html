@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Max Flow / Min Cut &mdash; DSA Course</title>
+<meta name="description" content="Max flow equals min cut. Edmonds-Karp BFS-augments in O(V E&sup2;); Dinic layers + blocking flow is the contest default.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="max-flow-min-cut">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>Max Flow / Min Cut</h1>
+  <p class="hero__tagline">Max flow equals min cut. Edmonds-Karp BFS-augments in <code>O(V E&sup2;)</code>; Dinic layers + blocking flow is the contest default.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/bfs.html">BFS</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">max flow</span>
+      <span class="chip">min cut</span>
+      <span class="chip">Dinic</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A flow is an assignment of values to directed edges that respects capacity and conservation. The maximum amount you can push from s to t equals the capacity of the cheapest s-t cut — the max-flow min-cut theorem. That one sentence turns "separate these vertices" and "assign jobs under capacities" into a flow network.</p>
+<p>Ford-Fulkerson finds an s-t path in the residual graph and pushes the bottleneck. Edmonds-Karp always takes a shortest residual path (BFS) and is polynomial. Dinic builds a level graph and then a blocking flow; on unit networks it is extremely fast and is what you write in a contest.</p>
+<p>Modelling is the skill: bipartite matching is unit-capacity flow; project selection is a min-cut; circulation with demands is a max-flow with a super-source. The algorithm is twenty lines; the reduction is the interview.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>An augmenting path in the residual graph is a place you can still push. When none exists, the set of nodes reachable from s in the residual graph is a min cut: every forward edge leaving it is saturated.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Maximum throughput from s to t under capacities</li>
+        <li>Minimum capacity of an edge set whose removal disconnects s from t</li>
+        <li>Bipartite matching via unit flow (next page is the specialised view)</li>
+        <li>Project selection / closure — profit nodes to t, cost nodes from s</li>
+        <li>n a few hundred, m a few thousand — Dinic fits easily</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Uncapacitated connectivity &rarr; DFS / bridges</li>
+        <li>Shortest path &rarr; Dijkstra; flow does not care about path length except inside Dinic levels</li>
+        <li>Min-cost flow when every unit has a price &rarr; MCMF, not this page</li>
+        <li>Undirected unweighted "min edges to disconnect" with unit capacities is flow, but also edge-connectivity via other theorems</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Max s-t throughput</td>
+        <td>Augment in residual</td>
+        <td>EK / Dinic</td>
+      </tr>
+      <tr>
+        <td>Min s-t cut</td>
+        <td>Residual-reachable from s after max flow</td>
+        <td>Same run</td>
+      </tr>
+      <tr>
+        <td>Bipartite matching</td>
+        <td>s	o L	o R	o t, caps 1</td>
+        <td>Flow or Kuhn</td>
+      </tr>
+      <tr>
+        <td>Project selection</td>
+        <td>s	o profitable, costly	o t, inf between</td>
+        <td>Min cut</td>
+      </tr>
+      <tr>
+        <td>Min-cost per unit</td>
+        <td>Need potentials / SPFA</td>
+        <td>MCMF</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> shortest path</td>
+        <td>Residual BFS is for augmenting hops, not for costs</td>
+        <td>Unless you are in MCMF</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 200</code> Edmonds-Karp is safe. <code>n &le; 2000</code>, unit caps → Dinic. Capacities up to 1e9 need <code>long</code>. Always add a reverse edge of capacity 0 for residual undo.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Residual graph: for each original edge u	o v of cap c with flow f, residual c-f forward and f backward. An augmenting path is an s-t path of residual &gt; 0. Push the min residual, increase forward flow, decrease backward (undo).</p>
+<p>Dinic: BFS to assign levels from s in the residual graph. DFS from s that only walks s	o t along edges with level[v]==level[u]+1, using a current-edge pointer, until the level graph is blocked. Repeat.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Conservation: for every v ≠ s,t, inflow = outflow. Capacity: 0 ≤ f(e) ≤ c(e). When no residual s-t path exists, the reachable-from-s set S is a min cut and v(f) = cap(δ(S)).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Edmonds-Karp residual distances (Dijkstra-style table)</h3>
+
+<p>Each row is one BFS on the residual graph. A cell is hops from s — the same table Dijkstra would write, except the 'weight' of every residual arc is 1. ∞ means unreachable. After a push the next BFS is a brand-new distance row.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="max-flow-min-cutViz"></div>
+  <div class="viz-player" data-viz-target="max-flow-min-cutViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "BFS\\\\v",
+      "rowHeads": [
+        "init",
+        "BFS1",
+        "aug1",
+        "BFS2",
+        "aug2",
+        "cut"
+      ],
+      "colHeads": [
+        "s",
+        "a",
+        "t"
+      ],
+      "vars": [
+        "path",
+        "bottleneck",
+        "total"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Caps: s→a 3, a→t 2, s→t 1. Residual = caps. dist[s]=0, others ∞.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "∞"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "∞"
+            }
+          ],
+          "values": {
+            "path": "init",
+            "bottleneck": "—",
+            "total": 0
+          }
+        },
+        {
+          "note": "BFS 1 (hop-Dijkstra): settle a at 1 via s→a, t at 1 via s→t. Shortest residual path is s-t.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "filled"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "path": "s-t",
+            "bottleneck": 1,
+            "total": 0
+          }
+        },
+        {
+          "note": "Augment 1: push 1 on s-t. Residual s-t becomes 0. Reverse t→s appears. Total = 1.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "—"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "push",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "path": "s-t",
+            "bottleneck": 1,
+            "total": 1
+          }
+        },
+        {
+          "note": "BFS 2: s-t residual is 0. Settle a at 1, then t at 2 via a→t. Path s-a-t.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "1",
+              "cls": "filled"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "2",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "path": "s-a-t",
+            "bottleneck": 2,
+            "total": 1
+          }
+        },
+        {
+          "note": "Augment 2: bottleneck min(3,2)=2. Residual a-t = 0, s-a = 1. Total = 3.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "1",
+              "cls": "filled"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "push",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "path": "s-a-t",
+            "bottleneck": 2,
+            "total": 3
+          }
+        },
+        {
+          "note": "BFS 3: a is still at dist 1 (s-a residual 1) but a-t is 0 and s-t is 0. t = ∞. S = {s,a}.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "val": "1",
+              "cls": "filled"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "∞",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "path": "cut S={s,a}",
+            "bottleneck": "2+1",
+            "total": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>EK always augments a shortest residual path. First BFS finds s→t at dist 1; second finds s→a→t at dist 2; third cannot reach t.</figcaption>
+</figure>
+
+<h3>Residual before any augmentation</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  nS["s"] --&gt;|"0/3"| nA["a"]
+  nA --&gt;|"0/2"| nT["t"]
+  nS --&gt;|"0/1"| nT
+  </div>
+  <figcaption>Every label is flow/capacity. Initially flow is 0. One mermaid per augmentation follows.</figcaption>
+</figure>
+
+<h3>After augmentation 1 (push 1 on s-t)</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  nS1["s"] --&gt;|"0/3"| nA1["a"]
+  nA1 --&gt;|"0/2"| nT1["t"]
+  nS1 --&gt;|"1/1"| nT1
+  </div>
+  <figcaption>Labels are flow/capacity. Residual s-t is now 0. The next BFS must go s-a-t.</figcaption>
+</figure>
+
+<h3>After augmentation 2 (push 2 on s-a-t)</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  nS2["s"] --&gt;|"2/3"| nA2["a"]
+  nA2 --&gt;|"2/2"| nT2["t"]
+  nS2 --&gt;|"1/1"| nT2
+  </div>
+  <figcaption>Labels are flow/capacity. a-t and s-t are saturated. Residual-reachable from s is {s,a}: the min cut of capacity 3.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Build residual:</strong> each edge gets a reverse twin of cap 0. Store index of the twin.</li>
+  <li><strong>Edmonds-Karp:</strong> BFS a residual path, push bottleneck, update both directions.</li>
+  <li><strong>Dinic:</strong> BFS levels; DFS blocking flow with a current-edge pointer; repeat while t is reachable.</li>
+  <li><strong>Stop</strong> when BFS cannot reach t. Flow value is the sum leaving s.</li>
+  <li><strong>Min cut:</strong> all vertices reachable from s in the final residual graph; edges S	o V\S with original cap &gt; 0.</li>
+  <li><strong>long</strong> for capacities and the answer.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>path</th><th>bottleneck</th><th>total</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>0</td><td>Caps: s→a 3, a→t 2, s→t 1. Residual = caps. dist[s]=0, others ∞.</td></tr>
+      <tr><td>s-t</td><td>1</td><td>0</td><td>BFS 1 (hop-Dijkstra): settle a at 1 via s→a, t at 1 via s→t. Shortest residual path is s-t.</td></tr>
+      <tr><td>s-t</td><td>1</td><td>1</td><td>Augment 1: push 1 on s-t. Residual s-t becomes 0. Reverse t→s appears. Total = 1.</td></tr>
+      <tr><td>s-a-t</td><td>2</td><td>1</td><td>BFS 2: s-t residual is 0. Settle a at 1, then t at 2 via a→t. Path s-a-t.</td></tr>
+      <tr><td>s-a-t</td><td>2</td><td>3</td><td>Augment 2: bottleneck min(3,2)=2. Residual a-t = 0, s-a = 1. Total = 3.</td></tr>
+      <tr><td>cut S={s,a}</td><td>2+1</td><td>3</td><td>BFS 3: a is still at dist 1 (s-a residual 1) but a-t is 0 and s-t is 0. t = ∞. S = {s,a}.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Max Flow / Min Cut implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FordFulkerson.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class FordFulkerson {
+        static int bfs(int[][] cap, int s, int t, int[] par) {
+            Arrays.fill(par, -1);
+            par[s] = s;
+            ArrayDeque&lt;int[]&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(new int[] {s, Integer.MAX_VALUE});
+            while (!q.isEmpty()) {
+                int[] cur = q.poll();
+                int u = cur[0], f = cur[1];
+                for (int v = 0; v &lt; cap.length; v++) if (par[v] == -1 &amp;&amp; cap[u][v] &gt; 0) {
+                    par[v] = u;
+                    int nf = Math.min(f, cap[u][v]);
+                    if (v == t) return nf;
+                    q.add(new int[] {v, nf});
+                }
+            }
+            return 0;
+        }
+        static int maxFlow(int[][] cap, int s, int t) {
+            int[] par = new int[cap.length];
+            int flow = 0, add;
+            while ((add = bfs(cap, s, t, par)) &gt; 0) {
+                flow += add;
+                for (int v = t; v != s; v = par[v]) { cap[par[v]][v] -= add; cap[v][par[v]] += add; }
+            }
+            return flow;
+        }
+        public static void main(String[] args) {
+            int[][] c = new int[3][3];
+            c[0][1] = 3; c[1][2] = 2; c[0][2] = 1;
+            System.out.println(maxFlow(c, 0, 2));
+        }
+        // Input : s=0,a=1,t=2 caps 3,2,1
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Dinic.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Dinic {
+        static class Edge { int to, rev; long cap; Edge(int to, int rev, long cap) { this.to = to; this.rev = rev; this.cap = cap; } }
+        List&lt;Edge&gt;[] g;
+        int[] lev, it;
+        Dinic(int n) {
+            g = new List[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new ArrayList&lt;&gt;();
+        }
+        void add(int u, int v, long c) {
+            g[u].add(new Edge(v, g[v].size(), c));
+            g[v].add(new Edge(u, g[u].size() - 1, 0));
+        }
+        boolean bfs(int s, int t) {
+            lev = new int[g.length];
+            Arrays.fill(lev, -1);
+            lev[s] = 0;
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(s);
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                for (Edge e : g[u]) if (e.cap &gt; 0 &amp;&amp; lev[e.to] &lt; 0) { lev[e.to] = lev[u] + 1; q.add(e.to); }
+            }
+            return lev[t] &gt;= 0;
+        }
+        long dfs(int u, int t, long f) {
+            if (u == t) return f;
+            for (; it[u] &lt; g[u].size(); it[u]++) {
+                Edge e = g[u].get(it[u]);
+                if (e.cap &lt;= 0 || lev[e.to] != lev[u] + 1) continue;
+                long pushed = dfs(e.to, t, Math.min(f, e.cap));
+                if (pushed &gt; 0) { e.cap -= pushed; g[e.to].get(e.rev).cap += pushed; return pushed; }
+            }
+            return 0;
+        }
+        long maxFlow(int s, int t) {
+            long flow = 0;
+            while (bfs(s, t)) {
+                it = new int[g.length];
+                long add;
+                while ((add = dfs(s, t, Long.MAX_VALUE / 4)) &gt; 0) flow += add;
+            }
+            return flow;
+        }
+        public static void main(String[] args) {
+            Dinic d = new Dinic(3);
+            d.add(0, 1, 3); d.add(1, 2, 2); d.add(0, 2, 1);
+            System.out.println(d.maxFlow(0, 2));
+        }
+        // Input : same network
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MinCut.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class MinCut {
+        static List&lt;Integer&gt; sideS(List&lt;int[]&gt;[] residual, int s) {
+            boolean[] vis = new boolean[residual.length];
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(s); vis[s] = true;
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                for (int[] e : residual[u]) if (e[1] &gt; 0 &amp;&amp; !vis[e[0]]) { vis[e[0]] = true; q.add(e[0]); }
+            }
+            List&lt;Integer&gt; S = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; vis.length; i++) if (vis[i]) S.add(i);
+            return S;
+        }
+        public static void main(String[] args) {
+            List&lt;int[]&gt;[] r = new List[3];
+            for (int i = 0; i &lt; 3; i++) r[i] = new ArrayList&lt;&gt;();
+            r[0].add(new int[] {1, 1});
+            System.out.println(sideS(r, 0));
+        }
+        // Input : residual after a toy run, s can reach 0 and 1
+        // Output: [0, 1]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time EK O(V E^2), Dinic O(V^2 E) typical</span>
+    <span class="badge badge--space">Space O(V + E)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Edmonds-Karp: each augmentation increases the shortest residual distance of some vertex, bounding the number of phases by VE, each a BFS. Dinic: O(V) phases, each a blocking flow; unit networks are much faster in practice (<code>O(E min(E^{1/2}, V^{2/3}))</code>).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Ford-Fulkerson (DFS)</td><td>unbounded if caps are large</td><td>O(E)</td><td>Do not use with big caps</td></tr>
+      <tr><td>Edmonds-Karp</td><td>O(V E^2)</td><td>O(V+E)</td><td>n <= 200</td></tr>
+      <tr><td>Dinic</td><td>O(V^2 E) worst</td><td>O(V+E)</td><td>Contest default</td></tr>
+      <tr><td>Push-relabel</td><td>O(V^2 E)</td><td>O(V+E)</td><td>Dense; more code</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">No reverse edges</span>
+    <div class="pitfalls__bug">You cannot undo a bad push and the algorithm gets stuck below max flow.</div>
+    <div class="pitfalls__fix">Every add(u,v,c) creates add(v,u,0) and the two store each other's indices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on cap sums</span>
+    <div class="pitfalls__bug">n * 1e9 exceeds int.</div>
+    <div class="pitfalls__fix"><code>long</code> capacities and flow.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using original caps to read the min cut</span>
+    <div class="pitfalls__bug">You need residual reachability, not "edges that still have cap".</div>
+    <div class="pitfalls__fix">BFS from s in the residual after the flow run; cut is S 	o V\S.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Multiple edges overwritten in a matrix</span>
+    <div class="pitfalls__bug">An adj-matrix residual silently keeps one cap.</div>
+    <div class="pitfalls__fix">Edge list (Dinic) or add onto the matrix cell.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Bidirected input as two independent caps</span>
+    <div class="pitfalls__bug">Sometimes the statement is undirected: one capacity shared both ways. Model as two directed edges of that cap, which is correct for undirected flow.</div>
+    <div class="pitfalls__fix">Undirected edge of cap c → add(u,v,c) and add(v,u,c).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bipartite matching</td>
+        <td>s	o L (1), L	o R (1), R	o t (1).</td>
+        <td><code>next page</code></td>
+        <td>Kuhn is shorter</td>
+      </tr>
+      <tr>
+        <td>Project selection</td>
+        <td>s	o profit (profit), cost	o t (cost), inf along prerequisites.</td>
+        <td><code>min cut = -max closure</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Vertex capacities</td>
+        <td>Split v into vin	o vout with the vertex cap.</td>
+        <td><code>standard gadget</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>State the max-flow min-cut theorem.</summary>
+    <div class="followup__body">
+      <p>In any flow network the value of a maximum s-t flow equals the capacity of a minimum s-t cut. Proof: weak inequality is easy (any flow is ≤ any cut); when FF stops, residual-unreachable t gives a cut of capacity equal to the flow.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you recover the cut edges?</summary>
+    <div class="followup__body">
+      <p>S = residual-reachable from s. Cut edges are original edges u	o v with u in S, v not in S. Their residual is 0 (they are saturated).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why Dinic's current-edge pointer?</summary>
+    <div class="followup__body">
+      <p>Once a residual edge is exhausted inside a blocking-flow phase it will not come back in that phase. The pointer makes each phase scan every edge a constant number of times.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Unit-capacity bipartite matching complexity?</summary>
+    <div class="followup__body">
+      <p>Dinic on that network is <code>O(E √V)</code> (Hopcroft-Karp is the same bound with different language). Kuhn is <code>O(VE)</code> and often faster to write for n = 500.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/swim-in-rising-water/" target="_blank" rel="noopener">Swim In Rising Water</a></td>
+        <td><span class="badge badge--lc">LC 778</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Not flow — binary search + DFS; contrast</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/653/D" target="_blank" rel="noopener">Delivery Bears</a></td>
+        <td><span class="badge badge--cf">CF 653D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search + max flow</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/546/E" target="_blank" rel="noopener">Soldier and Traveling</a></td>
+        <td><span class="badge badge--cf">CF 546E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Flow conservation gadget</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/269/C" target="_blank" rel="noopener">Flawed Flow</a></td>
+        <td><span class="badge badge--cf">CF 269C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Reconstruct orientations from a flow</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1694" target="_blank" rel="noopener">Download Speed</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dinic template</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1695" target="_blank" rel="noopener">Police Chase</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Min cut edges</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/practice2/tasks/practice2_d" target="_blank" rel="noopener">ACL Max Flow</a></td>
+        <td><span class="badge badge--atc">ACL</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Library</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/maximum-students-taking-exam/" target="_blank" rel="noopener">Maximum Students Taking Exam</a></td>
+        <td><span class="badge badge--lc">LC 1349</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bipartite matching / flow</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Max flow = min cut. Residual paths are leftover capacity.</li>
+    <li>Every edge needs a reverse twin for undo.</li>
+    <li>Edmonds-Karp = BFS augment. Dinic = levels + blocking flow.</li>
+    <li>Min cut = residual-reachable from s after the run.</li>
+    <li>Modelling (gadgets) is most of the problem.</li>
+  </ul>
+  <div class="recap__oneliner">while BFS residual s-t: push bottleneck; reverse +=; // Dinic: levels then blocking DFS</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,677 +1,754 @@
-import { pack } from "./pack.mjs";
+/* Module 09 — Decompositions */
+import { pack, lc, cf } from "./pack.mjs";
 
 export const topics = [
 
+/* ============================== 1. heavy-light-decomposition ========== */
 pack({
   id: "heavy-light-decomposition",
   difficulty: "Hard",
-  readTime: "24 min",
-  tagline: "Split a tree into heavy paths so a path query becomes O(log n) segment-tree queries instead of a walk.",
-  tags: ["HLD", "trees", "segtree", "P2"],
-  prereqs: [["Segment Tree", "../06-range-queries/segment-tree.html"], ["Euler Tour", "../05-trees/euler-tour-subtree-queries.html"]],
-  why: [
-    "Subtree queries flatten with an Euler tour. Path queries do not: a path is not a contiguous range in tin/tout order. Heavy-light decomposition (HLD) cuts the tree into O(log n) contiguous chains so each path is a short sequence of ranges.",
-    "The heavy child of v is the child with the largest subtree. Edges to heavy children stay in the same chain; light edges start a new chain. Any root path then uses at most log n light edges, because each light edge at least halves the remaining subtree.",
-    "Interview frequency is low. Google-hard onsite and CF Div1 still ask path-add / path-max on trees. If you can say the heavy-child definition and the log-chains argument you are ahead of most candidates.",
+  readTime: "28 min",
+  tagline: "Split every root-path into <code>O(log n)</code> heavy chains so a segment tree on a flattened tree answers path queries in <code>O(log&sup2; n)</code>.",
+  tags: ["HLD", "trees", "segment tree", "P2"],
+  prereqs: [
+    ["Binary Lifting & LCA", "../05-trees/lca-binary-lifting.html"],
+    ["Segment Tree", "../06-range-queries/segment-tree.html"],
   ],
-  insight: "A path is a union of O(log n) chain segments. Put a segment tree on the flattened chains and a path query is O(log² n).",
+  why: [
+    "A path in a tree is not an array interval. Naive path-sum walks <code>O(n)</code> edges; a Fenwick tree on a DFS order answers subtree queries, not arbitrary paths. Heavy-light decomposition (HLD) is the standard way to turn a path into a handful of contiguous segments.",
+    "The trick is structural: from each node, the edge into its heaviest child (largest subtree) is <em>heavy</em>; every other child edge is <em>light</em>. Light edges at most halve the remaining size, so any root-path crosses <code>O(log n)</code> light edges and therefore lives on <code>O(log n)</code> heavy chains.",
+    "Lay each chain down as a contiguous segment of a global array (DFS that prefers the heavy child). A segment tree on that array answers a chain-range in <code>O(log n)</code>, so a full path is <code>O(log&sup2; n)</code>. Path updates with lazy propagation are the same skeleton.",
+  ],
+  insight: "A light edge halves the subtree, so a root-path uses <code>O(log n)</code> chains. Prefer the heavy child in DFS so each chain occupies a contiguous interval.",
   yes: [
-    "Path sum / min / max / add on a tree, n ≤ 1e5",
-    "Subtree and path queries in the same problem",
-    "\"tree, queries on the path between u and v\"",
-    "You already have a segment tree and need to lift it onto a tree",
-    "CF statements that mention HLD or \"tree + range structure\"",
+    "Path aggregate or path update on a tree: sum, min, XOR, add-on-path",
+    "\"Sum of node values from u to v\" with point updates",
+    "Subtree queries <em>and</em> path queries on the same tree (HLD DFS order does both)",
+    "<code>n, q &le; 10&#8309;</code> on a tree, so <code>O(log&sup2; n)</code> per query is the intended budget",
+    "You already have LCA and a segment tree and the missing piece is \"the path is not an interval\"",
   ],
   no: [
-    "Only subtree queries → Euler tour + BIT is enough",
-    "Only LCA / distance → binary lifting, no HLD",
-    "Offline path queries with a property you can Mo → Mo on trees",
-    "n ≤ 2000 → naive parent walk is fine",
+    "Only subtree queries &rarr; Euler tour + Fenwick / segment tree, no HLD",
+    "Static path-min / path-max &rarr; binary lifting or a sparse table on the Euler tour",
+    "Distance-only queries &rarr; precompute depths and LCA, no values to aggregate",
+    "Centroid / small-to-large problems (\"count pairs at distance k\") &rarr; a different decomposition",
   ],
   table: [
-    ["path between u and v, static aggregates", "HLD + segtree on chains", "this page"],
-    ["subtree only", "Euler tour", "tin/tout range"],
-    ["kth ancestor / LCA only", "binary lifting", "no values"],
-    ["all-roots answers", "rerooting DP", "not HLD"],
-    ["count paths with a numeric property", "centroid decomposition", "often easier than HLD"],
-    ["<strong>Confused with:</strong> centroid decomp", "Centroid is for counting through a vertex; HLD is for path aggregates", "different tool"],
+    ["Path sum / min / XOR with updates", "Path is O(log) chain ranges", "HLD + segment tree"],
+    ["Path add, point query", "Lazy on each chain range", "HLD + lazy segtree"],
+    ["Subtree sum only", "DFS interval is already contiguous", "Euler tour, skip HLD"],
+    ["Static path minimum", "Idempotent, no updates", "Binary lifting / sparse table"],
+    ["k-th ancestor / jump", "Not an aggregate", "Binary lifting"],
+    ["<strong>Confused with:</strong> centroid decomposition", "Centroid solves through a separator; HLD linearises paths", "Use centroid for pair-count, HLD for path aggregates"],
   ],
-  constraint: "n,q ≤ 1e5 and path updates/queries → O(log² n) per query is intended. n ≤ 1e5 and only subtree → do not pull HLD.",
+  constraint: "<code>n, q &le; 2&times;10&#8309;</code> is the HLD signature. <code>O(log&sup2; n)</code> Java usually fits; drop the extra log with a Fenwick tree when the operation is prefix-friendly (sum, XOR) and you only need point updates.",
   core: [
-    "dfs1 computes sz[], parent[], depth[], and heavy[v] = child of max sz. dfs2 assigns pos[] in chain order: visit the heavy child first so a chain occupies a contiguous segment of the segtree base array, then light children each start a new head[].",
-    "query(u,v): while head[u] != head[v], lift the deeper head (by depth[head]) across its chain segment, then the last chain is a single range between u and v.",
+    "Two DFS passes. First: compute <code>sz</code>, <code>par</code>, <code>depth</code>, and <code>heavy[u]</code> = child of maximum subtree. Second: assign each node a position <code>pos[u]</code> in a flat array, walking the heavy child first so a chain is contiguous. <code>head[u]</code> is the top of the chain containing <code>u</code>.",
+    "A path query lifts the deeper head up one chain at a time: while <code>head[u] != head[v]</code>, query <code>[pos[head[u]], pos[u]]</code> and jump <code>u = par[head[u]]</code>. Finish with the remaining in-chain segment between <code>u</code> and <code>v</code>. Always query the deeper side first so the two pointers meet at the LCA chain.",
   ],
-  invariant: "<p><em>Every node is on exactly one heavy path. Any leaf-to-root path contains at most log n light edges, so it crosses at most log n chains. After flattening, each chain is a contiguous pos[] range.</em></p>",
-  extra: [{ kind: "math", title: "Why log n light edges",
-    html: "<p>A light edge goes to a child whose subtree is ≤ half of its parent (otherwise it would be heavy). Walking toward the root across a light edge at least doubles the remaining size, so there are O(log n) of them.</p>" }],
-  array: [1, 2, 3, 4, 5, 6, 7, 8],
-  arrayLabel: "pos → node (chains A:1-2-4, B:3, C:5-6, D:7, E:8)",
-  vars: ["u", "v", "chains", "ranges"],
+  invariant: "<p>Every root-path crosses <code>O(log n)</code> light edges, hence lives on <code>O(log n)</code> heavy chains. After a heavy-first DFS, each chain is a contiguous <code>[pos[head], pos[node]]</code> interval of the segment tree.</p>",
+  array: [1, 2, 3, 4, 5, 6, 7],
+  arrayLabel: "pos =",
+  indexLabels: ["1", "2", "3", "4", "5", "6", "7"],
+  vars: ["u", "head", "chain"],
   frames: [
-    { note: "Tree rooted at 1. Heavy edges 1-2, 2-4, 5-6. Light edges start new chains.",
-      window: [0, 7], values: { u: "—", v: "—", chains: 5, ranges: "—" } },
-    { note: "Query path 4..6. 4 is on chain A (head 1), 6 on chain C (head 5).",
-      active: [3, 5], values: { u: 4, v: 6, chains: 2, ranges: "?" } },
-    { note: "depth[head[4]]=0 < depth[head[6]]=2, so lift 6 across chain C: range pos[5]..pos[6].",
-      window: [4, 5], active: [5], values: { u: 4, v: 5, chains: "C done", ranges: "[5..6]" } },
-    { note: "Now v=5, parent is 2. 2 is on chain A with 4. Same head.",
-      active: [1, 3], values: { u: 4, v: 2, chains: "A", ranges: "[5..6] + ?" } },
-    { note: "Same chain: one range pos[2]..pos[4] covering 2 and 4. Path is 4-2-1-… no — 4-2-5? Parent of 5 is 2. Path 4-2-5-6.",
-      window: [1, 3], values: { u: 4, v: 2, chains: "A last", ranges: "[5..6]+[2..4]" } },
-    { note: "Two ranges, two segtree queries. O(log n) chains × O(log n) tree = O(log² n).",
-      best: [1, 2, 3, 4, 5], values: { u: 4, v: 6, chains: 2, ranges: "done" } },
+    { note: "Tree: 1-2-4, 1-2-5, 1-3-6, 1-3-7. Subtree sizes: 7,3,3,1,1,1,1. Heavy child of 1 is 2 (tie broken by first).",
+      active: [0], values: { u: 1, head: 1, chain: "start at root" } },
+    { note: "Chain A: 1-2-4 (heavy edges). pos = [1,2,4] get indices 0,1,2.",
+      active: [0, 1, 2], values: { u: 4, head: 1, chain: "A = 1-2-4" } },
+    { note: "Node 5 is a light child of 2, so it starts a new chain B. pos[5] = 3.",
+      active: [3], values: { u: 5, head: 5, chain: "B = 5" } },
+    { note: "Chain C: 3-6. 3 is a light child of 1. pos[3]=4, pos[6]=5.",
+      active: [4, 5], values: { u: 6, head: 3, chain: "C = 3-6" } },
+    { note: "Node 7 starts chain D. Four chains cover seven nodes.",
+      active: [6], values: { u: 7, head: 7, chain: "D = 7" } },
+    { note: "Path 5 to 7: 5 (chain B) -> 2 (chain A) -> 1 (chain A) -> 3 (chain C) -> 7 (chain D). Three chain jumps.",
+      active: [3, 1, 0, 4, 6], values: { u: "5..7", head: "B,A,C,D", chain: "3 jumps" } },
   ],
   mermaid: `graph TD
-  n1["1 head A"] --> n2["2 heavy"]
-  n1 --> n3["3 light B"]
-  n2 --> n4["4 heavy"]
-  n2 --> n5["5 light C"]
-  n5 --> n6["6 heavy"]
-  n1 --> n7["7 light D"]
-  n3 --> n8["8 light E"]`,
-  merTitle: "Heavy edges stay on a chain",
-  merCaption: "Thick (heavy) edges keep the same head. Light edges start a new chain.",
+  n1["1 head"] --> n2["2"]
+  n1 --> n3["3 head"]
+  n2 --> n4["4"]
+  n2 --> n5["5 head"]
+  n3 --> n6["6"]
+  n3 --> n7["7 head"]`,
+  merTitle: "Heavy edges vs new heads",
+  merCaption: "Thick vertical lines are heavy chains. Each light child starts a new head.",
   steps: [
-    "<strong>dfs1:</strong> compute sz, parent, depth; heavy[v] = argmax sz[child].",
-    "<strong>dfs2:</strong> pos[v]=timer++; if heavy[v] exists, dfs2(heavy, same head); then each light child dfs2(child, child as head).",
-    "<strong>Build a segtree</strong> on the base array indexed by pos, storing node values.",
-    "<strong>path query(u,v):</strong> while head[u]!=head[v], query the deeper chain from pos[head] to pos[node], then climb to parent[head].",
-    "<strong>Same-chain finish:</strong> query the pos-range between u and v.",
-    "<strong>Path update</strong> is the same walk with range updates (lazy if needed).",
-    "<strong>Subtree query</strong> is still a single pos-range if you assigned heavy-first (subtree is contiguous).",
+    "<strong>DFS 1.</strong> Compute <code>sz</code>, <code>par</code>, <code>depth</code>, <code>heavy[u]</code>.",
+    "<strong>DFS 2.</strong> Assign <code>pos</code> and <code>head</code>, always recursing into the heavy child first.",
+    "<strong>Build</strong> a segment tree on the <code>pos</code>-ordered values.",
+    "<strong>pathQuery(u, v):</strong> while heads differ, query the deeper chain and jump to <code>par[head]</code>.",
+    "<strong>Same chain:</strong> query the closed interval between <code>pos[u]</code> and <code>pos[v]</code>.",
+    "<strong>Updates</strong> are the same walk, writing instead of reading. Subtree query is one interval <code>[pos[u], pos[u]+sz[u])</code>.",
   ],
   code: [
-    { tab: "Naive path walk", file: "PathNaive.java", intro: "O(n) per query. Fine for n,q ≤ 2000.",
-      code: `import java.util.*;
-public class PathNaive {
-    static int[] parent, depth, val;
-    static long query(int u, int v) {
-        long s = 0;
-        while (u != v) {
-            if (depth[u] < depth[v]) { int t = u; u = v; v = t; }
-            s += val[u]; u = parent[u];
-        }
-        return s + val[u];
+    { tab: "Brute", file: "PathSumBrute.java",
+      intro: "Walk parent pointers to the LCA. Correct, <code>O(n)</code> per query.",
+      code: `public class PathSumBrute {
+    static int[] par, val, depth;
+    static int lca(int u, int v) {
+        while (depth[u] > depth[v]) u = par[u];
+        while (depth[v] > depth[u]) v = par[v];
+        while (u != v) { u = par[u]; v = par[v]; }
+        return u;
+    }
+    static int pathSum(int u, int v) {
+        int a = lca(u, v), s = val[a];
+        while (u != a) { s += val[u]; u = par[u]; }
+        while (v != a) { s += val[v]; v = par[v]; }
+        return s;
     }
     public static void main(String[] args) {
-        parent = new int[] {0, 0, 0, 1, 1}; depth = new int[] {0, 1, 1, 2, 2};
-        val = new int[] {0, 4, 2, 5, 1};
-        System.out.println(query(3, 4));
+        par = new int[] {0, 0, 1, 1, 2, 2, 3, 3};
+        val = new int[] {0, 1, 2, 3, 4, 5, 6, 7};
+        depth = new int[] {0, 0, 1, 1, 2, 2, 2, 2};
+        System.out.println(pathSum(5, 7));
     }
-    // Input : tree 0-1-3, 0-1-4, 0-2; values on nodes
-    // Output: 10   (5+4+1)
+    // Input : tree 1-2-4/5, 1-3-6/7, values = ids
+    // Output: 18
 }` },
-    { tab: "HLD query walk", file: "HLD.java", highlight: "28-36",
+    { tab: "Optimal", file: "HldPathSum.java",
+      intro: "Full HLD with a Fenwick tree for path sums and point updates.",
       code: `import java.util.*;
-public class HLD {
+public class HldPathSum {
     int n, timer;
-    int[] sz, parent, depth, heavy, head, pos, val;
-    List<List<Integer>> g;
-    long[] bit; // Fenwick on pos for point values
-
-    HLD(int n) {
+    List<Integer>[] g;
+    int[] par, depth, sz, heavy, head, pos, val;
+    long[] bit;
+    HldPathSum(int n) {
         this.n = n;
-        g = new ArrayList<>();
-        for (int i = 0; i < n; i++) g.add(new ArrayList<>());
-        sz = new int[n]; parent = new int[n]; depth = new int[n];
-        heavy = new int[n]; head = new int[n]; pos = new int[n];
-        Arrays.fill(heavy, -1);
-        val = new int[n]; bit = new long[n + 2];
+        g = new List[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        par = new int[n]; depth = new int[n]; sz = new int[n];
+        heavy = new int[n]; Arrays.fill(heavy, -1);
+        head = new int[n]; pos = new int[n]; val = new int[n];
+        bit = new long[n + 2];
     }
-    void add(int u, int v) { g.get(u).add(v); g.get(v).add(u); }
-
-    void dfs1(int v, int p) {
-        sz[v] = 1; parent[v] = p;
+    void add(int u, int v) { g[u].add(v); g[v].add(u); }
+    void dfsSz(int u, int p) {
+        par[u] = p; sz[u] = 1;
         int best = 0;
-        for (int to : g.get(v)) if (to != p) {
-            depth[to] = depth[v] + 1; dfs1(to, v); sz[v] += sz[to];
-            if (sz[to] > best) { best = sz[to]; heavy[v] = to; }
+        for (int v : g[u]) if (v != p) {
+            depth[v] = depth[u] + 1;
+            dfsSz(v, u);
+            sz[u] += sz[v];
+            if (sz[v] > best) { best = sz[v]; heavy[u] = v; }
         }
     }
-    void dfs2(int v, int h) {
-        head[v] = h; pos[v] = timer++;
-        if (heavy[v] != -1) dfs2(heavy[v], h);
-        for (int to : g.get(v)) if (to != parent[v] && to != heavy[v]) dfs2(to, to);
+    void dfsHld(int u, int h) {
+        head[u] = h; pos[u] = timer++;
+        if (heavy[u] != -1) dfsHld(heavy[u], h);
+        for (int v : g[u]) if (v != par[u] && v != heavy[u]) dfsHld(v, v);
     }
-    void bitAdd(int i, long x) { for (i++; i < bit.length; i += i & -i) bit[i] += x; }
+    void bitAdd(int i, long x) { for (i++; i <= n; i += i & -i) bit[i] += x; }
     long bitSum(int i) { long s = 0; for (i++; i > 0; i -= i & -i) s += bit[i]; return s; }
-    long bitRange(int l, int r) { if (l > r) { int t = l; l = r; r = t; } return bitSum(r) - bitSum(l - 1); }
-
-    long path(int u, int v) {
+    long bitRange(int l, int r) { return bitSum(r) - bitSum(l - 1); }
+    long pathSum(int u, int v) {
         long s = 0;
         while (head[u] != head[v]) {
             if (depth[head[u]] < depth[head[v]]) { int t = u; u = v; v = t; }
             s += bitRange(pos[head[u]], pos[u]);
-            u = parent[head[u]];
+            u = par[head[u]];
         }
+        if (depth[u] > depth[v]) { int t = u; u = v; v = t; }
         s += bitRange(pos[u], pos[v]);
         return s;
     }
-
     public static void main(String[] args) {
-        HLD h = new HLD(5);
-        h.add(0, 1); h.add(0, 2); h.add(1, 3); h.add(1, 4);
-        h.dfs1(0, 0); h.dfs2(0, 0);
-        int[] vals = {0, 4, 2, 5, 1};
-        for (int i = 0; i < 5; i++) { h.val[i] = vals[i]; h.bitAdd(h.pos[i], vals[i]); }
-        System.out.println(h.path(3, 4));
+        HldPathSum h = new HldPathSum(7);
+        int[][] e = {{0,1},{0,2},{1,3},{1,4},{2,5},{2,6}};
+        for (int[] x : e) h.add(x[0], x[1]);
+        for (int i = 0; i < 7; i++) h.val[i] = i + 1;
+        h.dfsSz(0, -1); h.dfsHld(0, 0);
+        for (int i = 0; i < 7; i++) h.bitAdd(h.pos[i], h.val[i]);
+        System.out.println(h.pathSum(4, 6));
     }
-    // Input : tree 0-1-3, 0-1-4, 0-2; node values 0,4,2,5,1
-    // Output: 10
+    // Input : same 7-node tree, values 1..7, query 5 to 7 (0-based 4,6)
+    // Output: 18
 }` },
-    { tab: "Reusable skeleton", file: "HLDTemplate.java",
-      code: `// dfs1 sizes + heavy child
-// dfs2: pos, head; heavy first so chain is contiguous
-// path: while heads differ, query deeper chain, climb to parent[head]
-// last range is pos[u]..pos[v] on the shared chain
-public class HLDTemplate {
-    public static void main(String[] args) {
-        System.out.println("see HLD.java");
+    { tab: "Template", file: "HldTemplate.java",
+      intro: "The query walk, isolated. Plug any range structure in for <code>seg.query</code>.",
+      code: `public class HldTemplate {
+    static int[] head, par, depth, pos;
+    static long queryRange(int l, int r) { return 0; } // segtree
+    static long pathQuery(int u, int v) {
+        long ans = 0;
+        while (head[u] != head[v]) {
+            if (depth[head[u]] < depth[head[v]]) { int t = u; u = v; v = t; }
+            ans += queryRange(pos[head[u]], pos[u]);
+            u = par[head[u]];
+        }
+        if (pos[u] > pos[v]) { int t = u; u = v; v = t; }
+        ans += queryRange(pos[u], pos[v]);
+        return ans;
     }
-    // Input : (template)
-    // Output: see HLD.java
+    public static void main(String[] args) {
+        head = new int[] {0, 0, 2, 0, 4, 2, 6};
+        par = new int[] {-1, 0, 0, 1, 1, 2, 2};
+        depth = new int[] {0, 1, 1, 2, 2, 2, 2};
+        pos = new int[] {0, 1, 4, 2, 3, 5, 6};
+        System.out.println(pathQuery(4, 6));
+    }
+    // Input : heads/pos of the 7-node example
+    // Output: 0
 }` },
   ],
   complexity: {
-    time: "O(n) build, O(log² n) per path query/update",
+    time: "O(n) preprocess, O(log^2 n) per query",
     space: "O(n)",
     derivation: [
-      "<p>A path crosses O(log n) chains (light-edge argument). Each chain is one segment-tree / Fenwick query of O(log n). Product: O(log² n).</p>",
-      "<span class=\"eq\">#light edges on a root path ≤ log₂ n &nbsp;⇒&nbsp; #chains on any path ≤ 2 log n</span>",
+      "<p>A light edge at least halves subtree size, so a node has <code>O(log n)</code> light ancestors. The query walk therefore processes <code>O(log n)</code> chains, each a segment-tree range of <code>O(log n)</code>.</p>",
+      "<span class=\"eq\">T<sub>query</sub> = O(log n) chains &times; O(log n) = O(log&sup2; n)</span>",
     ],
     compare: [
-      ["Parent walk", "O(n) / query", "O(n)", "n,q ≤ 2000"],
-      ["HLD + BIT", "O(log² n)", "O(n)", "path sums, point updates"],
-      ["HLD + lazy segtree", "O(log² n)", "O(n)", "path range add"],
-      ["Euler + BIT", "O(log n)", "O(n)", "subtree only"],
+      ["Walk to LCA", "O(n) / query", "O(n)", "Tiny n or one query"],
+      ["Binary lifting", "O(log n)", "O(n log n)", "Static path-min / k-th ancestor"],
+      ["HLD + Fenwick", "O(log^2 n)", "O(n)", "Path sum / XOR, point update"],
+      ["HLD + lazy segtree", "O(log^2 n)", "O(n)", "Path add + path query"],
     ],
   },
   pitfalls: [
-    { title: "Forgetting to visit the heavy child first",
-      bug: "If dfs2 visits children in arbitrary order, a chain is not contiguous in pos[] and range queries are wrong.",
-      fix: "Always `if (heavy[v] != -1) dfs2(heavy[v], sameHead)` before light children." },
-    { title: "Comparing depth[u] instead of depth[head[u]]",
-      bug: "You lift the deeper <em>node</em> rather than the deeper <em>chain head</em>, and skip part of a chain.",
-      fix: "The node you climb is the one whose head is deeper." },
-    { title: "Off-by-one when u and v are on the same chain",
-      bug: "pos[u] and pos[v] need min/max. Forgetting that returns an empty or reversed range.",
-      fix: "`bitRange` should swap if l > r, or compute `l = min(pos[u], pos[v])`." },
-    { title: "Values on edges vs nodes",
-      bug: "Edge-valued trees double-count the LCA or miss it, depending on how you assign the edge to a child.",
-      fix: "Store the edge value on the deeper endpoint; when querying, skip the LCA node." },
-    { title: "Root's parent",
-      bug: "`parent[root] = root` then `u = parent[head[u]]` infinite-loops if you query a chain that includes the root incorrectly.",
-      fix: "Stop when heads meet. Never climb past the root; `parent[root] = root` is OK only because the while condition fails first." },
+    { title: "DFS does not prefer the heavy child",
+      bug: "Chains fragment; a \"chain\" is no longer a contiguous <code>pos</code> interval and every query is wrong.",
+      fix: "In the second DFS, recurse into <code>heavy[u]</code> before any light child, and pass the same <code>head</code>." },
+    { title: "Forgetting to lift the deeper head",
+      bug: "Jumping the shallower pointer first walks off the LCA and double-counts or infinite-loops.",
+      fix: "Compare <code>depth[head[u]]</code> (not <code>depth[u]</code>) and always lift the deeper chain." },
+    { title: "Off-by-one on the in-chain segment",
+      bug: "<code>[pos[u], pos[v])</code> drops the LCA node, or includes it twice if both sides add it.",
+      fix: "After heads meet, query the closed interval between the two positions once." },
+    { title: "1-index vs 0-index mix",
+      bug: "Parent of the root becomes 0, Fenwick index 0 is unused, and <code>bitAdd(pos[root], x)</code> writes the wrong cell.",
+      fix: "Pick one convention. Fenwick wants 1-based indices: <code>bitAdd(pos[u] + 1, x)</code> if <code>pos</code> is 0-based." },
+    { title: "Updating values after HLD without writing the tree",
+      bug: "You change <code>val[u]</code> but not the Fenwick / segment tree cell at <code>pos[u]</code>.",
+      fix: "Point update is <code>tree.update(pos[u], newValue)</code>. The original array is only the build source." },
   ],
   variants: [
-    ["Path add, point read", "Lazy segtree on pos, same walk", "st.rangeAdd(l,r,x)", "CF path-add"],
-    ["Edge values", "Assign edge to child; skip LCA in the query", "if(u!=v) range without lca", "standard CF"],
-    ["Subtree + path", "Heavy-first pos makes subtree contiguous", "st.query(pos[v], pos[v]+sz[v]-1)", "both in one structure"],
+    ["Subtree query", "DFS interval [pos[u], pos[u]+sz[u]) is contiguous because heavy-first still visits a whole subtree together.", "seg.query(pos[u], pos[u]+sz[u]-1)", "CF 383C"],
+    ["Edge values", "Store the edge weight on the child endpoint; skip the LCA node when querying.", "pathQuery then subtract val[lca]", "CF 396C"],
+    ["Lazy path add", "Same walk, call seg.rangeAdd instead of query.", "while heads differ: seg.add(pos[head], pos[u], x)", "CF 587C"],
   ],
   followups: [
-    ["Prove the number of chains on a path is O(log n).",
-      "<p>Each light edge at least halves subtree size toward the root, so a node has O(log n) light edges above it. A u–v path is two root paths minus the prefix to the LCA, hence O(log n) chains.</p>"],
-    ["Why is HLD O(log² n) and not O(log n)?",
-      "<p>O(log n) chains, each needing an O(log n) structure query. You can sometimes drop a log with a specialised structure, but not with a general monoid.</p>"],
-    ["Can you do this with Euler tours only?",
-      "<p>Not for arbitrary path aggregates. Euler + RMQ gives LCA, not path sums of values. You would need extra tricks (tree flattening with in/out and a difference on parent) that still resemble HLD.</p>"],
-    ["HLD vs centroid for \"count paths with xor k\".",
-      "<p>Centroid is the default for counting paths with a property. HLD is the default for <em>aggregating values already stored on the tree</em> under updates.</p>"],
+    ["Why is the bound O(log n) chains, not O(n)?",
+      "<p>Each light edge moves to a subtree of size at most half. A walk toward the root therefore meets at most <code>log n</code> light edges, and each light edge is the only place a chain can change.</p>"],
+    ["Can you get O(log n) instead of O(log^2 n)?",
+      "<p>Yes for prefix-friendly operations (sum, XOR) with point updates: Fenwick on the HLD array is <code>O(log n)</code> per chain range, still <code>O(log^2 n)</code> total. True <code>O(log n)</code> path queries need a top tree or link-cut tree.</p>"],
+    ["How do you handle edge weights?",
+      "<p>Assign the edge <code>(p, u)</code> to node <code>u</code>. When the two pointers sit on the same chain, query <code>(pos[lca], pos[deeper]]</code> so the LCA node (which holds the parent edge) is excluded.</p>"],
+    ["HLD versus centroid for \"count pairs at distance k\"?",
+      "<p>HLD linearises paths; it does not enumerate pairs. Centroid decomposition solves through a separator in <code>O(n log n)</code>. Use the tool that matches the query shape.</p>"],
   ],
   problems: [
-    { url: "https://leetcode.com/problems/minimum-edge-weight-equilibrium-queries-in-a-tree/", name: "Min Edge Weight Equilibrium Queries", badge: "lc", tag: "LC 2846", level: "Hard", pattern: "path counts; lifting often enough" },
-    { url: "https://www.spoj.com/problems/QTREE/", name: "QTREE", badge: "gfg", tag: "SPOJ QTREE", level: "Hard", pattern: "the classic HLD problem" },
-    { url: "https://codeforces.com/problemset/problem/343/D", name: "Water Tree", badge: "cf", tag: "CF 343D", level: "Hard", pattern: "HLD or Euler + lazy" },
-    { url: "https://codeforces.com/problemset/problem/383/C", name: "Propagating Tree", badge: "cf", tag: "CF 383C", level: "Hard", pattern: "Euler + parity, not always HLD" },
-    { url: "https://atcoder.jp/contests/abc294/tasks/abc294_g", name: "AtCoder ABC294 G", badge: "atc", tag: "ABC 294G", level: "Hard", pattern: "path sums on a tree" },
-    { url: "https://www.luogu.com.cn/problem/P3384", name: "Luogu P3384 HLD template", badge: "gfg", tag: "P3384", level: "Hard", pattern: "template" },
-    { url: "https://leetcode.com/problems/throne-inheritance/", name: "Throne Inheritance", badge: "lc", tag: "LC 1600", level: "Medium", pattern: "tree order, not HLD — contrast" },
-    { url: "https://codeforces.com/problemset/problem/1083/A", name: "The Fair Nut and the Best Path", badge: "cf", tag: "CF 1083A", level: "Hard", pattern: "tree DP, not HLD — know the difference" },
-  ],
-  spoilers: [
-    { summary: "Hint for SPOJ QTREE", body: "<p>Edge weights stored on the child. Path max = HLD + segtree max. Change-on-edge is a point update at that child pos.</p>" },
-    { summary: "Hint for CF 343D", body: "<p>Fill a subtree with 1s, empty a node, query whether a subtree is all 1s. Euler + lazy is enough; HLD also works. The fill is a range assign.</p>" },
+    lc("209", "minimum-size-subarray-sum", "Medium", "Not HLD — warm-up on range sums"),
+    lc("307", "range-sum-query-mutable", "Medium", "The segment tree HLD sits on"),
+    cf("383C", "Propagating tree", "Hard", "HLD or Euler + Fenwick"),
+    cf("396C", "On Changing Tree", "Hard", "Path / subtree mix"),
+    cf("587C", "Duff in the Army", "Hard", "Path k-th with HLD"),
+    cf("600E", "Lomsat gelral", "Hard", "Often small-to-large; HLD also works"),
+    { url: "https://leetcode.com/problems/lca-of-deepest-leaves/", name: "LCA of Deepest Leaves", badge: "lc", tag: "LC 1123", level: "Medium", pattern: "LCA building block" },
+    { url: "https://atcoder.jp/contests/abc294/tasks/abc294_g", name: "ABC 294 G Heavy-Light Decomp", badge: "atc", tag: "ABC 294G", level: "Hard", pattern: "Path sums on a tree" },
   ],
   recap: [
-    "<strong>Heavy child = largest subtree.</strong> Light edges at least halve size.",
-    "<strong>dfs2 visits heavy first</strong> so a chain is one pos-range.",
-    "<strong>Path = O(log n) ranges.</strong> Lift the deeper head until heads match.",
-    "<strong>Subtree is still one range</strong> under heavy-first numbering.",
-    "<strong>Edge values live on the child.</strong> Skip the LCA when summing edges.",
+    "Heavy child = largest subtree; a light edge halves size.",
+    "Second DFS prefers the heavy child so a chain is contiguous.",
+    "Path query = O(log n) chain ranges, always lift the deeper head.",
+    "Subtree query is a single [pos, pos+sz) interval.",
+    "Edge weights live on the child; skip the LCA node.",
   ],
-  oneliner: "while(head[u]!=head[v]){ if(depth[head[u]]<depth[head[v]])swap; qry(pos[head[u]],pos[u]); u=parent[head[u]]; }",
+  oneliner: "while (head[u] != head[v]) { lift deeper chain; } query in-chain segment;",
 }),
 
+/* ============================== 2. centroid-decomposition ============= */
 pack({
   id: "centroid-decomposition",
   difficulty: "Hard",
-  readTime: "22 min",
-  tagline: "Recursively delete a balanced centroid so every path is counted at exactly one centroid — the one that sits on it.",
-  tags: ["centroid", "trees", "counting", "P2"],
-  prereqs: [["Tree DP", "../05-trees/tree-dp-and-rerooting.html"]],
-  why: [
-    "Many tree problems ask how many paths have a property (length k, xor k, sum in a range). Walking every path is n². Centroid decomposition gives a divide-and-conquer over the tree with a balanced cut.",
-    "A centroid of a tree is a node whose removal leaves components of size ≤ n/2. Every tree has one (or two). After you count paths that pass through the centroid, you mark it dead and recurse on each remaining component.",
-    "The recursion depth is O(log n) because components shrink by half. Total work is O(n log n) times whatever you spend per centroid.",
+  readTime: "26 min",
+  tagline: "A centroid splits every remaining component to size at most <code>n/2</code>. Recurse, and every pair of nodes meets at exactly one centroid ancestor.",
+  tags: ["centroid", "trees", "divide and conquer", "P2"],
+  prereqs: [
+    ["DFS & Components", "../07-graphs-core/dfs-and-components.html"],
+    ["Binary Lifting & LCA", "../05-trees/lca-binary-lifting.html"],
   ],
-  insight: "Every path has a unique highest centroid (the first centroid that lies on it). Count at that centroid, never twice.",
+  why: [
+    "Many tree problems ask about <em>pairs</em>: how many pairs sit at distance <code>k</code>, what is the closest red node, what is the XOR of a path with a given property. Walking every pair is <code>O(n&sup2;)</code>. Layering a balanced separator over the tree drops that to <code>O(n log n)</code>.",
+    "A centroid of a tree is a node whose removal leaves components of size at most <code>n/2</code>. Every tree has one (or two adjacent ones). After you solve \"paths that go through this centroid\", you mark it dead and recurse on each remaining component.",
+    "The recursion depth is <code>O(log n)</code> because every piece halves. The centroid tree (parent = the centroid that decomposed you) is a balanced tree you can also query online: the answer for a node is an aggregate over its <code>O(log n)</code> centroid ancestors.",
+  ],
+  insight: "Every path crosses exactly one centroid at each layer of the decomposition. Solve through the centroid, mark it dead, recurse. Depth is <code>log n</code> because pieces halve.",
   yes: [
-    "Count paths with length / xor / sum equal to k",
-    "n ≤ 1e5 tree, pairwise path property",
-    "\"how many pairs of vertices satisfy …\" on a tree",
-    "You can compute the property of all paths through a fixed root in linear time",
-    "CF/AtCoder centroid problems",
+    "\"How many pairs of nodes at distance k\"",
+    "Online \"paint this node, query nearest painted\" on a tree",
+    "Count / optimise paths with a numeric constraint (XOR, weight sum, length)",
+    "You can compute a contribution <em>through a fixed node</em> in linear time in the current component",
+    "<code>n &le; 10&#8309;</code> and a pair-over-tree flavour",
   ],
   no: [
-    "Path updates and queries → HLD",
-    "Only distances from one root → one BFS",
-    "DP on independent subtrees without pairwise paths → ordinary tree DP",
-    "n ≤ 2000 → O(n²) DFS from every node",
+    "Path aggregates with updates &rarr; HLD, not centroid",
+    "Subtree queries only &rarr; Euler tour",
+    "The graph is not a tree &rarr; you need a block-cut / bridge tree first, or a different tool",
+    "Offline queries that Mo's on trees can handle more simply",
   ],
   table: [
-    ["count paths of length k", "centroid + depth frequency", "classic"],
-    ["count paths with xor k", "centroid + hashmap of prefix xor", "same skeleton"],
-    ["existence of a path with a property", "same, early exit", ""],
-    ["point updates on a tree + path queries", "HLD, not centroid", "wrong tool"],
-    ["offline pairwise", "sometimes DSU on tree / small-to-large", "compare"],
-    ["<strong>Confused with:</strong> HLD", "HLD aggregates stored values; centroid counts generated paths", "pick by the verb: query vs count"],
+    ["Count pairs at distance k", "Through-centroid distances, then recurse", "Centroid + freq array"],
+    ["Nearest painted node", "Store min-dist at each centroid ancestor", "Online centroid tree"],
+    ["XOR / weighted path counts", "Same, map of prefix values", "Centroid + hashmap"],
+    ["Path sum with updates", "Need a mutable path structure", "HLD"],
+    ["Static LCA / distance", "Two DFS, no separator needed", "Binary lifting"],
+    ["<strong>Confused with:</strong> small-to-large", "Small-to-large merges child maps; centroid splits the tree", "Pair-count through a node vs sack of a subtree"],
   ],
-  constraint: "n ≤ 1e5 and counting paths → O(n log n · T) where T is the per-node map work. n ≤ 5000 can be n DFS.",
+  constraint: "<code>n &le; 10&#8309;</code> with a pair-count or online nearest-painted flavour. Each layer is linear in the live component, total <code>O(n log n)</code> (or <code>O(n log&sup2; n)</code> with maps).",
   core: [
-    "findCentroid: dfs sizes in the current (alive) component, then walk to a node where every alive neighbour-component is ≤ half. decompose(c): count paths through c, mark c dead, recurse into each alive neighbour.",
-    "Counting through c is usually: DFS each pending component separately, querying a global map of depths/xors collected from previous components, then inserting. That way you do not count pairs that never pass through c (they live inside one component).",
+    "To find a centroid: compute subtree sizes in the <em>alive</em> component, then walk from any node toward a child whose live size is <code>&gt; n/2</code> until none exists. That node is a centroid. Do not use global sizes — dead nodes are invisible.",
+    "Solve: DFS the alive component from the centroid, compute depths (or prefix XOR, etc.), and combine pairs that go through the centroid without combining two nodes from the same child (those paths do not go through the centroid). Then mark the centroid dead and recurse.",
   ],
-  invariant: "<p><em>A centroid splits the alive component into pieces of size ≤ n/2. Paths that cross between pieces go through the centroid and are counted here. Paths that stay inside one piece are counted in a deeper recursive call.</em></p>",
-  array: [9, 4, 3, 2, 2, 1, 1, 1, 1],
-  arrayLabel: "component sizes as we peel centroids (n=9 → 4 → …)",
-  vars: ["n", "centroid", "maxPiece", "depth"],
+  invariant: "<p>In an alive component of size <code>s</code>, the centroid has every remaining piece of size <code>&le; s/2</code>. Recursion depth is therefore <code>O(log n)</code>, and every pair of nodes has a unique deepest centroid that lies on the path between them.</p>",
+  array: [7, 3, 3, 1, 1, 1, 1],
+  arrayLabel: "sz =",
+  indexLabels: ["1", "2", "3", "4", "5", "6", "7"],
+  vars: ["u", "sz", "centroid"],
   frames: [
-    { note: "n=9. Find a node whose pieces are ≤ 4. Pick c0.", active: [0], values: { n: 9, centroid: "c0", maxPiece: 4, depth: 0 } },
-    { note: "Count paths through c0 in O(n). Mark c0 dead. Remaining sizes 4,3,1.",
-      done: [0], active: [1, 2], values: { n: 8, centroid: "c0 done", maxPiece: 4, depth: 0 } },
-    { note: "Recurse into size-4 piece. Its centroid c1, pieces ≤ 2.",
-      active: [1], values: { n: 4, centroid: "c1", maxPiece: 2, depth: 1 } },
-    { note: "Recurse size-3 piece, centroid c2.",
-      active: [2], values: { n: 3, centroid: "c2", maxPiece: 1, depth: 1 } },
-    { note: "Depth of recursion is ≤ log₂ n because every piece is ≤ half.",
-      dim: [5, 6, 7, 8], values: { n: "≤4", centroid: "…", maxPiece: "n/2", depth: "≤3" } },
-    { note: "Total work: each node is in O(log n) alive components (one per ancestor centroid).",
-      best: [0], values: { n: 9, centroid: "all", maxPiece: "—", depth: "O(log n)" } },
+    { note: "Full tree size 7. Node 1 has children of size 3 and 3. Both <= 7/2, so 1 is a centroid.",
+      active: [0], values: { u: 1, sz: 7, centroid: 1 } },
+    { note: "Solve through 1: distances into the left subtree {2,4,5} and right {3,6,7}. Pairs that cross 1 are counted here.",
+      active: [0], values: { u: 1, sz: 7, centroid: "solving" } },
+    { note: "Mark 1 dead. Left component {2,4,5}: sizes 3,1,1. Node 2 is the centroid.",
+      active: [1], values: { u: 2, sz: 3, centroid: 2 } },
+    { note: "Mark 2 dead. Leaves 4 and 5 are trivial centroids.",
+      active: [3, 4], values: { u: "4,5", sz: 1, centroid: "leaves" } },
+    { note: "Right component {3,6,7}: centroid 3.",
+      active: [2], values: { u: 3, sz: 3, centroid: 3 } },
+    { note: "Centroid tree parents: 2 and 3 under 1; 4,5 under 2; 6,7 under 3. Height 2 = log 7.",
+      active: [0, 1, 2], values: { u: "tree", sz: "—", centroid: "done" } },
   ],
   mermaid: `graph TD
-  c0["centroid c0"] --> pA["piece A n/2"]
-  c0 --> pB["piece B"]
-  c0 --> pC["piece C"]
-  pA --> c1["centroid c1"]
-  pB --> c2["centroid c2"]`,
+  c1["centroid 1"] --> c2["centroid 2"]
+  c1 --> c3["centroid 3"]
+  c2 --> c4["4"]
+  c2 --> c5["5"]
+  c3 --> c6["6"]
+  c3 --> c7["7"]`,
   steps: [
-    "<strong>findSize(v):</strong> subtree size ignoring dead nodes.",
-    "<strong>findCentroid(v, n):</strong> while some alive child has sz > n/2, step there.",
-    "<strong>countThrough(c):</strong> for each pending component, query the map then insert depths/xors.",
-    "<strong>Mark c dead.</strong>",
-    "<strong>Recurse</strong> on each alive neighbour as a new component root.",
-    "<strong>Clear the map</strong> between components (or use a timestamp).",
-    "<strong>Complexity:</strong> each layer is O(n) over disjoint pieces, log layers.",
+    "<strong>Find centroid:</strong> size-DFS on alive nodes, then walk to a node with no child <code>&gt; s/2</code>.",
+    "<strong>Solve through it</strong> — enumerate depths / prefixes per child, combine across children.",
+    "<strong>Mark the centroid dead</strong> so later size-DFS skips it.",
+    "<strong>Recurse</strong> on each remaining alive component.",
+    "<strong>Online:</strong> store an aggregate at each centroid; a query walks the <code>O(log n)</code> ancestors.",
+    "<strong>Distance</strong> from a node to a centroid ancestor = precomputed <code>dist(u)+dist(c)-2*dist[lca]</code> or a climb with stored depths.",
   ],
   code: [
-    { tab: "O(n²) count length k", file: "PathCountNaive.java",
+    { tab: "Brute", file: "PairsDistKBrute.java",
+      intro: "DFS from every node. Fine for n <= 2000.",
       code: `import java.util.*;
-public class PathCountNaive {
-    static List<List<Integer>> g;
-    static int k, ans;
-    static void dfs(int v, int p, int d) {
-        if (d == k) ans++;
-        if (d >= k) return;
-        for (int to : g.get(v)) if (to != p) dfs(to, v, d + 1);
-    }
-    static int count(int n, int kk) {
-        k = kk; ans = 0;
-        for (int i = 0; i < n; i++) dfs(i, -1, 0);
-        return ans / 2;
+public class PairsDistKBrute {
+    static List<Integer>[] g;
+    static int dfs(int u, int p, int d, int k) {
+        if (d == k) return 1;
+        int c = 0;
+        for (int v : g[u]) if (v != p) c += dfs(v, u, d + 1, k);
+        return c;
     }
     public static void main(String[] args) {
-        g = new ArrayList<>();
-        for (int i = 0; i < 4; i++) g.add(new ArrayList<>());
-        g.get(0).add(1); g.get(1).add(0);
-        g.get(1).add(2); g.get(2).add(1);
-        g.get(1).add(3); g.get(3).add(1);
-        System.out.println(count(4, 2));
+        int n = 5, k = 2;
+        g = new List[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        int[][] e = {{0,1},{0,2},{1,3},{1,4}};
+        for (int[] x : e) { g[x[0]].add(x[1]); g[x[1]].add(x[0]); }
+        int pairs = 0;
+        for (int u = 0; u < n; u++) pairs += dfs(u, -1, 0, k);
+        System.out.println(pairs / 2);
     }
-    // Input : star-like 0-1-2, 1-3; k=2
-    // Output: 3   paths (0-1-2, 0-1-3, 2-1-3)
+    // Input : tree 0-1-3/4, 0-2; k = 2
+    // Output: 3
 }` },
-    { tab: "Centroid count length k", file: "Centroid.java", highlight: "36-48",
+    { tab: "Optimal", file: "CentroidPairs.java",
+      intro: "Count pairs at distance k via centroid decomposition.",
       code: `import java.util.*;
-public class Centroid {
-    static List<List<Integer>> g;
+public class CentroidPairs {
+    int n, k, ans;
+    List<Integer>[] g;
+    boolean[] dead;
+    int[] sz;
+    CentroidPairs(int n, int k) {
+        this.n = n; this.k = k;
+        g = new List[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        dead = new boolean[n]; sz = new int[n];
+    }
+    void add(int u, int v) { g[u].add(v); g[v].add(u); }
+    int sizeOf(int u, int p) {
+        sz[u] = 1;
+        for (int v : g[u]) if (v != p && !dead[v]) sz[u] += sizeOf(v, u);
+        return sz[u];
+    }
+    int centroid(int u, int p, int s) {
+        for (int v : g[u]) if (v != p && !dead[v] && sz[v] > s / 2) return centroid(v, u, s);
+        return u;
+    }
+    void collect(int u, int p, int d, List<Integer> into) {
+        into.add(d);
+        for (int v : g[u]) if (v != p && !dead[v]) collect(v, u, d + 1, into);
+    }
+    void decompose(int src) {
+        int s = sizeOf(src, -1);
+        int c = centroid(src, -1, s);
+        Map<Integer, Integer> all = new HashMap<>();
+        all.put(0, 1);
+        for (int v : g[c]) if (!dead[v]) {
+            List<Integer> got = new ArrayList<>();
+            collect(v, c, 1, got);
+            for (int d : got) ans += all.getOrDefault(k - d, 0);
+            for (int d : got) all.merge(d, 1, Integer::sum);
+        }
+        dead[c] = true;
+        for (int v : g[c]) if (!dead[v]) decompose(v);
+    }
+    public static void main(String[] args) {
+        CentroidPairs t = new CentroidPairs(5, 2);
+        int[][] e = {{0,1},{0,2},{1,3},{1,4}};
+        for (int[] x : e) t.add(x[0], x[1]);
+        t.decompose(0);
+        System.out.println(t.ans);
+    }
+    // Input : same tree, k = 2
+    // Output: 3
+}` },
+    { tab: "Template", file: "CentroidFind.java",
+      intro: "Just the find-and-mark loop. Drop your \"solve through c\" in the middle.",
+      code: `import java.util.*;
+public class CentroidFind {
+    static List<Integer>[] g;
     static boolean[] dead;
     static int[] sz;
-    static int k, ans;
-
-    static int sizeOf(int v, int p) {
-        sz[v] = 1;
-        for (int to : g.get(v)) if (to != p && !dead[to]) sz[v] += sizeOf(to, v);
-        return sz[v];
+    static int sizeOf(int u, int p) {
+        sz[u] = 1;
+        for (int v : g[u]) if (v != p && !dead[v]) sz[u] += sizeOf(v, u);
+        return sz[u];
     }
-    static int centroid(int v, int p, int n) {
-        for (int to : g.get(v))
-            if (to != p && !dead[to] && sz[to] > n / 2) return centroid(to, v, n);
-        return v;
+    static int find(int u, int p, int s) {
+        for (int v : g[u]) if (v != p && !dead[v] && sz[v] > s / 2) return find(v, u, s);
+        return u;
     }
-    static void collect(int v, int p, int d, List<Integer> into) {
-        if (d > k) return;
-        into.add(d);
-        for (int to : g.get(v)) if (to != p && !dead[to]) collect(to, v, d + 1, into);
-    }
-    static void decompose(int v) {
-        int n = sizeOf(v, -1);
-        int c = centroid(v, -1, n);
+    static void go(int src) {
+        int c = find(src, -1, sizeOf(src, -1));
+        // solve through c
         dead[c] = true;
-        int[] freq = new int[k + 1];
-        freq[0] = 1; // the centroid itself
-        for (int to : g.get(c)) if (!dead[to]) {
-            List<Integer> ds = new ArrayList<>();
-            collect(to, c, 1, ds);
-            for (int d : ds) if (d <= k) ans += freq[k - d];
-            for (int d : ds) if (d <= k) freq[d]++;
-        }
-        for (int to : g.get(c)) if (!dead[to]) decompose(to);
+        for (int v : g[c]) if (!dead[v]) go(v);
     }
     public static void main(String[] args) {
-        int n = 4; k = 2;
-        g = new ArrayList<>();
-        for (int i = 0; i < n; i++) g.add(new ArrayList<>());
-        g.get(0).add(1); g.get(1).add(0);
-        g.get(1).add(2); g.get(2).add(1);
-        g.get(1).add(3); g.get(3).add(1);
-        dead = new boolean[n]; sz = new int[n];
-        decompose(0);
-        System.out.println(ans);
+        int n = 5;
+        g = new List[n]; dead = new boolean[n]; sz = new int[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        int[][] e = {{0,1},{0,2},{1,3},{1,4}};
+        for (int[] x : e) { g[x[0]].add(x[1]); g[x[1]].add(x[0]); }
+        go(0);
+        System.out.println(Arrays.toString(dead));
     }
-    // Input : 0-1-2, 1-3; k = 2
-    // Output: 3
-}` },
-    { tab: "Reusable skeleton", file: "CentroidTemplate.java",
-      code: `// sizeOf ignoring dead
-// centroid: walk to a node with all pieces <= n/2
-// count through c (query map per component, then insert)
-// dead[c]=true; recurse pieces
-public class CentroidTemplate {
-    public static void main(String[] args) { System.out.println(3); }
-    // Input : template
-    // Output: 3
+    // Input : 5-node tree
+    // Output: [true, true, true, true, true]
 }` },
   ],
   complexity: {
-    time: "O(n log n · T) where T is per-node work in countThrough",
+    time: "O(n log n)",
     space: "O(n)",
     derivation: [
-      "<p>Each decompose layer processes disjoint alive components whose sizes sum to n, in linear time plus T per node. Recursion depth is O(log n) because pieces have size ≤ n/2.</p>",
-      "<span class=\"eq\">T_total = T · n · O(log n)</span>",
+      "<p>Finding a centroid is linear in the live component. Each node is live in <code>O(log n)</code> layers because every split halves size. Total work is therefore <code>O(n log n)</code>, plus whatever the through-centroid combine costs (maps add a log).</p>",
     ],
     compare: [
-      ["DFS from every node", "O(n²)", "O(n)", "n ≤ 2000"],
-      ["Centroid", "O(n log n · T)", "O(n)", "counting paths"],
-      ["HLD", "O(log² n) / query", "O(n)", "stored path aggregates"],
+      ["DFS from every node", "O(n^2)", "O(n)", "n <= 2000"],
+      ["Centroid", "O(n log n)", "O(n)", "Pair counts, online nearest"],
+      ["HLD", "O(log^2 n)/query", "O(n)", "Path aggregates, not pairs"],
+      ["Small-to-large", "O(n log n)", "O(n)", "Subtree-sack problems"],
     ],
   },
   pitfalls: [
-    { title: "Counting pairs inside one pending component",
-      bug: "Inserting into the map before querying that same component double-counts paths that never leave the piece (they do not go through the centroid as a necessary vertex in your intended sense — they will be counted again deeper).",
-      fix: "For each neighbour-component: query, then insert. Reset the map after all neighbours, or use a timestamp." },
-    { title: "Not ignoring dead nodes in sizeOf",
-      bug: "Sizes include already-processed centroids, so you pick a wrong centroid and the ≤ n/2 guarantee dies.",
-      fix: "`if (dead[to]) continue` in every walk." },
-    { title: "Forgetting the 0-length path at the centroid",
-      bug: "freq[0] = 1 is the centroid itself; without it you miss paths that end at c.",
-      fix: "Initialise the map with the identity (depth 0 / xor 0) before the neighbour loop." },
-    { title: "k larger than n",
-      bug: "`freq[k-d]` index error if you allocated freq[n] but k can be larger (xor problems).",
-      fix: "Use a HashMap for sparse keys (xor); bound arrays only when the key is a small depth." },
-    { title: "Recursing from the original neighbour after marking dead",
-      bug: "You must start the next decompose at the neighbour, not at c (c is dead).",
-      fix: "`for (to : g[c]) if (!dead[to]) decompose(to)`." },
+    { title: "Using global subtree sizes",
+      bug: "After a centroid dies, sizes still include dead nodes and you pick a fake centroid in a tiny piece.",
+      fix: "Recompute <code>sz</code> on alive nodes only, every time you search." },
+    { title: "Combining two nodes from the same child",
+      bug: "Their path does not go through the centroid, so you double-count paths that a deeper layer already owns.",
+      fix: "Collect one child, query against the <em>previous</em> children, then merge." },
+    { title: "Forgetting to mark dead before recursing",
+      bug: "The next size-DFS walks back through the centroid into other components.",
+      fix: "<code>dead[c] = true</code> immediately after the through-solve, before the recursive calls." },
+    { title: "O(n) allocation inside the layer",
+      bug: "<code>new int[n]</code> freq arrays per centroid blow memory and time to <code>O(n&sup2;)</code>.",
+      fix: "Reuse a global freq array and roll back, or use a map of the depths you actually saw." },
+    { title: "Distance to a centroid ancestor via naive walk",
+      bug: "Online queries become <code>O(n)</code> if you climb the original tree.",
+      fix: "Precompute LCA, or store <code>dist(u, centroid)</code> while building the centroid tree." },
   ],
   variants: [
-    ["Xor k instead of length k", "Map of prefix xor; query xor^k", "ans += map.get(pref^k)", "CF xor-paths"],
-    ["Sum in [L,R]", "Fenwick of depths/values at the centroid", "bit.range(L-pref, R-pref)", "weighted"],
-    ["Keep the centroid tree", "parentCentroid[c] for further queries", "O(log n) ancestors", "offline updates"],
+    ["Online nearest painted", "Each centroid stores min distance to a painted node in its layer. Query mins over ancestors.", "ans = min(ans, stored[c] + dist(u,c))", "CF 342E"],
+    ["XOR / weighted", "Replace depth with prefix XOR or weight; combine with a hashmap.", "ans += map.get(need ^ pref)", "CF 161D variant"],
+    ["Keep the centroid tree", "parent[c] = the centroid that split you; height O(log n).", "for (int x = u; x != -1; x = cpar[x])", "CF 321C"],
   ],
   followups: [
-    ["Prove a centroid exists.",
-      "<p>Walk from any node toward a child with sz > n/2. This walk is acyclic and must stop; the stop node has all pieces ≤ n/2. Existence of two adjacent centroids is possible; either works.</p>"],
-    ["How do you count unordered pairs once?",
-      "<p>Each pair is counted at exactly one centroid — the first centroid that lies on the unique path. Do not divide by 2 if your countThrough only pairs different pending components plus the centroid.</p>"],
-    ["Centroid tree height?",
-      "<p>O(log n), because each parent centroid's component was at least twice as large.</p>"],
-    ["When would you still use HLD?",
-      "<p>When values live on the tree and queries ask for an aggregate of an explicit path under updates. Centroid does not give you a live path-sum structure for free.</p>"],
+    ["Does every tree have a centroid?",
+      "<p>Yes. Walk from any node toward a child of size <code>&gt; n/2</code>. The walk ends: a node with no such child exists, and that node is a centroid. At most two adjacent centroids exist.</p>"],
+    ["Why not use HLD for pair counts?",
+      "<p>HLD gives you path <em>aggregates</em>, not an enumeration of pairs. Counting pairs that satisfy a numeric constraint needs a separator so you can join two independent sides.</p>"],
+    ["What if the \"tree\" has extra edges?",
+      "<p>Build the block-cut or bridge-block tree first, then decompose that. Centroid decomposition is defined on trees.</p>"],
+    ["How do you roll back a frequency array?",
+      "<p>Collect the list of depths you incremented and decrement them after the combine. Clearing <code>int[n]</code> each layer is <code>O(n&sup2;)</code>.</p>"],
   ],
   problems: [
-    { url: "https://codeforces.com/problemset/problem/161/D", name: "Distance in Tree", badge: "cf", tag: "CF 161D", level: "Hard", pattern: "count paths of length k" },
-    { url: "https://codeforces.com/problemset/problem/321/C", name: "Ciel the Commander", badge: "cf", tag: "CF 321C", level: "Hard", pattern: "build the centroid tree" },
-    { url: "https://atcoder.jp/contests/abc291/tasks/abc291_f", name: "ABC 291 F", badge: "atc", tag: "ABC291F", level: "Hard", pattern: "path-like DAG, contrast" },
-    { url: "https://www.spoj.com/problems/QTREE5/", name: "QTREE5", badge: "gfg", tag: "SPOJ QTREE5", level: "Hard", pattern: "centroid tree + sets" },
-    { url: "https://leetcode.com/problems/number-of-pairs-of-interchangeable-rectangles/", name: "Interchangeable Rectangles", badge: "lc", tag: "LC 2001", level: "Medium", pattern: "not a tree — contrast counting pairs" },
-    { url: "https://leetcode.com/problems/number-of-nodes-in-the-sub-tree-with-the-same-label/", name: "Sub-tree Same Label", badge: "lc", tag: "LC 1519", level: "Medium", pattern: "tree DP, not centroid" },
-    { url: "https://codeforces.com/problemset/problem/715/C", name: "Digit Tree", badge: "cf", tag: "CF 715C", level: "Hard", pattern: "centroid + modular digits" },
-    { url: "https://judge.yosupo.jp/problem/frequency_table_of_tree_distance", name: "Frequency table of tree distance", badge: "gfg", tag: "Library Checker", level: "Hard", pattern: "centroid + FFT" },
+    cf("161D", "Distance in Tree", "Medium", "Pairs at distance k — the classic"),
+    cf("321C", "Ciel the Commander", "Medium", "Build the centroid tree, assign ranks"),
+    cf("342E", "Xenia and Tree", "Hard", "Online nearest painted"),
+    cf("716E", "Digit Tree", "Hard", "Centroid + digit prefixes"),
+    { url: "https://leetcode.com/problems/tree-diameter/", name: "Tree Diameter", badge: "lc", tag: "LC 543 variant", level: "Easy", pattern: "Warm-up: one DFS, not centroid" },
+    { url: "https://leetcode.com/problems/all-nodes-distance-k-in-binary-tree/", name: "All Nodes Distance K", badge: "lc", tag: "LC 863", level: "Medium", pattern: "Single-source distances" },
+    { url: "https://atcoder.jp/contests/abc291/tasks/abc291_f", name: "ABC 291 F", badge: "atc", tag: "ABC 291F", level: "Medium", pattern: "Shortest paths through a node" },
+    { url: "https://www.spoj.com/problems/QTREE5/", name: "QTREE5", badge: "gfg", tag: "SPOJ", level: "Hard", pattern: "Online nearest painted" },
   ],
   recap: [
-    "<strong>Centroid: all remaining pieces ≤ n/2.</strong> Always exists.",
-    "<strong>Count through c, mark dead, recurse.</strong> That is the whole algorithm.",
-    "<strong>Query then insert</strong> per neighbour-component so you only count paths that use c.",
-    "<strong>Depth O(log n)</strong> because pieces halve.",
-    "<strong>HLD vs centroid:</strong> query stored paths vs count generated paths.",
+    "Centroid: every remaining piece has size at most half.",
+    "Solve through it, mark dead, recurse — depth log n.",
+    "Combine across children, never inside one child.",
+    "Recompute live sizes every search.",
+    "Online: store an aggregate at each centroid ancestor.",
   ],
-  oneliner: "c=centroid(v); countThrough(c); dead[c]=true; for(to:g[c]) if(!dead[to]) decompose(to);",
+  oneliner: "c = centroid(alive); solveThrough(c); dead[c]=true; recurse(components);",
 }),
 
+/* ============================== 3. small-to-large-merging ============= */
 pack({
   id: "small-to-large-merging",
-  difficulty: "Hard",
-  readTime: "18 min",
-  tagline: "Always merge the smaller set into the larger so each element moves O(log n) times — DSU-on-tree for subtree set queries.",
-  tags: ["dsu on tree", "small-to-large", "P2"],
-  prereqs: [["DFS", "../07-graphs-core/dfs-and-components.html"], ["Tree DP", "../05-trees/tree-dp-and-rerooting.html"]],
-  why: [
-    "A common query: for every node, how many distinct colours are in its subtree? Naive set-union is O(n²). If you always dump the smaller set into the larger, each colour instance is moved O(log n) times and the total is O(n log n).",
-    "Sack / DSU-on-tree is the same idea with a reuse trick: keep the heavy child's set in place and merge light children into it, so you do not even copy the largest piece.",
-    "This is the right tool for subtree-set questions. It is not a substitute for HLD or BIT when you need path queries or updates.",
+  difficulty: "Medium",
+  readTime: "22 min",
+  tagline: "Always merge the smaller sack into the larger. Each node is moved <code>O(log n)</code> times, so subtree-map problems become <code>O(n log n)</code>.",
+  tags: ["dsu on tree", "small to large", "sack", "P2"],
+  prereqs: [
+    ["DFS & Components", "../07-graphs-core/dfs-and-components.html"],
+    ["Sorting & Comparators", "../02-sorting-hashing-bits/sorting-and-comparators.html"],
   ],
-  insight: "Merging small into large charges the move to a doubling of the element's current set size. An element of final size s moves O(log s) times.",
+  why: [
+    "A whole family of tree problems wants, for every node, some statistic of its subtree: number of distinct colours, the most frequent colour, a map of values. Building a fresh <code>HashMap</code> per node and inserting every descendant is <code>O(n&sup2;)</code>.",
+    "Small-to-large (also called DSU-on-tree) keeps one map per subtree and always merges the smaller into the larger. When a value moves, the map it lives in at least doubles, so each value moves <code>O(log n)</code> times. Total is <code>O(n log n)</code> map operations.",
+    "The implementation is a DFS that identifies the heaviest child, computes it first and <em>keeps</em> its map as the parent's sack, then merges the lighter children in. That is the same heavy-child idea as HLD, used for maps instead of paths.",
+  ],
+  insight: "A value that is copied into a larger map now sits in a container at least twice as big. It can be copied at most <code>log n</code> times before the map is the whole tree.",
   yes: [
-    "Distinct values in every subtree",
-    "Mode / most frequent colour in every subtree",
-    "Any semigroup you can store in a hashmap per subtree",
-    "\"for each vertex compute something about the multiset of its subtree\"",
-    "n ≤ 1e5 and a set-union shaped tree DP",
+    "For every node, a statistic of the multiset of values in its subtree",
+    "\"Number of distinct colours in the subtree\"",
+    "\"Most frequent colour in the subtree\" (CF 600E Lomsat gelral)",
+    "You would write <code>map[u] = merge(map[children])</code> if that were cheap",
+    "<code>n &le; 10&#8309;</code> with a subtree-of-values flavour",
   ],
   no: [
-    "Path queries → HLD",
-    "Point updates after the tree is built → persistency or HLD, not a one-shot sack",
-    "The \"set\" is just a sum / xor → ordinary tree DP, O(n)",
-    "Offline pairwise across the whole tree → centroid or Mo on trees",
+    "Path queries &rarr; HLD",
+    "Pair counts that cross a node &rarr; centroid",
+    "The statistic is a simple sum / min you can compute in one DFS without a map",
+    "Updates between queries that invalidate sacks &rarr; you need a persistent or segment-tree-of-maps structure",
   ],
   table: [
-    ["distinct colours in subtree", "sack / small-to-large", "CF 600E"],
-    ["sum of something over distinct", "same, extra payload in the map", ""],
-    ["ordinary sum / xor of subtree", "one integer, no merge", "plain dfs"],
-    ["path distinct colours", "Mo on trees or HLD+BIT of time", "harder"],
-    ["DSU of graphs, not trees", "union-by-size is the same charging", "module 06"],
-    ["<strong>Confused with:</strong> centroid", "Centroid counts paths; sack answers per-subtree functions", "verb: for each vertex vs how many paths"],
+    ["Distinct values per subtree", "Keep a HashSet, merge small into large", "Small-to-large"],
+    ["Mode / most frequent colour", "Keep counts + a \"best\" pair, merge", "CF 600E"],
+    ["k-th in subtree", "Ordered set / policy map, merge", "Small-to-large + TreeMap"],
+    ["Path aggregate", "Not a subtree sack", "HLD"],
+    ["Pairs at distance k", "Need a separator", "Centroid"],
+    ["<strong>Confused with:</strong> DSU union-by-size", "Same doubling idea, different object (components vs sacks)", "Both are small-into-large"],
   ],
-  constraint: "n ≤ 1e5, one tree, one-shot subtree multisets → O(n log n) sack. If you also have updates, this is the wrong structure.",
+  constraint: "<code>n &le; 10&#8309;</code> with a per-subtree map. HashMap operations make the hidden constant larger than a Fenwick tree; it still passes typical 2-second Java limits.",
   core: [
-    "Naive: each node allocates a HashMap, merges all children into it, answers, returns the map. Merge small-to-large: identify the child with the largest map, reuse that object, dump the others into it.",
-    "Sack optimisation: after answering v, if v is a light child of its parent, throw the map away (the parent will rebuild). If v is heavy, keep it. Implementation: dfs(v, keep). Light children are called with keep=false; the heavy child with keep=true; then you add the light subtrees by a second dfs that only inserts.",
+    "DFS computes subtree sizes, then processes the heavy child first <em>without clearing</em> its map. That map becomes the parent's sack. Each light child is computed, merged in, and can then be discarded.",
+    "If you need the answer at every node, record it after the light children are merged and before you return. If a caller is a light child of someone else, you will rebuild this sack from scratch next time — that is paid for by the doubling bound.",
   ],
-  invariant: "<p><em>When we finish v, `map` holds the multiset of v's subtree. The object identity of `map` is the largest child map, so we paid only for inserting the light nodes.</em> Charging: each time a node is inserted into a map, the map it lives in at least doubles, so a node is inserted O(log n) times.</p>",
-  array: [1, 2, 2, 3, 1, 2, 3, 3],
-  arrayLabel: "colour of node 0..7",
-  vars: ["v", "mapSize", "distinct", "merged"],
+  invariant: "<p>When a key is inserted into a larger map, the map size at least doubles. Each of the <code>n</code> values is therefore moved <code>O(log n)</code> times, and the whole DFS is <code>O(n log n)</code> map operations.</p>",
+  array: [1, 2, 2, 3, 1, 3, 2],
+  arrayLabel: "color =",
+  indexLabels: ["1", "2", "3", "4", "5", "6", "7"],
+  vars: ["u", "sack", "distinct"],
   frames: [
-    { note: "Leaf 7 colour 3. map={3:1}, distinct=1.", active: [7], values: { v: 7, mapSize: 1, distinct: 1, merged: "leaf" } },
-    { note: "Leaf 6 colour 3. map={3:1}.", active: [6], values: { v: 6, mapSize: 1, distinct: 1, merged: "leaf" } },
-    { note: "Node 3 merges two size-1 maps of colour 3. Small into large: still size 1 key.",
-      window: [3, 7], values: { v: 3, mapSize: 2, distinct: 1, merged: "3+3" } },
-    { note: "Node 1 is heavy; keep its map. Light sibling 2 dumped in. Distinct grows.",
-      window: [1, 3], values: { v: 1, mapSize: 4, distinct: 2, merged: "keep heavy" } },
-    { note: "Root 0 reuses the largest child map and inserts the rest. Each colour moved at most once this layer.",
-      active: [0], values: { v: 0, mapSize: 8, distinct: 3, merged: "root" } },
-    { note: "Total inserts across the tree are O(n log n). Answer[v] was recorded when v's map was complete.",
-      best: [0], values: { v: "all", mapSize: "O(n)", distinct: "ans[]", merged: "done" } },
+    { note: "Leaves first. Node 4 colour 3: sack {3:1}, distinct = 1.",
+      active: [3], values: { u: 4, sack: "{3:1}", distinct: 1 } },
+    { note: "Node 5 colour 1: sack {1:1}.",
+      active: [4], values: { u: 5, sack: "{1:1}", distinct: 1 } },
+    { note: "Node 2 colour 2, children 4 and 5. Keep 4's sack, merge 5: {3:1,1:1,2:1}, distinct = 3.",
+      active: [1], values: { u: 2, sack: "{1,2,3}", distinct: 3 } },
+    { note: "Node 6 colour 3, node 7 colour 2 — leaves.",
+      active: [5, 6], values: { u: "6,7", sack: "{3},{2}", distinct: 1 } },
+    { note: "Node 3 colour 2, merge 6 and 7: {3:1,2:2}, distinct = 2.",
+      active: [2], values: { u: 3, sack: "{2:2,3:1}", distinct: 2 } },
+    { note: "Root 1 colour 1. Keep the larger child sack (node 2, size 3), merge node 3: distinct = 3.",
+      active: [0], values: { u: 1, sack: "{1,2,3}", distinct: 3 } },
   ],
   mermaid: `graph TD
-  keepHeavy["keep heavy child map"] --> addLight["insert light subtrees"]
-  addLight --> answerV["ans v = map.size"]
-  answerV --> maybeDrop{"is v light for its parent?"}
-  maybeDrop -- yes --> dropMap["discard map"]
-  maybeDrop -- no --> keepMap["return map to parent"]`,
+  a["sack of 2 size 3"] --> b["keep it as sack of 1"]
+  c["sack of 3 size 2"] --> d["merge into 1"]
+  b --> e["each key moved once"]
+  d --> e`,
   steps: [
-    "<strong>dfs1</strong> optional: compute heavy child by subtree size.",
-    "<strong>dfs(v, keep):</strong> recurse heavy child with keep=true; light children with keep=false.",
-    "<strong>Start from the heavy map</strong> (or empty if no heavy child).",
-    "<strong>Insert every node of each light subtree</strong> (a second dfs, or merge their returned maps small-to-large).",
-    "<strong>Insert v's own colour.</strong> Record ans[v].",
-    "<strong>If !keep,</strong> roll back the inserts (decrement counts, erase zeros) so the parent starts clean.",
-    "<strong>If keep,</strong> leave the map for the parent to reuse.",
+    "<strong>DFS sizes</strong> so you know the heavy child.",
+    "<strong>Recurse heavy first</strong> and steal its map — do not copy.",
+    "<strong>Recurse each light child</strong>, merge its map into the stolen one, then drop it.",
+    "<strong>Insert</strong> the node's own value.",
+    "<strong>Record</strong> the answer for this node.",
+    "<strong>If this node is a light child</strong> of its parent, the parent will rebuild; that is fine.",
   ],
   code: [
-    { tab: "Naive HashMap per node", file: "DistinctNaive.java",
+    { tab: "Brute", file: "DistinctBrute.java",
+      intro: "Rebuild a set from every descendant. O(n^2).",
       code: `import java.util.*;
-public class DistinctNaive {
-    static List<List<Integer>> g; static int[] col, ans;
-    static Map<Integer,Integer> dfs(int v, int p) {
-        Map<Integer,Integer> m = new HashMap<>();
-        m.merge(col[v], 1, Integer::sum);
-        for (int to : g.get(v)) if (to != p) {
-            Map<Integer,Integer> c = dfs(to, v);
-            if (c.size() > m.size()) { Map<Integer,Integer> t = m; m = c; c = t; }
-            c.forEach((k, x) -> m.merge(k, x, Integer::sum));
-        }
-        ans[v] = m.size();
-        return m;
+public class DistinctBrute {
+    static List<Integer>[] g;
+    static int[] col, ans;
+    static Set<Integer> dfs(int u, int p) {
+        Set<Integer> s = new HashSet<>();
+        s.add(col[u]);
+        for (int v : g[u]) if (v != p) s.addAll(dfs(v, u));
+        ans[u] = s.size();
+        return s;
     }
     public static void main(String[] args) {
-        g = new ArrayList<>();
-        for (int i = 0; i < 4; i++) g.add(new ArrayList<>());
-        g.get(0).add(1); g.get(1).add(0);
-        g.get(0).add(2); g.get(2).add(0);
-        g.get(2).add(3); g.get(3).add(2);
-        col = new int[] {1, 2, 1, 1}; ans = new int[4];
+        int n = 7;
+        g = new List[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        int[][] e = {{0,1},{0,2},{1,3},{1,4},{2,5},{2,6}};
+        for (int[] x : e) { g[x[0]].add(x[1]); g[x[1]].add(x[0]); }
+        col = new int[] {1, 2, 2, 3, 1, 3, 2};
+        ans = new int[n];
         dfs(0, -1);
         System.out.println(Arrays.toString(ans));
     }
-    // Input : colours [1,2,1,1] on tree 0-1, 0-2-3
-    // Output: [2, 1, 1, 1]
+    // Input : colours [1,2,2,3,1,3,2]
+    // Output: [3, 3, 2, 1, 1, 1, 1]
 }` },
-    { tab: "Small-to-large (keep largest)", file: "SmallToLarge.java", highlight: "10-12",
+    { tab: "Optimal", file: "SmallToLarge.java",
+      intro: "Steal the heavy child's map, merge the rest.",
       code: `import java.util.*;
 public class SmallToLarge {
-    static List<List<Integer>> g; static int[] col, ans;
-    static Map<Integer,Integer> dfs(int v, int p) {
-        Map<Integer,Integer> m = new HashMap<>();
-        m.merge(col[v], 1, Integer::sum);
-        for (int to : g.get(v)) if (to != p) {
-            Map<Integer,Integer> c = dfs(to, v);
-            if (c.size() > m.size()) { var t = m; m = c; c = t; }
-            for (var e : c.entrySet()) m.merge(e.getKey(), e.getValue(), Integer::sum);
+    List<Integer>[] g;
+    int[] col, sz, heavy, ans;
+    List<Map<Integer, Integer>> sack;
+    SmallToLarge(int n) {
+        g = new List[n];
+        for (int i = 0; i < n; i++) g[i] = new ArrayList<>();
+        col = new int[n]; sz = new int[n]; heavy = new int[n];
+        Arrays.fill(heavy, -1); ans = new int[n];
+        sack = new ArrayList<>();
+        for (int i = 0; i < n; i++) sack.add(null);
+    }
+    void add(int u, int v) { g[u].add(v); g[v].add(u); }
+    void dfsSz(int u, int p) {
+        sz[u] = 1;
+        int best = 0;
+        for (int v : g[u]) if (v != p) {
+            dfsSz(v, u); sz[u] += sz[v];
+            if (sz[v] > best) { best = sz[v]; heavy[u] = v; }
         }
-        ans[v] = m.size();
-        return m;
+    }
+    Map<Integer, Integer> merge(Map<Integer, Integer> a, Map<Integer, Integer> b) {
+        if (a.size() < b.size()) { Map<Integer, Integer> t = a; a = b; b = t; }
+        for (var e : b.entrySet()) a.merge(e.getKey(), e.getValue(), Integer::sum);
+        return a;
+    }
+    void dfs(int u, int p) {
+        Map<Integer, Integer> cur = new HashMap<>();
+        if (heavy[u] != -1) { dfs(heavy[u], u); cur = sack.get(heavy[u]); }
+        for (int v : g[u]) if (v != p && v != heavy[u]) {
+            dfs(v, u);
+            cur = merge(cur, sack.get(v));
+        }
+        cur.merge(col[u], 1, Integer::sum);
+        ans[u] = cur.size();
+        sack.set(u, cur);
     }
     public static void main(String[] args) {
-        g = new ArrayList<>();
-        for (int i = 0; i < 4; i++) g.add(new ArrayList<>());
-        g.get(0).add(1); g.get(1).add(0);
-        g.get(0).add(2); g.get(2).add(0);
-        g.get(2).add(3); g.get(3).add(2);
-        col = new int[] {1, 2, 1, 1}; ans = new int[4];
-        dfs(0, -1);
-        System.out.println(Arrays.toString(ans));
+        SmallToLarge t = new SmallToLarge(7);
+        int[][] e = {{0,1},{0,2},{1,3},{1,4},{2,5},{2,6}};
+        for (int[] x : e) t.add(x[0], x[1]);
+        t.col = new int[] {1, 2, 2, 3, 1, 3, 2};
+        t.dfsSz(0, -1); t.dfs(0, -1);
+        System.out.println(Arrays.toString(t.ans));
     }
-    // Input : [1,2,1,1]
-    // Output: [2, 1, 1, 1]
+    // Input : same tree and colours
+    // Output: [3, 3, 2, 1, 1, 1, 1]
 }` },
-    { tab: "Sack with rollback", file: "Sack.java",
-      code: `// dfs1 heavy child
-// dfs(v, keep):
-//   dfs(heavy, true); dfs(light, false)
-//   add(light subtrees) by a second walk
-//   add v; ans[v] = size
-//   if (!keep) undo the adds
-public class Sack {
-    public static void main(String[] args) {
-        System.out.println("[2, 1, 1, 1]");
+    { tab: "Template", file: "MergeSmallIntoLarge.java",
+      intro: "The doubling merge, usable on arrays of sets too.",
+      code: `import java.util.*;
+public class MergeSmallIntoLarge {
+    static <T> Set<T> merge(Set<T> a, Set<T> b) {
+        if (a.size() < b.size()) { Set<T> t = a; a = b; b = t; }
+        a.addAll(b);
+        return a;
     }
-    // Input : same tree
-    // Output: [2, 1, 1, 1]
+    public static void main(String[] args) {
+        Set<Integer> a = new HashSet<>(List.of(1, 2, 3));
+        Set<Integer> b = new HashSet<>(List.of(3, 4));
+        Set<Integer> c = merge(a, b);
+        System.out.println(c.size());
+    }
+    // Input : {1,2,3} and {3,4}
+    // Output: 4
 }` },
   ],
   complexity: {
-    time: "O(n log n) expected (hash) or O(n log² n) with trees",
+    time: "O(n log n) map operations",
     space: "O(n)",
     derivation: [
-      "<p>When a key is moved from a set of size s into a set of size ≥ s, its new home has size ≥ 2s. A key starting at 1 and ending in a set of size ≤ n therefore moves O(log n) times. Summing over keys: O(n log n).</p>",
+      "<p>Each time a key is copied, it lands in a map at least twice as large. A key starting in a singleton can be copied at most <code>log n</code> times. <code>n</code> keys give <code>O(n log n)</code>.</p>",
     ],
     compare: [
-      ["Allocate a new map and copy everything", "O(n²)", "O(n)", "never"],
-      ["Small-to-large merge", "O(n log n)", "O(n)", "one-shot subtree sets"],
-      ["Sack + rollback", "O(n log n)", "O(n)", "same, less allocation"],
-      ["Mo on trees", "O((n+q)√n · T)", "O(n)", "offline path queries"],
+      ["Rebuild a set per node", "O(n^2)", "O(n)", "n <= 2000"],
+      ["Small-to-large", "O(n log n)", "O(n)", "Subtree sacks"],
+      ["Euler + Mo", "O((n+q) sqrt n)", "O(n)", "Offline, arbitrary ranges"],
+      ["HLD + segtree-of-sets", "O(log^2 n)/query", "O(n log n)", "When you also need path queries"],
     ],
   },
   pitfalls: [
+    { title: "Copying the heavy child's map",
+      bug: "<code>new HashMap<>(heavyMap)</code> destroys the bound — you pay linear in the heavy size at every level.",
+      fix: "Steal the reference. The heavy child does not need its map after you have recorded <code>ans[heavy]</code>." },
     { title: "Merging large into small",
-      bug: "The charging argument requires the destination to be at least as big. Swapping the wrong way restores quadratic behaviour on a bamboo.",
-      fix: "`if (child.size() > mine.size()) swap` before iterating the child." },
-    { title: "Returning a shared map that the caller then mutates twice",
-      bug: "Two light children cannot both return the same reused object.",
-      fix: "Only reuse the heavy child's map. Light children get keep=false and rollback." },
-    { title: "Forgetting to add v itself",
-      bug: "ans[v] misses v's colour when it was new.",
-      fix: "Insert col[v] after children, before recording ans[v]." },
-    { title: "Integer overflow in counts",
-      bug: "Rare, but if the payload is a sum of values use long.",
-      fix: "`Map<Integer,Long>` when the payload is a sum." },
+      bug: "The doubling argument requires the <em>target</em> to be the larger map.",
+      fix: "Swap if <code>a.size() &lt; b.size()</code> before iterating." },
+    { title: "Recording the answer after discarding the sack",
+      bug: "You merge, return, then try to read a map you already cleared.",
+      fix: "Write <code>ans[u]</code> while the merged map still belongs to <code>u</code>." },
     { title: "Using this for path queries",
-      bug: "Sack answers subtrees, not u–v paths. You will get a wrong subset.",
-      fix: "Path = subtree tricks only with extra inclusion-exclusion on the LCA, which is usually messier than HLD/Mo." },
+      bug: "A sack is the subtree multiset, not the path. Path problems look similar in the statement and are HLD.",
+      fix: "Ask: is the queried set a subtree or a path? Subtree &rarr; small-to-large; path &rarr; HLD." },
+    { title: "HashMap on tight limits without reserving",
+      bug: "Rehash storms on Java 8 HashMap can TLE at n = 2e5.",
+      fix: "Size-hint the first map, or use arrays when values are compressed to <code>[1, n]</code>." },
   ],
   variants: [
-    ["Most frequent colour (CF 600E)", "Store count[color] and a freq-of-counts bucket, keep a running sum of max", "when count hits new max, replace; when it ties, add", "CF 600E"],
-    ["Set of values with Fenwick ranks", "small-to-large of TreeSets + BIT of distinct", "higher constant", "offline"],
-    ["Undo version (sack)", "keep a stack of (+key, +delta) and reverse if !keep", "no extra maps", "standard sack"],
+    ["Mode of the subtree", "Track a running (bestCount, bestColor) while merging counts.", "if (cnt > best) update", "CF 600E"],
+    ["Keep all maps", "Persistent / immutable maps if a parent still needs the child sack later.", "more memory", "rare"],
+    ["DSU union-by-size", "Same doubling, on connectivity instead of tree sacks.", "if (sz[a]<sz[b]) swap", "Kruskal"],
   ],
   followups: [
-    ["Prove the O(n log n) bound.",
-      "<p>Each move of a key goes into a set at least twice as large. A key can do this at most log₂ n times before the set is the whole tree. n keys ⇒ O(n log n) moves.</p>"],
-    ["Why is this the same as union-by-size in DSU?",
-      "<p>Identical charging. DSU moves nodes of the smaller component under a new parent. Sack moves keys of the smaller map into the larger map.</p>"],
-    ["Can you support updates?",
-      "<p>Not with a one-shot sack. You would need a persistent map, a fenwick of time, or to rebuild. Different problem.</p>"],
-    ["Sack vs small-to-large of returned maps?",
-      "<p>Same complexity. Sack uses less allocation by rollback and by never copying the heavy child. Returned-map small-to-large is shorter to type and usually fast enough.</p>"],
+    ["Why is this also called DSU-on-tree?",
+      "<p>You are unioning child sacks into a parent the same way DSU unions components — always small into large. The \"DSU\" is a metaphor; there is no rollback-free disjoint-set structure unless you add one.</p>"],
+    ["Can you answer path queries this way?",
+      "<p>No. A sack is the subtree. For a path you need HLD, or a persistent segment tree on the Euler / DFS order.</p>"],
+    ["What if values are large (1e9)?",
+      "<p>HashMap is fine. If you need order statistics, compress coordinates first and use a Fenwick of counts inside the sack.</p>"],
+    ["How do you handle updates to a node's colour?",
+      "<p>Small-to-large is a static DFS. Updates need a different structure: HLD + fenwick-of-colours, or a segment tree with sets.</p>"],
   ],
   problems: [
-    { url: "https://codeforces.com/problemset/problem/600/E", name: "Lomsat gelral", badge: "cf", tag: "CF 600E", level: "Hard", pattern: "the sack classic" },
-    { url: "https://codeforces.com/problemset/problem/208/E", name: "Blood Cousins", badge: "cf", tag: "CF 208E", level: "Hard", pattern: "dsu on tree / binlift" },
-    { url: "https://codeforces.com/problemset/problem/375/D", name: "Tree and Queries", badge: "cf", tag: "CF 375D", level: "Hard", pattern: "sack + fenwick of frequencies" },
-    { url: "https://leetcode.com/problems/number-of-nodes-in-the-sub-tree-with-the-same-label/", name: "Nodes with Same Label", badge: "lc", tag: "LC 1519", level: "Medium", pattern: "26-letter arrays, no hashmap needed" },
-    { url: "https://leetcode.com/problems/smallest-subtree-with-all-the-deepest-nodes/", name: "Smallest Subtree Deepest", badge: "lc", tag: "LC 865", level: "Medium", pattern: "tree DP, contrast" },
-    { url: "https://atcoder.jp/contests/abc183/tasks/abc183_f", name: "ABC 183 F", badge: "atc", tag: "ABC183F", level: "Hard", pattern: "DSU + maps, union small-to-large" },
-    { url: "https://leetcode.com/problems/count-nodes-with-the-highest-score/", name: "Highest Score Nodes", badge: "lc", tag: "LC 2049", level: "Medium", pattern: "sizes only" },
-    { url: "https://codeforces.com/problemset/problem/1009/F", name: "Dominant Indices", badge: "cf", tag: "CF 1009F", level: "Hard", pattern: "sack on depths" },
+    cf("600E", "Lomsat gelral", "Hard", "The canonical small-to-large problem"),
+    cf("375D", "Tree and Queries", "Hard", "Subtree distinct with a threshold"),
+    cf("1009F", "Dominant Indices", "Hard", "Mode of depths in a subtree"),
+    cf("208E", "Blood Cousins", "Medium", "Subtree + binary lifting"),
+    { url: "https://leetcode.com/problems/number-of-nodes-in-the-sub-tree-with-the-same-label/", name: "Nodes With Same Label", badge: "lc", tag: "LC 1519", level: "Medium", pattern: "26-letter sack, no merge needed" },
+    { url: "https://leetcode.com/problems/unique-number-of-occurrences/", name: "Unique Number of Occurrences", badge: "lc", tag: "LC 1207", level: "Easy", pattern: "Warm-up on maps" },
+    { url: "https://atcoder.jp/contests/abc183/tasks/abc183_f", name: "ABC 183 F", badge: "atc", tag: "ABC 183F", level: "Hard", pattern: "DSU + small-to-large maps" },
+    { url: "https://www.spoj.com/problems/DQUERY/", name: "DQUERY", badge: "gfg", tag: "SPOJ", level: "Medium", pattern: "Distinct on arrays — Mo / fenwick" },
   ],
   recap: [
-    "<strong>Always merge small into large.</strong> That single `if` is the whole algorithm.",
-    "<strong>Each element moves O(log n) times</strong> because its home set doubles.",
-    "<strong>Reuse the heavy child's map</strong> (sack) to avoid copying the largest piece.",
-    "<strong>Rollback light children</strong> if the parent should not see them yet.",
-    "<strong>This answers per-subtree set questions</strong>, not live path queries.",
+    "Always merge the smaller map into the larger.",
+    "Steal the heavy child's map; do not copy it.",
+    "Each value moves O(log n) times because the host doubles.",
+    "Record ans[u] before returning the sack.",
+    "Subtree sacks, not paths — paths are HLD.",
   ],
-  oneliner: "if(child.size()>mine.size()) swap(mine,child); child.forEach(mine::merge);",
+  oneliner: "if (a.size() < b.size()) swap; a.mergeAll(b); // each key doubles",
 }),
-
 ];

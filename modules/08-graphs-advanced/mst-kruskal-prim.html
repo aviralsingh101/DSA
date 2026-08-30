@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MST: Kruskal &amp; Prim &mdash; DSA Course</title>
+<meta name="description" content="Kruskal sorts edges and unions if they do not form a cycle. Prim grows a tree from a seed, always taking the cheapest edge out. Same MST, different shapes.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="mst-kruskal-prim">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>MST: Kruskal & Prim</h1>
+  <p class="hero__tagline">Kruskal sorts edges and unions if they do not form a cycle. Prim grows a tree from a seed, always taking the cheapest edge out. Same MST, different shapes.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/graph-representations.html">Graph Representations</a>,
+      <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">MST</span>
+      <span class="chip">Kruskal</span>
+      <span class="chip">Prim</span>
+      <span class="chip">DSU</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A minimum spanning tree is the cheapest set of n-1 edges that connects a weighted undirected graph. It is unique if all weights are distinct. The cut property says the cheapest edge across any cut is safe to take — that is Kruskal (sort, skip cycles) and Prim (grow a set) in one sentence.</p>
+<p>Kruskal wants an edge list and a DSU. Prim wants an adjacency list and a heap, and looks like Dijkstra with a different relax. Pick Kruskal when you already have edges and might stop early (offline "add edges by weight"). Pick Prim when the graph is dense (n^2 implicit edges) or you already have adj lists.</p>
+<p>Variants that are still MST: maximum spanning tree (negate weights), second-best MST (swap one edge), MST in a complete graph of points (Prim on implicit edges), min bottleneck path (max edge on the MST path).</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>The cut property: the lightest edge across any partition of V is in some MST. Kruskal applies it to "components so far"; Prim applies it to "inside the tree vs outside".</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Connect n vertices at minimum total cost</li>
+        <li>Offline queries "how many pairs are connected by edges of weight <= x" (Kruskal + DSU sizes)</li>
+        <li>Min bottleneck path (u, v) = max edge on the unique MST path</li>
+        <li>Dense complete graph (n points in the plane) — Prim without building n^2 edges</li>
+        <li>Maximum spanning tree — negate, or sort descending</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Directed graphs &rarr; arborescence / Edmonds, not MST</li>
+        <li>Shortest paths &rarr; Dijkstra; MST paths are not shortest paths</li>
+        <li>Steiner tree (must include a subset) &rarr; NP-hard, different DP</li>
+        <li>You need a spanning tree of minimum <em>diameter</em> &rarr; not MST</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sparse m log m</td>
+        <td>Sort edges, DSU</td>
+        <td>Kruskal</td>
+      </tr>
+      <tr>
+        <td>Dense n^2</td>
+        <td>Heap or n passes of scan</td>
+        <td>Prim</td>
+      </tr>
+      <tr>
+        <td>Offline by weight</td>
+        <td>Sort once, DSU sizes</td>
+        <td>Kruskal</td>
+      </tr>
+      <tr>
+        <td>Min bottleneck u-v</td>
+        <td>Max edge on MST path</td>
+        <td>Kruskal + binary lifting / HLD</td>
+      </tr>
+      <tr>
+        <td>Directed</td>
+        <td>Not MST</td>
+        <td>Edmonds arborescence</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Dijkstra</td>
+        <td>Dijkstra minimises path weight from a source; Prim minimises the edge into the tree</td>
+        <td>Same heap shape, different key</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, <code>m &le; 2&times;10&#8309;</code> → Kruskal. <code>n &le; 2000</code> complete → Prim O(n^2) without a heap. Weights fit in <code>int</code>; the total needs <code>long</code>.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Kruskal: sort edges by weight. For each, <code>if (dsu.union(u, v))</code> take it. Stop at n-1 edges. If you finish the list with fewer, the graph is disconnected.</p>
+<p>Prim: <code>dist[src] = 0</code>, heap of (cost, node). Pop the unused node of min cost, add that cost, relax its unused neighbours. Same as Dijkstra except you store the edge weight, not a path sum, and you mark a node used when it is popped.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Cut property: for any cut <code>(S, V\S)</code>, a lightest edge crossing the cut belongs to some MST. Kruskal's S is a DSU component; Prim's S is the set of popped nodes. Both stay a forest / a tree of MST edges.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="mst-kruskal-primViz"></div>
+  <div class="viz-player" data-viz-target="mst-kruskal-primViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "taken w =",
+      "array": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "indexLabels": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4"
+      ],
+      "vars": [
+        "edge",
+        "w",
+        "take"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "4 nodes. Edges (w,u,v): (1,0,1), (2,1,2), (2,0,2), (3,2,3), (4,0,3). Sort already shown.",
+          "active": [
+            0
+          ],
+          "values": {
+            "edge": "0-1",
+            "w": 1,
+            "take": "yes, union"
+          }
+        },
+        {
+          "note": "Take 1-2 weight 2. Components {0,1,2} and {3}.",
+          "active": [
+            1
+          ],
+          "values": {
+            "edge": "1-2",
+            "w": 2,
+            "take": "yes"
+          }
+        },
+        {
+          "note": "Skip 0-2 weight 2 — same DSU parent.",
+          "active": [
+            2
+          ],
+          "values": {
+            "edge": "0-2",
+            "w": 2,
+            "take": "no, cycle"
+          }
+        },
+        {
+          "note": "Take 2-3 weight 3. Now one component. MST weight 1+2+3=6.",
+          "active": [
+            3
+          ],
+          "values": {
+            "edge": "2-3",
+            "w": 3,
+            "take": "yes, done"
+          }
+        },
+        {
+          "note": "Skip 0-3. Already connected.",
+          "active": [
+            4
+          ],
+          "values": {
+            "edge": "0-3",
+            "w": 4,
+            "take": "no"
+          }
+        },
+        {
+          "note": "Three edges, weight 6. Unique? The skipped 0-2 was a tie — another MST of the same weight exists.",
+          "active": [
+            0,
+            1,
+            3
+          ],
+          "values": {
+            "edge": "MST",
+            "w": 6,
+            "take": "1+2+3"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  a["0"] ---|"1"| b["1"]
+  b ---|"2"| c["2"]
+  c ---|"3"| d["3"]
+  a -.-&gt;|"2 skip"| c
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Kruskal:</strong> sort edges by weight.</li>
+  <li><strong>DSU union</strong> if parents differ; add the weight; count edges.</li>
+  <li><strong>If count &lt; n-1</strong> the graph is disconnected.</li>
+  <li><strong>Prim:</strong> heap (cost, node), skip popped, add cost, relax unused neighbours with the edge weight.</li>
+  <li><strong>Dense Prim:</strong> no heap — n times scan the unused node of min dist.</li>
+  <li><strong>Total</strong> is <code>long</code>. Parallel edges: keep the min (Kruskal sorts them; Prim relaxes).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>edge</th><th>w</th><th>take</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0-1</td><td>1</td><td>yes, union</td><td>4 nodes. Edges (w,u,v): (1,0,1), (2,1,2), (2,0,2), (3,2,3), (4,0,3). Sort already shown.</td></tr>
+      <tr><td>1-2</td><td>2</td><td>yes</td><td>Take 1-2 weight 2. Components {0,1,2} and {3}.</td></tr>
+      <tr><td>0-2</td><td>2</td><td>no, cycle</td><td>Skip 0-2 weight 2 — same DSU parent.</td></tr>
+      <tr><td>2-3</td><td>3</td><td>yes, done</td><td>Take 2-3 weight 3. Now one component. MST weight 1+2+3=6.</td></tr>
+      <tr><td>0-3</td><td>4</td><td>no</td><td>Skip 0-3. Already connected.</td></tr>
+      <tr><td>MST</td><td>6</td><td>1+2+3</td><td>Three edges, weight 6. Unique? The skipped 0-2 was a tie — another MST of the same weight exists.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="MST: Kruskal & Prim implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MstBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class MstBrute {
+        static long kruskal(int n, int[][] edges) {
+            Arrays.sort(edges, Comparator.comparingInt(e -&gt; e[2]));
+            int[] p = new int[n];
+            for (int i = 0; i &lt; n; i++) p[i] = i;
+            java.util.function.IntUnaryOperator find = new java.util.function.IntUnaryOperator() {
+                public int applyAsInt(int x) { return p[x] == x ? x : (p[x] = applyAsInt(p[x])); }
+            };
+            long ans = 0; int used = 0;
+            for (int[] e : edges) {
+                int a = find.applyAsInt(e[0]), b = find.applyAsInt(e[1]);
+                if (a == b) continue;
+                p[a] = b; ans += e[2]; used++;
+            }
+            return used == n - 1 ? ans : -1;
+        }
+        public static void main(String[] args) {
+            int[][] e = {{0,1,1},{1,2,2},{0,2,2},{2,3,3},{0,3,4}};
+            System.out.println(kruskal(4, e));
+        }
+        // Input : 4 nodes, 5 edges
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KruskalPrim.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class KruskalPrim {
+        static class DSU {
+            int[] p, r;
+            DSU(int n) { p = new int[n]; r = new int[n]; for (int i = 0; i &lt; n; i++) p[i] = i; }
+            int find(int x) { return p[x] == x ? x : (p[x] = find(p[x])); }
+            boolean union(int a, int b) {
+                a = find(a); b = find(b);
+                if (a == b) return false;
+                if (r[a] &lt; r[b]) { int t = a; a = b; b = t; }
+                p[b] = a;
+                if (r[a] == r[b]) r[a]++;
+                return true;
+            }
+        }
+        static long kruskal(int n, int[][] edges) {
+            Arrays.sort(edges, Comparator.comparingInt(e -&gt; e[2]));
+            DSU d = new DSU(n);
+            long ans = 0; int used = 0;
+            for (int[] e : edges) if (d.union(e[0], e[1])) { ans += e[2]; used++; }
+            return used == n - 1 ? ans : -1;
+        }
+        public static void main(String[] args) {
+            int[][] e = {{0,1,1},{1,2,2},{0,2,2},{2,3,3},{0,3,4}};
+            System.out.println(kruskal(4, e));
+        }
+        // Input : same
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Prim.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Prim {
+        static long prim(List&lt;int[]&gt;[] g) {
+            int n = g.length;
+            boolean[] used = new boolean[n];
+            long[] dist = new long[n];
+            Arrays.fill(dist, Long.MAX_VALUE / 4);
+            dist[0] = 0;
+            PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingLong(a -&gt; a[0]));
+            pq.add(new long[] {0, 0});
+            long ans = 0; int seen = 0;
+            while (!pq.isEmpty()) {
+                long[] cur = pq.poll();
+                int u = (int) cur[1];
+                if (used[u]) continue;
+                used[u] = true; ans += cur[0]; seen++;
+                for (int[] e : g[u]) if (!used[e[0]] &amp;&amp; e[1] &lt; dist[e[0]]) {
+                    dist[e[0]] = e[1];
+                    pq.add(new long[] {e[1], e[0]});
+                }
+            }
+            return seen == n ? ans : -1;
+        }
+        public static void main(String[] args) {
+            List&lt;int[]&gt;[] g = new List[4];
+            for (int i = 0; i &lt; 4; i++) g[i] = new ArrayList&lt;&gt;();
+            int[][] e = {{0,1,1},{1,2,2},{0,2,2},{2,3,3},{0,3,4}};
+            for (int[] x : e) { g[x[0]].add(new int[] {x[1], x[2]}); g[x[1]].add(new int[] {x[0], x[2]}); }
+            System.out.println(prim(g));
+        }
+        // Input : same graph
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time Kruskal O(m log m), Prim O(m log n)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Kruskal is sort plus almost-O(1) DSU. Prim is Dijkstra-shaped: each edge is pushed at most once per improvement. Dense Prim without a heap is <code>O(n&sup2;)</code> and beats a heap when m ~ n^2.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Kruskal</td><td>O(m log m)</td><td>O(n)</td><td>Sparse, offline by weight</td></tr>
+      <tr><td>Prim + heap</td><td>O(m log n)</td><td>O(n+m)</td><td>Adj lists ready</td></tr>
+      <tr><td>Prim dense</td><td>O(n^2)</td><td>O(n^2)</td><td>Complete / implicit</td></tr>
+      <tr><td>Dijkstra</td><td>O(m log n)</td><td>O(n+m)</td><td>Shortest paths, not MST</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Directed edges</span>
+    <div class="pitfalls__bug">MST is defined on undirected graphs. Kruskal on a tournament produces nonsense.</div>
+    <div class="pitfalls__fix">Confirm the graph is undirected; add both orientations only for Prim's adj list.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Disconnected graph</span>
+    <div class="pitfalls__bug">You return the sum of a forest and call it an MST.</div>
+    <div class="pitfalls__fix">Count taken edges; require n-1, or return the forest if the statement wants MSF.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Prim using path-sum keys</span>
+    <div class="pitfalls__bug">You copied Dijkstra and stored <code>dist[u]+w</code>. That is a shortest-path tree, not an MST.</div>
+    <div class="pitfalls__fix">The key is the edge weight into the tree, <code>w</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int total</span>
+    <div class="pitfalls__bug">n-1 edges of 1e9 overflow.</div>
+    <div class="pitfalls__fix"><code>long ans</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting union-by-rank / path compression</span>
+    <div class="pitfalls__bug">DSU degrades and Kruskal looks like O(n) per find.</div>
+    <div class="pitfalls__fix">Both heuristics. Path compression alone is already fine at 2e5.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Maximum ST</td>
+        <td>Sort descending, or negate weights.</td>
+        <td><code>same DSU</code></td>
+        <td>CF 1245D-ish</td>
+      </tr>
+      <tr>
+        <td>Second-best MST</td>
+        <td>Build MST, for each unused edge find the max MST-edge on that path, swap.</td>
+        <td><code>HLD / lifting</code></td>
+        <td>CF 609E</td>
+      </tr>
+      <tr>
+        <td>Offline connectivity by weight</td>
+        <td>Kruskal, multiply DSU sizes when you union.</td>
+        <td><code>CF 1213G</code></td>
+        <td>Path Queries</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Is the MST unique?</summary>
+    <div class="followup__body">
+      <p>Yes if all weights are distinct. If there are ties, every MST has the same multiset of weights (the sorted-edge greedy is forced on the distinct prefixes).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is the MST a shortest-path tree?</summary>
+    <div class="followup__body">
+      <p>No. A path in the MST can be heavier than a path that uses a non-tree edge. The MST minimises the <em>sum of used edges</em>, not distances from a source.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Min bottleneck path?</summary>
+    <div class="followup__body">
+      <p>Among all u-v paths, the one that minimises the heaviest edge is a path in the MST (any MST). Compute the MST, then the max edge on the unique tree path (lifting / HLD).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Directed analogue?</summary>
+    <div class="followup__body">
+      <p>Minimum arborescence rooted at r — Edmonds' algorithm. Do not run Kruskal on a directed graph.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/min-cost-to-connect-all-points/" target="_blank" rel="noopener">Min Cost To Connect All Points</a></td>
+        <td><span class="badge badge--lc">LC 1584</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prim / Kruskal on complete graph</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/connecting-cities-with-minimum-cost/" target="_blank" rel="noopener">Connecting Cities With Minimum Cost</a></td>
+        <td><span class="badge badge--lc">LC 1135</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kruskal</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/1245/D" target="_blank" rel="noopener">Shichikuji and Power Grid</a></td>
+        <td><span class="badge badge--cf">CF 1245D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>MST with a virtual node</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/609/E" target="_blank" rel="noopener">Minimum spanning tree for each edge</a></td>
+        <td><span class="badge badge--cf">CF 609E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Second-best / swap</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1213/G" target="_blank" rel="noopener">Path Queries</a></td>
+        <td><span class="badge badge--cf">CF 1213G</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Offline Kruskal + DSU sizes</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/optimize-water-distribution-in-a-village/" target="_blank" rel="noopener">Optimize Water Distribution</a></td>
+        <td><span class="badge badge--lc">LC 1168</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Virtual well node</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/1675" target="_blank" rel="noopener">Road Reparation</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kruskal template</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc218/tasks/abc218_e" target="_blank" rel="noopener">ABC 218 E</a></td>
+        <td><span class="badge badge--atc">ABC 218E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max edges you can drop</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Cut property: lightest edge across a cut is safe.</li>
+    <li>Kruskal: sort, DSU-union if no cycle.</li>
+    <li>Prim: grow a tree, key = edge weight, not path sum.</li>
+    <li>Need n-1 edges or the graph is disconnected.</li>
+    <li>Min bottleneck path lives on the MST.</li>
+  </ul>
+  <div class="recap__oneliner">sort edges; if (dsu.union(u,v)) take; // or Prim with key = w, not dist+w</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

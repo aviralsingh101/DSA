@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCA &amp; Binary Lifting &mdash; DSA Course</title>
+<meta name="description" content="Precompute the 2^k-th ancestor of every node in O(n log n), then LCA and k-th ancestor queries become O(log n) jumps.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="lca-binary-lifting">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>LCA & Binary Lifting</h1>
+  <p class="hero__tagline">Precompute the 2^k-th ancestor of every node in <code>O(n log n)</code>, then LCA and k-th ancestor queries become <code>O(log n)</code> jumps.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="tree-dp-and-rerooting.html">Tree DP & Rerooting</a>,
+      <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">LCA</span>
+      <span class="chip">binary lifting</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The interview LCA on a binary tree is one DFS. The contest LCA is n,q = 1e5 queries on a static tree: distance(u,v), k-th node on a path, max edge on a path. Binary lifting stores up[k][v] = the 2^k-th parent of v, built from up[k][v]=up[k-1][up[k-1][v]]. Lift the deeper node to the same depth, then lift both until their parents match.</p>
+<p>The same table answers "k-th ancestor" by jumping bits of k, and with extra payload on edges (max, gcd, sum) you merge along the jumps. Euler-tour RMQ is the other LCA; lifting is easier to extend with path aggregates.</p>
+<p>depth[] from a DFS, parent[0][v] from the same DFS, then the doubling loop. Queries are then a short bit loop. Off-by-one on "lift to depth of LCA+1" is the classic bug.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Any ancestor distance d is a sum of distinct powers of two. Jump those bits. LCA is: equalise depth, then jump both while the 2^k parents still differ, then take the parent.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Many LCA queries on a static tree</li>
+        <li>Distance = depth[u]+depth[v]-2*depth[lca]</li>
+        <li>k-th ancestor, or k-th node on the path u-v</li>
+        <li>Path min/max/gcd by storing a payload next to up[k][v]</li>
+        <li>n,q = 1e5, so O(log n) per query after O(n log n) prep</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>One or two LCA queries on a binary tree in an interview &rarr; the postorder trick</li>
+        <li>The tree changes (link/cut) &rarr; LCT, not lifting</li>
+        <li>Subtree queries, not path-to-root &rarr; Euler tour + Fenwick</li>
+        <li>n=1e9 implicit &rarr; different</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LCA(u,v) many times</td>
+        <td>Binary lifting or Euler+RMQ</td>
+        <td>up[k][v] table</td>
+      </tr>
+      <tr>
+        <td>dist(u,v)</td>
+        <td>depth[u]+depth[v]-2 depth[lca]</td>
+        <td>Same table</td>
+      </tr>
+      <tr>
+        <td>k-th ancestor of v</td>
+        <td>Jump bits of k on up[][]</td>
+        <td>O(log n)</td>
+      </tr>
+      <tr>
+        <td>Max edge on path</td>
+        <td>Also lift a max[][] payload</td>
+        <td>Merge on jumps</td>
+      </tr>
+      <tr>
+        <td>Interview binary tree, 1 query</td>
+        <td>Postorder both-sides</td>
+        <td>Previous patterns page</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sparse table on the array</td>
+        <td>Lifting is a sparse table of ancestors, not of a linear array</td>
+        <td>Same doubling idea, different domain</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n,q &le; 2e5, LOG=18 or 20. up is int[LOG][n] (or [n][LOG]). Root's parent is the root or -1; jumping past the root must be defined (stay at root, or -1).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>DFS from the root: depth[v], up[0][v]=parent. Then for k=1..LOG-1, for all v, up[k][v]=up[k-1][up[k-1][v]] (if parent is -1, keep -1).</p>
+<p>LCA: if depth[u]&lt;depth[v] swap. Lift u by depth[u]-depth[v] using bits. If u==v return u. Then for k=LOG-1..0, if up[k][u]!=up[k][v] jump both. Return up[0][u].</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>up[k][v] is the ancestor of v exactly 2^k steps toward the root (or the root / -1 if you run out).</p><span class="eq">lca(u,v) = first common ancestor; dist = d[u]+d[v]-2 d[lca]</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>LCA(2,3): both depth 2, parent 1 is the LCA</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="lca-binary-liftingViz"></div>
+  <div class="viz-player" data-viz-target="lca-binary-liftingViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "depth[v] on the sample tree rooted at 0",
+      "array": [
+        0,
+        1,
+        2,
+        2,
+        1
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "u-v",
+        "depthGap",
+        "jump",
+        "lca"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Tree 0-1-2, 1-3, 0-4. depth [0,1,2,2,1]. up[0] = parent [-1,0,1,1,0].",
+          "values": {
+            "u-v": "prep",
+            "depthGap": "—",
+            "jump": "up[0]",
+            "lca": "—"
+          }
+        },
+        {
+          "note": "up[1][v] = grandparent: [-, -, 0, 0, -].",
+          "values": {
+            "u-v": "doubling",
+            "depthGap": "—",
+            "jump": "up[1]",
+            "lca": "—"
+          }
+        },
+        {
+          "note": "LCA(2,3): depths equal. up[1][2]=0 and up[1][3]=0 same, so do not jump 2. up[0][2]=1 != up[0][3]=1? They are equal 1. Then return parent of 2, which is 1. Wait: if up[0] already equal, we still return up[0][u] after the loop... Standard: if after equalising u==v return u. Here 2!=3. Loop k: if parents differ, jump. up[0][2]==up[0][3]==1, so we do not jump, then return up[0][2]=1.",
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "u-v": "2,3",
+            "depthGap": 0,
+            "jump": "none",
+            "lca": 1
+          }
+        },
+        {
+          "note": "LCA(2,4): lift 2 by 1 to 1. 1!=4. up[0][1]=0, up[0][4]=0 equal, return 0.",
+          "active": [
+            2,
+            4
+          ],
+          "values": {
+            "u-v": "2,4",
+            "depthGap": 1,
+            "jump": "2->1",
+            "lca": 0
+          }
+        },
+        {
+          "note": "dist(2,4)=2+1-0=3. Path 2-1-0-4.",
+          "best": [
+            0,
+            1,
+            2,
+            4
+          ],
+          "values": {
+            "u-v": "dist",
+            "depthGap": "—",
+            "jump": "—",
+            "lca": "3 hops"
+          }
+        },
+        {
+          "note": "k-th ancestor of 2, k=2: jump bit 1 (value 2) -> 0.",
+          "active": [
+            2,
+            0
+          ],
+          "values": {
+            "u-v": "anc 2 k=2",
+            "depthGap": 2,
+            "jump": "bit1",
+            "lca": 0
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Sample tree with depths</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t0["0 d=0"] --&gt; t1["1 d=1"]
+  t0 --&gt; t4["4 d=1"]
+  t1 --&gt; t2["2 d=2"]
+  t1 --&gt; t3["3 d=2"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>DFS</strong> from root: depth[], up[0][v]=parent (root parent = -1 or itself).</li>
+  <li><strong>Double:</strong> for k=1..LOG-1, up[k][v] = up[k-1][up[k-1][v]] (guard -1).</li>
+  <li><strong>Equalise depth</strong> by lifting the deeper node.</li>
+  <li><strong>If equal, that is the LCA.</strong></li>
+  <li><strong>From high bit to 0:</strong> if up[k][u]!=up[k][v] jump both.</li>
+  <li><strong>Return up[0][u]</strong> (the parent of the nodes just below the LCA).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u-v</th><th>depthGap</th><th>jump</th><th>lca</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>prep</td><td>—</td><td>up[0]</td><td>—</td><td>Tree 0-1-2, 1-3, 0-4. depth [0,1,2,2,1]. up[0] = parent [-1,0,1,1,0].</td></tr>
+      <tr><td>doubling</td><td>—</td><td>up[1]</td><td>—</td><td>up[1][v] = grandparent: [-, -, 0, 0, -].</td></tr>
+      <tr><td>2,3</td><td>0</td><td>none</td><td>1</td><td>LCA(2,3): depths equal. up[1][2]=0 and up[1][3]=0 same, so do not jump 2. up[0][2]=1 != up[0][3]=1? They are equal 1. Then return parent of 2, which is 1. Wait: if up[0] already equal, we still return up[0][u] after the loop... Standard: if after equalising u==v return u. Here 2!=3. Loop k: if parents differ, jump. up[0][2]==up[0][3]==1, so we do not jump, then return up[0][2]=1.</td></tr>
+      <tr><td>2,4</td><td>1</td><td>2->1</td><td>0</td><td>LCA(2,4): lift 2 by 1 to 1. 1!=4. up[0][1]=0, up[0][4]=0 equal, return 0.</td></tr>
+      <tr class="trace-table__row--change"><td>dist</td><td>—</td><td>—</td><td>3 hops</td><td>dist(2,4)=2+1-0=3. Path 2-1-0-4.</td></tr>
+      <tr><td>anc 2 k=2</td><td>2</td><td>bit1</td><td>0</td><td>k-th ancestor of 2, k=2: jump bit 1 (value 2) -> 0.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="LCA & Binary Lifting implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcaWalk.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class LcaWalk {
+        static int[] p, d;
+        static int lca(int u, int v) {
+            while (d[u] &gt; d[v]) u = p[u];
+            while (d[v] &gt; d[u]) v = p[v];
+            while (u != v) { u = p[u]; v = p[v]; }
+            return u;
+        }
+        public static void main(String[] args) {
+            p = new int[]{-1, 0, 1, 1, 0};
+            d = new int[]{0, 1, 2, 2, 1};
+            System.out.println(lca(2, 3) + " " + lca(2, 4));
+        }
+        // Input : sample parents
+        // Output: 1 0
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BinaryLifting.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class BinaryLifting {
+        static final int LOG = 20;
+        static int[][] up;
+        static int[] depth;
+        static List&lt;List&lt;Integer&gt;&gt; g;
+    
+        static void dfs(int u, int p) {
+            up[0][u] = p;
+            for (int k = 1; k &lt; LOG; k++) {
+                int mid = up[k - 1][u];
+                up[k][u] = mid &lt; 0 ? -1 : up[k - 1][mid];
+            }
+            for (int v : g.get(u)) if (v != p) {
+                depth[v] = depth[u] + 1;
+                dfs(v, u);
+            }
+        }
+        static int lift(int u, int h) {
+            for (int k = 0; k &lt; LOG; k++) if (((h &gt;&gt; k) &amp; 1) == 1) {
+                u = up[k][u];
+                if (u &lt; 0) return u;
+            }
+            return u;
+        }
+        static int lca(int u, int v) {
+            if (depth[u] &lt; depth[v]) { int t = u; u = v; v = t; }
+            u = lift(u, depth[u] - depth[v]);
+            if (u == v) return u;
+            for (int k = LOG - 1; k &gt;= 0; k--)
+                if (up[k][u] != up[k][v]) { u = up[k][u]; v = up[k][v]; }
+            return up[0][u];
+        }
+        public static void main(String[] args) {
+            int n = 5;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            up = new int[LOG][n];
+            depth = new int[n];
+            for (int[] row : up) java.util.Arrays.fill(row, -1);
+            dfs(0, -1);
+            System.out.println(lca(2, 3) + " " + lca(2, 4));
+            System.out.println(depth[2] + depth[4] - 2 * depth[lca(2, 4)]);
+        }
+        // Input : sample tree, queries (2,3) (2,4)
+        // Output: 1 0
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KthAncestor.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class KthAncestor {
+        static int[][] up;
+        static int kth(int u, int k) {
+            for (int i = 0; i &lt; 20; i++) if (((k &gt;&gt; i) &amp; 1) == 1) {
+                u = up[i][u];
+                if (u &lt; 0) return -1;
+            }
+            return u;
+        }
+        public static void main(String[] args) {
+            up = new int[20][5];
+            for (int[] row : up) java.util.Arrays.fill(row, -1);
+            up[0][1] = 0; up[0][2] = 1; up[0][3] = 1; up[0][4] = 0;
+            for (int k = 1; k &lt; 20; k++)
+                for (int v = 0; v &lt; 5; v++)
+                    if (up[k - 1][v] &gt;= 0) up[k][v] = up[k - 1][up[k - 1][v]];
+            System.out.println(kth(2, 2));
+            System.out.println(kth(2, 3));
+        }
+        // Input : 2's 2nd ancestor and 3rd
+        // Output: 0
+        //         -1
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n) build, O(log n) per LCA / k-th ancestor</span>
+    <span class="badge badge--space">Space O(n log n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>LOG = ceil(log2 n) ~ 18. Filling up[k][v] is n * LOG. A query equalises with at most LOG jumps then at most LOG more.</p>
+    <p><span class="eq">T_build = O(n log n), T_q = O(log n)</span></p>
+    <p>Euler+RMQ is O(n log n) / O(1) with a sparse table, slightly heavier constants, worse at path payloads.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Walk parents</td><td>O(n) / query</td><td>O(n)</td><td>q tiny</td></tr>
+      <tr><td>Binary lifting</td><td>O(log n) / query</td><td>O(n log n)</td><td>Default CP LCA</td></tr>
+      <tr><td>Euler + sparse table</td><td>O(1) / query</td><td>O(n log n)</td><td>Many LCA, no extra payload</td></tr>
+      <tr><td>Interview postorder</td><td>O(n) once</td><td>O(h)</td><td>One tree, few queries</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Lifting past the root without a guard</span>
+    <div class="pitfalls__bug">up[k][-1] or up[k][parent of root] indexes garbage.</div>
+    <div class="pitfalls__fix">Store -1, skip when mid&lt;0. Or parent[root]=root and jumps stay put.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Returning u after the loop instead of up[0][u]</span>
+    <div class="pitfalls__bug">You stopped at the children of the LCA, not the LCA.</div>
+    <div class="pitfalls__fix">After equalise, if u==v return u; else jump while parents differ; return parent.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Filling up[k] inside DFS before children set up[k-1]</span>
+    <div class="pitfalls__bug">up[k][v] depends only on v's ancestors, so filling at v during DFS is actually OK if you fill all k for v after up[0][v] is set, before children. Filling a global k-loop after the whole DFS is simpler.</div>
+    <div class="pitfalls__fix">Either fill all k for u at dfs entry, or a nested loop after DFS.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">depth not set when lifting</span>
+    <div class="pitfalls__bug">Forgot DFS, all depths 0, LCA is nonsense.</div>
+    <div class="pitfalls__fix">One DFS from the true root (problem's 1, or 0).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">1-based nodes, 0-based table</span>
+    <div class="pitfalls__bug">n=5 nodes 1..5, array of 5, index 5 dies.</div>
+    <div class="pitfalls__fix">n+1 arrays, ignore 0, or decrement labels.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Path max</td>
+        <td>mx[k][v] = max(mx[k-1][v], mx[k-1][up[k-1][v]]) along the same jumps.</td>
+        <td><code>ans = max(ans, mx[k][u]) when jumping u</code></td>
+        <td>Max edge, min edge, gcd</td>
+      </tr>
+      <tr>
+        <td>k-th on path u-v</td>
+        <td>Let w=lca. If k is on u-w, lift u by k; else lift v by dist(u,v)-k.</td>
+        <td><code>int du = depth[u]-depth[w];</code></td>
+        <td>Path node queries</td>
+      </tr>
+      <tr>
+        <td>Farach-Colton / RMQ LCA</td>
+        <td>Euler tour of depth, sparse table of mins, O(1) query.</td>
+        <td><code>st min of first[u]..first[v]</code></td>
+        <td>When you only need LCA, not path payload</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why jump from high bits down when equalising is low bits up?</summary>
+    <div class="followup__body">
+      <p>Equalising a known height h uses the bits of h, any order. The LCA's "while parents differ" must go from high to low: a low-bit jump first could overshoot the LCA and land on different ancestors that later cannot resync.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Virtual trees?</summary>
+    <div class="followup__body">
+      <p>Sort a subset of nodes by tin, LCA consecutive pairs, stack-build the compressed tree. Binary lifting (or RMQ) supplies those LCAs. Used in DP on a few important vertices.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Weighted distance?</summary>
+    <div class="followup__body">
+      <p>Store distRoot[v] = distance to root during DFS. dist(u,v)=distRoot[u]+distRoot[v]-2*distRoot[lca]. No extra lifting payload needed for sums.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>LOG = 20 vs 18?</summary>
+    <div class="followup__body">
+      <p>2^18 = 262144. n=2e5 needs 18. 20 is a safe default. 31 is a waste of memory (n*31 ints).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/" target="_blank" rel="noopener">Lowest Common Ancestor Of A Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 236</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Interview DFS, not lifting</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/kth-ancestor-of-a-tree-node/" target="_blank" rel="noopener">Kth Ancestor Of A Tree Node</a></td>
+        <td><span class="badge badge--lc">LC 1483</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary lifting table</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/step-by-step-directions-from-a-binary-tree-node-to-another/" target="_blank" rel="noopener">Step By Step Directions From A Binary Tree Node To Another</a></td>
+        <td><span class="badge badge--lc">LC 2096</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>LCA + paths</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/832/D" target="_blank" rel="noopener">Misha, Grisha and Underground</a></td>
+        <td><span class="badge badge--cf">CF 832D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Three LCAs, longest shared tail</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1304/E" target="_blank" rel="noopener">1-Trees and Queries</a></td>
+        <td><span class="badge badge--cf">CF 1304E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>dist via LCA, plus one extra edge</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/191/C" target="_blank" rel="noopener">Fools and Roads</a></td>
+        <td><span class="badge badge--cf">CF 191C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Diff on paths via LCA, then down</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/208/E" target="_blank" rel="noopener">Blood Cousins</a></td>
+        <td><span class="badge badge--cf">CF 208E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>k-th ancestor + count at depth</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree-iv/" target="_blank" rel="noopener">Lowest Common Ancestor Of A Binary Tree Iv</a></td>
+        <td><span class="badge badge--lc">LC 1676</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Generalise both-sides</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>up[k][v] = 2^k-th parent</strong>, doubled from k-1.</li>
+    <li><strong>Equalise depth</strong>, then jump while parents differ, return parent.</li>
+    <li><strong>dist = d[u]+d[v]-2 d[lca]</strong>.</li>
+    <li><strong>k-th ancestor</strong> is jumping the bits of k.</li>
+    <li><strong>Path payload</strong> rides along the same jumps.</li>
+  </ul>
+  <div class="recap__oneliner">lift deeper to same depth; for k=LOG-1..0 if up[k][u]!=up[k][v] jump both; return parent</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

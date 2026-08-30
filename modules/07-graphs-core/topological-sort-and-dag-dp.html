@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Topological Sort &amp; DAG DP &mdash; DSA Course</title>
+<meta name="description" content="A DAG has an order where every edge goes forward, and once you have that order every path DP is a single scan &mdash; no recursion, no memo table.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="topological-sort-and-dag-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 07 &middot; Graphs: Core</span>
+  <h1>Topological Sort & DAG DP</h1>
+  <p class="hero__tagline">A DAG has an order where every edge goes forward, and once you have that order every path DP is a single scan &mdash; no recursion, no memo table.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dfs-and-components.html">DFS &amp; Components</a>,
+      <a href="cycle-detection-and-bipartite.html">Cycle Detection &amp; Bipartite</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">topo sort</span>
+      <span class="chip">Kahn</span>
+      <span class="chip">DAG DP</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Topological order is the reason DAGs are the friendliest graphs in the toolkit. If every edge u &rarr; v means "u before v", then a linear scan in that order processes every predecessor of v before v itself. Shortest paths, longest paths, counts of paths, and "minimum time to finish tasks" all collapse to <code>for u in topo: for v in g[u]: relax</code>.</p>
+<p>Two constructions: Kahn peels vertices of indegree 0 and is the one you write in interviews (it also detects cycles). DFS post-order reversed is the one that falls out of the 3-colour cycle walk. Both are O(n + m).</p>
+<p>DAG DP is the payoff. On a general graph, longest path is NP-hard. On a DAG it is the same relaxation as shortest path with min flipped to max, run in topo order. Course-schedule II, alien dictionary, and "number of ways to arrive" (on a DAG or after Dijkstra's DAG of shortest edges) are this pattern.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>If the graph has a directed cycle, no topo order exists. If it does not, every path DP is legal in that order: when you reach v, every incoming edge has already been relaxed.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Prerequisites, task order, compilation order, course schedule</li>
+        <li>"Longest / shortest / number of paths" on a directed graph that is acyclic (or a grid only moving down/right)</li>
+        <li>Alien dictionary: letters must respect a partial order</li>
+        <li>The constraint graph is a DAG of n le 1e5, so a general DP would be too slow without an order</li>
+        <li>You already have indegrees and a leftover after peeling would mean "impossible"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Undirected graphs &mdash; topo order is a directed idea. Use a tree order or BFS layers</li>
+        <li>Directed graphs that may have cycles and you need shortest paths with positive weights &rarr; Dijkstra, not topo</li>
+        <li>Negative weights with possible negative cycles &rarr; Bellman-Ford</li>
+        <li>You need a partial order over all pairs, not just a linear extension</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Course order / prerequisites</td>
+        <td>Partial order</td>
+        <td>Kahn, emit the peel</td>
+      </tr>
+      <tr>
+        <td>"Impossible if a cycle"</td>
+        <td>Leftover indegree > 0</td>
+        <td>Kahn, check popped == n</td>
+      </tr>
+      <tr>
+        <td>Longest path in a DAG</td>
+        <td>NP-hard on general graphs</td>
+        <td>dp[v] = max dp[u]+w over in-edges</td>
+      </tr>
+      <tr>
+        <td>Count paths s to t in a DAG</td>
+        <td>Each incoming path is finished</td>
+        <td>dp[v] += dp[u]</td>
+      </tr>
+      <tr>
+        <td>Grid only down/right</td>
+        <td>Implicit DAG</td>
+        <td>Row-major is already a topo order</td>
+      </tr>
+      <tr>
+        <td>Alien dictionary</td>
+        <td>Letters, edges from order of words</td>
+        <td>Kahn; multiple answers: pick lex</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Dijkstra order</td>
+        <td>Dijkstra orders by distance, not by edges</td>
+        <td>Topo needs acyclicity; Dijkstra needs non-negative weights</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Kahn uses an ArrayDeque of current zeros and an <code>int[] indeg</code>. DP values that count paths need <code>long</code> and often a modulus.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Kahn, DFS-topo, then one DP scan</h2>
+<p>Kahn: compute indegree of every vertex, push all zeros into a queue, pop u, append u to the order, decrement indegree of every out-neighbour, and push those that hit zero. If you emit fewer than n vertices, a cycle remains.</p>
+<p>DFS-topo: run the 3-colour walk; on exit (paint BLACK) push u onto a stack. Reverse the stack. If you ever see a GREY neighbour, abort: no order exists. The two orders need not match; any linear extension is valid.</p>
+<p>DAG DP: initialise dp[sources] from the problem (0 for longest-path length, 1 for path counts). Then <code>for (u : topo) for (v : g[u]) dp[v] = combine(dp[v], dp[u] + w)</code>. Because every in-edge of v comes from an earlier topo index, the combine sees the final dp[u].</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p>In a topo order <code>t[0..n)</code>, every directed edge <code>u &rarr; v</code> satisfies <code>index(u) &lt; index(v)</code>. Therefore a left-to-right scan has already finalised every predecessor.</p><span class="eq">dp[v] is complete the moment the scan reaches v</span>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Prefer Kahn when the problem wants "impossible"</span>
+    <p>popped &lt; n is a one-line cycle test and you already have the order. DFS-topo needs the extra GREY state. Interviewers almost always expect Kahn for course schedule.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Longest path on a DAG</span>
+    <p>Set dp[u] = 0 at vertices with indegree 0 (or -inf if you only want paths from a given s). Relax <code>dp[v] = max(dp[v], dp[u] + w(u,v))</code> in topo order. The global max is the longest path length. Reconstruct via parent of the best relaxation.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>A small DAG</h3>
+
+<p>Edges 0&rarr;1, 0&rarr;2, 1&rarr;3, 2&rarr;3. Two valid orders: 0,1,2,3 and 0,2,1,3. Longest path 0 to 3 has length 2.</p>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n0["0  dp 0"] --&gt; n1["1  dp 1"]
+  n0 --&gt; n2["2  dp 1"]
+  n1 --&gt; n3["3  dp 2"]
+  n2 --&gt; n3
+  </div>
+  <figcaption>Every edge points rightward in either topo order. DAG DP for longest path: dp = [0, 1, 1, 2].</figcaption>
+</figure>
+
+<h3>indeg[] and Kahn's queue</h3>
+
+<p>The array is remaining indegree. The queue holds current zeros. Each pop decrements neighbours; 3 hits zero last.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="topoIndeg"></div>
+  <div class="viz-player" data-viz-target="topoIndeg">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "indeg[u] remaining",
+      "array": [
+        0,
+        1,
+        1,
+        2
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "u",
+        "queue",
+        "indeg[u]"
+      ],
+      "speed": 900,
+      "frames": [
+        {
+          "note": "Initial indegrees from the four edges. Zeros: only 0. Queue = [0].",
+          "arr": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": "seed",
+            "queue": "[0]",
+            "indeg[u]": 0
+          }
+        },
+        {
+          "note": "Pop 0, emit 0. Decrement 1 and 2. Both hit 0 and are pushed.",
+          "arr": [
+            0,
+            0,
+            0,
+            2
+          ],
+          "active": [
+            1,
+            2
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            3
+          ],
+          "values": {
+            "u": 0,
+            "queue": "[1, 2]",
+            "indeg[u]": 0
+          }
+        },
+        {
+          "note": "Pop 1, emit 1. Decrement 3: indeg[3] = 1. 3 is not ready.",
+          "arr": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "best": [
+            2
+          ],
+          "values": {
+            "u": 1,
+            "queue": "[2]",
+            "indeg[u]": 0
+          }
+        },
+        {
+          "note": "Pop 2, emit 2. Decrement 3: indeg[3] = 0. Push 3.",
+          "arr": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": 2,
+            "queue": "[3]",
+            "indeg[u]": 0
+          }
+        },
+        {
+          "note": "Pop 3, emit 3. Queue empty, popped = 4 = n. Order 0,1,2,3 is a valid topo.",
+          "arr": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": 3,
+            "queue": "[]",
+            "indeg[u]": 0
+          }
+        },
+        {
+          "note": "DAG DP longest path in that order: dp[0]=0, dp[1]=dp[0]+1=1, dp[2]=1, dp[3]=max(1,1)+1=2.",
+          "arr": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "best": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": "dp",
+            "queue": "scan",
+            "indeg[u]": "len=2"
+          }
+        },
+        {
+          "note": "If a 3->0 edge existed, 3 would never hit zero and popped would be 3 < 4: cycle, no order, no DAG DP.",
+          "arr": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "x": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": "cycle",
+            "queue": "[]",
+            "indeg[u]": "stuck"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Kahn peels 0 first (only zero), then 1 and 2 in some order, then 3. The queue never holds a vertex with leftover incoming edges.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Build a directed adjacency list</strong> and an <code>int[] indeg</code>.</li>
+  <li><strong>Push every vertex with indegree 0</strong> into an ArrayDeque.</li>
+  <li><strong>While the queue is not empty:</strong> pop u, append u to <code>order</code>.</li>
+  <li><strong>For each out-neighbour v:</strong> decrement indeg[v]; if it hits 0, offer v.</li>
+  <li><strong>If order.size() &lt; n</strong> return "cycle / impossible".</li>
+  <li><strong>Allocate dp[]</strong> and set the base (0 / 1 / -inf) on sources.</li>
+  <li><strong>Scan u in order</strong> and relax every out-edge into v with min, max, or +=.</li>
+  <li><strong>Read dp[target]</strong> or the global best, depending on the question.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Kahn on 0&rarr;1, 0&rarr;2, 1&rarr;3, 2&rarr;3, then longest-path DP (edge weight 1).</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>pop u</th><th>order</th><th>indeg after</th><th>queue</th><th>dp after relax from u</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>seed</td><td>[]</td><td>[0,1,1,2]</td><td>[0]</td><td>[0,-inf,-inf,-inf]</td><td>Only 0 is a source.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>[0]</td><td>[0,0,0,2]</td><td>[1,2]</td><td>[0,1,1,-inf]</td><td>Both children get dp = 1.</td></tr>
+      <tr><td>1</td><td>[0,1]</td><td>[0,0,0,1]</td><td>[2]</td><td>[0,1,1,2]</td><td>Relax 1&rarr;3: dp[3] = 2.</td></tr>
+      <tr><td>2</td><td>[0,1,2]</td><td>[0,0,0,0]</td><td>[3]</td><td>[0,1,1,2]</td><td>Relax 2&rarr;3: max stays 2.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>[0,1,2,3]</td><td>[0,0,0,0]</td><td>[]</td><td>[0,1,1,2]</td><td>Done. Longest path length 2.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Topological Sort & DAG DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Kahn</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">DAG DP</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Kahn">
+    <p>Returns the order, or null if a cycle remains. This is the interview default.</p>
+    <div class="code" data-highlight="18-24">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KahnTopo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class KahnTopo {
+    
+        static int[] topo(List&lt;List&lt;Integer&gt;&gt; g) {
+            int n = g.size();
+            int[] indeg = new int[n];
+            for (int u = 0; u &lt; n; u++) {
+                for (int v : g.get(u)) {
+                    indeg[v]++;
+                }
+            }
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            for (int u = 0; u &lt; n; u++) {
+                if (indeg[u] == 0) {
+                    q.offer(u);
+                }
+            }
+            int[] order = new int[n];
+            int k = 0;
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                order[k++] = u;
+                for (int v : g.get(u)) {
+                    if (--indeg[v] == 0) {
+                        q.offer(v);
+                    }
+                }
+            }
+            return k == n ? order : null;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            g.get(0).add(1);
+            g.get(0).add(2);
+            g.get(1).add(3);
+            g.get(2).add(3);
+            System.out.println(Arrays.toString(topo(g)));
+        }
+        // Input : DAG 0-&gt;1, 0-&gt;2, 1-&gt;3, 2-&gt;3
+        // Output: [0, 1, 2, 3]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="DAG DP">
+    <p>Longest path lengths from sources, using the Kahn order. Edge weight 1.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DagDp.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class DagDp {
+    
+        static int[] longest(List&lt;List&lt;Integer&gt;&gt; g, int[] order) {
+            int n = g.size();
+            int[] dp = new int[n];
+            Arrays.fill(dp, Integer.MIN_VALUE / 2);
+            for (int u : order) {
+                if (dp[u] &lt; 0) {
+                    dp[u] = 0;               // source (never relaxed)
+                }
+                for (int v : g.get(u)) {
+                    dp[v] = Math.max(dp[v], dp[u] + 1);
+                }
+            }
+            return dp;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            g.get(0).add(1);
+            g.get(0).add(2);
+            g.get(1).add(3);
+            g.get(2).add(3);
+            int[] order = {0, 1, 2, 3};
+            System.out.println(Arrays.toString(longest(g, order)));
+        }
+        // Input : same DAG, unit weights
+        // Output: [0, 1, 1, 2]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Self-contained Kahn plus path-count DP from vertex 0, modulo not needed on this size.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TopoTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class TopoTemplate {
+    
+        static long[] ways(List&lt;List&lt;Integer&gt;&gt; g, int s) {
+            int n = g.size();
+            int[] indeg = new int[n];
+            for (int u = 0; u &lt; n; u++) {
+                for (int v : g.get(u)) {
+                    indeg[v]++;
+                }
+            }
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            for (int u = 0; u &lt; n; u++) {
+                if (indeg[u] == 0) {
+                    q.offer(u);
+                }
+            }
+            int[] order = new int[n];
+            int k = 0;
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                order[k++] = u;
+                for (int v : g.get(u)) {
+                    if (--indeg[v] == 0) {
+                        q.offer(v);
+                    }
+                }
+            }
+            long[] dp = new long[n];
+            dp[s] = 1;
+            for (int i = 0; i &lt; k; i++) {
+                int u = order[i];
+                for (int v : g.get(u)) {
+                    dp[v] += dp[u];
+                }
+            }
+            return dp;
+        }
+    
+        public static void main(String[] args) {
+            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) {
+                g.add(new ArrayList&lt;&gt;());
+            }
+            g.get(0).add(1);
+            g.get(0).add(2);
+            g.get(1).add(3);
+            g.get(2).add(3);
+            System.out.println(Arrays.toString(ways(g, 0)));
+        }
+        // Input : same DAG, count paths from 0
+        // Output: [1, 1, 1, 2]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Kahn visits each vertex once and each edge once (the decrement). DFS-topo is the same bound. The DP scan is a third linear pass:</p>
+    <p><span class="eq">T = &Theta;(n + m)</span></p>
+    <p>That is why longest path is easy on a DAG and hopeless on a general graph: the order is what removes the need to try subsets of vertices.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Kahn</td><td>O(n + m)</td><td>O(n)</td><td>Interview default, cycle test included</td></tr>
+      <tr><td>DFS post-order reverse</td><td>O(n + m)</td><td>O(n)</td><td>Falls out of 3-colour DFS</td></tr>
+      <tr><td>DAG DP after topo</td><td>O(n + m)</td><td>O(n)</td><td>Shortest / longest / count paths</td></tr>
+      <tr><td>Dijkstra</td><td>O((n+m) log n)</td><td>O(n)</td><td>Positive weights, cycles allowed</td></tr>
+      <tr><td>General longest path</td><td>NP-hard</td><td>—</td><td>Do not try DP-on-subsets unless n ≤ 20</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using the order of input vertices as topo order</span>
+    <div class="pitfalls__bug">Relaxing in label order on a DAG that is not already sorted. dp[v] is read before its predecessors are final.</div>
+    <div class="pitfalls__fix">Always compute an order (or prove the labels already are one, as in a grid).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the cycle check</span>
+    <div class="pitfalls__bug">Returning a partial order of length &lt; n and then indexing it as if it were complete. DAG DP silently ignores the cyclic leftover.</div>
+    <div class="pitfalls__fix">if (k != n) return impossible. Do this before allocating dp.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Building indegree from an undirected list</span>
+    <div class="pitfalls__bug">Every edge increments both ends; every vertex with a neighbour has positive indegree and Kahn emits nothing.</div>
+    <div class="pitfalls__fix">Topo is directed. If the problem is undirected, you want a different order.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Initialising path-count dp to 1 on every vertex</span>
+    <div class="pitfalls__bug">Counts paths that start everywhere, not from s. Sources that are not s contribute phantom paths.</div>
+    <div class="pitfalls__fix">dp[s] = 1, everyone else 0. Vertices not reachable from s stay 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on path counts</span>
+    <div class="pitfalls__bug">A 40-vertex skinny DAG already exceeds Integer.MAX_VALUE.</div>
+    <div class="pitfalls__fix">long, and apply the modulus in the relaxation if the statement asks.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">PriorityQueue instead of ArrayDeque in Kahn</span>
+    <div class="pitfalls__bug">Correct, and required when the problem wants the lexicographically smallest order. Otherwise it is a log factor and a surprise if you thought the order was unique.</div>
+    <div class="pitfalls__fix">ArrayDeque for any valid order. PriorityQueue only when the statement asks for smallest labels first.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Lexicographically smallest order</td>
+        <td>Replace the queue with a min-heap of current zeros.</td>
+        <td><code>PriorityQueue&lt;Integer&gt; q; ... q.offer(v);</code></td>
+        <td>Alien dictionary / some CF problems</td>
+      </tr>
+      <tr>
+        <td>Shortest path on a DAG (any weights)</td>
+        <td>Same scan, min instead of max. Negative weights are fine because there is no cycle.</td>
+        <td><code>dp[v] = min(dp[v], dp[u] + w);</code></td>
+        <td>Cheaper than Dijkstra when you know it is a DAG</td>
+      </tr>
+      <tr>
+        <td>Minimum time to finish tasks</td>
+        <td>dp[v] = time[v] + max dp[u] over predecessors. Answer is max dp.</td>
+        <td><code>LC 2050, parallel courses</code></td>
+        <td>Critical-path method</td>
+      </tr>
+      <tr>
+        <td>Grid down/right</td>
+        <td>Indices in row-major (or diagonal) order are already topological. Skip Kahn.</td>
+        <td><code>&lt;a href="../10-dynamic-programming/grid-dp.html"&gt;Grid DP&lt;/a&gt;</code></td>
+        <td>undefined</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Is the topo order unique?</summary>
+    <div class="followup__body">
+      <p>Iff at every peel step exactly one vertex has indegree 0 (the remaining graph is a single chain of sources). If two zeros sit in the queue you may emit them in either order. Uniqueness is equivalent to a Hamiltonian path in the DAG that is forced by edges.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How is this related to DP on DAGs versus general DP?</summary>
+    <div class="followup__body">
+      <p>General DP needs an explicit state partial order you invent. DAG DP uses the graph's own edges as that order. If your DP states are vertices of a DAG you already have, never recurse: topo-scan.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I topo-sort a graph with cycles after contracting SCCs?</summary>
+    <div class="followup__body">
+      <p>Yes. The condensation of a directed graph is always a DAG. That is how you DP on "almost DAGs": Tarjan, then Kahn on the components. See SCC in the advanced graphs module.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Kahn vs DFS-topo for reconstruction of a cycle?</summary>
+    <div class="followup__body">
+      <p>Kahn tells you a cycle exists (leftovers) but does not give the cycle. 3-colour DFS gives a back-edge. If you need the cycle itself, DFS; if you only need "impossible", Kahn.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/course-schedule/" target="_blank" rel="noopener">Course Schedule</a></td>
+        <td><span class="badge badge--lc">LC 207</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kahn leftover = cycle</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/course-schedule-ii/" target="_blank" rel="noopener">Course Schedule II</a></td>
+        <td><span class="badge badge--lc">LC 210</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Return the Kahn order</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/alien-dictionary/" target="_blank" rel="noopener">Alien Dictionary</a></td>
+        <td><span class="badge badge--lc">LC 269</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Edges from adjacent words, then Kahn</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/parallel-courses-iii/" target="_blank" rel="noopener">Parallel Courses III</a></td>
+        <td><span class="badge badge--lc">LC 2050</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>DAG DP: time[v] + max over preds</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/number-of-ways-to-arrive-at-destination/" target="_blank" rel="noopener">Number of Ways to Arrive at Destination</a></td>
+        <td><span class="badge badge--lc">LC 1976</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dijkstra, then count on the shortest-path DAG</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1679" target="_blank" rel="noopener">Course Schedule</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kahn, print order or IMPOSSIBLE</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/1680" target="_blank" rel="noopener">Longest Flight Route</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Longest path 1 to n on a DAG</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/510/B" target="_blank" rel="noopener">Fox And Two Dots</a></td>
+        <td><span class="badge badge--cf">CF 510B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Directed? No — cycle of length ≥4 in a grid</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/topological-sort/1" target="_blank" rel="noopener">Topological sort</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Return any valid order</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://atcoder.jp/contests/abc142/tasks/abc142_f" target="_blank" rel="noopener">ABC 142 F</a></td>
+        <td><span class="badge badge--atc">ABC 142F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Induced cycle; topo thinking on leftover</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CSES Longest Flight Route</summary>
+  <div class="spoiler__body">
+    <p>Only vertices reachable from 1 can be on the answer. Run Kahn (or DFS-topo) on the whole graph, then longest-path DP from 1 (dp[1]=1 city, -inf elsewhere so you do not start in the middle). If dp[n] is still -inf, IMPOSSIBLE. Reconstruct via parent of the best relaxation.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 1976 &mdash; ways on the shortest-path DAG</summary>
+  <div class="spoiler__body">
+    <p>First Dijkstra for dist[]. An edge u-v is a shortest-path edge iff dist[u] + w = dist[v]. Those edges form a DAG. Then path-count DP from src, or accumulate ways during Dijkstra when you hit equality. Mod 1e9+7, use long.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Kahn peels indegree 0</strong>; popped &lt; n means a cycle.</li>
+    <li><strong>Any linear extension is a valid topo order.</strong></li>
+    <li><strong>DAG DP is one scan</strong> of that order: min, max, or += on out-edges.</li>
+    <li><strong>Longest path is easy on a DAG</strong> and NP-hard otherwise.</li>
+    <li><strong>Path counts need long</strong> (and usually a modulus).</li>
+  </ul>
+  <div class="recap__oneliner">Kahn: peel indeg 0 | k!=n =&gt; cycle | then for u in order relax out-edges</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

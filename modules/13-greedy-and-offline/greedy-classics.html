@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greedy Classics &mdash; DSA Course</title>
+<meta name="description" content="A field guide to the greedy shapes you will actually be handed: intervals, jumps, gas, candies, Huffman-like merging, and scheduling.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="greedy-classics">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 13 &middot; Greedy & Offline Techniques</span>
+  <h1>Greedy Classics</h1>
+  <p class="hero__tagline">A field guide to the greedy shapes you will actually be handed: intervals, jumps, gas, candies, Huffman-like merging, and scheduling.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="greedy-foundations.html">Greedy Foundations</a>,
+      <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps & Priority Queue</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">greedy</span>
+      <span class="chip">intervals</span>
+      <span class="chip">scheduling</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Once the proof toolkit exists, recognition is the remaining skill. These patterns share a sort key and a one-pass decision; mixing the keys is the usual bug.</p>
+<p>Intervals: finish time, or "min arrows / rooms" as a sweep. Jumps: farthest reach. Gas: prefix of gas-cost, start after the minimum prefix. Candies / ratings: two passes. Merging files: always merge two smallest (Huffman / heap).</p>
+<p>Interviewers chain them: "now the weighted version" (DP), "now k rooms" (heap of end times). Know which upgrade kills the greedy.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Name the sort key in one phrase before you touch the keyboard. If you cannot, you do not yet know which classic it is.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Intervals on a line: select, cover, or puncture</li>
+        <li>Jump game / jump game II</li>
+        <li>Circular gas / circular tour</li>
+        <li>Ratings with a neighbour constraint (candies)</li>
+        <li>Repeatedly combine two smallest costs</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Weighted interval scheduling → DP</li>
+        <li>Must take fractions? wait, fractional knapsack IS greedy; 0/1 is DP</li>
+        <li>Need exact k-cover with costs → maybe min-cost flow</li>
+        <li>Graph shortest path → Dijkstra is greedy-with-a-proof, but it is its own page</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Max non-overlapping intervals</td>
+        <td>Sort by end</td>
+        <td>Activity</td>
+      </tr>
+      <tr>
+        <td>Min arrows / min rooms</td>
+        <td>Sort by end or sweep starts/ends</td>
+        <td>Arrows / heap of rooms</td>
+      </tr>
+      <tr>
+        <td>Jump Game II</td>
+        <td>Greedy farthest in the current window</td>
+        <td>Jumps</td>
+      </tr>
+      <tr>
+        <td>Gas station</td>
+        <td>Start after the worst prefix deficit</td>
+        <td>Circular</td>
+      </tr>
+      <tr>
+        <td>Candies</td>
+        <td>Two slope passes</td>
+        <td>Ratings</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> merge k lists vs Huffman</td>
+        <td>Huffman pays the sum every time a file is re-merged</td>
+        <td>Heap of sizes</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> All of these are n log n or n. If you wrote DP on n=1e5 intervals, you picked the weighted variant by mistake — or the unweighted one.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Jump Game II: the current interval [L,R] was reachable in s jumps. Scan it for the farthest index, which becomes the next R. That is BFS-on-array without a queue.</p>
+<p>Gas: if total gas &lt; total cost, impossible. Otherwise the unique start is the index after the minimum prefix of (gas-cost). Proof: that prefix is the deepest deficit; starting just after it never goes negative.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Each classic has one invariant: activity — last-finish is minimal among k-sets; jumps — [0,R] is exactly the set reachable in ≤ s jumps; gas — prefix surplus is minimised at start-1.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="greedy-classicsViz"></div>
+  <div class="viz-player" data-viz-target="greedy-classicsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "jump length =",
+      "array": [
+        2,
+        3,
+        1,
+        1,
+        4
+      ],
+      "vars": [
+        "s",
+        "R",
+        "farthest"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Jump Game II on [2,3,1,1,4]. s=0, window [0,0], farthest=2.",
+          "active": [
+            0
+          ],
+          "values": {
+            "s": 0,
+            "R": 0,
+            "farthest": 2
+          }
+        },
+        {
+          "note": "Window ends: one jump covers [1,2]. Scan them: from 1 can reach 1+3=4, from 2 reach 2+1=3. farthest=4.",
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "s": 1,
+            "R": 2,
+            "farthest": 4
+          }
+        },
+        {
+          "note": "Second jump window [3,4] already includes n-1. Answer 2.",
+          "active": [
+            4
+          ],
+          "values": {
+            "s": 2,
+            "R": 4,
+            "farthest": 4
+          }
+        },
+        {
+          "note": "Gas example [1,2,3,4,5] cost [3,4,5,1,2]. prefix of gas-cost: -2,-4,-6,-3,0. Min at index 2, start at 3.",
+          "active": [
+            3
+          ],
+          "values": {
+            "s": "gas",
+            "R": "start 3",
+            "farthest": "ok"
+          }
+        },
+        {
+          "note": "Candies [1,0,2]: left pass [1,1,2], right pass [2,1,2], sum 5.",
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "s": "candy",
+            "R": "—",
+            "farthest": "5"
+          }
+        },
+        {
+          "note": "Huffman: files 1,2,3,4. Merge 1+2=3, then 3+3=6, then 6+4=10. Total cost 3+6+10=19.",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "s": "heap",
+            "R": "—",
+            "farthest": 19
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Pick the classic by the object</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["what is being chosen?"] --&gt; iv{"intervals?"}
+  iv -- yes --&gt; endK["sort by end / sweep"]
+  q --&gt; jp{"jumps on an array?"}
+  jp -- yes --&gt; far["farthest in window"]
+  q --&gt; gs{"circular surplus?"}
+  gs -- yes --&gt; pref["start after min prefix"]
+  q --&gt; mg{"repeated merge cost?"}
+  mg -- yes --&gt; heapN["min-heap of sizes"]
+  </div>
+  <figcaption>One diagram for the five keys. Weighted interval scheduling is not on it — that is DP.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Classify</strong> the object: interval, jump, circular, rating, merge.</li>
+  <li><strong>Sort or heap</strong> with the matching key.</li>
+  <li><strong>One pass</strong> maintaining the invariant (last end, farthest, prefix, slope, heap pop).</li>
+  <li><strong>Handle impossible</strong> (gas total, jump that cannot grow R).</li>
+  <li><strong>Upgrade check:</strong> weights? k resources? → DP or a heap of k.</li>
+  <li><strong>Reconstruct</strong> if asked: store parent jumps / chosen indices.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>s</th><th>R</th><th>farthest</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>2</td><td>Jump Game II on [2,3,1,1,4]. s=0, window [0,0], farthest=2.</td></tr>
+      <tr><td>1</td><td>2</td><td>4</td><td>Window ends: one jump covers [1,2]. Scan them: from 1 can reach 1+3=4, from 2 reach 2+1=3. farthest=4.</td></tr>
+      <tr><td>2</td><td>4</td><td>4</td><td>Second jump window [3,4] already includes n-1. Answer 2.</td></tr>
+      <tr><td>gas</td><td>start 3</td><td>ok</td><td>Gas example [1,2,3,4,5] cost [3,4,5,1,2]. prefix of gas-cost: -2,-4,-6,-3,0. Min at index 2, start at 3.</td></tr>
+      <tr><td>candy</td><td>—</td><td>5</td><td>Candies [1,0,2]: left pass [1,1,2], right pass [2,1,2], sum 5.</td></tr>
+      <tr><td>heap</td><td>—</td><td>19</td><td>Huffman: files 1,2,3,4. Merge 1+2=3, then 3+3=6, then 6+4=10. Total cost 3+6+10=19.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Greedy Classics implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Min jumps by DFS. Exponential.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">JumpBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class JumpBrute {
+        static int min(int[] a, int i) {
+            if (i &gt;= a.length - 1) return 0;
+            int best = 1_000_000;
+            for (int j = 1; j &lt;= a[i]; j++) best = Math.min(best, 1 + min(a, i + j));
+            return best;
+        }
+        public static void main(String[] args) {
+            System.out.println(min(new int[] {2, 3, 1, 1, 4}, 0));
+        }
+        // Input : [2,3,1,1,4]
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Greedy window. O(n).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">JumpGameII.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class JumpGameII {
+        static int jumps(int[] a) {
+            int jumps = 0, r = 0, far = 0;
+            for (int i = 0; i &lt; a.length - 1; i++) {
+                far = Math.max(far, i + a[i]);
+                if (i == r) { jumps++; r = far; }
+            }
+            return jumps;
+        }
+        public static void main(String[] args) {
+            System.out.println(jumps(new int[] {2, 3, 1, 1, 4}));
+        }
+        // Input : [2,3,1,1,4]
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Circular tour start index.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GasStation.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class GasStation {
+        static int start(int[] gas, int[] cost) {
+            int n = gas.length, tank = 0, min = 0, idx = 0;
+            for (int i = 0; i &lt; n; i++) {
+                tank += gas[i] - cost[i];
+                if (tank &lt; min) { min = tank; idx = i + 1; }
+            }
+            return tank &lt; 0 ? -1 : idx % n;
+        }
+        public static void main(String[] args) {
+            System.out.println(start(new int[] {1, 2, 3, 4, 5}, new int[] {3, 4, 5, 1, 2}));
+        }
+        // Input : gas 1..5, cost 3,4,5,1,2
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) or O(n log n)</span>
+    <span class="badge badge--space">Space O(1) to O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Jumps and gas are one pass. Interval problems sort. Huffman is n heap operations, O(n log n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Activity / arrows</td><td>O(n log n)</td><td>O(n)</td><td>Sort by end</td></tr>
+      <tr><td>Jump II</td><td>O(n)</td><td>O(1)</td><td>Window farthest</td></tr>
+      <tr><td>Gas</td><td>O(n)</td><td>O(1)</td><td>Min prefix</td></tr>
+      <tr><td>Huffman merge</td><td>O(n log n)</td><td>O(n)</td><td>Min-heap</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Jump Game II loop including last index</span>
+    <div class="pitfalls__bug">You add an extra jump when i hits n-1.</div>
+    <div class="pitfalls__fix">Loop to n-2 only.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Gas returning 0 when total is negative</span>
+    <div class="pitfalls__bug">The min-prefix still exists but the tour is impossible.</div>
+    <div class="pitfalls__fix">Check total &lt; 0 first.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Meeting rooms without a heap</span>
+    <div class="pitfalls__bug">Sorting by start and counting overlap naively is O(n^2), or wrong if you only look at the previous meeting.</div>
+    <div class="pitfalls__fix">Min-heap of end times, or a sweep of +1/-1.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Candies one pass</span>
+    <div class="pitfalls__bug">A decreasing then increasing valley needs both directions.</div>
+    <div class="pitfalls__fix">Left-to-right enforce left neighbour, right-to-left enforce right, take max.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Huffman adding the new file once</span>
+    <div class="pitfalls__bug">Cost is the sum of internal nodes, not just the final root. Push the merged size back.</div>
+    <div class="pitfalls__fix">ans += a+b; heap.add(a+b);</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Meeting rooms II</td>
+        <td>Sweep or min-heap of ends.</td>
+        <td><code>LC 253</code></td>
+        <td>k rooms</td>
+      </tr>
+      <tr>
+        <td>Weighted intervals</td>
+        <td>DP + binary search previous compatible.</td>
+        <td><code>LC 1235</code></td>
+        <td>kills greedy</td>
+      </tr>
+      <tr>
+        <td>Jump Game I</td>
+        <td>Only reachability: track farthest, no jump count.</td>
+        <td><code>LC 55</code></td>
+        <td>easier</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is Jump II not DP?</summary>
+    <div class="followup__body">
+      <p>It can be DP (min jumps to i). The greedy window is BFS layers on the array, so the first time you reach n-1 is the shortest. That is the proof.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Two starting points for gas?</summary>
+    <div class="followup__body">
+      <p>If total ≥ 0 there is exactly one start (modulo a stretch of zeros). The unique deepest prefix deficit pins it.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can Huffman run on more than two-way merges?</summary>
+    <div class="followup__body">
+      <p>Yes, k-way: always merge k lightest. Pad with zeros if n-1 is not divisible by k-1.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Interval covering from a point?</summary>
+    <div class="followup__body">
+      <p>Sort by start, greedy take the interval that covers the current point and extends farthest. Jump Game in disguise.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/jump-game-ii/" target="_blank" rel="noopener">Jump Game Ii</a></td>
+        <td><span class="badge badge--lc">LC 45</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Farthest window</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/gas-station/" target="_blank" rel="noopener">Gas Station</a></td>
+        <td><span class="badge badge--lc">LC 134</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Min prefix</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/candy/" target="_blank" rel="noopener">Candy</a></td>
+        <td><span class="badge badge--lc">LC 135</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two passes</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/meeting-rooms-ii/" target="_blank" rel="noopener">Meeting Rooms Ii</a></td>
+        <td><span class="badge badge--lc">LC 253</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Heap of ends / sweep</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/maximum-profit-in-job-scheduling/" target="_blank" rel="noopener">Maximum Profit In Job Scheduling</a></td>
+        <td><span class="badge badge--lc">LC 1235</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Weighted — DP, know why greedy dies</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/queue-reconstruction-by-height/" target="_blank" rel="noopener">Queue Reconstruction By Height</a></td>
+        <td><span class="badge badge--lc">LC 406</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort height desc, insert at k</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/545/C" target="_blank" rel="noopener">Woodcutters</a></td>
+        <td><span class="badge badge--cf">CF 545C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Left/right fall greedy</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1132/B" target="_blank" rel="noopener">Draw It!</a></td>
+        <td><span class="badge badge--cf">CF 1132B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort and drop k largest</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Intervals: sort by end (or sweep).</li>
+    <li>Jumps: farthest in the current BFS layer.</li>
+    <li>Gas: start after the minimum prefix.</li>
+    <li>Candies: max of two slope passes.</li>
+    <li>Merges: always two smallest, push back.</li>
+  </ul>
+  <div class="recap__oneliner">classify; sort or heap; one pass that maintains the invariant;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

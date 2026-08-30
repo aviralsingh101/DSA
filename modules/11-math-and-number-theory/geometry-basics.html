@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geometry Basics &mdash; DSA Course</title>
+<meta name="description" content="Points are long pairs. Orientation is a cross product. Almost every elementary geometry test — left of a line, segment intersection, polygon area — is that one signed area.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="geometry-basics">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Geometry Basics</h1>
+  <p class="hero__tagline">Points are <code>long</code> pairs. Orientation is a cross product. Almost every elementary geometry test — left of a line, segment intersection, polygon area — is that one signed area.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">geometry</span>
+      <span class="chip">cross product</span>
+      <span class="chip">orientation</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Contest geometry is not trigonometry. You almost never need sin, and you almost always need the sign of (b−a)×(c−a) to decide whether c is left, right, or collinear with directed line ab.</p>
+<p>Integer coordinates up to 1e9 make every multiply a 2e9×2e9 = 4e18 candidate — it fits in long, not in int. Division is the enemy (it loses the exact predicate). Prefer comparisons of cross products to comparing doubles.</p>
+<p>Area of a polygon is the shoelace sum of consecutive crosses. Point-in-polygon is winding or ray-crossing, both built from the same orientation tests. Convex hull is the next page; this page is the toolkit it sits on.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>cross(a,b) = a.x*b.y − a.y*b.x is twice the signed area of the triangle 0,a,b. Its sign is orientation. Overflow of that multiply is the #1 WA.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Is C left of directed line AB? Are three points collinear?</li>
+        <li>Do two segments intersect (properly or including touching)?</li>
+        <li>Polygon area, convex? point in triangle / polygon</li>
+        <li>Closest pair (sweep or D&C) as a follow-up</li>
+        <li>Integer coordinates, exact predicates required</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Convex hull construction — next page (this page is the predicates)</li>
+        <li>Rotating calipers / diameter of a hull — after you have the hull</li>
+        <li>3-D / spherical geometry</li>
+        <li>Need a floating-point intersection point as output and the statement allows 1e-9 error — still compute with long predicates first</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Left / right / on</td>
+        <td>sign of cross(b-a, c-a)</td>
+        <td>orientation</td>
+      </tr>
+      <tr>
+        <td>Segment intersect</td>
+        <td>straddle tests + on-segment</td>
+        <td>4 orientations</td>
+      </tr>
+      <tr>
+        <td>Polygon area</td>
+        <td>shoelace of consecutive crosses</td>
+        <td>abs/2</td>
+      </tr>
+      <tr>
+        <td>Point in convex polygon</td>
+        <td>all turns the same way</td>
+        <td>n tests or log n</td>
+      </tr>
+      <tr>
+        <td>Point in general polygon</td>
+        <td>ray crossings / winding</td>
+        <td>O(n)</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> dot product</td>
+        <td>dot is angle / projection; cross is orientation</td>
+        <td>dot=0 ⟂, cross=0 collinear</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|x|,|y| &le; 1e9</code> → use <code>long</code> for every cross. <code>|x| &le; 1e18</code> needs BigInteger or a careful 128-bit emulation. n ≤ 1e5 for O(n) scans; closest pair is O(n log n).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Point = (x, y). sub(a,b) = a-b. cross(u,v) = u.x*v.y - u.y*v.x. orient(a,b,c) = sign(cross(b-a, c-a)): +1 left, −1 right, 0 collinear.</p>
+<p>Segments AB, CD intersect properly if orient(A,B,C) and orient(A,B,D) have opposite signs and the other pair too. Inclusive intersection also accepts the collinear-and-on-segment case (bounding-box + between).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>orient(a,b,c) &gt; 0 iff you turn left at b walking a→b→c. Shoelace: twice signed area = Σ (p_i × p_{i+1}) with p_n = p_0. Positive means CCW.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="geometry-basicsViz"></div>
+  <div class="viz-player" data-viz-target="geometry-basicsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "xy =",
+      "array": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2
+      ],
+      "indexLabels": [
+        "Ax",
+        "Ay",
+        "Bx",
+        "By",
+        "Cx",
+        "Cy"
+      ],
+      "vars": [
+        "cross",
+        "orient",
+        "area2"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "A=(0,0), B=(2,0), C=(1,2). u=B-A=(2,0), v=C-A=(1,2).",
+          "active": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "cross": "—",
+            "orient": "—",
+            "area2": "—"
+          }
+        },
+        {
+          "note": "cross = 2*2 − 0*1 = 4. Positive → C is left of AB.",
+          "active": [
+            4,
+            5
+          ],
+          "values": {
+            "cross": 4,
+            "orient": "+1",
+            "area2": 4
+          }
+        },
+        {
+          "note": "If C were (1,-2), cross = −4, right turn.",
+          "active": [
+            4,
+            5
+          ],
+          "values": {
+            "cross": -4,
+            "orient": "-1",
+            "area2": 4
+          }
+        },
+        {
+          "note": "If C=(3,0), cross=0, collinear. On-segment? 0≤3≤2 is false.",
+          "active": [
+            4,
+            5
+          ],
+          "values": {
+            "cross": 0,
+            "orient": 0,
+            "area2": 0
+          }
+        },
+        {
+          "note": "Triangle area = |cross|/2 = 2.",
+          "best": [
+            0,
+            2,
+            4
+          ],
+          "values": {
+            "cross": 4,
+            "orient": "+1",
+            "area2": 4
+          }
+        },
+        {
+          "note": "Shoelace on a polygon is the sum of these consecutive crosses.",
+          "best": [
+            0,
+            2,
+            4
+          ],
+          "values": {
+            "cross": "Σ",
+            "orient": "CCW",
+            "area2": "2Area"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  pts["points A B C"] --&gt; cr["cross of B-A and C-A"]
+  cr --&gt; sgn{"sign?"}
+  sgn -- plus --&gt; left["C left of AB"]
+  sgn -- minus --&gt; right["C right of AB"]
+  sgn -- zero --&gt; col["collinear"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Store</strong> coordinates as long. Never int for a cross.</li>
+  <li><strong>orient(a,b,c)</strong> = Long.signum(cross(b-a, c-a)).</li>
+  <li><strong>onSeg(a,b,p):</strong> collinear and p in the bounding box of ab.</li>
+  <li><strong>intersect(a,b,c,d):</strong> proper-straddle OR (collinear and onSeg).</li>
+  <li><strong>area2(poly):</strong> sum cross(p[i], p[i+1]), wrap last to first.</li>
+  <li><strong>point in convex:</strong> all orients against edges have the same sign (or 0 on boundary — read the statement).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>cross</th><th>orient</th><th>area2</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>—</td><td>A=(0,0), B=(2,0), C=(1,2). u=B-A=(2,0), v=C-A=(1,2).</td></tr>
+      <tr><td>4</td><td>+1</td><td>4</td><td>cross = 2*2 − 0*1 = 4. Positive → C is left of AB.</td></tr>
+      <tr><td>-4</td><td>-1</td><td>4</td><td>If C were (1,-2), cross = −4, right turn.</td></tr>
+      <tr><td>0</td><td>0</td><td>0</td><td>If C=(3,0), cross=0, collinear. On-segment? 0≤3≤2 is false.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>+1</td><td>4</td><td>Triangle area = |cross|/2 = 2.</td></tr>
+      <tr class="trace-table__row--change"><td>Σ</td><td>CCW</td><td>2Area</td><td>Shoelace on a polygon is the sum of these consecutive crosses.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Geometry Basics implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Orient.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Orient {
+        static long cross(long x1, long y1, long x2, long y2) {
+            return x1 * y2 - y1 * x2;
+        }
+        public static void main(String[] args) {
+            System.out.println(Long.signum(cross(2, 0, 1, 2)));
+        }
+        // Input : AB=(2,0) AC=(1,2)
+        // Output: 1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Orientation, on-segment, inclusive segment intersection, shoelace.</p>
+    <div class="code" data-highlight="8-28">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Geom.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Geom {
+        static class P {
+            long x, y;
+            P(long x, long y) { this.x = x; this.y = y; }
+            P sub(P o) { return new P(x - o.x, y - o.y); }
+        }
+        static long cross(P a, P b) { return a.x * b.y - a.y * b.x; }
+        static int orient(P a, P b, P c) { return Long.signum(cross(b.sub(a), c.sub(a))); }
+        static boolean onSeg(P a, P b, P p) {
+            if (orient(a, b, p) != 0) return false;
+            return Math.min(a.x, b.x) &lt;= p.x &amp;&amp; p.x &lt;= Math.max(a.x, b.x)
+                &amp;&amp; Math.min(a.y, b.y) &lt;= p.y &amp;&amp; p.y &lt;= Math.max(a.y, b.y);
+        }
+        static boolean intersect(P a, P b, P c, P d) {
+            int o1 = orient(a, b, c), o2 = orient(a, b, d);
+            int o3 = orient(c, d, a), o4 = orient(c, d, b);
+            if (o1 != o2 &amp;&amp; o3 != o4) return true;
+            return (o1 == 0 &amp;&amp; onSeg(a, b, c)) || (o2 == 0 &amp;&amp; onSeg(a, b, d))
+                || (o3 == 0 &amp;&amp; onSeg(c, d, a)) || (o4 == 0 &amp;&amp; onSeg(c, d, b));
+        }
+        static long area2(P[] p) {
+            long s = 0;
+            for (int i = 0, n = p.length; i &lt; n; i++) s += cross(p[i], p[(i + 1) % n]);
+            return s;
+        }
+        public static void main(String[] args) {
+            P a = new P(0, 0), b = new P(2, 0), c = new P(1, 2);
+            System.out.println(orient(a, b, c));
+            System.out.println(area2(new P[] {a, b, c}));
+        }
+        // Input : triangle (0,0)(2,0)(1,2)
+        // Output: 1
+        //         4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Point in a CCW convex polygon, including boundary.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PointInConvex.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class PointInConvex {
+        static class P { long x, y; P(long x, long y) { this.x = x; this.y = y; } }
+        static long cross(P a, P b, P c) {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        }
+        static boolean inside(P[] h, P q) {
+            int n = h.length;
+            for (int i = 0; i &lt; n; i++)
+                if (cross(h[i], h[(i + 1) % n], q) &lt; 0) return false;
+            return true;
+        }
+        public static void main(String[] args) {
+            P[] h = { new P(0, 0), new P(4, 0), new P(4, 3), new P(0, 3) };
+            System.out.println(inside(h, new P(2, 1)));
+            System.out.println(inside(h, new P(5, 1)));
+        }
+        // Input : square [0,4]x[0,3], query (2,1) then (5,1)
+        // Output: true
+        //         false
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(1) per predicate; O(n) area / point-in-polygon</span>
+    <span class="badge badge--space">Space O(1) extra</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each test is a constant number of long multiplies. Closest pair and hull are the log-factor algorithms on the next page / D&C.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Double + atan2</td><td>unstable</td><td>O(1)</td><td>Never for predicates</td></tr>
+      <tr><td>long cross</td><td>exact at 1e9</td><td>O(1)</td><td>Default</td></tr>
+      <tr><td>BigInteger cross</td><td>exact at 1e18</td><td>slow</td><td>When |x| > 2e9</td></tr>
+      <tr><td>Ray + double</td><td>fragile on edges</td><td>O(n)</td><td>Prefer winding + long</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">int cross</span>
+    <div class="pitfalls__bug">1e9 * 1e9 overflows int (and even 2e9*2e9 needs long).</div>
+    <div class="pitfalls__fix">Every x, y, and every product is long.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparing doubles of areas</span>
+    <div class="pitfalls__bug">You divide by 2 or take hypot and then compare to 0 with 1e-9.</div>
+    <div class="pitfalls__fix">Compare 2*area (the raw cross) to 0. No division.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Collinear overlap missed</span>
+    <div class="pitfalls__bug">Proper-straddle only; two collinear overlapping segments report false.</div>
+    <div class="pitfalls__fix">Handle o==0 && onSeg for inclusive intersection.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">CW vs CCW polygon</span>
+    <div class="pitfalls__bug">area2 is negative; point-in-convex rejects interior points.</div>
+    <div class="pitfalls__fix">Reverse if area2 < 0, or accept both signs consistently.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">On-boundary policy</span>
+    <div class="pitfalls__bug">The statement says strictly inside and you counted the edge.</div>
+    <div class="pitfalls__fix">Treat orient==0 as a separate case; read the problem once.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Closest pair</td>
+        <td>Sort by x, D&C, scan a strip of width d.</td>
+        <td><code>O(n log n)</code></td>
+        <td>CSES</td>
+      </tr>
+      <tr>
+        <td>Line intersection point</td>
+        <td>Solve the 2×2; output doubles after the predicate says they meet.</td>
+        <td><code>only if they intersect</code></td>
+        <td>constructive</td>
+      </tr>
+      <tr>
+        <td>Rotating calipers</td>
+        <td>After hull: antipodal pairs for diameter / width.</td>
+        <td><code>next page's client</code></td>
+        <td>diameter</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not atan2 to sort by angle?</summary>
+    <div class="followup__body">
+      <p>You can, with care. Safer: sort by quadrant + orient (cross) so the order is exact. atan2 is a double.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Dot vs cross?</summary>
+    <div class="followup__body">
+      <p>dot(u,v) = |u||v|cos. Sign of dot is acute/obtuse. Sign of cross is left/right. Length² is dot(u,u) — no sqrt until output.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you test collinear in a degenerate triangle?</summary>
+    <div class="followup__body">
+      <p>orient==0. Area is 0. Do not use an epsilon on integer input.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Point in non-convex polygon?</summary>
+    <div class="followup__body">
+      <p>Ray to +∞ on x, count crossings, skip vertices carefully (only count an edge if it straddles the ray in y). Or winding number with orient.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/erect-the-fence/" target="_blank" rel="noopener">Erect The Fence</a></td>
+        <td><span class="badge badge--lc">LC 587</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Hull — next page, uses these predicates</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/convex-polygon/" target="_blank" rel="noopener">Convex Polygon</a></td>
+        <td><span class="badge badge--lc">LC 469</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>All turns same sign</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/circle-and-rectangle-overlapping/" target="_blank" rel="noopener">Circle And Rectangle Overlapping</a></td>
+        <td><span class="badge badge--lc">LC 1401</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Clamp point, compare d²</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/uncrossed-lines/" target="_blank" rel="noopener">Uncrossed Lines</a></td>
+        <td><span class="badge badge--lc">LC 1035</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Not geometry — contrast LCS</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/2189" target="_blank" rel="noopener">Point Location Test</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>orient</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/2190" target="_blank" rel="noopener">Line Segment Intersection</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>inclusive intersect</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/2191" target="_blank" rel="noopener">Polygon Area</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>shoelace</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/166/B" target="_blank" rel="noopener">Polygons</a></td>
+        <td><span class="badge badge--cf">CF 166B</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Point in convex / hull inclusion</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/961/D" target="_blank" rel="noopener">Pair Of Lines</a></td>
+        <td><span class="badge badge--cf">CF 961D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>All points lie on two lines</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>cross is 2×signed area. Sign is orientation.</li>
+    <li>long for every product. No epsilon on integer predicates.</li>
+    <li>Segment intersect = straddle + collinear on-seg.</li>
+    <li>Shoelace = sum of consecutive crosses.</li>
+    <li>Convex point-in = all turns the same way.</li>
+  </ul>
+  <div class="recap__oneliner">cross(u,v)=u.x*v.y-u.y*v.x; orient=signum(cross(b-a,c-a));</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -171,6 +171,11 @@
     <tr><td>lexicographically smallest / largest</td><td>Greedy + stack, or suffix array</td><td><a href="modules/03-linear-structures/stacks-and-monotonic-stack.html">Mono stack</a></td><td><code>pop while top &gt; next and remaining allows</code></td></tr>
     <tr><td>"connected" after unions / Kruskal</td><td>DSU</td><td><a href="modules/06-range-queries/dsu.html">DSU</a></td><td><code>if(find(u)!=find(v)) unite</code></td></tr>
     <tr><td>path queries on a tree, n log² n OK</td><td>HLD</td><td><a href="modules/09-decompositions/heavy-light-decomposition.html">HLD</a></td><td><code>while(head[u]!=head[v]) lift deeper</code></td></tr>
+    <tr><td>count pairs at distance k / through a separator</td><td>Centroid decomposition</td><td><a href="modules/09-decompositions/centroid-decomposition.html">Centroid</a></td><td><code>centroid, solve, mark dead, recurse</code></td></tr>
+    <tr><td>offline range distinct / freq of freq</td><td>Mo's algorithm</td><td><a href="modules/13-greedy-and-offline/mos-algorithm.html">Mo</a></td><td><code>sort (L/B, R); add/rem while moving</code></td></tr>
+    <tr><td>unimodal f, find min / max</td><td>Ternary search</td><td><a href="modules/13-greedy-and-offline/ternary-search-and-convexity.html">Ternary</a></td><td><code>m1=lo+(hi-lo)/3; m2=hi-(hi-lo)/3</code></td></tr>
+    <tr><td>huge coords, Fenwick / segtree of size n</td><td>Coordinate compression</td><td><a href="modules/13-greedy-and-offline/coordinate-compression.html">Compress</a></td><td><code>sort unique; rank = lower_bound</code></td></tr>
+    <tr><td>convex polygon / fence / farthest pair</td><td>Convex hull + calipers</td><td><a href="modules/11-math-and-number-theory/convex-hull.html">Hull</a></td><td><code>sort x; pop while not left turn</code></td></tr>
   </tbody>
 </table>
 </div>

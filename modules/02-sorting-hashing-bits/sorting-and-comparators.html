@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorting &amp; Comparators &mdash; DSA Course</title>
+<meta name="description" content="Java's sort is a primitive. The skill is writing a comparator that encodes the order the problem actually wants, then proving that order is a total, transitive key.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="sorting-and-comparators">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Sorting & Comparators</h1>
+  <p class="hero__tagline">Java's sort is a primitive. The skill is writing a comparator that encodes the order the problem actually wants, then proving that order is a total, transitive key.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">sort</span>
+      <span class="chip">comparator</span>
+      <span class="chip">custom order</span>
+      <span class="chip">greedy</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Almost every greedy proof starts with "sort the input". Intervals by start or by end, tasks by deadline, points by polar angle, strings by <code>a+b vs b+a</code> &mdash; the algorithm is often two lines after the sort. If the comparator is wrong, the rest of the code is theatre.</p>
+<p>Interviews test comparators because they mix language trivia with algorithmic honesty. <code>Integer.compare</code> versus subtraction (overflow), stability of <code>Arrays.sort</code> on objects versus primitives, and the contract <code>sgn(a,b) == -sgn(b,a)</code> are the three traps that turn a correct idea into a WA or a runtime exception on a single pair of values.</p>
+<p>The reformulation is: you are not sorting values, you are sorting <em>keys you invented</em>. Once the key is a number or a pair that is totally ordered, TimSort does the rest in <code>O(n log n)</code>. Inventing that key is the problem; calling sort is the punctuation.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Write the comparator so that it answers one question: "if I can only keep one of these two items first, which one must come first for the rest of the algorithm to work?" If that answer is not transitive, the sort is undefined and so is your greedy.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Order by X, break ties by Y" &mdash; a comparator of two keys</li>
+        <li>A greedy that is obviously correct after the items are in a particular order (intervals, deadlines, Huffman-style merge)</li>
+        <li>"Largest number formed by concatenating", "reorder logs", "rank teams by votes"</li>
+        <li>You need a stable order so equal keys keep their input relative order</li>
+        <li>The bottleneck is deciding the key, not computing it &mdash; each key is <code>O(1)</code> or <code>O(|s|)</code></li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the k-th element only &rarr; <a href="../01-arrays-and-windows/kth-and-selection.html">quickselect / heap</a>, not a full sort</li>
+        <li>The range is tiny (<code>0..n</code> or <code>0..10&#8308;</code>) and you need linear time &rarr; <a href="non-comparison-sorts.html">counting / radix</a></li>
+        <li>The sequence is a permutation of <code>1..n</code> with swaps of misplaced values &rarr; <a href="cyclic-sort-and-index-tricks.html">cyclic sort</a></li>
+        <li>Order is defined by a partial order / graph of prerequisites &rarr; topological sort, not a comparator</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"sort by start, then by end"</td>
+        <td>Lexicographic pair key</td>
+        <td>Comparator of two ints</td>
+      </tr>
+      <tr>
+        <td>"largest number from concatenating"</td>
+        <td>Order is not numeric; it is a+b vs b+a</td>
+        <td>String comparator</td>
+      </tr>
+      <tr>
+        <td>"k closest points to origin"</td>
+        <td>Sort by distance, or a size-k heap</td>
+        <td>Comparator or PriorityQueue</td>
+      </tr>
+      <tr>
+        <td>"reconstruct queue by height"</td>
+        <td>Sort tallest first, insert by k-count</td>
+        <td>Sort then list-insert</td>
+      </tr>
+      <tr>
+        <td>"merge overlapping intervals"</td>
+        <td>Sort by start so overlaps are adjacent</td>
+        <td><a href="intervals.html">Intervals</a></td>
+      </tr>
+      <tr>
+        <td>primitive <code>int[]</code> vs <code>Integer[]</code></td>
+        <td>TimSort is stable only on objects</td>
+        <td>Box, or sort indices</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> counting sort</td>
+        <td>Comparison sort is n log n; counting is n + range</td>
+        <td><a href="non-comparison-sorts.html">Non-comparison sorts</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> is the signature for one <code>O(n log n)</code> sort. Keys that themselves take <code>O(L)</code> (strings of length L) make the true cost <code>O(n L log n)</code>. Subtraction comparators overflow when values reach <code>&plusmn;10&#8313;</code>; use <code>Integer.compare</code> or <code>Long.compare</code>.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p><code>Arrays.sort</code> on <code>int[]</code> is dual-pivot quicksort (not stable). On objects it is TimSort (stable). For a custom order, box to <code>Integer[]</code> or sort an index array. The comparator must be a total order: antisymmetric, transitive, and zero only on equivalents. Violating transitivity ("put a before b because of a local rule that does not extend") is undefined behaviour and shows up as a rare shuffle, not an exception.</p>
+<p>The standard Java pattern is <code>(u, v) -&gt; Integer.compare(key(u), key(v))</code> or <code>Comparator.comparingInt(...).thenComparingInt(...)</code>. Never <code>return u - v</code> on arbitrary ints. For concatenation, compare <code>a+b</code> with <code>b+a</code> as strings; do not parse them as integers. After the sort, the greedy scan is usually a single pass that only looks at neighbours.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After <code>Arrays.sort(a, cmp)</code>, for every <code>i &lt; j</code>:</p><span class="eq">cmp(a[i], a[j]) &le; 0</span><p>Interview sentence: <em>"I sort by a key that makes the remaining decision local &mdash; each item only needs to look at its sorted neighbour."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="sorting-and-comparatorsViz"></div>
+  <div class="viz-player" data-viz-target="sorting-and-comparatorsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        5,
+        2,
+        4,
+        6,
+        1,
+        3
+      ],
+      "vars": [
+        "pass",
+        "i",
+        "j",
+        "a"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Input [5, 2, 4, 6, 1, 3]. Merge-sort: split until singles, then merge adjacent runs.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "pass": "split",
+            "i": "—",
+            "j": "—",
+            "a": "[5,2,4,6,1,3]"
+          }
+        },
+        {
+          "note": "Merge [5] and [2] → [2, 5]. Left half starts to take shape.",
+          "active": [
+            0,
+            1
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "pass": "merge",
+            "i": 0,
+            "j": 1,
+            "a": "[2,5,4,6,1,3]"
+          }
+        },
+        {
+          "note": "Merge [4] and [6] → [4, 6].",
+          "active": [
+            2,
+            3
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            4,
+            5
+          ],
+          "values": {
+            "pass": "merge",
+            "i": 2,
+            "j": 3,
+            "a": "[2,5,4,6,1,3]"
+          }
+        },
+        {
+          "note": "Merge [2,5] and [4,6] → [2, 4, 5, 6]. Left half sorted.",
+          "window": [
+            0,
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            4,
+            5
+          ],
+          "values": {
+            "pass": "merge",
+            "i": 0,
+            "j": 3,
+            "a": "[2,4,5,6,1,3]"
+          }
+        },
+        {
+          "note": "Right half: merge [1] and [3] → [1, 3].",
+          "active": [
+            4,
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "pass": "merge",
+            "i": 4,
+            "j": 5,
+            "a": "[2,4,5,6,1,3]"
+          }
+        },
+        {
+          "note": "Final merge [2,4,5,6] with [1,3] → [1, 2, 3, 4, 5, 6]. Comparator was Integer.compare.",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "pass": "done",
+            "i": 0,
+            "j": 5,
+            "a": "[1,2,3,4,5,6]"
+          }
+        },
+        {
+          "note": "Same skeleton with a custom key: sort strings so that a+b >= b+a (LC 179). The merge is identical; only cmp changes.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "pass": "custom",
+            "i": "—",
+            "j": "—",
+            "a": "same merge, new cmp"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Pick the key, then sort</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  need["need a specific order"] --&gt; kind{"what defines the order?"}
+  kind -- "numeric key" --&gt; intCmp["Integer.compare or Long.compare"]
+  kind -- "pair of keys" --&gt; thenCmp["comparingInt then thenComparingInt"]
+  kind -- "concatenation / votes" --&gt; strCmp["compare a+b with b+a as strings"]
+  kind -- "partial order / graph" --&gt; topo["wrong page: topological sort"]
+  intCmp --&gt; call["Arrays.sort"]
+  thenCmp --&gt; call
+  strCmp --&gt; call
+  call --&gt; scan["one greedy pass on neighbours"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the key</strong> that makes the rest of the algorithm a neighbour scan.</li>
+  <li><strong>Prove transitivity</strong> on paper for two minutes. If A before B and B before C does not imply A before C, the comparator is illegal.</li>
+  <li><strong>Implement with <code>Integer.compare</code></strong> / <code>Comparator.comparingInt</code>. Never subtract ints.</li>
+  <li><strong>Stability:</strong> need it? Sort <code>Integer[]</code> or indices. Primitive <code>int[]</code> sort is not stable.</li>
+  <li><strong>Sort once</strong> with <code>Arrays.sort(a, cmp)</code> or <code>Arrays.sort(idx, (i, j) -&gt; cmp)</code>.</li>
+  <li><strong>Scan linearly.</strong> The greedy decision should now look only at <code>a[i]</code> vs <code>a[i-1]</code>.</li>
+  <li><strong>State <code>O(n log n)</code></strong> plus the cost of the key. String keys of length L cost <code>O(n L log n)</code>.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>pass</th><th>i</th><th>j</th><th>a</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>split</td><td>—</td><td>—</td><td>[5,2,4,6,1,3]</td><td>Input [5, 2, 4, 6, 1, 3]. Merge-sort: split until singles, then merge adjacent runs.</td></tr>
+      <tr><td>merge</td><td>0</td><td>1</td><td>[2,5,4,6,1,3]</td><td>Merge [5] and [2] → [2, 5]. Left half starts to take shape.</td></tr>
+      <tr><td>merge</td><td>2</td><td>3</td><td>[2,5,4,6,1,3]</td><td>Merge [4] and [6] → [4, 6].</td></tr>
+      <tr><td>merge</td><td>0</td><td>3</td><td>[2,4,5,6,1,3]</td><td>Merge [2,5] and [4,6] → [2, 4, 5, 6]. Left half sorted.</td></tr>
+      <tr><td>merge</td><td>4</td><td>5</td><td>[2,4,5,6,1,3]</td><td>Right half: merge [1] and [3] → [1, 3].</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>0</td><td>5</td><td>[1,2,3,4,5,6]</td><td>Final merge [2,4,5,6] with [1,3] → [1, 2, 3, 4, 5, 6]. Comparator was Integer.compare.</td></tr>
+      <tr><td>custom</td><td>—</td><td>—</td><td>same merge, new cmp</td><td>Same skeleton with a custom key: sort strings so that a+b >= b+a (LC 179). The merge is identical; only cmp changes.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Sorting & Comparators implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Selection sort: correct, quadratic, the thing you are about to replace.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SortBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SortBrute {
+        static void selectionSort(int[] a) {
+            int n = a.length;
+            for (int i = 0; i &lt; n; i++) {
+                int best = i;
+                for (int j = i + 1; j &lt; n; j++) {
+                    if (a[j] &lt; a[best]) {
+                        best = j;
+                    }
+                }
+                int t = a[i];
+                a[i] = a[best];
+                a[best] = t;
+            }
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {5, 2, 4, 6, 1, 3};
+            selectionSort(a);
+            System.out.println(Arrays.toString(a));
+        }
+        // Input : [5, 2, 4, 6, 1, 3]
+        // Output: [1, 2, 3, 4, 5, 6]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Library sort plus three comparator patterns: ints, pairs, concatenation.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SortKeys.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.Comparator;
+    
+    public class SortKeys {
+        static int[] sortInts(int[] a) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            return b;
+        }
+    
+        static int[][] sortPairs(int[][] pairs) {
+            Arrays.sort(pairs, Comparator
+                .comparingInt((int[] p) -&gt; p[0])
+                .thenComparingInt(p -&gt; p[1]));
+            return pairs;
+        }
+    
+        static String largestNumber(int[] nums) {
+            String[] s = new String[nums.length];
+            for (int i = 0; i &lt; nums.length; i++) {
+                s[i] = String.valueOf(nums[i]);
+            }
+            Arrays.sort(s, (a, b) -&gt; (b + a).compareTo(a + b));
+            if (s[0].equals("0")) {
+                return "0";
+            }
+            StringBuilder sb = new StringBuilder();
+            for (String x : s) {
+                sb.append(x);
+            }
+            return sb.toString();
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(sortInts(new int[] {5, 2, 4, 6, 1, 3})));
+            System.out.println(largestNumber(new int[] {3, 30, 34, 5, 9}));
+        }
+        // Input : [5,2,4,6,1,3] then [3,30,34,5,9]
+        // Output: [1, 2, 3, 4, 5, 6]
+        //         9534330
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Sort indices when you must keep the original array, and a stable object sort.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SortIndices.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.Comparator;
+    
+    public class SortIndices {
+        static int[] orderByValue(int[] a) {
+            Integer[] idx = new Integer[a.length];
+            for (int i = 0; i &lt; a.length; i++) {
+                idx[i] = i;
+            }
+            Arrays.sort(idx, Comparator.comparingInt(i -&gt; a[i]));
+            int[] out = new int[a.length];
+            for (int i = 0; i &lt; a.length; i++) {
+                out[i] = idx[i];
+            }
+            return out;
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {5, 2, 4, 6, 1, 3};
+            System.out.println(Arrays.toString(orderByValue(a)));
+            System.out.println(Arrays.toString(a));
+        }
+        // Input : values [5, 2, 4, 6, 1, 3]
+        // Output: indices [4, 1, 5, 2, 0, 3]
+        //         original unchanged [5, 2, 4, 6, 1, 3]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n) comparisons, times the cost of the key</span>
+    <span class="badge badge--space">Space O(n) TimSort scratch; O(1) extra for primitive dual-pivot aside from the call stack</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>A comparison sort must distinguish <code>n!</code> permutations, so <span class="eq">&Omega;(n log n)</span> comparisons in the worst case. Java's object sort is TimSort, adaptive and stable; primitive sort is dual-pivot quicksort.</p>
+    <p>If each comparison costs <code>O(L)</code> (string keys of length L), multiply: <span class="eq">T(n) = O(n L log n)</span>. Concatenation comparators allocate, so they are slower than they look; still the right complexity class for <code>n &le; 10&#8309;</code>, <code>L &le; 20</code>.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Selection / insertion sort</td><td>O(n²)</td><td>O(1)</td><td>n ≤ 2000 teaching only</td></tr>
+      <tr><td>Arrays.sort primitives</td><td>O(n log n)</td><td>O(log n)</td><td>Default numeric order, not stable</td></tr>
+      <tr><td>Arrays.sort objects / TimSort</td><td>O(n log n)</td><td>O(n)</td><td>Stable; custom Comparator</td></tr>
+      <tr><td>Counting / radix</td><td>O(n + R) / O(n w)</td><td>O(n + R)</td><td>Tiny range; next page</td></tr>
+      <tr><td>Heap of size k</td><td>O(n log k)</td><td>O(k)</td><td>k-th / k closest, not full order</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Subtraction overflow in the comparator</span>
+    <div class="pitfalls__bug"><code>return a - b</code> with <code>a = Integer.MIN_VALUE</code> and <code>b = 1</code> wraps and reports the wrong sign.</div>
+    <div class="pitfalls__fix"><code>Integer.compare(a, b)</code> or <code>Long.compare</code>. Never subtract.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Unstable primitive sort</span>
+    <div class="pitfalls__bug">Sorting <code>int[]</code> of equal keys shuffles their original order, then a tie-breaking scan is wrong.</div>
+    <div class="pitfalls__fix">Box to <code>Integer[]</code>, or sort an index array with a stable object sort.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Illegal transitive order</span>
+    <div class="pitfalls__bug">Comparator says A&lt;B, B&lt;C, C&lt;A. TimSort may throw <code>IllegalArgumentException: Comparison method violates its general contract!</code></div>
+    <div class="pitfalls__fix">The key must be a total order. Test a cycle of three items by hand.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Parsing concatenated numbers as ints</span>
+    <div class="pitfalls__bug">LC 179 with numbers that concatenate past 2&#8313;1. <code>parseInt(a+b)</code> throws.</div>
+    <div class="pitfalls__fix">Compare strings. Leading-zero answer is the single character <code>"0"</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting that sort mutates</span>
+    <div class="pitfalls__bug">You sort the caller's array and a later assertion on the original order fails.</div>
+    <div class="pitfalls__fix">Clone first, or sort indices and leave the source untouched.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sort by distance / closeness</td>
+        <td>Key is <code>x*x + y*y</code> as long, to avoid sqrt and overflow.</td>
+        <td><code>Arrays.sort(pts, Comparator.comparingLong(p -&gt; (long)p[0]*p[0] + (long)p[1]*p[1]));</code></td>
+        <td>LC 973; or a size-k heap if you only need k.</td>
+      </tr>
+      <tr>
+        <td>Queue reconstruction by height</td>
+        <td>Sort tallest first, then insert each person at index k in a list.</td>
+        <td><code>sort (h desc, k asc); then list.add(k, person);</code></td>
+        <td>LC 406.</td>
+      </tr>
+      <tr>
+        <td>Rank teams by votes</td>
+        <td>26-letter position counts; comparator walks ranks then letter.</td>
+        <td><code>cmp: first differing rank count, then team id.</code></td>
+        <td>LC 1366.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is primitive Arrays.sort not stable?</summary>
+    <div class="followup__body">
+      <p>It is a dual-pivot quicksort tuned for ints. Stability requires extra memory to remember original positions. Objects go through TimSort, which is stable. If you need stability on ints, sort boxed values or indices.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you sort by a key that is a long without boxing the array?</summary>
+    <div class="followup__body">
+      <p>Sort indices: <code>Integer[] idx</code> and <code>Comparator.comparingLong(i -&gt; key[i])</code>. The values stay primitive; only the permutation is boxed.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is a lambda comparator allocated every call?</summary>
+    <div class="followup__body">
+      <p>The lambda is a singleton invokedynamic handle; it is not allocated per comparison. What is allocated is any string you build inside it (concatenation comparators). Cache keys if L is large.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is n log n not good enough after a sort?</summary>
+    <div class="followup__body">
+      <p>When the true bottleneck is the key, not the sort: string keys with large L, or when you only needed the k-th element. Also when the range is tiny and counting sort is linear.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sort-an-array/" target="_blank" rel="noopener">Sort an Array</a></td>
+        <td><span class="badge badge--lc">LC 912</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Implement a stable n log n sort</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/largest-number/" target="_blank" rel="noopener">Largest Number</a></td>
+        <td><span class="badge badge--lc">LC 179</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Comparator a+b vs b+a</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/reorder-data-in-log-files/" target="_blank" rel="noopener">Reorder Data in Log Files</a></td>
+        <td><span class="badge badge--lc">LC 937</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Letter logs vs digit logs; stable</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/k-closest-points-to-origin/" target="_blank" rel="noopener">K Closest Points to Origin</a></td>
+        <td><span class="badge badge--lc">LC 973</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by squared distance, or heap</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/queue-reconstruction-by-height/" target="_blank" rel="noopener">Queue Reconstruction by Height</a></td>
+        <td><span class="badge badge--lc">LC 406</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort tallest first, insert at k</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/rank-teams-by-votes/" target="_blank" rel="noopener">Rank Teams by Votes</a></td>
+        <td><span class="badge badge--lc">LC 1366</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count ranks, then custom cmp</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/sort-characters-by-frequency/" target="_blank" rel="noopener">Sort Characters By Frequency</a></td>
+        <td><span class="badge badge--lc">LC 451</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count then sort by freq</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/car-fleet/" target="_blank" rel="noopener">Car Fleet</a></td>
+        <td><span class="badge badge--lc">LC 853</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by position, scan time to target</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Invent a totally ordered key</strong>, then call the library sort.</li>
+    <li><strong>Integer.compare</strong>, never <code>a - b</code>.</li>
+    <li><strong>Primitive sort is not stable</strong>; object TimSort is.</li>
+    <li><strong>String concatenation keys</strong> compare <code>a+b</code> vs <code>b+a</code>.</li>
+    <li><strong>After the sort</strong> the greedy should be a neighbour scan.</li>
+  </ul>
+  <div class="recap__oneliner">Arrays.sort(a, Comparator.comparingInt(x -&gt; key(x)).thenComparingInt(x -&gt; tie(x)));</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

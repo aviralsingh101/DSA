@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inclusion-Exclusion &mdash; DSA Course</title>
+<meta name="description" content="|A∪B|=|A|+|B|-|A∩B|. For n sets the sign is (-1)^{|S|+1}. The same sum counts surjections, derangements, and coprime lattice points.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="inclusion-exclusion">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Inclusion-Exclusion</h1>
+  <p class="hero__tagline">|A∪B|=|A|+|B|-|A∩B|. For n sets the sign is (-1)^{|S|+1}. The same sum counts surjections, derangements, and coprime lattice points.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="combinatorics.html">Combinatorics</a>,
+      <a href="primes-and-sieves.html">Primes & Sieves</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">inclusion-exclusion</span>
+      <span class="chip">PIE</span>
+      <span class="chip">Möbius</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"How many integers ≤ n are divisible by 2 or 3 or 5?" is add singles, subtract pairs, add the triple. The same loop counts derangements and gcd==1 pairs.</p>
+<p>In code: loop 2^k subsets of k properties, sign = popcount parity. 2^k times the cost of one intersection must fit.</p>
+<p>Möbius inversion packages IE on the divisor lattice: Σ_{d|n} μ(d)=[n==1]. Coprime pairs become Σ μ(d) floor(n/d)^2.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>You can count a union if you can count every intersection. An element in exactly r sets is counted C(r,1)-C(r,2)+...=1 time.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Union of k≤20 sets, each intersection easy</li>
+        <li>Count ≤ n coprime to m</li>
+        <li>Derangements n! Σ (-1)^k/k!</li>
+        <li>Surjections onto k labels</li>
+        <li>Stars-and-bars with upper bounds</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>k=40 unstructured properties → 2^40 dies</li>
+        <li>Subset DP is cheaper</li>
+        <li>You cannot count A∩B</li>
+        <li>Just one set</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Union of k</td>
+        <td>Σ (-1)^{|S|+1} |∩ S|</td>
+        <td>2^k loop</td>
+      </tr>
+      <tr>
+        <td>gcd==1 pairs</td>
+        <td>Σ μ(d) floor(n/d)^2</td>
+        <td>Möbius</td>
+      </tr>
+      <tr>
+        <td>Derangement</td>
+        <td>n! Σ (-1)^k/k!</td>
+        <td>fixed points</td>
+      </tr>
+      <tr>
+        <td>Upper-bounded bars</td>
+        <td>subtract x_i ≥ L+1</td>
+        <td>CF 451E</td>
+      </tr>
+      <tr>
+        <td>Coprime to m, ≤ n</td>
+        <td>IE on primes of m</td>
+        <td>φ if n=m</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> 1-minus only</td>
+        <td>That is IE for one set</td>
+        <td>Do not stop at pairs</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> k≤20 for a mask loop. Möbius to n=1e7 is a linear sieve. Floor(n/d) blocks make Σ f(d)floor(n/d) O(√n).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>For mask≠0, count the intersection of those properties. Sign + for odd popcount (union). Sum.</p>
+<p>Möbius: sieve μ; g(n)=Σ_{d|n} μ(d) f(n/d). gcd==1 is the textbook application.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Σ_j C(r,j)(-1)^{j+1} = 1 for r≥1, so every element in the union is counted once.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="inclusion-exclusionViz"></div>
+  <div class="viz-player" data-viz-target="inclusion-exclusionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "term =",
+      "array": [
+        10,
+        6,
+        4,
+        2
+      ],
+      "indexLabels": [
+        "U",
+        "A",
+        "B",
+        "A∩B"
+      ],
+      "vars": [
+        "step",
+        "term",
+        "acc"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "1..10 divisible by 2 or 3: |A|=5, |B|=3.",
+          "active": [
+            1
+          ],
+          "values": {
+            "step": "singles",
+            "term": "5+3",
+            "acc": 8
+          }
+        },
+        {
+          "note": "Subtract |A∩B|=1 → 7. Numbers: 2,3,4,6,8,9,10.",
+          "active": [
+            3
+          ],
+          "values": {
+            "step": "pair",
+            "term": "-1",
+            "acc": 7
+          }
+        },
+        {
+          "note": "Primes 2,3,5: 5+3+2-1-1-0+0=8.",
+          "active": [
+            0
+          ],
+          "values": {
+            "step": "3 primes",
+            "term": 8,
+            "acc": 8
+          }
+        },
+        {
+          "note": "!3 = 6*(1-1+1/2-1/6)=2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "step": "derange",
+            "term": 2,
+            "acc": 2
+          }
+        },
+        {
+          "note": "μ(1..6)=1,-1,-1,0,-1,1.",
+          "active": [
+            0
+          ],
+          "values": {
+            "step": "mu",
+            "term": "pairs",
+            "acc": "sum"
+          }
+        },
+        {
+          "note": "Skip mask 0 for a union; + on odd popcount.",
+          "active": [
+            0
+          ],
+          "values": {
+            "step": "sign",
+            "term": "popcount",
+            "acc": "odd+"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart LR
+  u["union"] --&gt; a["plus singles"]
+  u --&gt; b["minus pairs"]
+  u --&gt; c["plus triples"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name properties</strong> so intersections are countable.</li>
+  <li><strong>Loop masks 1..(1<<k)-1</strong>.</li>
+  <li><strong>Sign</strong> from popcount; + if odd.</li>
+  <li><strong>Skip</strong> if the product of primes exceeds n.</li>
+  <li><strong>Möbius</strong> for divisor-lattice questions.</li>
+  <li><strong>Verify k=2</strong> against |A|+|B|-|A∩B|.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>step</th><th>term</th><th>acc</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>singles</td><td>5+3</td><td>8</td><td>1..10 divisible by 2 or 3: |A|=5, |B|=3.</td></tr>
+      <tr><td>pair</td><td>-1</td><td>7</td><td>Subtract |A∩B|=1 → 7. Numbers: 2,3,4,6,8,9,10.</td></tr>
+      <tr><td>3 primes</td><td>8</td><td>8</td><td>Primes 2,3,5: 5+3+2-1-1-0+0=8.</td></tr>
+      <tr><td>derange</td><td>2</td><td>2</td><td>!3 = 6*(1-1+1/2-1/6)=2.</td></tr>
+      <tr><td>mu</td><td>pairs</td><td>sum</td><td>μ(1..6)=1,-1,-1,0,-1,1.</td></tr>
+      <tr><td>sign</td><td>popcount</td><td>odd+</td><td>Skip mask 0 for a union; + on odd popcount.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Inclusion-Exclusion implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">UnionBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class UnionBrute {
+        static int count(int n, int[] p) {
+            int c = 0;
+            outer:
+            for (int x = 1; x &lt;= n; x++)
+                for (int v : p) if (x % v == 0) { c++; continue outer; }
+            return c;
+        }
+        public static void main(String[] args) {
+            System.out.println(count(10, new int[] {2, 3}));
+        }
+        // Input : 1..10, div by 2 or 3
+        // Output: 7
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">InclusionExclusion.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class InclusionExclusion {
+        static long unionDiv(long n, int[] p) {
+            int k = p.length;
+            long ans = 0;
+            for (int m = 1; m &lt; (1 &lt;&lt; k); m++) {
+                long prod = 1;
+                int bits = 0;
+                boolean ov = false;
+                for (int i = 0; i &lt; k; i++) if (((m &gt;&gt; i) &amp; 1) == 1) {
+                    bits++;
+                    if (prod &gt; n / p[i]) { ov = true; break; }
+                    prod *= p[i];
+                }
+                if (ov) continue;
+                long term = n / prod;
+                ans += (bits % 2 == 1) ? term : -term;
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(unionDiv(10, new int[] {2, 3}));
+            System.out.println(unionDiv(10, new int[] {2, 3, 5}));
+        }
+        // Input : 10 with {2,3} and {2,3,5}
+        // Output: 7
+        //         8
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MobiusGcd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class MobiusGcd {
+        static int[] mu;
+        static void sieve(int n) {
+            mu = new int[n + 1];
+            int[] spf = new int[n + 1];
+            mu[1] = 1;
+            List&lt;Integer&gt; pr = new ArrayList&lt;&gt;();
+            for (int i = 2; i &lt;= n; i++) {
+                if (spf[i] == 0) { spf[i] = i; pr.add(i); mu[i] = -1; }
+                for (int p : pr) {
+                    long v = (long) i * p;
+                    if (v &gt; n) break;
+                    spf[(int) v] = p;
+                    mu[(int) v] = (i % p == 0) ? 0 : -mu[i];
+                    if (i % p == 0) break;
+                }
+            }
+        }
+        static long coprimePairs(int n) {
+            sieve(n);
+            long ans = 0;
+            for (int d = 1; d &lt;= n; d++) ans += (long) mu[d] * (n / d) * (n / d);
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(coprimePairs(3));
+        }
+        // Input : pairs in 1..3 with gcd 1
+        // Output: 7
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(2^k T); Möbius O(n) + O(√n) floor sum</span>
+    <span class="badge badge--space">Space O(n) for μ</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>2^k subsets. Möbius is a linear sieve. Floor values group into O(√n) blocks.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Brute universe</td><td>O(U k)</td><td>O(1)</td><td>U small</td></tr>
+      <tr><td>IE 2^k</td><td>O(2^k T)</td><td>O(k)</td><td>k<=20</td></tr>
+      <tr><td>Möbius + floor</td><td>O(n+√n)</td><td>O(n)</td><td>gcd</td></tr>
+      <tr><td>SOS DP</td><td>O(n 2^n)</td><td>O(2^n)</td><td>subset zeta</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Wrong sign / empty mask</span>
+    <div class="pitfalls__bug">Mask 0 adds the universe.</div>
+    <div class="pitfalls__fix">Skip 0; + on odd popcount.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Product overflow</span>
+    <div class="pitfalls__bug">lcm wraps; n/prod is junk.</div>
+    <div class="pitfalls__fix">If prod would exceed n, skip.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">μ of a square not zeroed</span>
+    <div class="pitfalls__bug">mu[i*p]=-mu[i] even when p|i.</div>
+    <div class="pitfalls__fix">If p|i, μ=0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Derangement integer /</span>
+    <div class="pitfalls__bug">n!/k! must stay exact.</div>
+    <div class="pitfalls__fix">Running mul or mods.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">min(|A|,|B|) as intersection</span>
+    <div class="pitfalls__bug">Not the size of A∩B.</div>
+    <div class="pitfalls__fix">Count from the structure (lcm, both constraints).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bars + caps</td>
+        <td>Subtract C(n'+k-1, k-1) per exceeding subset.</td>
+        <td><code>CF 451E</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Surjections</td>
+        <td>Σ (-1)^{k-i} C(k,i) i^n</td>
+        <td><code>onto functions</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Subset Möbius</td>
+        <td>SOS DP is fast zeta on 2^[n].</td>
+        <td><code>sos-dp</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is an r-set element counted once?</summary>
+    <div class="followup__body">
+      <p>Σ C(r,j)(-1)^{j+1}=1 for r≥1.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Möbius vs raw IE?</summary>
+    <div class="followup__body">
+      <p>Möbius is IE on the divisor poset with μ precomputed.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>n=1e12 in Σ μ(d) floor(n/d)^2?</summary>
+    <div class="followup__body">
+      <p>Cannot sieve to 1e12. Need Du-Jiao / min_25, or n≤1e7.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Three-set formula?</summary>
+    <div class="followup__body">
+      <p>|A∪B∪C|=|A|+|B|+|C|-|AB|-|AC|-|BC|+|ABC|.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/ugly-number-iii/" target="_blank" rel="noopener">Ugly Number Iii</a></td>
+        <td><span class="badge badge--lc">LC 1201</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Binary search + IE of 3</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/subarrays-with-k-different-integers/" target="_blank" rel="noopener">Subarrays With K Different Integers</a></td>
+        <td><span class="badge badge--lc">LC 992</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>at-most k minus at-most k-1</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/451/E" target="_blank" rel="noopener">Devu and Flowers</a></td>
+        <td><span class="badge badge--cf">CF 451E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Stars-and-bars + IE</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/449/D" target="_blank" rel="noopener">Jzzhu and Numbers</a></td>
+        <td><span class="badge badge--cf">CF 449D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SOS / IE on bits</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/2185" target="_blank" rel="noopener">Prime Multiples</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>IE on primes</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/abc172/tasks/abc172_d" target="_blank" rel="noopener">ABC 172 D</a></td>
+        <td><span class="badge badge--atc">ABC 172D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sum of d(n)</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/628/D" target="_blank" rel="noopener">Magic Numbers</a></td>
+        <td><span class="badge badge--cf">CF 628D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Digit DP</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/NDIVPHI/" target="_blank" rel="noopener">NDIVPHI</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n/phi max</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Union = plus singles, minus pairs, plus triples.</li>
+    <li>Skip empty mask; + on odd popcount.</li>
+    <li>An r-set element is counted once.</li>
+    <li>Möbius is IE on divisors.</li>
+    <li>Overflow-check the product.</li>
+  </ul>
+  <div class="recap__oneliner">for mask: ans += (popcount odd ? +1 : -1) * intersection(mask);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

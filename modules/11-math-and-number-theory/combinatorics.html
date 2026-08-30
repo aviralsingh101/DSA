@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Combinatorics &mdash; DSA Course</title>
+<meta name="description" content="nCr = n!/(r!(n-r)!) in a prime field is three factorials. Lucas handles n &ge; p. Stars-and-bars is C(n+k-1, k-1).">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="combinatorics">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Combinatorics</h1>
+  <p class="hero__tagline"><code>nCr = n!/(r!(n-r)!)</code> in a prime field is three factorials. Lucas handles <code>n &ge; p</code>. Stars-and-bars is <code>C(n+k-1, k-1)</code>.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="modular-arithmetic.html">Modular Arithmetic</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">nCr</span>
+      <span class="chip">Lucas</span>
+      <span class="chip">Catalan</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Counting problems collapse to choose, distribute, or Catalan. Mod a prime, a fact/invFact table makes every nCr O(1). That table is the primitive the rest of combinatorics sits on.</p>
+<p>When n is huge and r is tiny, multiply the falling factorial. When n ≥ p, n! is 0 and you need Lucas: nCr of the base-p digits.</p>
+<p>Stars-and-bars, "at least one", Catalan, and derangements are the four named shapes. The algebra is short once nCr is cheap.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>nCr is a field element when M is prime and n < M. Precompute fact and invFact once. Lucas is the same formula on base-p digits when n ≥ M.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Combinations / distributions modulo a prime</li>
+        <li>Stars-and-bars: n identical items, k labelled bins</li>
+        <li>Catalan: brackets, BSTs, monotone paths under the diagonal</li>
+        <li>n ≤ 1e18, r ≤ 1e6 — falling factorial</li>
+        <li>nCr mod p with n ≥ p — Lucas</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Composite modulus that is not a prime power → CRT + per-prime fact</li>
+        <li>Exact huge integer, not a residue → BigInteger</li>
+        <li>Order matters and you used nCr instead of nPr</li>
+        <li>Subset DP is smaller than the closed form you are forcing</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>nCr mod p, n < p</td>
+        <td>fact[n]*invF[r]*invF[n-r]</td>
+        <td>O(1) after O(n)</td>
+      </tr>
+      <tr>
+        <td>n huge, r small</td>
+        <td>falling / r!</td>
+        <td>O(r + log p)</td>
+      </tr>
+      <tr>
+        <td>n ≥ p</td>
+        <td>Lucas on base-p digits</td>
+        <td>O(log_p n)</td>
+      </tr>
+      <tr>
+        <td>n identical, k bins ≥0</td>
+        <td>C(n+k-1, k-1)</td>
+        <td>stars and bars</td>
+      </tr>
+      <tr>
+        <td>Catalan n</td>
+        <td>C(2n,n)*inv(n+1)</td>
+        <td>or C(2n,n)-C(2n,n-1)</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> nPr</td>
+        <td>Order matters: n!/(n-r)!</td>
+        <td>Ask if order counts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> M prime, n ≤ 1e6 for a fact table. Falling for r ≤ 1e6. Lucas when p ≤ 1e6 and n is huge.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Build fact[0..n] and invFact (one inverse at n, then walk down). nCr = 0 if r<0 or r>n. Stars-and-bars: non-neg solutions of x_1+...+x_k=n is C(n+k-1, k-1).</p>
+<p>Lucas: while n or r is nonzero, multiply nCr(n%p, r%p) (0 if a digit of r exceeds n), then n/=p, r/=p. Catalan = C(2n,n)*inv(n+1).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>C(n,r)=C(n-1,r)+C(n-1,r-1) in Z and in a field. Lucas is that recurrence in base p via (1+x)^n ≡ ∏ (1+x)^{n_i p^i} (mod p).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="combinatoricsViz"></div>
+  <div class="viz-player" data-viz-target="combinatoricsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "C(5,k) =",
+      "array": [
+        1,
+        5,
+        10,
+        10,
+        5,
+        1
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "vars": [
+        "n",
+        "r",
+        "val"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Pascal row n=5. C(5,0)=1.",
+          "active": [
+            0
+          ],
+          "values": {
+            "n": 5,
+            "r": 0,
+            "val": 1
+          }
+        },
+        {
+          "note": "C(5,2)=10 = 5*4/2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "n": 5,
+            "r": 2,
+            "val": 10
+          }
+        },
+        {
+          "note": "C(5,3)=10 by symmetry.",
+          "active": [
+            3
+          ],
+          "values": {
+            "n": 5,
+            "r": 3,
+            "val": 10
+          }
+        },
+        {
+          "note": "Stars-and-bars: 3 sweets, 2 kids, ≥0: C(4,1)=4.",
+          "active": [
+            1
+          ],
+          "values": {
+            "n": "bars",
+            "r": 1,
+            "val": 4
+          }
+        },
+        {
+          "note": "Catalan_3 = C(6,3)/4 = 5.",
+          "active": [
+            3
+          ],
+          "values": {
+            "n": "Cat3",
+            "r": 3,
+            "val": 5
+          }
+        },
+        {
+          "note": "Lucas C(10,3) mod 7: 10=(1,3)_7, 3=(0,3)_7 → C(1,0)*C(3,3)=1.",
+          "active": [
+            0
+          ],
+          "values": {
+            "n": 10,
+            "r": 3,
+            "val": 1
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["n vs p vs r"] --&gt; small{"n less than p?"}
+  small -- yes --&gt; fact["fact table"]
+  small -- "n huge r small" --&gt; fall["falling factorial"]
+  small -- "n at least p" --&gt; lucas["Lucas digits"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Pick the formula</strong> from n, r, M.</li>
+  <li><strong>fact / invFact</strong> if n < M and many queries.</li>
+  <li><strong>Falling</strong> if r is small: multiply (n-i)*inv(i+1).</li>
+  <li><strong>Lucas</strong> if n ≥ p: product of digit nCr.</li>
+  <li><strong>Stars-and-bars</strong> C(n+k-1, k-1); IE the caps.</li>
+  <li><strong>Catalan</strong> C(2n,n)*inv(n+1), or the difference form if p | n+1.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>n</th><th>r</th><th>val</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>5</td><td>0</td><td>1</td><td>Pascal row n=5. C(5,0)=1.</td></tr>
+      <tr><td>5</td><td>2</td><td>10</td><td>C(5,2)=10 = 5*4/2.</td></tr>
+      <tr><td>5</td><td>3</td><td>10</td><td>C(5,3)=10 by symmetry.</td></tr>
+      <tr><td>bars</td><td>1</td><td>4</td><td>Stars-and-bars: 3 sweets, 2 kids, ≥0: C(4,1)=4.</td></tr>
+      <tr><td>Cat3</td><td>3</td><td>5</td><td>Catalan_3 = C(6,3)/4 = 5.</td></tr>
+      <tr><td>10</td><td>3</td><td>1</td><td>Lucas C(10,3) mod 7: 10=(1,3)_7, 3=(0,3)_7 → C(1,0)*C(3,3)=1.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Combinatorics implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NcrPascal.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class NcrPascal {
+        static int nCr(int n, int r) {
+            if (r &lt; 0 || r &gt; n) return 0;
+            int[] dp = new int[r + 1];
+            dp[0] = 1;
+            for (int i = 1; i &lt;= n; i++)
+                for (int j = Math.min(i, r); j &gt; 0; j--) dp[j] += dp[j - 1];
+            return dp[r];
+        }
+        public static void main(String[] args) {
+            System.out.println(nCr(5, 2));
+        }
+        // Input : 5 choose 2
+        // Output: 10
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NcrMod.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class NcrMod {
+        static final int M = 1_000_000_007;
+        static long[] fact, invF;
+        static long modPow(long a, long e) {
+            long r = 1;
+            for (; e &gt; 0; e &gt;&gt;= 1, a = a * a % M) if ((e &amp; 1) == 1) r = r * a % M;
+            return r;
+        }
+        static void build(int n) {
+            fact = new long[n + 1]; invF = new long[n + 1];
+            fact[0] = 1;
+            for (int i = 1; i &lt;= n; i++) fact[i] = fact[i - 1] * i % M;
+            invF[n] = modPow(fact[n], M - 2);
+            for (int i = n; i &gt; 0; i--) invF[i - 1] = invF[i] * i % M;
+        }
+        static long nCr(int n, int r) {
+            if (r &lt; 0 || r &gt; n) return 0;
+            return fact[n] * invF[r] % M * invF[n - r] % M;
+        }
+        public static void main(String[] args) {
+            build(20);
+            System.out.println(nCr(10, 3));
+            System.out.println(nCr(6, 3) * modPow(4, M - 2) % M);
+        }
+        // Input : C(10,3) ; Catalan_3
+        // Output: 120
+        //         5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Lucas.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Lucas {
+        static long inv(long a, int p) {
+            long r = 1, e = p - 2;
+            for (a %= p; e &gt; 0; e &gt;&gt;= 1, a = a * a % p) if ((e &amp; 1) == 1) r = r * a % p;
+            return r;
+        }
+        static long nCrSmall(int n, int r, int p) {
+            if (r &lt; 0 || r &gt; n) return 0;
+            long a = 1, b = 1;
+            for (int i = 0; i &lt; r; i++) { a = a * (n - i) % p; b = b * (i + 1) % p; }
+            return a * inv(b, p) % p;
+        }
+        static long lucas(long n, long r, int p) {
+            long ans = 1;
+            while (n &gt; 0 || r &gt; 0) {
+                ans = ans * nCrSmall((int) (n % p), (int) (r % p), p) % p;
+                n /= p; r /= p;
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(lucas(10, 3, 7));
+        }
+        // Input : C(10,3) mod 7
+        // Output: 1
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + log M) preprocess, O(1) nCr; Lucas O(log_p n) with a p-table</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The factorial table is one pass. Lucas does O(log_p n) digits, each an nCr with args &lt; p.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pascal DP</td><td>O(n r)</td><td>O(r)</td><td>No mod, n<=1000</td></tr>
+      <tr><td>fact table</td><td>O(n + Q)</td><td>O(n)</td><td>n < M</td></tr>
+      <tr><td>Falling</td><td>O(r log M)</td><td>O(1)</td><td>r small</td></tr>
+      <tr><td>Lucas</td><td>O(p + log n)</td><td>O(p)</td><td>n >= p</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">fact[n] when n >= M</span>
+    <div class="pitfalls__bug">fact[n]=0, every choose looks like 0.</div>
+    <div class="pitfalls__fix">Lucas.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Stars-and-bars off-by-one</span>
+    <div class="pitfalls__bug">C(n+k-1, k) is not the number of solutions.</div>
+    <div class="pitfalls__fix">C(n+k-1, k-1).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Catalan inv(n+1) when p | n+1</span>
+    <div class="pitfalls__bug">Division fails.</div>
+    <div class="pitfalls__fix">Use C(2n,n) - C(2n, n-1).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Integer / on the falling factorial</span>
+    <div class="pitfalls__bug">Truncation in Z, not the field.</div>
+    <div class="pitfalls__fix">Multiply by inv(i+1) mod M.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Order vs combination</span>
+    <div class="pitfalls__bug">Arrangements are nPr.</div>
+    <div class="pitfalls__fix">Ask whether order matters.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Upper negation</td>
+        <td>C(-n,k)=(-1)^k C(n+k-1,k).</td>
+        <td><code>stars-and-bars in disguise</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Multinomial</td>
+        <td>n! / (n1! n2! ...)</td>
+        <td><code>same fact table</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Derangement</td>
+        <td>!n = n! * sum (-1)^k/k!</td>
+        <td><code>IE page</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why Lucas?</summary>
+    <div class="followup__body">
+      <p>Freshman's dream: (1+x)^p ≡ 1+x^p (mod p). The coefficient of x^r is the product of digit-wise nCr.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Each bin at least 1?</summary>
+    <div class="followup__body">
+      <p>Give one first: C(n-1, k-1), n≥k.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is Catalan an integer?</summary>
+    <div class="followup__body">
+      <p>Always. Prefer the difference form mod p if p might divide n+1.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>n=1e18, r=1e18, p=1e9+7?</summary>
+    <div class="followup__body">
+      <p>Cannot sieve a 1e9 table. The problem will guarantee small r, or a different modulus.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/unique-paths/" target="_blank" rel="noopener">Unique Paths</a></td>
+        <td><span class="badge badge--lc">LC 62</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>C(n+m-2, n-1)</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/unique-binary-search-trees/" target="_blank" rel="noopener">Unique Binary Search Trees</a></td>
+        <td><span class="badge badge--lc">LC 96</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Catalan</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/300/C" target="_blank" rel="noopener">Beautiful Numbers</a></td>
+        <td><span class="badge badge--cf">CF 300C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>nCr times digit counts</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/1312/D" target="_blank" rel="noopener">Count the Arrays</a></td>
+        <td><span class="badge badge--cf">CF 1312D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>nCr times (n-2) * 2^{n-k-1}</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1079" target="_blank" rel="noopener">Binomial Coefficients</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>fact table</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1715" target="_blank" rel="noopener">Creating Strings II</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Multinomial n! / freq!</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/abc156/tasks/abc156_d" target="_blank" rel="noopener">ABC 156 D</a></td>
+        <td><span class="badge badge--atc">ABC 156D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2^n - nCr</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/combinations/" target="_blank" rel="noopener">Combinations</a></td>
+        <td><span class="badge badge--lc">LC 77</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Generate, not count</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>nCr = fact[n]*invF[r]*invF[n-r] for n < p.</li>
+    <li>Falling factorial when r is small.</li>
+    <li>Lucas when n ≥ p.</li>
+    <li>Stars-and-bars C(n+k-1, k-1).</li>
+    <li>Catalan = C(2n,n)/(n+1).</li>
+  </ul>
+  <div class="recap__oneliner">nCr = fact[n]*invF[r]%M*invF[n-r]%M;  // Lucas if n&gt;=M</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

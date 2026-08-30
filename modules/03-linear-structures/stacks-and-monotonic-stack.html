@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stacks &amp; Monotonic Stack &mdash; DSA Course</title>
+<meta name="description" content="A stack answers &quot;who is waiting for me?&quot; in linear time: next greater, nearest smaller, histogram rectangles, trapped rain, and the contribution of every subarray minimum">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="stacks-and-monotonic-stack">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>Stacks & Monotonic Stack</h1>
+  <p class="hero__tagline">A stack answers "who is waiting for me?" in linear time: next greater, nearest smaller, histogram rectangles, trapped rain, and the contribution of every subarray minimum.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>,
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">stack</span>
+      <span class="chip">monotonic stack</span>
+      <span class="chip">NGE</span>
+      <span class="chip">histogram</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The next-greater-element question looks like a nested scan: for each index, walk right until a strictly larger value. That is <code>O(n&sup2;)</code> and dies at <code>n = 10&#8309;</code>. If <code>a[j]</code> is smaller than <code>a[i]</code> and to its right, <code>a[j]</code> can never be the next greater of anyone still waiting left of <code>i</code>. A stack of unresolved indices, popped when a greater value arrives, does all the work in one pass.</p>
+<p>That same pop-when-dominated structure is an entire SDE-2 cluster. Largest rectangle in a histogram is next-smaller on both sides. Trapping rain is bounded by the nearest taller bar on each side. Sum of subarray minimums is previous-less times next-less. Daily temperatures and stock span are next-greater with a distance payload.</p>
+<p>The other stack family is structural, not monotonic: matching brackets, decoding nested strings, RPN / calculator. Those keep unmatched openers or pending operators. Mixing the two families in an interview is a classification error.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A monotonic stack stores indices whose answer is not yet known, in an order that lets you discard dominated candidates forever. Each index is pushed once and popped once, so the nested while is O(n) amortised, not quadratic.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Next / previous strictly greater (or smaller) element" for every index</li>
+        <li>"Largest rectangle in a histogram", "maximal rectangle of 1s" after each row is a histogram</li>
+        <li>"How much water can be trapped" bounded by nearest taller bars</li>
+        <li>"Sum of subarray minimums" &mdash; contribution (i-prev)*(next-i)</li>
+        <li>Stock span, daily temperatures, visible people in a queue</li>
+        <li>Matching parentheses, nested decode, or operator-precedence evaluation (structural stack)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Maximum inside a <em>sliding window of fixed size</em> &rarr; <a href="queues-and-monotonic-deque.html">monotonic deque</a> (candidates also expire by age)</li>
+        <li>"k-th greatest so far" or "median of a stream" &rarr; <a href="heaps-and-priority-queue.html">heap</a></li>
+        <li>Nearest greater with updates between queries &rarr; sparse table or segment tree</li>
+        <li>The sequence is not a total order on values &rarr; a different structure</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>next greater to the right</td>
+        <td>Unresolved indices, popped by a larger arrival</td>
+        <td>Decreasing stack</td>
+      </tr>
+      <tr>
+        <td>previous smaller</td>
+        <td>Same idea, opposite comparison or scan</td>
+        <td>Increasing stack</td>
+      </tr>
+      <tr>
+        <td>largest rectangle in histogram</td>
+        <td>Width = next-smaller - prev-smaller - 1</td>
+        <td>0-sentinel at i=n</td>
+      </tr>
+      <tr>
+        <td>trapping rain water</td>
+        <td>min(tallest-left, tallest-right) - height</td>
+        <td>Stack, or two-pointer maxes</td>
+      </tr>
+      <tr>
+        <td>sum of subarray mins</td>
+        <td>Each value owns a rectangle of subarrays</td>
+        <td>Prev-less * next-less</td>
+      </tr>
+      <tr>
+        <td>daily temperatures / stock span</td>
+        <td>NGE with distance instead of value</td>
+        <td>Payload i-j</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sliding-window maximum</td>
+        <td>Window expiry is by index age, not only by domination</td>
+        <td><a href="queues-and-monotonic-deque.html">Monotonic deque</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a next-greater / histogram / rain flavour is the linear-stack signature. Areas and contributions need <code>long</code>: heights up to <code>10&#8313;</code> times widths up to <code>10&#8309;</code> overflow int.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Keep a stack of indices whose next-greater (or next-smaller) is unknown. Values are monotone: decreasing when hunting a strictly greater neighbour, increasing when hunting smaller. When <code>a[i]</code> breaks the monotone property, every popped index has just found its answer, and is dominated forever. Store <em>indices</em>, not values: widths and distances need the position. Histogram sentinel: loop to <code>i = n</code> with virtual height 0 so every remaining bar pops.</p>
+<p>Contribution (sum of subarray mins): subarrays where i is the unique min start in (prevLess, i] and end in [i, nextLess). Make one side strict so a plateau is not counted twice. Use <code>ArrayDeque</code>, never <code>java.util.Stack</code>.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The stack holds unresolved indices in monotone order of <code>a[&middot;]</code>. For a decreasing stack used for next-greater:</p><span class="eq">a[s0] &ge; a[s1] &ge; &hellip; , and every popped j has a[j] &lt; a[i] with no greater value in (j, i)</span><p>Interview sentence: <em>"Each index is pushed once and popped once, so the nested while is O(n)."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="stacks-and-monotonic-stackViz"></div>
+  <div class="viz-player" data-viz-target="stacks-and-monotonic-stackViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        2,
+        1,
+        2,
+        4,
+        3
+      ],
+      "vars": [
+        "i",
+        "a[i]",
+        "stack",
+        "wrote"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start. Stack empty. Answers unknown.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": "—",
+            "a[i]": "—",
+            "stack": "[]",
+            "wrote": "—"
+          }
+        },
+        {
+          "note": "i=0, a[0]=2. Nothing to pop. Push 0.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 0,
+            "a[i]": 2,
+            "stack": "[0]",
+            "wrote": "—"
+          }
+        },
+        {
+          "note": "i=1, a[1]=1. 1 is not greater than 2. Push 1. Stack [0,1].",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": 1,
+            "a[i]": 1,
+            "stack": "[0, 1]",
+            "wrote": "—"
+          }
+        },
+        {
+          "note": "i=2, a[2]=2. 2>1, pop 1, write nge[1]=2. Strict: do not pop 0. Push 2.",
+          "active": [
+            2
+          ],
+          "x": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            3,
+            4
+          ],
+          "values": {
+            "i": 2,
+            "a[i]": 2,
+            "stack": "[0, 2]",
+            "wrote": "nge[1]=2"
+          }
+        },
+        {
+          "note": "i=3, a[3]=4. Pop 2 then 0; write nge[2]=4 and nge[0]=4. Push 3.",
+          "active": [
+            3
+          ],
+          "best": [
+            0,
+            2
+          ],
+          "done": [
+            1
+          ],
+          "dim": [
+            4
+          ],
+          "values": {
+            "i": 3,
+            "a[i]": 4,
+            "stack": "[3]",
+            "wrote": "nge[0]=nge[2]=4"
+          }
+        },
+        {
+          "note": "i=4, a[4]=3. 3<4, push 4. End: leftover get -1. Answer [4,2,4,-1,-1].",
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "i": 4,
+            "a[i]": 3,
+            "stack": "[3, 4]",
+            "wrote": "[4,2,4,-1,-1]"
+          }
+        },
+        {
+          "note": "Histogram on [2,1,5,6,2,3]: bar of height 5 has prev-smaller 1 and next-smaller 4, area 10.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "i": "hist",
+            "a[i]": 5,
+            "stack": "—",
+            "wrote": "area 10"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Which stack?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  ask["nearest neighbour or nested syntax?"] --&gt; kind{"which family?"}
+  kind -- "nearest greater/smaller" --&gt; side{"one side or both?"}
+  side -- one --&gt; nge["monotonic stack, scan toward the unknown"]
+  side -- both --&gt; hist["same stack; widths from prev and next"]
+  kind -- "nested syntax" --&gt; syn{"brackets, decode, or operators?"}
+  syn -- brackets --&gt; match["stack of unmatched openers"]
+  syn -- decode --&gt; nest["stack of strings and multipliers"]
+  syn -- operators --&gt; calc["values deque plus operators deque"]
+  nge --&gt; window{"do candidates also expire by age?"}
+  window -- yes --&gt; deque["wrong page: monotonic deque"]
+  window -- no --&gt; doneNode["ArrayDeque as a stack of indices"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Classify.</strong> Nearest greater/smaller (monotonic) vs nested structure.</li>
+  <li><strong>Comparison:</strong> decreasing stack for next-greater; increasing for next-smaller. Strictness is spec.</li>
+  <li><strong>Store indices</strong> in <code>ArrayDeque&lt;Integer&gt;</code>: addLast / pollLast / peekLast.</li>
+  <li><strong>Scan once.</strong> While the top is dominated by a[i], pop and write. Then push i.</li>
+  <li><strong>Sentinel.</strong> Histogram: i to n with height 0. NGE leftovers get -1.</li>
+  <li><strong>Widths:</strong> nextSmall - prevSmall - 1. Contributions in <code>long</code>.</li>
+  <li><strong>Amortised O(n):</strong> each index pushed once and popped once.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>a[i]</th><th>stack</th><th>wrote</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>[]</td><td>—</td><td>Start. Stack empty. Answers unknown.</td></tr>
+      <tr><td>0</td><td>2</td><td>[0]</td><td>—</td><td>i=0, a[0]=2. Nothing to pop. Push 0.</td></tr>
+      <tr><td>1</td><td>1</td><td>[0, 1]</td><td>—</td><td>i=1, a[1]=1. 1 is not greater than 2. Push 1. Stack [0,1].</td></tr>
+      <tr><td>2</td><td>2</td><td>[0, 2]</td><td>nge[1]=2</td><td>i=2, a[2]=2. 2>1, pop 1, write nge[1]=2. Strict: do not pop 0. Push 2.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>4</td><td>[3]</td><td>nge[0]=nge[2]=4</td><td>i=3, a[3]=4. Pop 2 then 0; write nge[2]=4 and nge[0]=4. Push 3.</td></tr>
+      <tr><td>4</td><td>3</td><td>[3, 4]</td><td>[4,2,4,-1,-1]</td><td>i=4, a[4]=3. 3<4, push 4. End: leftover get -1. Answer [4,2,4,-1,-1].</td></tr>
+      <tr><td>hist</td><td>5</td><td>—</td><td>area 10</td><td>Histogram on [2,1,5,6,2,3]: bar of height 5 has prev-smaller 1 and next-smaller 4, area 10.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Stacks & Monotonic Stack implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute NGE</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal stack</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute NGE">
+    <p>Correct nested scan. Mention it, then beat it. Only for n ≤ 2000.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NgeBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class NgeBrute {
+        static int[] nextGreater(int[] a) {
+            int n = a.length;
+            int[] ans = new int[n];
+            Arrays.fill(ans, -1);
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = i + 1; j &lt; n; j++) {
+                    if (a[j] &gt; a[i]) {
+                        ans[i] = a[j];
+                        break;
+                    }
+                }
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(nextGreater(new int[] {2, 1, 2, 4, 3})));
+        }
+        // Input : [2, 1, 2, 4, 3]
+        // Output: [4, 2, 4, -1, -1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal stack">
+    <p>Next-greater, histogram, rain: three payloads on one decreasing-stack skeleton.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MonotonicStack.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.Arrays;
+    
+    public class MonotonicStack {
+        static int[] nextGreater(int[] a) {
+            int n = a.length;
+            int[] ans = new int[n];
+            Arrays.fill(ans, -1);
+            ArrayDeque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) {
+                while (!st.isEmpty() &amp;&amp; a[st.peekLast()] &lt; a[i]) {
+                    ans[st.pollLast()] = a[i];
+                }
+                st.addLast(i);
+            }
+            return ans;
+        }
+    
+        static int largestRectangle(int[] h) {
+            int n = h.length;
+            ArrayDeque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+            long best = 0;
+            for (int i = 0; i &lt;= n; i++) {
+                int cur = (i == n) ? 0 : h[i];
+                while (!st.isEmpty() &amp;&amp; h[st.peekLast()] &gt; cur) {
+                    int height = h[st.pollLast()];
+                    int left = st.isEmpty() ? -1 : st.peekLast();
+                    best = Math.max(best, (long) height * (i - left - 1));
+                }
+                if (i &lt; n) {
+                    st.addLast(i);
+                }
+            }
+            return (int) best;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(nextGreater(new int[] {2, 1, 2, 4, 3})));
+            System.out.println(largestRectangle(new int[] {2, 1, 5, 6, 2, 3}));
+        }
+        // Input : NGE [2,1,2,4,3]; histogram [2,1,5,6,2,3]
+        // Output: [4, 2, 4, -1, -1]
+        //         10
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Sum of subarray mins (asymmetric strictness) and RPN on ArrayDeque of long.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">StackTemplates.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    
+    public class StackTemplates {
+        static int sumSubarrayMins(int[] a) {
+            int n = a.length;
+            int mod = 1_000_000_007;
+            int[] prev = new int[n];
+            int[] next = new int[n];
+            ArrayDeque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) {
+                while (!st.isEmpty() &amp;&amp; a[st.peekLast()] &gt; a[i]) {
+                    st.pollLast();
+                }
+                prev[i] = st.isEmpty() ? -1 : st.peekLast();
+                st.addLast(i);
+            }
+            st.clear();
+            for (int i = n - 1; i &gt;= 0; i--) {
+                while (!st.isEmpty() &amp;&amp; a[st.peekLast()] &gt;= a[i]) {
+                    st.pollLast();
+                }
+                next[i] = st.isEmpty() ? n : st.peekLast();
+                st.addLast(i);
+            }
+            long ans = 0;
+            for (int i = 0; i &lt; n; i++) {
+                ans += (long) a[i] * (i - prev[i]) * (next[i] - i);
+                ans %= mod;
+            }
+            return (int) ans;
+        }
+    
+        static int evalRpn(String[] tokens) {
+            ArrayDeque&lt;Long&gt; st = new ArrayDeque&lt;&gt;();
+            for (String t : tokens) {
+                if (t.length() == 1 &amp;&amp; "+-*/".indexOf(t.charAt(0)) &gt;= 0) {
+                    long b = st.pollLast();
+                    long a = st.pollLast();
+                    char op = t.charAt(0);
+                    long v = switch (op) {
+                        case '+' -&gt; a + b;
+                        case '-' -&gt; a - b;
+                        case '*' -&gt; a * b;
+                        default -&gt; a / b;
+                    };
+                    st.addLast(v);
+                } else {
+                    st.addLast(Long.parseLong(t));
+                }
+            }
+            return st.peekLast().intValue();
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(sumSubarrayMins(new int[] {3, 1, 2, 4}));
+            System.out.println(evalRpn(new String[] {"2", "1", "+", "3", "*"}));
+        }
+        // Input : mins [3,1,2,4]; RPN (2+1)*3
+        // Output: 17
+        //         9
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) amortised</span>
+    <span class="badge badge--space">Space O(n) for the stack and the answer array</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Every index is pushed at most once and popped at most once. If P is the total pops:</p><span class="eq">T(n) = n pushes + P pops, P ≤ n, so T(n) = Θ(n)</span>
+    <p>The nested while is therefore not a hidden quadratic. Histogram and rain are the same pass with more arithmetic per pop. Sum of subarray mins is two passes plus a linear accumulation, still Θ(n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Nested scan for NGE</td><td>O(n²)</td><td>O(1)</td><td>n ≤ 2000 only</td></tr>
+      <tr><td>Monotonic stack</td><td>O(n)</td><td>O(n)</td><td>Default for nearest-neighbour</td></tr>
+      <tr><td>Two-pointer rain</td><td>O(n)</td><td>O(1)</td><td>Rain only; no NGE payload</td></tr>
+      <tr><td>Left-max / right-max</td><td>O(n)</td><td>O(n)</td><td>Rain; simpler if that is all</td></tr>
+      <tr><td>Segment tree of range max</td><td>O(n log n)</td><td>O(n)</td><td>When the array is updated</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using java.util.Stack</span>
+    <div class="pitfalls__bug">Synchronised Vector subclass. Slower, allows null, signals outdated Java.</div>
+    <div class="pitfalls__fix">ArrayDeque with addLast / pollLast / peekLast.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Storing values instead of indices</span>
+    <div class="pitfalls__bug">Cannot compute widths, distances, or equal-value identity.</div>
+    <div class="pitfalls__fix">Always store indices. Read values through a[st.peekLast()].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wrong strictness on equals</span>
+    <div class="pitfalls__bug">Plateau double-counted or undercounted in contribution problems.</div>
+    <div class="pitfalls__fix">NGE is strict. Contribution: one side strict, the other not.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the histogram sentinel</span>
+    <div class="pitfalls__bug">Suffix minima never pop; strictly increasing samples still look OK.</div>
+    <div class="pitfalls__fix">Loop i to n with virtual height 0 at i==n.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on area</span>
+    <div class="pitfalls__bug">height * width wraps before you store it.</div>
+    <div class="pitfalls__fix">(long) height * (i - left - 1). Reduce mod only after the product.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Circular next greater (LC 503)</td>
+        <td>Scan 2n; write only if ans[j] is still -1; never push index ≥ n.</td>
+        <td><code>for (int i = 0; i &lt; 2*n; i++) { int v = a[i % n]; ... }</code></td>
+        <td>LC 503.</td>
+      </tr>
+      <tr>
+        <td>Maximal rectangle of 1s</td>
+        <td>Each row: height[c] = row[c]==1 ? height[c]+1 : 0; then histogram.</td>
+        <td><code>best = max(best, largestRectangle(height));</code></td>
+        <td>LC 85.</td>
+      </tr>
+      <tr>
+        <td>Online stock span</td>
+        <td>Previous-greater on a stream: pop while top price ≤ today.</td>
+        <td><code>span = i - (empty ? -1 : peek);</code></td>
+        <td>LC 901.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the nested while O(n) not O(n²)?</summary>
+    <div class="followup__body">
+      <p>Amortisation. An index that has been popped is never pushed again, so the inner loop runs at most n times in total. State it as "each index is pushed once and popped once".</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Histogram vs rain: same stack, different payload?</summary>
+    <div class="followup__body">
+      <p>Histogram: height[mid]*(right-left-1), take max. Rain: (min(h[left],h[right])-h[mid])*width, add. Two-pointer rain is simpler if they only want rain; the stack generalises to histogram.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you avoid double-counting equal minima?</summary>
+    <div class="followup__body">
+      <p>Previous strictly-less and next less-or-equal (or the opposite). Ownership is a partition of subarrays, not a cover.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Circular NGE without overwriting?</summary>
+    <div class="followup__body">
+      <p>Only write if ans[j]==-1. Do not push aliases i≥n. A strictly decreasing array is the worst case: every answer wraps except a[0] which stays -1.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/next-greater-element-i/" target="_blank" rel="noopener">Next Greater Element I</a></td>
+        <td><span class="badge badge--lc">LC 496</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>NGE on nums2, map-lookup nums1</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/next-greater-element-ii/" target="_blank" rel="noopener">Next Greater Element II</a></td>
+        <td><span class="badge badge--lc">LC 503</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Circular NGE; scan 2n</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/daily-temperatures/" target="_blank" rel="noopener">Daily Temperatures</a></td>
+        <td><span class="badge badge--lc">LC 739</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>NGE with distance i-j</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/online-stock-span/" target="_blank" rel="noopener">Online Stock Span</a></td>
+        <td><span class="badge badge--lc">LC 901</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Previous-greater on a stream</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/largest-rectangle-in-histogram/" target="_blank" rel="noopener">Largest Rectangle in Histogram</a></td>
+        <td><span class="badge badge--lc">LC 84</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Prev-smaller and next-smaller; 0-sentinel</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/trapping-rain-water/" target="_blank" rel="noopener">Trapping Rain Water</a></td>
+        <td><span class="badge badge--lc">LC 42</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Stack of bars, or two-pointer maxes</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/sum-of-subarray-minimums/" target="_blank" rel="noopener">Sum of Subarray Minimums</a></td>
+        <td><span class="badge badge--lc">LC 907</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Contribution (i-prev)*(next-i)*a[i]</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/maximal-rectangle/" target="_blank" rel="noopener">Maximal Rectangle</a></td>
+        <td><span class="badge badge--lc">LC 85</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Each row as a histogram, then LC 84</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/evaluate-reverse-polish-notation/" target="_blank" rel="noopener">Evaluate Reverse Polish Notation</a></td>
+        <td><span class="badge badge--lc">LC 150</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Structural ArrayDeque of long</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/basic-calculator/" target="_blank" rel="noopener">Basic Calculator</a></td>
+        <td><span class="badge badge--lc">LC 224</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Sign + accumulator at each '('</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/number-of-visible-people-in-a-queue/" target="_blank" rel="noopener">Number of Visible People in a Queue</a></td>
+        <td><span class="badge badge--lc">LC 1944</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Decreasing stack; count pops plus one</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://cses.fi/problemset/task/1645" target="_blank" rel="noopener">Nearest Smaller Values</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Previous-smaller; NGE flipped</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 84 &mdash; the 0-sentinel</summary>
+  <div class="spoiler__body">
+    <p>Bars that never meet a smaller value to their right stay on the stack until the array ends. Without a virtual height-0 at index n, those bars never pop, so every suffix-minimum rectangle is missing. Test a strictly increasing histogram.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 907 &mdash; the plateau rule</summary>
+  <div class="spoiler__body">
+    <p>Previous strictly-less plus next less-or-equal assigns each subarray to exactly one occurrence of its minimum. Using the same comparison on both sides overcounts or undercounts a run of equal values.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Store indices</strong> in ArrayDeque, never values and never java.util.Stack.</li>
+    <li><strong>Decreasing</strong> for next-greater; <strong>increasing</strong> for next-smaller.</li>
+    <li><strong>Amortised O(n):</strong> each index pushed once and popped once.</li>
+    <li><strong>Histogram / rain / contribution</strong> are the same neighbours, different payload.</li>
+    <li><strong>Structural stacks</strong> (RPN, calculator) are a different family; use long.</li>
+  </ul>
+  <div class="recap__oneliner">while (!st.isEmpty() &amp;&amp; a[st.peekLast()] &lt; a[i]) ans[st.pollLast()] = a[i]; st.addLast(i);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

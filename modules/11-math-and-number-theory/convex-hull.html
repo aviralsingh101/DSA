@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convex Hull &mdash; DSA Course</title>
+<meta name="description" content="Andrew's monotone chain sorts points by (x, y) and builds lower then upper hulls with a left-turn stack — O(n log n) and the default you should type.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="convex-hull">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Convex Hull</h1>
+  <p class="hero__tagline">Andrew's monotone chain sorts points by (x, y) and builds lower then upper hulls with a left-turn stack — O(n log n) and the default you should type.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="geometry-basics.html">Geometry Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">convex hull</span>
+      <span class="chip">Andrew</span>
+      <span class="chip">Graham</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The convex hull is the smallest convex polygon containing the points. After you have it, diameter, width, farthest pair, and "does this polygon contain that one" become walks on a circular sequence.</p>
+<p>Andrew's algorithm is Graham scan after a sort by x: walk left-to-right keeping only left turns (lower hull), then right-to-left (upper hull). The stack pops while the last three points do not make a strict CCW turn.</p>
+<p>n ≤ 1e5, integer coords. Degenerate all-collinear is a segment (or a point). Interviews want the sort + stack, the left-turn predicate, and what you do with ties (keep or drop middle of an edge — read the statement).</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>After sorting by x, the lower hull is the chain you get by refusing right turns. The same walk backwards is the upper hull. Concatenate and drop the duplicated endpoints.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Smallest convex polygon covering the points ("erect the fence")</li>
+        <li>Diameter / farthest pair (rotating calipers on the hull)</li>
+        <li>Static point-in-convex after one hull + binary search</li>
+        <li>Minkowski sum of two convex polygons (walk both hulls)</li>
+        <li>n ≤ 1e5 points, integer coordinates</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Dynamic hull (insert/delete online) → Li Chao / CHT / set of tangents, not a one-shot stack</li>
+        <li>Non-convex outline / alpha shape / concave enclosure</li>
+        <li>3-D convex hull</li>
+        <li>You only need the leftmost / min-max x,y — four points, not a hull</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Static hull</td>
+        <td>sort + two monotone chains</td>
+        <td>Andrew</td>
+      </tr>
+      <tr>
+        <td>Angular Graham</td>
+        <td>sort by polar around lowest point</td>
+        <td>same bound, messier ties</td>
+      </tr>
+      <tr>
+        <td>Diameter</td>
+        <td>rotating calipers on hull</td>
+        <td>O(n) after hull</td>
+      </tr>
+      <tr>
+        <td>Dynamic upper hull of lines</td>
+        <td>CHT, previous module</td>
+        <td>not this stack</td>
+      </tr>
+      <tr>
+        <td>All collinear</td>
+        <td>hull is the two endpoints (or keep the edge)</td>
+        <td>statement</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> CHT hull of lines</td>
+        <td>This page is a hull of points</td>
+        <td>Different object</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 1e5</code> is O(n log n) sort plus O(n) stack. Coordinates 1e9 → long crosses. Output vertices in CCW order, no consecutive collinear unless asked.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Sort unique points by (x, y). If n ≤ 1 return them. Lower: for each point, while the last two + this one are not a left turn, pop. Upper: walk the array backwards with the same rule. Concatenate lower + upper[1..end-1].</p>
+<p>Left turn: cross(stack[-2]→stack[-1], stack[-1]→p) > 0 for a strict hull (drop collinear middles). Use ≥ 0 if you must keep collinear edge points.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After the lower pass, every consecutive triple on the stack is a left turn, and the chain is the lower envelope from leftmost to rightmost. The upper pass mirrors that. The closed polygon is convex and contains every input point.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="convex-hullViz"></div>
+  <div class="viz-player" data-viz-target="convex-hullViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "id =",
+      "array": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "indexLabels": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "vars": [
+        "i",
+        "stack",
+        "cross"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y: A,B,C,E,D wait — E is (0,2) so order A,E,B,C,D.",
+          "active": [
+            0
+          ],
+          "values": {
+            "i": 0,
+            "stack": "A",
+            "cross": "—"
+          }
+        },
+        {
+          "note": "Lower: push A, E. Next B: A→E→B is a right turn (E is above). Pop E. A→B is fine. Then C: A-B-C right-ish? B is above AC — pop B. Lower = A,C.",
+          "active": [
+            2
+          ],
+          "values": {
+            "i": "C",
+            "stack": "A C",
+            "cross": "pop B"
+          }
+        },
+        {
+          "note": "D is to the right. A-C-D is left. Lower = A,C,D.",
+          "active": [
+            4
+          ],
+          "values": {
+            "i": "D",
+            "stack": "A C D",
+            "cross": "+"
+          }
+        },
+        {
+          "note": "Upper backwards: D,E,A. D-E-A left. Full hull A,C,D,E.",
+          "active": [
+            0,
+            2,
+            4
+          ],
+          "values": {
+            "i": "up",
+            "stack": "A C D E",
+            "cross": "CCW"
+          }
+        },
+        {
+          "note": "B sits inside, never on the hull.",
+          "active": [
+            1
+          ],
+          "values": {
+            "i": "B",
+            "stack": "inside",
+            "cross": 0
+          }
+        },
+        {
+          "note": "Output CCW from leftmost: A,C,D,E.",
+          "best": [
+            0,
+            2,
+            4
+          ],
+          "values": {
+            "i": "done",
+            "stack": "4 verts",
+            "cross": "+"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  sortP["sort by x then y"] --&gt; low["lower chain: pop while not left turn"]
+  low --&gt; up["upper chain: walk backwards"]
+  up --&gt; cat["concatenate, drop duplicate ends"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Dedup</strong> identical points. Sort by x, then y.</li>
+  <li><strong>build(dir):</strong> empty stack; for each point in order (or reverse), pop while size≥2 and orient is not a left turn; push.</li>
+  <li><strong>Lower</strong> on the sorted list. <strong>Upper</strong> on the reversed list.</li>
+  <li><strong>Join</strong> lower + upper without repeating the two endpoints.</li>
+  <li><strong>n ≤ 1:</strong> return the points. All collinear: two endpoints if strict.</li>
+  <li><strong>Optional:</strong> rotating calipers for diameter on the result.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>stack</th><th>cross</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>A</td><td>—</td><td>Points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y: A,B,C,E,D wait — E is (0,2) so order A,E,B,C,D.</td></tr>
+      <tr><td>C</td><td>A C</td><td>pop B</td><td>Lower: push A, E. Next B: A→E→B is a right turn (E is above). Pop E. A→B is fine. Then C: A-B-C right-ish? B is above AC — pop B. Lower = A,C.</td></tr>
+      <tr><td>D</td><td>A C D</td><td>+</td><td>D is to the right. A-C-D is left. Lower = A,C,D.</td></tr>
+      <tr><td>up</td><td>A C D E</td><td>CCW</td><td>Upper backwards: D,E,A. D-E-A left. Full hull A,C,D,E.</td></tr>
+      <tr><td>B</td><td>inside</td><td>0</td><td>B sits inside, never on the hull.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>4 verts</td><td>+</td><td>Output CCW from leftmost: A,C,D,E.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Convex Hull implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>O(n³): a point is on the hull if some half-plane has everyone on one side. Not for contests.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HullBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class HullBrute {
+        static int nOnHull(long[][] p) {
+            int n = p.length, c = 0;
+            for (int i = 0; i &lt; n; i++) {
+                boolean ext = false;
+                for (int j = 0; j &lt; n; j++) if (j != i) {
+                    boolean ok = true;
+                    long x1 = p[j][0] - p[i][0], y1 = p[j][1] - p[i][1];
+                    for (int k = 0; k &lt; n; k++) {
+                        long cr = x1 * (p[k][1] - p[i][1]) - y1 * (p[k][0] - p[i][0]);
+                        if (cr &lt; 0) { ok = false; break; }
+                    }
+                    if (ok) { ext = true; break; }
+                }
+                if (ext || n &lt;= 2) c++;
+            }
+            return c;
+        }
+        public static void main(String[] args) {
+            long[][] p = {{0,0},{1,1},{2,0},{2,2},{0,2}};
+            System.out.println(nOnHull(p));
+        }
+        // Input : square plus interior
+        // Output: 4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Monotone chain, strict left turns, unique points.</p>
+    <div class="code" data-highlight="12-28">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AndrewHull.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class AndrewHull {
+        static class P implements Comparable&lt;P&gt; {
+            long x, y;
+            P(long x, long y) { this.x = x; this.y = y; }
+            public int compareTo(P o) { return x != o.x ? Long.compare(x, o.x) : Long.compare(y, o.y); }
+            public boolean equals(Object o) { P p = (P) o; return x == p.x &amp;&amp; y == p.y; }
+        }
+        static long cross(P a, P b, P c) {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        }
+        static P[] hull(P[] pts) {
+            Arrays.sort(pts);
+            int n = pts.length;
+            if (n &lt;= 1) return pts;
+            P[] st = new P[2 * n];
+            int k = 0;
+            for (int i = 0; i &lt; n; i++) {
+                while (k &gt;= 2 &amp;&amp; cross(st[k - 2], st[k - 1], pts[i]) &lt;= 0) k--;
+                st[k++] = pts[i];
+            }
+            for (int i = n - 2, t = k + 1; i &gt;= 0; i--) {
+                while (k &gt;= t &amp;&amp; cross(st[k - 2], st[k - 1], pts[i]) &lt;= 0) k--;
+                st[k++] = pts[i];
+            }
+            return Arrays.copyOf(st, k - 1);
+        }
+        public static void main(String[] args) {
+            P[] h = hull(new P[] {
+                new P(0, 0), new P(1, 1), new P(2, 0), new P(2, 2), new P(0, 2)
+            });
+            System.out.println(h.length);
+        }
+        // Input : square plus (1,1)
+        // Output: 4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Rotating calipers: farthest pair = antipodal walk on the hull.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Diameter.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Diameter {
+        static long dist2(long[] a, long[] b) {
+            long dx = a[0] - b[0], dy = a[1] - b[1];
+            return dx * dx + dy * dy;
+        }
+        static long diameter(long[][] h) {
+            int n = h.length;
+            if (n &lt;= 1) return 0;
+            if (n == 2) return dist2(h[0], h[1]);
+            long best = 0;
+            int j = 1;
+            for (int i = 0; i &lt; n; i++) {
+                int ni = (i + 1) % n;
+                while (true) {
+                    int nj = (j + 1) % n;
+                    long now = Math.abs((h[ni][0] - h[i][0]) * (h[j][1] - h[i][1])
+                        - (h[ni][1] - h[i][1]) * (h[j][0] - h[i][0]));
+                    long nxt = Math.abs((h[ni][0] - h[i][0]) * (h[nj][1] - h[i][1])
+                        - (h[ni][1] - h[i][1]) * (h[nj][0] - h[i][0]));
+                    if (nxt &gt; now) j = nj; else break;
+                }
+                best = Math.max(best, dist2(h[i], h[j]));
+                best = Math.max(best, dist2(h[ni], h[j]));
+            }
+            return best;
+        }
+        public static void main(String[] args) {
+            long[][] h = {{0,0},{3,0},{3,4},{0,4}};
+            System.out.println(diameter(h));
+        }
+        // Input : 3x4 rectangle hull
+        // Output: 25
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Sort dominates. Each point is pushed and popped at most once per chain, so the stack passes are O(n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Gift wrapping</td><td>O(n h)</td><td>O(n)</td><td>h tiny</td></tr>
+      <tr><td>Andrew / Graham</td><td>O(n log n)</td><td>O(n)</td><td>Default</td></tr>
+      <tr><td>Chan's algorithm</td><td>O(n log h)</td><td>O(n)</td><td>Theory, rarely typed</td></tr>
+      <tr><td>Dynamic hull</td><td>O(log n) / update</td><td>O(n)</td><td>set + tangents</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not sorting (or sorting only by x)</span>
+    <div class="pitfalls__bug">Ties in x leave the chain crossing itself.</div>
+    <div class="pitfalls__fix">Sort by x then y. Dedup equals first.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wrong inequality on collinear</span>
+    <div class="pitfalls__bug"><code>&lt; 0</code> vs <code>≤ 0</code> keeps or drops edge midpoints. The judge has a collinear triple.</div>
+    <div class="pitfalls__fix">Strict hull: pop on ≤ 0. Keep collinear: pop only on < 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Duplicating the start point twice</span>
+    <div class="pitfalls__bug">You copy both chains including both endpoints twice and the polygon has a zero-length edge.</div>
+    <div class="pitfalls__fix">Drop the last point of the second chain (it repeats the first of the first).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int cross on 1e9 coordinates</span>
+    <div class="pitfalls__bug">Same overflow as the previous page, now inside a while-pop.</div>
+    <div class="pitfalls__fix">long everywhere.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using the hull as unordered</span>
+    <div class="pitfalls__bug">You dump stack points without the CCW order and a later calipers / area walk breaks.</div>
+    <div class="pitfalls__fix">Andrew already emits CCW if you lower-then-upper. Do not sort the output again.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Graham polar sort</td>
+        <td>Lowest point as origin, sort by orient, same stack.</td>
+        <td><code>ties by distance</code></td>
+        <td>classic textbook</td>
+      </tr>
+      <tr>
+        <td>Upper hull only</td>
+        <td>Needed for CHT dual / max envelope of points.</td>
+        <td><code>one chain</code></td>
+        <td>3D hull projections</td>
+      </tr>
+      <tr>
+        <td>Minkowski sum</td>
+        <td>Both polygons CCW; two pointers on edges by angle.</td>
+        <td><code>O(n+m)</code></td>
+        <td>sum of convex shapes</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the hull O(n) after the sort?</summary>
+    <div class="followup__body">
+      <p>Amortised stack: a popped point never returns on that chain. Two passes, each O(n).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you find the farthest pair?</summary>
+    <div class="followup__body">
+      <p>It is an antipodal pair on the hull. Rotating calipers walks one pointer monotonically around the polygon in O(h).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Point in convex in O(log n)?</summary>
+    <div class="followup__body">
+      <p>Binary search the fan from h[0]: find the triangle h[0],h[i],h[i+1] by orient, then one more orient. Or two binary searches on upper/lower chains.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Graham vs Andrew?</summary>
+    <div class="followup__body">
+      <p>Same complexity. Andrew's x-sort avoids polar-angle ties and is shorter in Java. Prefer Andrew unless the textbook said Graham.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/erect-the-fence/" target="_blank" rel="noopener">Erect The Fence</a></td>
+        <td><span class="badge badge--lc">LC 587</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Andrew / Graham, keep collinear</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/stamping-the-grid/" target="_blank" rel="noopener">Stamping The Grid</a></td>
+        <td><span class="badge badge--lc">LC 936</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Not hull — contrast</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://cses.fi/problemset/task/2195" target="_blank" rel="noopener">Convex Hull</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Andrew, include collinear</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://cses.fi/problemset/task/2193" target="_blank" rel="noopener">Polygon Lattice Points</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Pick's + hull-ish</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/166/B" target="_blank" rel="noopener">Polygons</a></td>
+        <td><span class="badge badge--cf">CF 166B</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Hull then contain</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/70/D" target="_blank" rel="noopener">Professor's task</a></td>
+        <td><span class="badge badge--cf">CF 70D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Dynamic hull</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://open.kattis.com/problems/convexhull" target="_blank" rel="noopener">Kattis Convex Hull</a></td>
+        <td><span class="badge badge--gfg">Kattis</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Standard hull I/O</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/convex-polygon/" target="_blank" rel="noopener">Convex Polygon</a></td>
+        <td><span class="badge badge--lc">LC 469</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Verify convex, not construct</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Sort by (x, y). Lower chain, then upper chain.</li>
+    <li>Pop while the last three are not a left turn.</li>
+    <li>long cross. Decide ≤ vs < for collinear.</li>
+    <li>Drop the duplicated endpoints when joining.</li>
+    <li>Diameter / containment are walks on this polygon.</li>
+  </ul>
+  <div class="recap__oneliner">sort; for p: while k&gt;=2 &amp;&amp; cross(st[k-2],st[k-1],p)&lt;=0 k--; st[k++]=p; then reverse pass;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

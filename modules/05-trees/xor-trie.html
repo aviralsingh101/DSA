@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XOR Trie (Binary Trie) &mdash; DSA Course</title>
+<meta name="description" content="A 2-child trie on bits, MSB first: to maximise XOR, greedily take the opposite bit whenever that child exists.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="xor-trie">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>XOR Trie (Binary Trie)</h1>
+  <p class="hero__tagline">A 2-child trie on bits, MSB first: to maximise XOR, greedily take the opposite bit whenever that child exists.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="trie.html">Trie</a>,
+      <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">XOR trie</span>
+      <span class="chip">binary trie</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Maximum XOR of two numbers in an array is not a sort+two-pointer problem in the usual way: XOR does not respect order. The greedy that works is bitwise, from bit 31 down: given a prefix of x, you want the other number to have the opposite bit. A binary trie of the inserted numbers tells you in O(1) whether that opposite child exists.</p>
+<p>The same structure answers max XOR with a query value, max XOR of a subarray (insert prefix XORs), and CF 706D Vasiliy's Multiset (insert/delete + max XOR with x). It is the bit analogue of a BST on the numeric order of the 32-bit strings.</p>
+<p>Insert is 32 steps of creating next[bit]. Query is 32 steps of preferring opposite. Counts on nodes support delete. Off-by-one on signed ints: treat bits as unsigned with &gt;&gt;&gt; or a mask, or work in 30 bits if values are 1e9.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>XOR is maximised by making each bit 1 from the MSB down, independently of lower bits in the greedy sense: at bit k, if the opposite child exists, take it. The trie is the existence oracle for those children.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Maximum XOR of two numbers in an array (LC 421)</li>
+        <li>Max XOR of a subarray (prefix XOR + query)</li>
+        <li>Insert / delete / max XOR with x (CF 706D)</li>
+        <li>Two numbers from two arrays maximising XOR</li>
+        <li>Bitwise greedy that needs "does a number with this prefix exist?"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Maximum sum / min difference &rarr; sort, not XOR trie</li>
+        <li>26-letter prefixes &rarr; ordinary trie</li>
+        <li>n=20, brute 2^n is enough</li>
+        <li>You need the k-th XOR, not the max &rarr; extra counts on nodes, still this trie</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Max a[i] XOR a[j]</td>
+        <td>Insert all, query each (or insert as you go)</td>
+        <td>LC 421</td>
+      </tr>
+      <tr>
+        <td>Max XOR subarray</td>
+        <td>Prefix XOR, query trie of previous prefixes</td>
+        <td>Same as max pair on prefixes</td>
+      </tr>
+      <tr>
+        <td>Online insert/delete + max XOR x</td>
+        <td>cnt on nodes</td>
+        <td>CF 706D</td>
+      </tr>
+      <tr>
+        <td>Max XOR with a value in [L,R]</td>
+        <td>Counts + walk with range constraints, or two tries of prefixes</td>
+        <td>Harder</td>
+      </tr>
+      <tr>
+        <td>Min XOR pair</td>
+        <td>Adjacent after sorting by value, actually; or prefer same bit</td>
+        <td>Sort often enough for min XOR</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> prefix XOR + hashmap</td>
+        <td>Hash answers equality of XOR to k, not maximisation</td>
+        <td>Hash for =k; trie for max</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5, values &le; 1e9 so 30 bits (or 31). O(n * BITS) time and nodes. Use cnt if you delete. Java ints: bit 31 is the sign; for non-neg values loop b=30..0.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Node { Node[] ch = new Node[2]; int cnt; }. insert(x): from b=30..0, bit=(x>>b)&1, create child, cur=child, cnt++. queryMax(x): from b=30..0, want=1-bit, if child want exists and cnt&gt;0 take it and set that bit in ans, else take bit.</p>
+<p>For max pair: insert a[0], for i=1..n-1 ans=max(ans, queryMax(a[i])), insert a[i]. For subarray: same on prefix XOR array. Delete: walk and cnt-- (optionally drop cnt==0).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Each root-to-node path is a bit prefix of at least one stored number. queryMax walks a path that maximises XOR with x bit by bit.</p><span class="eq">at bit b: if opposite child exists, take it (that bit of XOR is 1)</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Insert 3 (011), query 10 (1010) preferring opposite bits</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="xor-trieViz"></div>
+  <div class="viz-player" data-viz-target="xor-trieViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "numbers then running max-XOR after each insert",
+      "array": [
+        3,
+        10,
+        5,
+        25,
+        2,
+        8
+      ],
+      "vars": [
+        "x",
+        "bit",
+        "want",
+        "best"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Insert 3 = 0011. Trie path 0,0,1,1 (4 bits for the demo).",
+          "active": [
+            0
+          ],
+          "values": {
+            "x": 3,
+            "bit": "0011",
+            "want": "insert",
+            "best": 0
+          }
+        },
+        {
+          "note": "Query 10 = 1010. MSB want 1 (opposite of 0), no 1-child, take 0. XOR bit 0.",
+          "values": {
+            "x": 10,
+            "bit": 3,
+            "want": 1,
+            "best": 0
+          }
+        },
+        {
+          "note": "Next bits: eventually XOR 3^10=9. Insert 10.",
+          "active": [
+            1
+          ],
+          "values": {
+            "x": 10,
+            "bit": "1010",
+            "want": "done",
+            "best": 9
+          }
+        },
+        {
+          "note": "Insert 5, 25, ... LC 421 sample ends at 28 = 5 XOR 25.",
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "x": 25,
+            "bit": "11001",
+            "want": "vs 5",
+            "best": 28
+          }
+        },
+        {
+          "note": "Greedy opposite at each bit is optimal because a higher bit of XOR outweighs all lower bits combined.",
+          "best": [
+            2,
+            3
+          ],
+          "values": {
+            "x": "why",
+            "bit": "MSB first",
+            "want": "greedy",
+            "best": 28
+          }
+        },
+        {
+          "note": "Prefix-XOR trick: max subarray XOR = max over i<j of pref[j]^pref[i], same trie on prefixes.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "x": "pref",
+            "bit": "—",
+            "want": "subarray",
+            "best": "same query"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Binary trie of 3 (011) and 5 (101), 3 bits</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  root["root"] --&gt; b0["0"]
+  root --&gt; b1["1"]
+  b0 --&gt; b01["1"]
+  b01 --&gt; b011["1 term 3"]
+  b1 --&gt; b10["0"]
+  b10 --&gt; b101["1 term 5"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>BITS=30</strong> (or 31). Node with ch[2] and cnt.</li>
+  <li><strong>insert(x):</strong> for b=BITS-1..0, bit=(x>>b)&1, create, cur=ch[bit], cnt++.</li>
+  <li><strong>queryMax(x):</strong> want=bit^1; if ch[want]!=null take want and set ans|=(1<<b); else take bit.</li>
+  <li><strong>Max pair:</strong> insert as you go, or insert all then query all.</li>
+  <li><strong>Subarray:</strong> insert 0 first (empty prefix), then each prefix XOR.</li>
+  <li><strong>Delete:</strong> cnt-- along the path of x.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>x</th><th>bit</th><th>want</th><th>best</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>3</td><td>0011</td><td>insert</td><td>0</td><td>Insert 3 = 0011. Trie path 0,0,1,1 (4 bits for the demo).</td></tr>
+      <tr><td>10</td><td>3</td><td>1</td><td>0</td><td>Query 10 = 1010. MSB want 1 (opposite of 0), no 1-child, take 0. XOR bit 0.</td></tr>
+      <tr><td>10</td><td>1010</td><td>done</td><td>9</td><td>Next bits: eventually XOR 3^10=9. Insert 10.</td></tr>
+      <tr><td>25</td><td>11001</td><td>vs 5</td><td>28</td><td>Insert 5, 25, ... LC 421 sample ends at 28 = 5 XOR 25.</td></tr>
+      <tr class="trace-table__row--change"><td>why</td><td>MSB first</td><td>greedy</td><td>28</td><td>Greedy opposite at each bit is optimal because a higher bit of XOR outweighs all lower bits combined.</td></tr>
+      <tr><td>pref</td><td>—</td><td>subarray</td><td>same query</td><td>Prefix-XOR trick: max subarray XOR = max over i<j of pref[j]^pref[i], same trie on prefixes.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="XOR Trie (Binary Trie) implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">XorPairBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class XorPairBrute {
+        static int maxXor(int[] a) {
+            int best = 0;
+            for (int i = 0; i &lt; a.length; i++)
+                for (int j = i + 1; j &lt; a.length; j++)
+                    best = Math.max(best, a[i] ^ a[j]);
+            return best;
+        }
+        public static void main(String[] args) {
+            System.out.println(maxXor(new int[]{3, 10, 5, 25, 2, 8}));
+        }
+        // Input : LC 421 sample
+        // Output: 28
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">XorTrie.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class XorTrie {
+        static class Node {
+            Node[] ch = new Node[2];
+            int cnt;
+        }
+        final Node root = new Node();
+        static final int BITS = 30;
+    
+        void insert(int x) {
+            Node cur = root;
+            cur.cnt++;
+            for (int b = BITS - 1; b &gt;= 0; b--) {
+                int bit = (x &gt;&gt; b) &amp; 1;
+                if (cur.ch[bit] == null) cur.ch[bit] = new Node();
+                cur = cur.ch[bit];
+                cur.cnt++;
+            }
+        }
+        int queryMax(int x) {
+            if (root.cnt == 0) return 0;
+            Node cur = root;
+            int ans = 0;
+            for (int b = BITS - 1; b &gt;= 0; b--) {
+                int bit = (x &gt;&gt; b) &amp; 1, want = bit ^ 1;
+                if (cur.ch[want] != null &amp;&amp; cur.ch[want].cnt &gt; 0) {
+                    ans |= 1 &lt;&lt; b;
+                    cur = cur.ch[want];
+                } else {
+                    cur = cur.ch[bit];
+                }
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            int[] a = {3, 10, 5, 25, 2, 8};
+            XorTrie t = new XorTrie();
+            int best = 0;
+            t.insert(a[0]);
+            for (int i = 1; i &lt; a.length; i++) {
+                best = Math.max(best, t.queryMax(a[i]));
+                t.insert(a[i]);
+            }
+            System.out.println(best);
+        }
+        // Input : 3 10 5 25 2 8
+        // Output: 28
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MaxXorSubarray.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MaxXorSubarray {
+        static class Node { Node[] ch = new Node[2]; }
+        static Node root = new Node();
+        static void insert(int x) {
+            Node cur = root;
+            for (int b = 30; b &gt;= 0; b--) {
+                int bit = (x &gt;&gt; b) &amp; 1;
+                if (cur.ch[bit] == null) cur.ch[bit] = new Node();
+                cur = cur.ch[bit];
+            }
+        }
+        static int queryMax(int x) {
+            Node cur = root;
+            int ans = 0;
+            for (int b = 30; b &gt;= 0; b--) {
+                int bit = (x &gt;&gt; b) &amp; 1, want = bit ^ 1;
+                if (cur.ch[want] != null) { ans |= 1 &lt;&lt; b; cur = cur.ch[want]; }
+                else cur = cur.ch[bit];
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            int[] a = {1, 2, 3, 4};
+            insert(0);
+            int pref = 0, best = 0;
+            for (int x : a) {
+                pref ^= x;
+                best = Math.max(best, queryMax(pref));
+                insert(pref);
+            }
+            System.out.println(best);
+        }
+        // Input : [1,2,3,4] max subarray XOR
+        // Output: 7
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n * BITS)</span>
+    <span class="badge badge--space">Space O(n * BITS) nodes worst case</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each insert/query walks BITS nodes, creating at most BITS new nodes. BITS=30, n=1e5 is 3e6 steps.</p>
+    <p><span class="eq">T = O(n B), S = O(n B), B &asymp; 30</span></p>
+    <p>Brute pairs are O(n^2). Hashing does not help maximisation.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>All pairs</td><td>O(n^2)</td><td>O(1)</td><td>n<=2000</td></tr>
+      <tr><td>XOR trie</td><td>O(n B)</td><td>O(n B)</td><td>n=1e5, max XOR</td></tr>
+      <tr><td>Hash prefix XOR</td><td>O(n)</td><td>O(n)</td><td>XOR equals k, not max</td></tr>
+      <tr><td>Sort for min XOR pair</td><td>O(n log n)</td><td>O(n)</td><td>Min pair is adjacent in value order</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Signed shift on negative numbers</span>
+    <div class="pitfalls__bug">>> sign-extends; bit 31 pollutes the walk if you use 32 bits on negatives.</div>
+    <div class="pitfalls__fix">Non-neg constraints: loop 30..0. Else >>> or store as long.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Query on an empty trie</span>
+    <div class="pitfalls__bug">NPE walking null children, or XOR with 0 pretending a number exists.</div>
+    <div class="pitfalls__fix">cnt on root, or insert a dummy only when the problem allows 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to insert 0 as empty prefix</span>
+    <div class="pitfalls__bug">Max subarray XOR misses prefixes that start at index 0 (XOR of a prefix with 0).</div>
+    <div class="pitfalls__fix">insert(0) before the loop.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Delete without cnt</span>
+    <div class="pitfalls__bug">Removing a number that shared prefixes with another wipes the sibling's path.</div>
+    <div class="pitfalls__fix">cnt++ on insert, cnt-- on delete, treat cnt==0 as missing.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Preferring the same bit for max XOR</span>
+    <div class="pitfalls__bug">You minimise that bit of the XOR. Answer too small.</div>
+    <div class="pitfalls__fix">want = bit ^ 1. Same bit is the fallback, and the rule for min XOR.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Min XOR pair</td>
+        <td>Prefer the same bit when it exists; or sort and check adjacent.</td>
+        <td><code>want = bit, fallback opposite</code></td>
+        <td>Adjacent-in-sorted is O(n log n) and simpler</td>
+      </tr>
+      <tr>
+        <td>k-th XOR with x</td>
+        <td>cnt on subtrees: if opposite child's cnt >= k, take it and k stays; else k -= cnt, take same.</td>
+        <td><code>like order-statistic on bits</code></td>
+        <td>CF variants</td>
+      </tr>
+      <tr>
+        <td>Two tries for [L,R]</td>
+        <td>Prefixes of a[1..R] minus prefixes of a[1..L-1] via persistent nodes or cnt snapshots.</td>
+        <td><code>persistent binary trie</code></td>
+        <td>Offline [L,R] max XOR with x</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is bit-greedy optimal?</summary>
+    <div class="followup__body">
+      <p>Bit b is worth 2^b, more than 2^b-1+...+1. If you can set it, you always should, regardless of lower bits. The trie only tells you whether any stored number realises that opposite bit given the bits already chosen (which are a prefix constraint).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Max subarray XOR vs max pair XOR?</summary>
+    <div class="followup__body">
+      <p>Subarray XOR is pref[r]^pref[l-1]. Insert prefix XORs into the trie, query the current prefix. That is max pair on the prefix array, including 0.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>CF 706D operations?</summary>
+    <div class="followup__body">
+      <p>Insert x, delete x (cnt), query max XOR with x. Same trie, watch cnt so two equal inserts need two deletes.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Persistent XOR trie?</summary>
+    <div class="followup__body">
+      <p>On insert, copy the O(BITS) nodes on the path. Version i is the trie of the first i numbers. Query a range of versions for [L,R] problems.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/" target="_blank" rel="noopener">Maximum Xor Of Two Numbers In An Array</a></td>
+        <td><span class="badge badge--lc">LC 421</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The classic</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/maximum-xor-with-an-element-from-array/" target="_blank" rel="noopener">Maximum Xor With An Element From Array</a></td>
+        <td><span class="badge badge--lc">LC 1707</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Offline sort + trie</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/count-pairs-with-xor-in-a-range/" target="_blank" rel="noopener">Count Pairs With Xor In A Range</a></td>
+        <td><span class="badge badge--lc">LC 1803</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>cnt walk with bit limits</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/maximum-strong-pair-xor-ii/" target="_blank" rel="noopener">Maximum Strong Pair Xor Ii</a></td>
+        <td><span class="badge badge--lc">LC 2935</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Trie + two pointers on values</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/706/D" target="_blank" rel="noopener">Vasiliy's Multiset</a></td>
+        <td><span class="badge badge--cf">CF 706D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Insert/delete/max XOR</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/888/G" target="_blank" rel="noopener">Xor-MST</a></td>
+        <td><span class="badge badge--cf">CF 888G</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Boruvka + XOR trie</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/817/E" target="_blank" rel="noopener">Choosing The Commander</a></td>
+        <td><span class="badge badge--cf">CF 817E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Binary trie with counts</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/282/E" target="_blank" rel="noopener">Sausage Maximization</a></td>
+        <td><span class="badge badge--cf">CF 282E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix and suffix XOR tries</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Bits MSB first</strong>, two children 0/1.</li>
+    <li><strong>Max XOR: prefer the opposite bit</strong> if that child exists.</li>
+    <li><strong>O(n B)</strong> with B~30.</li>
+    <li><strong>cnt</strong> for delete and empty checks.</li>
+    <li><strong>Prefix XOR + trie</strong> for max subarray XOR; insert 0 first.</li>
+  </ul>
+  <div class="recap__oneliner">for b=30..0: want=bit^1; if ch[want]!=null take it else take bit</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

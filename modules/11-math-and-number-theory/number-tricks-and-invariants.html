@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number Tricks &amp; Invariants &mdash; DSA Course</title>
+<meta name="description" content="Parity, gcd, xor, and digit-sum mod 9 are invariants: a move that cannot change them cannot reach a target that differs.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="number-tricks-and-invariants">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Number Tricks & Invariants</h1>
+  <p class="hero__tagline">Parity, gcd, xor, and digit-sum mod 9 are invariants: a move that cannot change them cannot reach a target that differs.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="gcd-and-extended-euclid.html">GCD & Extended Euclid</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">invariants</span>
+      <span class="chip">parity</span>
+      <span class="chip">gcd</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Can you reach B from A?" is often one invariant, not a BFS. If every move preserves I and I(A)≠I(B), the answer is no.</p>
+<p>Workhorses: parity of a sum or of inversions; gcd of a step on a circle; xor of a pile; n ≡ digitSum (mod 9).</p>
+<p>Sufficiency is a second lemma: same I does not automatically mean reachable. Construct, or name the extra obstruction.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Name the thing a move cannot change. If the target differs, stop. If it matches, construct or search a smaller space.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Reachability under a short list of algebraic moves</li>
+        <li>Frog on a circle: gcd(step,n) | distance</li>
+        <li>15-puzzle / swaps — inversion parity</li>
+        <li>a[i]+=x, a[j]-=x — conserved sum</li>
+        <li>Digital-root / multiple-of-9 questions</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>State graph is already small → just BFS</li>
+        <li>Every obvious quantity changes → maybe no cheap I</li>
+        <li>You need the number of ways → DP</li>
+        <li>Full impartial games → Grundy page</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Frog on a circle</td>
+        <td>gcd(step,n) | dist</td>
+        <td>Bezout</td>
+      </tr>
+      <tr>
+        <td>Adjacent swaps</td>
+        <td>inversion parity flips each swap</td>
+        <td>15-puzzle adds blank taxicab</td>
+      </tr>
+      <tr>
+        <td>a[i]+=x, a[j]-=x</td>
+        <td>sum (and often gcd of diffs)</td>
+        <td>conserved</td>
+      </tr>
+      <tr>
+        <td>Digit sum</td>
+        <td>n ≡ digits (mod 9)</td>
+        <td>mod 9</td>
+      </tr>
+      <tr>
+        <td>Water jugs</td>
+        <td>gcd(capA,capB) | target</td>
+        <td>LC 365</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> a heuristic that sometimes changes</td>
+        <td>Not an invariant</td>
+        <td>Prove I(move(s))=I(s)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Evaluating I is O(1) or O(n). A matching construction is usually another linear pass.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Guess I. Prove I(move(s))=I(s) for every move type. Compare start and target. Different ⇒ NO.</p>
+<p>If equal, construct (often by simulating backwards) or prove the I-level is connected.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>I is a function of the state such that every legal move preserves I. Different values ⇒ unreachable. Same I is necessary, not always sufficient.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="number-tricks-and-invariantsViz"></div>
+  <div class="viz-player" data-viz-target="number-tricks-and-invariantsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        3,
+        1,
+        4,
+        2
+      ],
+      "vars": [
+        "I",
+        "move",
+        "ok"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "[3,1,4,2] has 3 inversions (odd).",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "I": "inv=3",
+            "move": "—",
+            "ok": "odd"
+          }
+        },
+        {
+          "note": "Adjacent swap 3leftrightarrow1 flips parity to even.",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "I": "inv=2",
+            "move": "swap",
+            "ok": "even"
+          }
+        },
+        {
+          "note": "Sorted has 0 inversions. Need an odd number of adjacent swaps from the start.",
+          "active": [
+            0
+          ],
+          "values": {
+            "I": "parity",
+            "move": "odd swaps",
+            "ok": "yes"
+          }
+        },
+        {
+          "note": "Circle n=10, jump +4. gcd=2. 0→6 yes; 0→5 no.",
+          "active": [
+            2
+          ],
+          "values": {
+            "I": "gcd=2",
+            "move": "jump 4",
+            "ok": "6 yes"
+          }
+        },
+        {
+          "note": "38 → 3+8=11 → 2, and 38%9=2.",
+          "active": [
+            3
+          ],
+          "values": {
+            "I": "mod9=2",
+            "move": "digits",
+            "ok": "match"
+          }
+        },
+        {
+          "note": "If any move type changes I, throw I away.",
+          "active": [
+            0
+          ],
+          "values": {
+            "I": "check all",
+            "move": "all types",
+            "ok": "must hold"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  s["start"] --&gt; i["I start"]
+  t["target"] --&gt; j["I target"]
+  i --&gt; c{"equal?"}
+  j --&gt; c
+  c -- no --&gt; no["impossible"]
+  c -- yes --&gt; suf["construct or search"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>List the moves</strong> algebraically.</li>
+  <li><strong>Guess I</strong> (parity, gcd, sum, xor, colour).</li>
+  <li><strong>Prove preservation</strong> on every type.</li>
+  <li><strong>Compare</strong> start and target.</li>
+  <li><strong>If equal</strong>, construct or argue connectivity.</li>
+  <li><strong>Backwards</strong> is often easier.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>I</th><th>move</th><th>ok</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>inv=3</td><td>—</td><td>odd</td><td>[3,1,4,2] has 3 inversions (odd).</td></tr>
+      <tr><td>inv=2</td><td>swap</td><td>even</td><td>Adjacent swap 3leftrightarrow1 flips parity to even.</td></tr>
+      <tr><td>parity</td><td>odd swaps</td><td>yes</td><td>Sorted has 0 inversions. Need an odd number of adjacent swaps from the start.</td></tr>
+      <tr><td>gcd=2</td><td>jump 4</td><td>6 yes</td><td>Circle n=10, jump +4. gcd=2. 0→6 yes; 0→5 no.</td></tr>
+      <tr><td>mod9=2</td><td>digits</td><td>match</td><td>38 → 3+8=11 → 2, and 38%9=2.</td></tr>
+      <tr><td>check all</td><td>all types</td><td>must hold</td><td>If any move type changes I, throw I away.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Number Tricks & Invariants implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ReachBfs.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class ReachBfs {
+        static boolean reach(int start, int target, int n, int step) {
+            boolean[] vis = new boolean[n];
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(start); vis[start] = true;
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                if (u == target) return true;
+                int v = Math.floorMod(u + step, n);
+                if (!vis[v]) { vis[v] = true; q.add(v); }
+            }
+            return false;
+        }
+        public static void main(String[] args) {
+            System.out.println(reach(0, 6, 10, 4) + " " + reach(0, 5, 10, 4));
+        }
+        // Input : n=10 step=4, targets 6 and 5
+        // Output: true false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GcdReach.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class GcdReach {
+        static long gcd(long a, long b) {
+            a = Math.abs(a); b = Math.abs(b);
+            while (b != 0) { long t = a % b; a = b; b = t; }
+            return a;
+        }
+        static boolean reach(int start, int target, int n, int step) {
+            return Math.floorMod(target - start, n) % gcd(step, n) == 0;
+        }
+        public static void main(String[] args) {
+            System.out.println(reach(0, 6, 10, 4) + " " + reach(0, 5, 10, 4));
+        }
+        // Input : same
+        // Output: true false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">InvParity.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class InvParity {
+        static int inversions(int[] a) {
+            int c = 0;
+            for (int i = 0; i &lt; a.length; i++)
+                for (int j = i + 1; j &lt; a.length; j++) if (a[i] &gt; a[j]) c++;
+            return c;
+        }
+        public static void main(String[] args) {
+            System.out.println(inversions(new int[] {3, 1, 4, 2}) % 2);
+            System.out.println(inversions(new int[] {1, 2, 3, 4}) % 2);
+        }
+        // Input : [3,1,4,2] vs sorted
+        // Output: 1
+        //         0
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(1) or O(n) to evaluate I</span>
+    <span class="badge badge--space">Space O(1)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The point is to avoid a search. gcd / xor / inversion parity is linear at worst.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>BFS states</td><td>O(|S|)</td><td>O(|S|)</td><td>When I is not enough</td></tr>
+      <tr><td>Invariant</td><td>O(n)</td><td>O(1)</td><td>Impossibility</td></tr>
+      <tr><td>I + construct</td><td>O(n log n)</td><td>O(n)</td><td>Full solution</td></tr>
+      <tr><td>Grundy</td><td>O(states)</td><td>O(states)</td><td>Games</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">I not actually preserved</span>
+    <div class="pitfalls__bug">A third move type flips it.</div>
+    <div class="pitfalls__fix">Prove it for a generic move of every type.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Necessity as sufficiency</span>
+    <div class="pitfalls__bug">Same gcd, hidden extra obstruction.</div>
+    <div class="pitfalls__fix">Construct or name the extra I.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mod 9 vs digital root 9</span>
+    <div class="pitfalls__bug">18 ≡ 0, not 9.</div>
+    <div class="pitfalls__fix">Compare residues.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">15-puzzle missing blank taxicab</span>
+    <div class="pitfalls__bug">Permutation parity alone is incomplete on 4×4.</div>
+    <div class="pitfalls__fix">XOR with blank taxicab parity.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">BFS after a cheap NO</span>
+    <div class="pitfalls__bug">Wasted.</div>
+    <div class="pitfalls__fix">Check I first.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Board colouring</td>
+        <td>Knight stays on one colour.</td>
+        <td><code>chess</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Nim xor</td>
+        <td>Zero xor is the losing position.</td>
+        <td><code>games page</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Potential</td>
+        <td>Strictly decreases — proves termination, not invariance.</td>
+        <td><code>different tool</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Invariant vs potential?</summary>
+    <div class="followup__body">
+      <p>Invariant is constant. Potential strictly decreases and proves termination.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you invent I?</summary>
+    <div class="followup__body">
+      <p>Look at what the move adds and subtracts. Try the cheapest quantity that is not 0=0.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Two step sizes a and b on a circle?</summary>
+    <div class="followup__body">
+      <p>gcd(a,b,n) | distance.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is same I enough?</summary>
+    <div class="followup__body">
+      <p>When you can reduce every same-I state to a normal form.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/water-and-jug-problem/" target="_blank" rel="noopener">Water And Jug Problem</a></td>
+        <td><span class="badge badge--lc">LC 365</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>gcd | target</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/gas-station/" target="_blank" rel="noopener">Gas Station</a></td>
+        <td><span class="badge badge--lc">LC 134</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>total gas vs cost</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/230/B" target="_blank" rel="noopener">T-primes</a></td>
+        <td><span class="badge badge--cf">CF 230B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Squares of primes</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/26/A" target="_blank" rel="noopener">Almost Prime</a></td>
+        <td><span class="badge badge--cf">CF 26A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Exactly two distinct prime factors</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1754" target="_blank" rel="noopener">Coin Piles</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>2a-b, 2b-a and %3</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/1473/A" target="_blank" rel="noopener">Replacing Elements</a></td>
+        <td><span class="badge badge--cf">CF 1473A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Min two sum</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/moving-stones-until-consecutive/" target="_blank" rel="noopener">Moving Stones Until Consecutive</a></td>
+        <td><span class="badge badge--lc">LC 1033</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Endpoint gaps</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc173/tasks/abc173_c" target="_blank" rel="noopener">ABC 173 C</a></td>
+        <td><span class="badge badge--atc">ABC 173C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Enumerate contrast</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>I(move(s)) must equal I(s).</li>
+    <li>Different I ⇒ impossible.</li>
+    <li>Workhorses: parity, gcd, sum, xor, mod 9.</li>
+    <li>Same I needs a construction.</li>
+    <li>Simulate backwards when forward branches.</li>
+  </ul>
+  <div class="recap__oneliner">if (I(start) != I(target)) return NO; // then construct</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

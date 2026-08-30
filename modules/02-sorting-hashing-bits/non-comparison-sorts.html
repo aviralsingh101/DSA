@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Non-Comparison Sorts &mdash; DSA Course</title>
+<meta name="description" content="When keys live in a small universe, you can sort in linear time by counting, bucketing, or peeling digits &mdash; the &Omega;(n log n) barrier only applies to comparison sorts.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="non-comparison-sorts">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 02 &middot; Sorting, Hashing, Bits & Matrix</span>
+  <h1>Non-Comparison Sorts</h1>
+  <p class="hero__tagline">When keys live in a small universe, you can sort in linear time by counting, bucketing, or peeling digits &mdash; the &Omega;(n log n) barrier only applies to comparison sorts.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="sorting-and-comparators.html">Sorting & Comparators</a>,
+      <a href="../00-foundations/constraints-to-complexity.html">Constraints → Complexity</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">counting sort</span>
+      <span class="chip">radix sort</span>
+      <span class="chip">bucket sort</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The information-theoretic lower bound of <code>n log n</code> assumes the only question you can ask is "is A less than B?". If you can index an array by the key itself, you can tally frequencies in <code>O(n + R)</code> and write the output in order. That is counting sort, and it is the right tool whenever <code>R</code> is on the order of <code>n</code> or a small constant (0/1/2, grades, ages, colours).</p>
+<p>Radix sort is counting sort applied to one digit at a time, LSD or MSD. It turns a huge numeric range into <code>w</code> passes of a tiny range (base 10 or 2&#8312;). Bucket sort assumes a known distribution, scatters into <code>n</code> buckets, and sorts each; maximum-gap (LC 164) is the pigeonhole form of the same idea.</p>
+<p>In interviews this family shows up as Dutch national flag (three colours), "sort an array of 0s and 1s", H-index with citations in <code>0..n</code>, and maximum gap. Contests use counting as soon as values are coordinates you can compress, or as a histogram of a small alphabet.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Comparison sorts are optimal among comparison sorts. If the key is an integer in a small range, index by it. Linear time is then a histogram plus a prefix of counts.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Keys are integers in <code>0..R</code> with <code>R = O(n)</code> or a tiny constant</li>
+        <li>"Sort colours / 0s, 1s, 2s" &mdash; Dutch national flag, a 3-way partition</li>
+        <li>H-index, or any "how many values &ge; x" where x is in <code>0..n</code></li>
+        <li>Maximum gap after sorting, when n is large but a comparison sort is still allowed to feel too slow conceptually &mdash; bucket / pigeonhole</li>
+        <li>Fixed-width integers (32-bit) and you want guaranteed <code>O(n)</code> with a few passes</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Arbitrary comparable objects with no integer key &rarr; comparison sort</li>
+        <li>Range is <code>10&#8313;</code> and you only have <code>n = 10&#8309;</code> &rarr; sort the n values, or compress then count</li>
+        <li>You need the k-th element, not the full order &rarr; <a href="../01-arrays-and-windows/kth-and-selection.html">quickselect</a></li>
+        <li>Keys are floats with no distribution promise &rarr; comparison sort; buckets can be empty or overloaded</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Values in 0..R, R small</td>
+        <td>Histogram then emit</td>
+        <td>Counting sort</td>
+      </tr>
+      <tr>
+        <td>0 / 1 / 2 only</td>
+        <td>Three pointers, one pass</td>
+        <td>Dutch national flag</td>
+      </tr>
+      <tr>
+        <td>32-bit ints, linear guaranteed</td>
+        <td>Counting per digit</td>
+        <td>LSD radix</td>
+      </tr>
+      <tr>
+        <td>H-index, citations in 0..n</td>
+        <td>Count how many papers with ≥ i cites</td>
+        <td>Counting in 0..n</td>
+      </tr>
+      <tr>
+        <td>Maximum adjacent gap after sort</td>
+        <td>n-1 buckets, skip empty</td>
+        <td>Pigeonhole / bucket</td>
+      </tr>
+      <tr>
+        <td>Coordinates up to 1e9, n ≤ 1e5</td>
+        <td>Not counting on raw values</td>
+        <td>Compress, then count</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> HashMap frequency then sort keys</td>
+        <td>That is n log n on the unique keys, not linear in R</td>
+        <td>Use an array of size R when R is tiny</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Counting is linear when <code>R &le; 10&#8310;</code> or so (memory). <code>n &le; 10&#8309;</code> with values in <code>1..n</code> is the classic signature. Radix on 32-bit keys is ~4 passes of base 256. Always use <code>long</code> for prefix totals of counts.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Counting sort: allocate <code>cnt[R]</code>, increment <code>cnt[a[i]]</code>, then either emit <code>v</code> repeated <code>cnt[v]</code> times (not stable in that form) or turn counts into starting positions with a prefix sum and scatter the original elements into an output array (stable). Stability matters when the payload is a pair and you are inside radix sort.</p>
+<p>Dutch national flag is counting sort specialised to <code>R = 3</code> in-place: pointers <code>lo, mid, hi</code>. <code>a[mid] == 0</code> swaps with <code>lo++</code>; <code>== 2</code> swaps with <code>hi--</code>; <code>== 1</code> just <code>mid++</code>. Radix LSD applies stable counting to each digit from least significant, so the previous digit's order is preserved.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After counting, <code>cnt[v]</code> is how many keys equal <code>v</code>, and the prefix <code>pos[v] = cnt[0]+&hellip;+cnt[v-1]</code> is the first output index for <code>v</code>.</p><span class="eq">output[pos[a[i]]++] = a[i]</span><p>Interview sentence: <em>"I index by the key instead of comparing keys, so the sort is a histogram plus a scatter."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="non-comparison-sortsViz"></div>
+  <div class="viz-player" data-viz-target="non-comparison-sortsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        2,
+        0,
+        2,
+        1,
+        1,
+        0
+      ],
+      "vars": [
+        "lo",
+        "mid",
+        "hi",
+        "a[mid]"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Dutch national flag on [2,0,2,1,1,0]. lo=0, mid=0, hi=5. a[mid]=2 → swap with hi.",
+          "active": [
+            0,
+            5
+          ],
+          "pointers": {
+            "i": 0
+          },
+          "values": {
+            "lo": 0,
+            "mid": 0,
+            "hi": 5,
+            "a[mid]": 2
+          }
+        },
+        {
+          "note": "After swap: [0,0,2,1,1,2], hi=4. a[mid]=0 → swap with lo, then lo++, mid++.",
+          "active": [
+            0
+          ],
+          "window": [
+            0,
+            4
+          ],
+          "values": {
+            "lo": 0,
+            "mid": 0,
+            "hi": 4,
+            "a[mid]": 0
+          }
+        },
+        {
+          "note": "Now [0,0,2,1,1,2], lo=1, mid=1, a[mid]=0 → swap with lo (no-op), lo=2, mid=2.",
+          "done": [
+            0,
+            1
+          ],
+          "active": [
+            1
+          ],
+          "values": {
+            "lo": 1,
+            "mid": 1,
+            "hi": 4,
+            "a[mid]": 0
+          }
+        },
+        {
+          "note": "mid=2, a[2]=2 → swap with hi=4: [0,0,1,1,2,2], hi=3. Do not increment mid yet.",
+          "active": [
+            2,
+            4
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "values": {
+            "lo": 2,
+            "mid": 2,
+            "hi": 4,
+            "a[mid]": 2
+          }
+        },
+        {
+          "note": "a[mid]=1 → just mid++. Then a[mid]=1 → mid++. mid > hi, stop.",
+          "active": [
+            2,
+            3
+          ],
+          "done": [
+            0,
+            1,
+            4,
+            5
+          ],
+          "values": {
+            "lo": 2,
+            "mid": 3,
+            "hi": 3,
+            "a[mid]": 1
+          }
+        },
+        {
+          "note": "Done: [0,0,1,1,2,2]. Zeros left of lo, twos right of hi, ones in the middle.",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "lo": 2,
+            "mid": 4,
+            "hi": 3,
+            "a[mid]": "—"
+          }
+        },
+        {
+          "note": "Same array via counting: cnt=[2,2,2], emit two 0s, two 1s, two 2s. Linear, extra R memory.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "lo": "count",
+            "mid": "—",
+            "hi": "—",
+            "a[mid]": "[2,2,2]"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Which linear sort?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  key["integer key"] --&gt; range{"how large is R?"}
+  range -- "R is 2 or 3" --&gt; flag["Dutch national flag in place"]
+  range -- "R = O(n)" --&gt; count["counting sort, array of size R"]
+  range -- "32-bit but R huge" --&gt; radix["LSD radix, stable counting per digit"]
+  range -- "unknown distribution" --&gt; bucket["bucket / pigeonhole for gaps"]
+  range -- "no integer key" --&gt; cmp["wrong page: comparison sort"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Read the range.</strong> If keys are not integers in a small universe, stop.</li>
+  <li><strong>R ≤ 3:</strong> Dutch national flag, in-place, one pass.</li>
+  <li><strong>R = O(n):</strong> <code>int[] cnt = new int[R]</code>, tally, then emit or scatter.</li>
+  <li><strong>Stable scatter:</strong> prefix of counts → starting index; walk the input left-to-right or right-to-left as required.</li>
+  <li><strong>Radix LSD:</strong> for each digit from least significant, stable-count on that digit.</li>
+  <li><strong>Buckets / max gap:</strong> n-1 buckets over [min,max]; the max gap is not inside a bucket.</li>
+  <li><strong>Negatives:</strong> shift by <code>min</code>, or radix on unsigned bit patterns.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>lo</th><th>mid</th><th>hi</th><th>a[mid]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>5</td><td>2</td><td>Dutch national flag on [2,0,2,1,1,0]. lo=0, mid=0, hi=5. a[mid]=2 → swap with hi.</td></tr>
+      <tr><td>0</td><td>0</td><td>4</td><td>0</td><td>After swap: [0,0,2,1,1,2], hi=4. a[mid]=0 → swap with lo, then lo++, mid++.</td></tr>
+      <tr><td>1</td><td>1</td><td>4</td><td>0</td><td>Now [0,0,2,1,1,2], lo=1, mid=1, a[mid]=0 → swap with lo (no-op), lo=2, mid=2.</td></tr>
+      <tr><td>2</td><td>2</td><td>4</td><td>2</td><td>mid=2, a[2]=2 → swap with hi=4: [0,0,1,1,2,2], hi=3. Do not increment mid yet.</td></tr>
+      <tr><td>2</td><td>3</td><td>3</td><td>1</td><td>a[mid]=1 → just mid++. Then a[mid]=1 → mid++. mid > hi, stop.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>4</td><td>3</td><td>—</td><td>Done: [0,0,1,1,2,2]. Zeros left of lo, twos right of hi, ones in the middle.</td></tr>
+      <tr><td>count</td><td>—</td><td>—</td><td>[2,2,2]</td><td>Same array via counting: cnt=[2,2,2], emit two 0s, two 1s, two 2s. Linear, extra R memory.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Non-Comparison Sorts implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Library sort is correct and simpler. Use it unless R is tiny or they ask for linear.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CountBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class CountBrute {
+        static int[] sort(int[] a) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            return b;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(sort(new int[] {2, 0, 2, 1, 1, 0})));
+        }
+        // Input : [2, 0, 2, 1, 1, 0]
+        // Output: [0, 0, 1, 1, 2, 2]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Three-way partition and counting sort on a general small range.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DutchFlag.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class DutchFlag {
+        static void sortColors(int[] a) {
+            int lo = 0, mid = 0, hi = a.length - 1;
+            while (mid &lt;= hi) {
+                if (a[mid] == 0) {
+                    swap(a, lo++, mid++);
+                } else if (a[mid] == 2) {
+                    swap(a, mid, hi--);
+                } else {
+                    mid++;
+                }
+            }
+        }
+    
+        static int[] countingSort(int[] a, int r) {
+            int[] cnt = new int[r];
+            for (int v : a) {
+                cnt[v]++;
+            }
+            int[] out = new int[a.length];
+            int k = 0;
+            for (int v = 0; v &lt; r; v++) {
+                for (int c = 0; c &lt; cnt[v]; c++) {
+                    out[k++] = v;
+                }
+            }
+            return out;
+        }
+    
+        static void swap(int[] a, int i, int j) {
+            int t = a[i];
+            a[i] = a[j];
+            a[j] = t;
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {2, 0, 2, 1, 1, 0};
+            sortColors(a);
+            System.out.println(Arrays.toString(a));
+            System.out.println(Arrays.toString(countingSort(new int[] {2, 0, 2, 1, 1, 0}, 3)));
+        }
+        // Input : [2, 0, 2, 1, 1, 0]
+        // Output: [0, 0, 1, 1, 2, 2]
+        //         [0, 0, 1, 1, 2, 2]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Stable LSD radix on non-negative ints, base 256, four passes.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RadixLsd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class RadixLsd {
+        static void radixSort(int[] a) {
+            int n = a.length;
+            int[] tmp = new int[n];
+            for (int shift = 0; shift &lt; 32; shift += 8) {
+                int[] cnt = new int[256];
+                for (int v : a) {
+                    cnt[(v &gt;&gt;&gt; shift) &amp; 255]++;
+                }
+                int[] pos = new int[256];
+                for (int i = 1; i &lt; 256; i++) {
+                    pos[i] = pos[i - 1] + cnt[i - 1];
+                }
+                for (int v : a) {
+                    int d = (v &gt;&gt;&gt; shift) &amp; 255;
+                    tmp[pos[d]++] = v;
+                }
+                int[] swap = a;
+                a = tmp;
+                tmp = swap;
+            }
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {170, 45, 75, 90, 802, 24, 2, 66};
+            radixSort(a);
+            System.out.println(Arrays.toString(a));
+        }
+        // Input : [170, 45, 75, 90, 802, 24, 2, 66]
+        // Output: [2, 24, 45, 66, 75, 90, 170, 802]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time Counting O(n + R); radix O(n · w); DNF O(n)</span>
+    <span class="badge badge--space">Space O(n + R) for stable counting; O(1) extra for DNF</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Counting: one tally pass and one emit/scatter pass over n items plus R buckets: <span class="eq">T(n,R) = Θ(n + R)</span>. Memory is the same order.</p>
+    <p>LSD radix with digit width w (e.g. 4 bytes): <span class="eq">T(n) = Θ(w(n + B))</span> with B = 256. That is linear in n for fixed-width ints. DNF is one pass, three pointers, no extra histogram.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Arrays.sort</td><td>O(n log n)</td><td>O(log n)</td><td>Default when R is huge</td></tr>
+      <tr><td>Dutch flag</td><td>O(n)</td><td>O(1)</td><td>Exactly 2 or 3 values</td></tr>
+      <tr><td>Counting sort</td><td>O(n + R)</td><td>O(n + R)</td><td>R = O(n) integers</td></tr>
+      <tr><td>LSD radix</td><td>O(n w)</td><td>O(n)</td><td>Fixed-width integers</td></tr>
+      <tr><td>Bucket / pigeonhole</td><td>O(n)</td><td>O(n)</td><td>Max gap; uniform assumption</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Indexing cnt[a[i]] on a negative key</span>
+    <div class="pitfalls__bug"><code>ArrayIndexOutOfBoundsException</code> or a huge R if you shift wrong.</div>
+    <div class="pitfalls__fix">Subtract <code>min</code> first, or radix on unsigned bits (<code>&gt;&gt;&gt;</code>).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Incrementing mid after swapping a 2</span>
+    <div class="pitfalls__bug">The value swapped in from <code>hi</code> has not been inspected. You skip a 0.</div>
+    <div class="pitfalls__fix">On a 2: swap with hi and do <em>not</em> increment mid. On a 0: increment both.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Unstable counting inside radix</span>
+    <div class="pitfalls__bug">Emitting by walking v = 0..R destroys the previous digit's order.</div>
+    <div class="pitfalls__fix">Scatter via prefix positions, walking the input in a consistent direction.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">R = 1e9 with n = 1e5</span>
+    <div class="pitfalls__bug"><code>new int[1_000_000_000]</code> is a memory error, not a linear sort.</div>
+    <div class="pitfalls__fix">Coordinate-compress, or comparison-sort the n values.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Max-gap putting n values into n buckets of width (max-min)/n</span>
+    <div class="pitfalls__bug">The max adjacent gap in the sorted array can sit inside a bucket if you use n buckets carelessly, or you divide by zero when max==min.</div>
+    <div class="pitfalls__fix">Use n-1 buckets over the exclusive range, handle max==min, scan adjacent non-empty buckets.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>H-index (citations in 0..n)</td>
+        <td>Clamp cites at n, count, walk from n down until papers ≥ i.</td>
+        <td><code>cnt[Math.min(c, n)]++; then accumulate from the right.</code></td>
+        <td>LC 274.</td>
+      </tr>
+      <tr>
+        <td>Maximum gap</td>
+        <td>Pigeonhole: max adjacent sorted gap is at least ceil((max-min)/(n-1)).</td>
+        <td><code>Buckets store min/max; answer is max over empty-skipped neighbours.</code></td>
+        <td>LC 164.</td>
+      </tr>
+      <tr>
+        <td>Relative sort / custom order</td>
+        <td>Count 0..1000, emit in arr2 order, then the rest sorted.</td>
+        <td><code>int[] cnt = new int[1001]; then walk arr2 then 0..1000.</code></td>
+        <td>LC 1122.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why does radix need a stable inner sort?</summary>
+    <div class="followup__body">
+      <p>After sorting on digit k, items with the same digit k must keep their order from digits 0..k-1. An unstable inner sort reshuffles those, and the higher-digit pass cannot recover it. Counting-with-scatter is stable; dual-pivot quicksort is not.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can counting sort be in-place?</summary>
+    <div class="followup__body">
+      <p>The histogram is extra R memory. You can cycle-swap into place using the prefix positions, but it is not worth it in an interview. DNF is the in-place special case for R=3.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you handle 32-bit negatives in radix?</summary>
+    <div class="followup__body">
+      <p>XOR with 1&lt;&lt;31 to flip the sign bit so negatives come first as unsigned, sort, then flip back. Or shift by subtracting Integer.MIN_VALUE as long.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is counting slower than Arrays.sort?</summary>
+    <div class="followup__body">
+      <p>When R is millions and n is thousands: you touch a huge cold array. Constants matter. Rule of thumb: counting wins when R is a small multiple of n and the array fits in cache.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sort-colors/" target="_blank" rel="noopener">Sort Colors</a></td>
+        <td><span class="badge badge--lc">LC 75</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dutch national flag</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/h-index/" target="_blank" rel="noopener">H-Index</a></td>
+        <td><span class="badge badge--lc">LC 274</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count citations clamped to n</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/maximum-gap/" target="_blank" rel="noopener">Maximum Gap</a></td>
+        <td><span class="badge badge--lc">LC 164</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Pigeonhole buckets</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/relative-sort-array/" target="_blank" rel="noopener">Relative Sort Array</a></td>
+        <td><span class="badge badge--lc">LC 1122</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Count 0..1000, emit in custom order</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/sort-characters-by-frequency/" target="_blank" rel="noopener">Sort Characters By Frequency</a></td>
+        <td><span class="badge badge--lc">LC 451</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count 256, bucket by frequency</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/top-k-frequent-elements/" target="_blank" rel="noopener">Top K Frequent Elements</a></td>
+        <td><span class="badge badge--lc">LC 347</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count then bucket by freq 0..n</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/670/C" target="_blank" rel="noopener">Cinema</a></td>
+        <td><span class="badge badge--cf">CF 670C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count language frequencies, then pick</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/433/B" target="_blank" rel="noopener">Kuriyama Mirai's Stones</a></td>
+        <td><span class="badge badge--cf">CF 433B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sort a copy, prefix both orders</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Small integer range</strong> → histogram, not comparisons.</li>
+    <li><strong>R=3</strong> → Dutch flag, do not increment mid on a swap with hi.</li>
+    <li><strong>Radix LSD</strong> needs a stable inner counting scatter.</li>
+    <li><strong>R ≫ n</strong> → compress or comparison-sort; do not allocate R.</li>
+    <li><strong>Max gap</strong> is pigeonhole: the big empty space is between buckets.</li>
+  </ul>
+  <div class="recap__oneliner">while (mid &lt;= hi) { if (a[mid]==0) swap(lo++,mid++); else if (a[mid]==2) swap(mid,hi--); else mid++; }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

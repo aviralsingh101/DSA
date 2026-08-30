@@ -105,8 +105,9 @@ for (const file of files) {
   for (const t of targets) if (!ids.includes(t)) err(`viz-player target "${t}" has no data-viz-id`);
   for (const i of ids) if (!targets.includes(i)) warn(`data-viz-id "${i}" has no player`);
 
-  // topic pages: structural requirements
-  const isTopic = !!(idm && idm[1]);
+  // Lesson pages live under modules/. Hub pages (pattern index, toolkit,
+  // drills, cheat-sheet index) have a data-topic-id but not the 14-section skeleton.
+  const isTopic = !!(idm && idm[1]) && r.startsWith("modules/");
   if (isTopic) {
     if (!/<section class="hero">/.test(src)) err("missing .hero");
     if (!/<section class="recognise">/.test(src)) err("missing .recognise");

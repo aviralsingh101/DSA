@@ -89,11 +89,12 @@ for (const file of files) {
   if (!d.querySelector("#theme-toggle")) errs.push("no theme toggle");
 
   const topicId = d.body.getAttribute("data-topic-id");
+  const isLesson = r.startsWith("modules/");
   if (topicId) {
     if (!d.querySelector(".navlink.is-active")) errs.push("no active nav link");
-    if (!d.querySelector(".prevnext__card")) errs.push("prevnext not populated");
+    if (isLesson && !d.querySelector(".prevnext__card")) errs.push("prevnext not populated");
     const toc = d.querySelectorAll("#toc .toc__link").length;
-    if (toc < 8) errs.push(`TOC only has ${toc} entries`);
+    if (isLesson && toc < 8) errs.push(`TOC only has ${toc} entries`);
 
     // every viz player must have initialised
     for (const p of d.querySelectorAll(".viz-player")) {

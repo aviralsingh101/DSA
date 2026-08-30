@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Data Structures &mdash; DSA Course</title>
+<meta name="description" content="Design rounds are two structures glued together: LRU is HashMap + doubly linked list, LFU is LRU buckets per frequency, and the randomized set is HashMap + ArrayList.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="design-data-structures">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>Design Data Structures</h1>
+  <p class="hero__tagline">Design rounds are two structures glued together: LRU is HashMap + doubly linked list, LFU is LRU buckets per frequency, and the randomized set is HashMap + ArrayList.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../02-sorting-hashing-bits/hashing-patterns.html">Hashing Patterns</a>,
+      <a href="linked-lists.html">Linked Lists</a>,
+      <a href="heaps-and-priority-queue.html">Heaps & Priority Queue</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">design</span>
+      <span class="chip">LRU</span>
+      <span class="chip">LFU</span>
+      <span class="chip">HashMap</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Design LRU cache" is the most-asked design question because it forces O(1) get and put under a capacity: a HashMap for lookup, a doubly linked list for recency. Miss either piece and you have O(n) eviction. LFU is the follow-up: buckets per frequency, each an LRU, plus a minFreq integer.</p>
+<p>The other classics are min-stack (store minSoFar with each push), insert-delete-getRandom O(1) (map + array, delete is swap-with-last), and all-O(1). Median-from-stream sits on the heaps page; a trie is a design problem too.</p>
+<p>The transferable sentence: name the operations, name the bottleneck, pick one structure per bottleneck, then write the glue that keeps them in sync on every mutation.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>O(1) lookup is a HashMap. O(1) recency is a DLL with dummy head/tail. O(1) random is an ArrayList. Eviction updates both sides in the same method.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Design LRU / LFU cache" with O(1) get and put</li>
+        <li>"Insert, delete, getRandom in O(1)"</li>
+        <li>"Min stack" / "max stack" in O(1)</li>
+        <li>"All O(1)" frequency + recency (LC 432)</li>
+        <li>They ask you to pick structures before you write a line</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The operations are only offer/poll of the extreme &rarr; a heap, not a design glue</li>
+        <li>You need floor/ceiling of keys &rarr; TreeMap calendar, previous page</li>
+        <li>The cache can be O(log n) &rarr; TreeMap by recency is legal but they want O(1) LRU</li>
+        <li>It is a graph / tree algorithm wearing a "design" title &rarr; solve the algorithm</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LRU cache</td>
+        <td>HashMap + DLL, dummy head/tail</td>
+        <td>LC 146</td>
+      </tr>
+      <tr>
+        <td>LFU cache</td>
+        <td>freq to LRU bucket, minFreq</td>
+        <td>LC 460</td>
+      </tr>
+      <tr>
+        <td>Min stack</td>
+        <td>ArrayDeque of (val, minSoFar)</td>
+        <td>LC 155</td>
+      </tr>
+      <tr>
+        <td>Randomized set</td>
+        <td>HashMap + ArrayList, swap-with-last</td>
+        <td>LC 380</td>
+      </tr>
+      <tr>
+        <td>All O(1)</td>
+        <td>key to freq, freq to keys DLL</td>
+        <td>LC 432</td>
+      </tr>
+      <tr>
+        <td>Median stream</td>
+        <td>Two heaps</td>
+        <td>LC 295 (heaps page)</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> LinkedHashMap accessOrder</td>
+        <td>It is LRU, and interviewers still want you to write the DLL</td>
+        <td>Mention it, then implement</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Capacity up to 1e4, 1e5 operations, O(1) worst-case per op. Do not scan the list. Dummy nodes so head/tail deletes have no null cases.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>LRU: Node(key, val) in a DLL, newest at head. HashMap key to node. get: map lookup, move node to head. put: update + move, or insert at head; if over capacity, unlink tail.prev and map.remove that key. Dummy head and tail so unlink is four pointer writes.</p>
+<p>LFU: each key has a freq. freqMap: freq to DLL of keys at that freq. On get/put, unlink from freq, insert into freq+1, and if the old bucket is empty and freq==minFreq, increment minFreq. New keys reset minFreq to 1. Randomized set: map key to index in ArrayList; delete swaps with the last element, fixes that key's index, then pops.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After every get/put the map and the recency (and frequency) lists describe the same set of keys. The tail of the recency list is the LRU victim. minFreq is the smallest freq that still has a key.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="design-data-structuresViz"></div>
+  <div class="viz-player" data-viz-target="design-data-structuresViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "ops =",
+      "array": [
+        1,
+        2,
+        3,
+        1,
+        4
+      ],
+      "indexLabels": [
+        "put1",
+        "put2",
+        "put3",
+        "get1",
+        "put4"
+      ],
+      "vars": [
+        "cap",
+        "head",
+        "tail",
+        "evict"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "LRU capacity 2. put(1). List: 1. Map {1}.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "cap": 2,
+            "head": 1,
+            "tail": 1,
+            "evict": "—"
+          }
+        },
+        {
+          "note": "put(2). List: 2-1. Newest is 2.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "cap": 2,
+            "head": 2,
+            "tail": 1,
+            "evict": "—"
+          }
+        },
+        {
+          "note": "put(3). Over capacity. Evict tail 1. List: 3-2.",
+          "active": [
+            2
+          ],
+          "x": [
+            0
+          ],
+          "dim": [
+            3,
+            4
+          ],
+          "values": {
+            "cap": 2,
+            "head": 3,
+            "tail": 2,
+            "evict": 1
+          }
+        },
+        {
+          "note": "get(1) misses because 1 was evicted.",
+          "active": [
+            3
+          ],
+          "dim": [
+            4
+          ],
+          "values": {
+            "cap": 2,
+            "head": 3,
+            "tail": 2,
+            "evict": "miss 1"
+          }
+        },
+        {
+          "note": "If we had get(2) instead: move 2 to head. List 2-3. Tail is 3.",
+          "active": [
+            1
+          ],
+          "best": [
+            1
+          ],
+          "values": {
+            "cap": 2,
+            "head": 2,
+            "tail": 3,
+            "evict": "—"
+          }
+        },
+        {
+          "note": "put(4) after 3-2: evict 2, list 4-3.",
+          "active": [
+            4
+          ],
+          "x": [
+            1
+          ],
+          "values": {
+            "cap": 2,
+            "head": 4,
+            "tail": 3,
+            "evict": 2
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>One structure per bottleneck</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  ask{"which pair of bottlenecks?"}
+  ask -- "lookup + recency" --&gt; lru["HashMap + DLL"]
+  ask -- "lookup + recency + frequency" --&gt; lfu["freq buckets of LRU + minFreq"]
+  ask -- "lookup + random" --&gt; rnd["HashMap + ArrayList, swap-with-last"]
+  ask -- "push/pop + running min" --&gt; mnst["ArrayDeque of val and minSoFar"]
+  lru --&gt; glue["every mutation updates both structures"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>List the operations and the required complexity.</strong></li>
+  <li><strong>Assign a structure</strong> to each bottleneck (hash, DLL, array, heap).</li>
+  <li><strong>Dummy head and tail</strong> for any DLL. Unlink is four assignments.</li>
+  <li><strong>LRU get/put:</strong> map, move-to-head; evict tail.prev and the map entry.</li>
+  <li><strong>LFU:</strong> bump freq, fix minFreq when a bucket dies.</li>
+  <li><strong>Random delete:</strong> swap-with-last, update the swapped key's index, pop.</li>
+  <li><strong>Keep them in sync</strong> in the same method; a missed map.remove is the usual bug.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>cap</th><th>head</th><th>tail</th><th>evict</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>2</td><td>1</td><td>1</td><td>—</td><td>LRU capacity 2. put(1). List: 1. Map {1}.</td></tr>
+      <tr><td>2</td><td>2</td><td>1</td><td>—</td><td>put(2). List: 2-1. Newest is 2.</td></tr>
+      <tr><td>2</td><td>3</td><td>2</td><td>1</td><td>put(3). Over capacity. Evict tail 1. List: 3-2.</td></tr>
+      <tr><td>2</td><td>3</td><td>2</td><td>miss 1</td><td>get(1) misses because 1 was evicted.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>3</td><td>—</td><td>If we had get(2) instead: move 2 to head. List 2-3. Tail is 3.</td></tr>
+      <tr><td>2</td><td>4</td><td>3</td><td>2</td><td>put(4) after 3-2: evict 2, list 4-3.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Design Data Structures implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>ArrayList of pairs, scan on get. Correct, O(n), the thing they will reject.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LruBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class LruBrute {
+        static class E { int k, v; E(int k, int v) { this.k = k; this.v = v; } }
+        final int cap;
+        final List&lt;E&gt; a = new ArrayList&lt;&gt;();
+        LruBrute(int cap) { this.cap = cap; }
+        int get(int k) {
+            for (int i = 0; i &lt; a.size(); i++) {
+                if (a.get(i).k == k) {
+                    E e = a.remove(i);
+                    a.add(e);
+                    return e.v;
+                }
+            }
+            return -1;
+        }
+        void put(int k, int v) {
+            for (int i = 0; i &lt; a.size(); i++) {
+                if (a.get(i).k == k) {
+                    a.remove(i);
+                    break;
+                }
+            }
+            a.add(new E(k, v));
+            if (a.size() &gt; cap) {
+                a.remove(0);
+            }
+        }
+        public static void main(String[] args) {
+            LruBrute c = new LruBrute(2);
+            c.put(1, 1); c.put(2, 2);
+            System.out.println(c.get(1));
+            c.put(3, 3);
+            System.out.println(c.get(2));
+        }
+        // Input : cap 2; put 1,2; get 1; put 3; get 2
+        // Output: 1
+        //         -1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>HashMap + DLL. Dummy head/tail. Move-to-head on get and put.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LruCache.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class LruCache {
+        static class Node {
+            int k, v;
+            Node prev, next;
+            Node(int k, int v) { this.k = k; this.v = v; }
+        }
+        final int cap;
+        final Node head = new Node(0, 0), tail = new Node(0, 0);
+        final Map&lt;Integer, Node&gt; map = new HashMap&lt;&gt;();
+        LruCache(int cap) {
+            this.cap = cap;
+            head.next = tail;
+            tail.prev = head;
+        }
+        void unlink(Node n) {
+            n.prev.next = n.next;
+            n.next.prev = n.prev;
+        }
+        void insertHead(Node n) {
+            n.next = head.next;
+            n.prev = head;
+            head.next.prev = n;
+            head.next = n;
+        }
+        int get(int k) {
+            Node n = map.get(k);
+            if (n == null) {
+                return -1;
+            }
+            unlink(n);
+            insertHead(n);
+            return n.v;
+        }
+        void put(int k, int v) {
+            Node n = map.get(k);
+            if (n != null) {
+                n.v = v;
+                unlink(n);
+                insertHead(n);
+                return;
+            }
+            n = new Node(k, v);
+            map.put(k, n);
+            insertHead(n);
+            if (map.size() &gt; cap) {
+                Node lru = tail.prev;
+                unlink(lru);
+                map.remove(lru.k);
+            }
+        }
+        public static void main(String[] args) {
+            LruCache c = new LruCache(2);
+            c.put(1, 1); c.put(2, 2);
+            System.out.println(c.get(1));
+            c.put(3, 3);
+            System.out.println(c.get(2));
+        }
+        // Input : cap 2; put 1,2; get 1; put 3; get 2
+        // Output: 1
+        //         -1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Map + ArrayList. Delete is swap-with-last.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RandomizedSet.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.HashMap;
+    import java.util.List;
+    import java.util.Map;
+    import java.util.concurrent.ThreadLocalRandom;
+    
+    public class RandomizedSet {
+        final List&lt;Integer&gt; a = new ArrayList&lt;&gt;();
+        final Map&lt;Integer, Integer&gt; at = new HashMap&lt;&gt;();
+        boolean insert(int x) {
+            if (at.containsKey(x)) {
+                return false;
+            }
+            at.put(x, a.size());
+            a.add(x);
+            return true;
+        }
+        boolean remove(int x) {
+            Integer i = at.get(x);
+            if (i == null) {
+                return false;
+            }
+            int last = a.get(a.size() - 1);
+            a.set(i, last);
+            at.put(last, i);
+            a.remove(a.size() - 1);
+            at.remove(x);
+            return true;
+        }
+        int getRandom() {
+            return a.get(ThreadLocalRandom.current().nextInt(a.size()));
+        }
+        public static void main(String[] args) {
+            RandomizedSet s = new RandomizedSet();
+            System.out.println(s.insert(1) + " " + s.insert(1) + " " + s.insert(2));
+            s.remove(1);
+            System.out.println(s.getRandom());
+        }
+        // Input : insert 1, 1, 2; remove 1; getRandom
+        // Output: true false true
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(1) per LRU / LFU / randomized / min-stack operation</span>
+    <span class="badge badge--space">Space O(capacity)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>HashMap and DLL pointer writes are O(1). Eviction is one unlink plus one map.remove. Randomized delete is O(1) because swap-with-last avoids a linear hole.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Scan a list</td><td>O(n)</td><td>O(n)</td><td>Rejected</td></tr>
+      <tr><td>HashMap + DLL (LRU)</td><td>O(1)</td><td>O(cap)</td><td>LC 146</td></tr>
+      <tr><td>LinkedHashMap accessOrder</td><td>O(1)</td><td>O(cap)</td><td>Library LRU; still implement</td></tr>
+      <tr><td>TreeMap by recency</td><td>O(log n)</td><td>O(cap)</td><td>Legal, not the asked bound</td></tr>
+      <tr><td>Two heaps (median)</td><td>O(log n)</td><td>O(n)</td><td>Heaps page</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Evict from the list but not the map</span>
+    <div class="pitfalls__bug">get of the evicted key returns a detached node. Capacity appears to grow.</div>
+    <div class="pitfalls__fix">unlink and map.remove in the same two lines.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">No dummy head/tail</span>
+    <div class="pitfalls__bug">Null checks on every unlink; empty-list and one-node cases fail.</div>
+    <div class="pitfalls__fix">Sentinel head and tail, always linked to each other when empty.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Randomized delete without fixing the swapped index</span>
+    <div class="pitfalls__bug">You move last into i but leave map[last] pointing at the old last index.</div>
+    <div class="pitfalls__fix"><code>at.put(last, i)</code> before pop. If x is already last, the put is a no-op.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">LFU: forgetting to bump minFreq</span>
+    <div class="pitfalls__bug">You empty the minFreq bucket and still evict from it.</div>
+    <div class="pitfalls__fix">If that bucket is empty after a bump, minFreq++. New keys set minFreq = 1.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Min-stack storing only the global min</span>
+    <div class="pitfalls__bug">After popping the current min you do not know the previous min.</div>
+    <div class="pitfalls__fix">Store minSoFar with every node, or a second stack of mins.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LFU</td>
+        <td>freqMap of DLLs plus key to node. Evict the LRU of the minFreq bucket.</td>
+        <td><code>LC 460.</code></td>
+        <td>New key always freq 1, minFreq = 1.</td>
+      </tr>
+      <tr>
+        <td>Min stack</td>
+        <td>ArrayDeque of val and minSoFar. Push min(val, peek.min). Never java.util.Stack.</td>
+        <td><code>LC 155.</code></td>
+        <td>O(1) extra per element.</td>
+      </tr>
+      <tr>
+        <td>All O(1)</td>
+        <td>Like LFU without a capacity: inc/dec freq and return min/max key.</td>
+        <td><code>LC 432.</code></td>
+        <td>Same buckets, plus a maxFreq.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not a heap of (time, key) for LRU?</summary>
+    <div class="followup__body">
+      <p>Get would need decrease-key on that key's timestamp. PriorityQueue cannot. A DLL move-to-head is O(1) and is the decrease-key.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is LinkedHashMap enough?</summary>
+    <div class="followup__body">
+      <p>Yes for LRU: accessOrder=true and override removeEldestEntry. Say so, then write the DLL. They are testing the glue, not the library.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does LFU break a tie?</summary>
+    <div class="followup__body">
+      <p>Among keys with minFreq, evict the least recently used. That is why each freq bucket is itself an LRU list, not a bag.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can getRandom be O(1) with deletes if you use a HashSet?</summary>
+    <div class="followup__body">
+      <p>No. HashSet has no index. You need an array for random access and a map to find the hole in O(1).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/lru-cache/" target="_blank" rel="noopener">LRU Cache</a></td>
+        <td><span class="badge badge--lc">LC 146</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>HashMap + DLL</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/lfu-cache/" target="_blank" rel="noopener">LFU Cache</a></td>
+        <td><span class="badge badge--lc">LC 460</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>freq buckets of LRU</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/min-stack/" target="_blank" rel="noopener">Min Stack</a></td>
+        <td><span class="badge badge--lc">LC 155</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Deque of (val, minSoFar)</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/insert-delete-getrandom-o1/" target="_blank" rel="noopener">Insert Delete GetRandom O(1)</a></td>
+        <td><span class="badge badge--lc">LC 380</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Map + ArrayList, swap-with-last</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/all-oone-data-structure/" target="_blank" rel="noopener">All O(1) Data Structure</a></td>
+        <td><span class="badge badge--lc">LC 432</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>LFU without capacity</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener">Find Median from Data Stream</a></td>
+        <td><span class="badge badge--lc">LC 295</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two heaps</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/implement-trie-prefix-tree/" target="_blank" rel="noopener">Implement Trie</a></td>
+        <td><span class="badge badge--lc">LC 208</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Design a 26-way trie</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/max-stack/" target="_blank" rel="noopener">Max Stack</a></td>
+        <td><span class="badge badge--lc">LC 716</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two stacks, or TreeMap + DLL</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>LRU = HashMap + DLL</strong>, dummy head/tail, evict both sides.</li>
+    <li><strong>LFU = LRU buckets per freq</strong> plus minFreq.</li>
+    <li><strong>Randomized set = map + ArrayList</strong>, delete is swap-with-last.</li>
+    <li><strong>Min-stack = deque of (val, minSoFar)</strong>.</li>
+    <li><strong>Name the bottleneck, pick a structure, glue them on every write.</strong></li>
+  </ul>
+  <div class="recap__oneliner">map.get(k); unlink(n); insertHead(n); if (map.size()&gt;cap) { unlink(tail.prev); map.remove(key); }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

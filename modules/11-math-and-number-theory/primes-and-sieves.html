@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Primes &amp; Sieves &mdash; DSA Course</title>
+<meta name="description" content="The linear sieve builds every prime ≤ n in O(n) and the smallest-prime-factor table factors any k ≤ n in O(log k).">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="primes-and-sieves">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>Primes & Sieves</h1>
+  <p class="hero__tagline">The linear sieve builds every prime ≤ n in O(n) and the smallest-prime-factor table factors any k ≤ n in O(log k).</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="modular-arithmetic.html">Modular Arithmetic</a>,
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">sieve</span>
+      <span class="chip">SPF</span>
+      <span class="chip">primes</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Trial division to n is O(sqrt n) per number. A sieve pays O(n log log n) once (Eratosthenes) or O(n) (linear / Euler sieve) and then primality of every k ≤ n is an array read. The SPF table is the reason you sieve even when you only needed factorisation.</p>
+<p>n = 1e7 is the Java comfort zone for a bool/int sieve. n = 1e12 needs segmented sieves or Miller-Rabin on single queries.</p>
+<p>Multiplicative functions (phi, mu, tau, sigma) fill with the same linear sieve in one pass.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Every composite k ≤ n has a smallest prime factor p. Mark k=p*m exactly once, when p does not exceed SPF[m]. That is the linear sieve.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>All primes ≤ n, n ≤ 1e7</li>
+        <li>Factor many numbers ≤ n</li>
+        <li>phi/mu prefix on 1..n</li>
+        <li>Count primes in a range of length 1e6 inside [1,1e12] (segmented)</li>
+        <li>Smallest prime factor queries</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>One primality test of a 64-bit n → Miller-Rabin</li>
+        <li>Factor one 64-bit n → Pollard Rho</li>
+        <li>n=1e12 full sieve → memory dies</li>
+        <li>Need primes in a very sparse set → just test those</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Primes ≤ n</td>
+        <td>Eratosthenes / linear</td>
+        <td>Sieve</td>
+      </tr>
+      <tr>
+        <td>Factor k ≤ n, many k</td>
+        <td>SPF table</td>
+        <td>Linear sieve</td>
+      </tr>
+      <tr>
+        <td>One 64-bit prime test</td>
+        <td>Miller-Rabin</td>
+        <td>Random page</td>
+      </tr>
+      <tr>
+        <td>phi[1..n]</td>
+        <td>Linear sieve of a multiplicative f</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>Primes in [L,R] R-L≤1e6, R≤1e12</td>
+        <td>Segmented sieve</td>
+        <td>Variant</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sieving by gcd</td>
+        <td>Not a thing</td>
+        <td>SPF is the factorisation oracle</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n le 10&#8311;</code> bool sieve ~ 10 MB; int SPF ~ 40 MB. Java init time matters: keep the inner loop tight, start j from i*i.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Eratosthenes: for i=2..n, if prime, mark i*i, i*i+i, ... composite. Optimise odds / wheel if needed.</p>
+<p>Linear: for x=2..n, if spf[x]==0, spf[x]=x, push prime. Then for each prime p with ple spf[x] and p*xle n, spf[p*x]=p. Each composite is written once.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After the linear sieve, spf[x] is the smallest prime dividing x (and spf[p]=p). Factorisation pops spf until x=1, O(Ω(x)) ≤ O(log x).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="primes-and-sievesViz"></div>
+  <div class="viz-player" data-viz-target="primes-and-sievesViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "spf[0..10] =",
+      "array": [
+        0,
+        0,
+        2,
+        3,
+        2,
+        5,
+        2,
+        7,
+        2,
+        3,
+        2
+      ],
+      "vars": [
+        "x",
+        "spf",
+        "primes"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "x=2: unmarked, prime. spf[2]=2. Mark 4,6,8,10 with 2 (linear: only ple spf[x]).",
+          "active": [
+            2
+          ],
+          "values": {
+            "x": 2,
+            "spf": 2,
+            "primes": "[2]"
+          }
+        },
+        {
+          "note": "x=3: prime. spf[3]=3. 6 already has spf 2 (2le3 but 6 was marked by 2 first).",
+          "active": [
+            3
+          ],
+          "values": {
+            "x": 3,
+            "spf": 3,
+            "primes": "[2,3]"
+          }
+        },
+        {
+          "note": "x=4: spf=2, composite. Try p=2 only (ple2). 8 already marked.",
+          "active": [
+            4
+          ],
+          "values": {
+            "x": 4,
+            "spf": 2,
+            "primes": "[2,3]"
+          }
+        },
+        {
+          "note": "x=5: prime. Remaining 7, and 9=3*3 gets spf 3.",
+          "active": [
+            5
+          ],
+          "values": {
+            "x": 5,
+            "spf": 5,
+            "primes": "[2,3,5]"
+          }
+        },
+        {
+          "note": "Factor 84 with a bigger table: 2*2*3*7 by looping n/=spf[n].",
+          "active": [
+            2
+          ],
+          "values": {
+            "x": 84,
+            "spf": "2,2,3,7",
+            "primes": "fact"
+          }
+        },
+        {
+          "note": "phi[10]: primes 2,5 so 10*(1-1/2)*(1-1/5)=4.",
+          "active": [
+            10
+          ],
+          "values": {
+            "x": 10,
+            "spf": 2,
+            "primes": "phi=4"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Each composite gets its SPF exactly once</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  xN["x from 2 to n"] --&gt; mark{"spf x == 0?"}
+  mark -- yes --&gt; primeN["spf x = x, append prime"]
+  mark -- no --&gt; comps["already composite"]
+  primeN --&gt; inner["for primes p while p ≤ spf x"]
+  comps --&gt; inner
+  inner --&gt; write["spf of p*x = p, once"]
+  </div>
+  <figcaption>Stop the inner loop when p > spf[x] so p*x is left for a smaller prime.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate</strong> int[] spf = new int[n+1].</li>
+  <li><strong>For x=2..n:</strong> if spf[x]==0, spf[x]=x, primes.add(x).</li>
+  <li><strong>Inner:</strong> for each prime p, if p>spf[x] or p*x>n break; spf[p*x]=p.</li>
+  <li><strong>Factor k:</strong> while k&gt;1, p=spf[k], divide out p.</li>
+  <li><strong>phi:</strong> same loop, phi[p*x] = phi[x]*p if p|x else phi[x]*(p-1).</li>
+  <li><strong>Segmented:</strong> sieve primes to sqrt(R), then a bool array of length R-L+1.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>x</th><th>spf</th><th>primes</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>[2]</td><td>x=2: unmarked, prime. spf[2]=2. Mark 4,6,8,10 with 2 (linear: only ple spf[x]).</td></tr>
+      <tr><td>3</td><td>3</td><td>[2,3]</td><td>x=3: prime. spf[3]=3. 6 already has spf 2 (2le3 but 6 was marked by 2 first).</td></tr>
+      <tr><td>4</td><td>2</td><td>[2,3]</td><td>x=4: spf=2, composite. Try p=2 only (ple2). 8 already marked.</td></tr>
+      <tr><td>5</td><td>5</td><td>[2,3,5]</td><td>x=5: prime. Remaining 7, and 9=3*3 gets spf 3.</td></tr>
+      <tr><td>84</td><td>2,2,3,7</td><td>fact</td><td>Factor 84 with a bigger table: 2*2*3*7 by looping n/=spf[n].</td></tr>
+      <tr><td>10</td><td>2</td><td>phi=4</td><td>phi[10]: primes 2,5 so 10*(1-1/2)*(1-1/5)=4.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Primes & Sieves implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>O(sqrt n) per test.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TrialPrime.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class TrialPrime {
+        static boolean isPrime(int n) {
+            if (n &lt; 2) return false;
+            for (int i = 2; i * i &lt;= n; i++) if (n % i == 0) return false;
+            return true;
+        }
+        public static void main(String[] args) {
+            int c = 0;
+            for (int i = 2; i &lt;= 10; i++) if (isPrime(i)) c++;
+            System.out.println(c);
+        }
+        // Input : count primes ≤ 10
+        // Output: 4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>SPF + primes list. Factor 84.</p>
+    <div class="code" data-highlight="10-18">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LinearSieve.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class LinearSieve {
+        static int[] spf;
+        static List&lt;Integer&gt; primes = new ArrayList&lt;&gt;();
+        static void sieve(int n) {
+            spf = new int[n + 1];
+            for (int x = 2; x &lt;= n; x++) {
+                if (spf[x] == 0) { spf[x] = x; primes.add(x); }
+                for (int p : primes) {
+                    if (p &gt; spf[x] || (long) p * x &gt; n) break;
+                    spf[p * x] = p;
+                }
+            }
+        }
+        static List&lt;Integer&gt; factor(int n) {
+            List&lt;Integer&gt; f = new ArrayList&lt;&gt;();
+            while (n &gt; 1) { f.add(spf[n]); n /= spf[n]; }
+            return f;
+        }
+        public static void main(String[] args) {
+            sieve(100);
+            System.out.println(primes.subList(0, 4));
+            System.out.println(factor(84));
+        }
+        // Input : n=100, factor 84
+        // Output: [2, 3, 5, 7]
+        //         [2, 2, 3, 7]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>The simpler sieve if you only need a boolean prime[].</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Eratosthenes.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    public class Eratosthenes {
+        static boolean[] sieve(int n) {
+            boolean[] p = new boolean[n + 1];
+            Arrays.fill(p, true);
+            p[0] = p[1] = false;
+            for (int i = 2; i * i &lt;= n; i++) if (p[i])
+                for (int j = i * i; j &lt;= n; j += i) p[j] = false;
+            return p;
+        }
+        public static void main(String[] args) {
+            boolean[] p = sieve(10);
+            System.out.println(p[7] + " " + p[9]);
+        }
+        // Input : n=10
+        // Output: true false
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) linear / O(n log log n) Eratosthenes</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Linear: each composite is assigned its SPF once, each prime is pushed once. Eratosthenes: harmonic sum of n/p over primes is n log log n.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Trial per number</td><td>O(n sqrt n)</td><td>O(1)</td><td>n tiny</td></tr>
+      <tr><td>Eratosthenes</td><td>O(n log log n)</td><td>O(n)</td><td>prime[] only</td></tr>
+      <tr><td>Linear SPF</td><td>O(n)</td><td>O(n)</td><td>Factor many k ≤ n</td></tr>
+      <tr><td>Miller-Rabin</td><td>O(k log n)</td><td>O(1)</td><td>One huge n</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Inner loop from 2i instead of i*i</span>
+    <div class="pitfalls__bug">Correct but slower; also i*i overflow for i~46341 in int.</div>
+    <div class="pitfalls__fix"><code>(long)i*i</code> and start at i*i.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Linear sieve not breaking on p>spf[x]</span>
+    <div class="pitfalls__bug">A number is marked by several primes, SPF is no longer smallest, and O(n log n).</div>
+    <div class="pitfalls__fix">The break is the algorithm.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">spf[1] and factor(1)</span>
+    <div class="pitfalls__bug">Infinite loop while n>1 if spf[1] is 0 and you call factor(1).</div>
+    <div class="pitfalls__fix">Special-case 1 as empty factor list.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">n=1e8 boolean in Java</span>
+    <div class="pitfalls__bug">Memory and time both tight; TLE on slow marking.</div>
+    <div class="pitfalls__fix">Bitset, or n=1e7, or linear sieve.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Segmented sieve off-by-one on L=1</span>
+    <div class="pitfalls__bug">1 is not prime; index 0 maps to L.</div>
+    <div class="pitfalls__fix">Mark 0/1 explicitly if Lle1.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>phi/mu linear</td>
+        <td>Same loop, multiplicative recurrence.</td>
+        <td><code>phi[p*x]=p|x ? phi[x]*p : phi[x]*(p-1)</code></td>
+        <td>CSES counting</td>
+      </tr>
+      <tr>
+        <td>Segmented</td>
+        <td>Primes to sqrt(R), mark [L,R].</td>
+        <td><code>O((R-L+sqrt R) log log R)</code></td>
+        <td>primes in a window</td>
+      </tr>
+      <tr>
+        <td>n=1e12 single factor</td>
+        <td>Pollard Rho, not a sieve.</td>
+        <td><code>random techniques</code></td>
+        <td>one integer</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the linear sieve linear?</summary>
+    <div class="followup__body">
+      <p>Every composite m has a unique writing m = p * x with p = spf[m] le spf[x]. The inner loop produces each m once.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Eratosthenes vs linear in practice?</summary>
+    <div class="followup__body">
+      <p>Eratosthenes has better cache for prime[] only. Linear wins when you want SPF/phi/mu in the same pass.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you list primes in [1e12, 1e12+1e6]?</summary>
+    <div class="followup__body">
+      <p>Sieve primes ≤ 1e6+eps, then segmented-mark the window. Do not allocate 1e12.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Goldbach / twin primes?</summary>
+    <div class="followup__body">
+      <p>Sieve then a linear scan of the prime list. The sieve is the preprocess.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://cses.fi/problemset/task/1713" target="_blank" rel="noopener">Counting Divisors</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>SPF or n^{1/3} tricks</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://cses.fi/problemset/task/1642" target="_blank" rel="noopener">Sum of Four Values? skip</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>use 1713 / 1081</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://cses.fi/problemset/task/1081" target="_blank" rel="noopener">Common Divisors</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>sieve multiples, max gcd</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/count-primes/" target="_blank" rel="noopener">Count Primes</a></td>
+        <td><span class="badge badge--lc">LC 204</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Eratosthenes</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/largest-component-size-by-common-factor/" target="_blank" rel="noopener">Largest Component Size By Common Factor</a></td>
+        <td><span class="badge badge--lc">LC 952</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>SPF + DSU</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/26/A" target="_blank" rel="noopener">Almost Prime</a></td>
+        <td><span class="badge badge--cf">CF 26A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Sieve then count two distinct primes</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/546/D" target="_blank" rel="noopener">Soldier and Number Game</a></td>
+        <td><span class="badge badge--cf">CF 546D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix of omega via SPF</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc142/tasks/abc142_d" target="_blank" rel="noopener">ABC 142 D</a></td>
+        <td><span class="badge badge--atc">ABC 142D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>gcd then factor</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Linear sieve: each composite gets SPF once.</li>
+    <li>Factor k≤n by dividing spf[k].</li>
+    <li>Eratosthenes if you only need prime[].</li>
+    <li>Huge single n: Miller-Rabin / Rho.</li>
+    <li>phi/mu fill in the same pass.</li>
+  </ul>
+  <div class="recap__oneliner">if(spf[x]==0){spf[x]=x; primes.add(x);} for(p:primes){ if(p&gt;spf[x])break; spf[p*x]=p; }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

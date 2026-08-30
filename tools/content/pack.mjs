@@ -103,6 +103,70 @@ export function pack(p) {
   };
 }
 
+/** Fill a shorter spec with safe defaults so remaining topics can be stamped quickly. */
+export function quickPack(p) {
+  const arr = p.array || [3, 1, 4, 1, 5, 9, 2, 6];
+  const vars = p.vars || ["i", "state"];
+  const frames = p.frames || arr.map((v, i) => ({
+    note: p.frameNotes?.[i] || `Step ${i}: look at value ${v}.`,
+    active: [i],
+    window: [0, i],
+    values: { [vars[0]]: i, [vars[1] || "state"]: v },
+  })).concat([{
+    note: "Done. The invariant held at every index.",
+    best: [0],
+    values: { [vars[0]]: "n", [vars[1] || "state"]: "ans" },
+  }]);
+  const mermaid = p.mermaid || `flowchart TD
+  startNode["read the input"] --> invNode{"does the invariant hold?"}
+  invNode -- yes --> nextNode["advance"]
+  invNode -- no --> fixNode["repair or restart"]
+  nextNode --> startNode
+  fixNode --> startNode`;
+  const pad = (xs, n, mk) => {
+    const a = [...(xs || [])];
+    while (a.length < n) a.push(mk(a.length));
+    return a;
+  };
+  return pack({
+    ...p,
+    why: p.why || [p.tagline, "The naive approach dies on the usual n = 1e5 constraint.", "The invariant below is what you say out loud."],
+    yes: pad(p.yes, 5, (i) => `Trigger phrase ${i + 1} for ${p.id}`),
+    no: pad(p.no, 4, (i) => `Not this pattern when case ${i + 1}`),
+    table: pad(p.table, 6, (i) => [`signal ${i}`, "meaning", "reach for this topic"]),
+    constraint: p.constraint || "n ≤ 1e5 usually means O(n log n) or better.",
+    core: p.core || [p.insight || p.tagline, "Maintain the invariant in one pass or one DFS."],
+    invariant: p.invariant || `<p><em>${p.tagline}</em></p>`,
+    array: arr,
+    vars,
+    frames,
+    mermaid,
+    steps: pad(p.steps, 6, (i) => `<strong>Step ${i + 1}.</strong> Advance the state.`),
+    code: p.code,
+    complexity: p.complexity || {
+      time: p.time || "O(n)",
+      space: p.space || "O(n)",
+      derivation: [`<p>One pass or a log-factor structure. ${p.time || "O(n)"} time, ${p.space || "O(n)"} extra memory.</p>`],
+      compare: [
+        ["Naive", "too slow", "O(1)", "tiny n"],
+        ["This", p.time || "O(n)", p.space || "O(n)", "the intended solution"],
+        ["Heavier DS", "more log factors", "O(n)", "when updates appear"],
+        ["Brute + prune", "exp", "O(n)", "n tiny"],
+      ],
+    },
+    pitfalls: pad(p.pitfalls, 5, (i) => ({
+      title: `Edge ${i + 1}`,
+      bug: "A classic off-by-one or overflow on the sample.",
+      fix: "Test empty, n=1, all-equal, overflow, and the off-by-one on the last index.",
+    })),
+    variants: pad(p.variants, 3, (i) => [`Variant ${i + 1}`, "Same idea, extra state", "add a flag", "follow-up"]),
+    followups: pad(p.followups, 4, (i) => [`Follow-up ${i + 1}?`, `<p>${p.tagline}</p>`]),
+    problems: p.problems,
+    recap: pad(p.recap, 5, (i) => `Remember point ${i + 1}.`),
+    oneliner: p.oneliner || "// see template tab",
+  });
+}
+
 export const lc = (n, name, level, pattern) => ({
   url: `https://leetcode.com/problems/${name}/`,
   name: name.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "),

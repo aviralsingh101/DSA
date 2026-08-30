@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DP Foundations &mdash; DSA Course</title>
+<meta name="description" content="DP is not a list of named tricks &mdash; it is a pipeline: name the state, write the transition, fix the base, pick an order (or memoize), then shave the space.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="dp-foundations">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>DP Foundations</h1>
+  <p class="hero__tagline">DP is not a list of named tricks &mdash; it is a pipeline: name the state, write the transition, fix the base, pick an order (or memoize), then shave the space.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/recurrences-and-master-theorem.html">Recurrences</a>,
+      <a href="../00-foundations/constraints-to-complexity.html">Constraints → Complexity</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">DP</span>
+      <span class="chip">state</span>
+      <span class="chip">memoization</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Most interview DP failures are not arithmetic. They are a missing definition of <em>what a state means</em>, a transition that does not cover every way to form that state, or a loop that reads a cell before it has been written. The named problems (knapsack, LIS, LCS, digit DP) are the same pipeline with different state shapes.</p>
+<p>The reason the pipeline is worth drilling is that it is mechanical. Once you can write "dp[i] = number of ways to climb i stairs" and "dp[i] = dp[i-1] + dp[i-2]" without blinking, every later page on this module is a change of coordinates, not a new subject.</p>
+<p>Climbing stairs / Fibonacci is the smallest complete example: overlapping subproblems, an optimal-substructure recurrence, a base case, a linear order, and a rolling-array space optimisation. We run that example to the ground so the later families can assume the vocabulary.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A DP state is a question with a numeric answer. The transition is how that answer is assembled from strictly smaller questions. If you cannot say those two sentences out loud, you are not ready to code.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Number of ways" / "minimum cost" / "can you reach" on a structure with overlapping subproblems</li>
+        <li>A recurrence that would be exponential if you recurse without storing answers</li>
+        <li>The statement smells like recursion plus "do not recompute"</li>
+        <li>n is 40..1e4 and a 1D or 2D table of that size fits</li>
+        <li>You can name a suffix/prefix/subarray/subset whose answer depends only on smaller ones</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Subproblems do not overlap (pure divide-and-conquer) &rarr; no table, just the recurrence</li>
+        <li>A greedy choice is provably safe &rarr; do not force DP</li>
+        <li>The graph of states has cycles with no decreasing rank &rarr; not a DAG of states; rethink</li>
+        <li>n = 1e5 and your first state is O(n&sup2;) &rarr; the state is wrong, not the idea of DP</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"number of ways to do X"</td>
+        <td>Counting DP, usually += </td>
+        <td>1D/2D ways[]</td>
+      </tr>
+      <tr>
+        <td>"minimum cost to achieve X"</td>
+        <td>Min DP</td>
+        <td>dp[state] = min over choices</td>
+      </tr>
+      <tr>
+        <td>"is it possible"</td>
+        <td>Boolean DP, or = or</td>
+        <td>undefined</td>
+      </tr>
+      <tr>
+        <td>Recursion with repeated calls</td>
+        <td>Overlapping subproblems</td>
+        <td>Memo first, then tabulate</td>
+      </tr>
+      <tr>
+        <td>n ≤ 20 plus subsets</td>
+        <td>State is a mask</td>
+        <td><a href="bitmask-dp.html">Bitmask DP</a></td>
+      </tr>
+      <tr>
+        <td>n ≤ 1e5, O(n) or O(n log n) needed</td>
+        <td>1D + data structure, not n²</td>
+        <td><a href="dp-1d.html">1-D DP</a> / LIS</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> greedy</td>
+        <td>Greedy needs an exchange proof; DP needs a state proof</td>
+        <td>If you cannot prove greedy, write the DP</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> A table of size S and a transition of cost T must have S &middot; T under about 10&#8312;. That single inequality is how you reject an over-large state before you write it. Answers that sum ways usually need <code>long</code> and a modulus.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>The five-line pipeline</h2>
+<p><strong>State.</strong> Write a sentence: <code>dp[i]</code> = number of ways to climb <code>i</code> stairs taking steps of 1 or 2. Until that sentence is unambiguous, do not open an editor.</p>
+<p><strong>Transition and base.</strong> The last step was 1 or 2, so <code>dp[i] = dp[i-1] + dp[i-2]</code>. Bases: <code>dp[0] = 1</code> (one way to stand still) and <code>dp[1] = 1</code>. Every index the transition reads must be defined. <strong>Order or memo, then space.</strong> Recurse + hashmap of seen states, or fill <code>i = 2 .. n</code> left to right. Only the last two cells are live, so a pair of integers replaces the array. That is the whole subject, at this scale.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>DP = DAG of questions. An edge <code>A &larr; B</code> means "A's answer uses B's answer". A valid order is any topological order of that DAG. Memoized recursion discovers the order for you; tabulation requires you to write it.</p><span class="eq">dp[i] = ways to climb i = dp[i-1] + dp[i-2]</span>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Overlapping + optimal substructure</span>
+    <p>Overlapping: the same (i) is asked from many parents. Optimal substructure: a best/count answer for i is assembled from best/count answers for smaller i, not from some hidden extra that the state forgot. If the "how we got here" still matters, the state is incomplete (add a parameter).</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Memo first in an interview</span>
+    <p>Write the recursive function that computes the state, add a cache keyed by the arguments, then &mdash; if time remains &mdash; invert it into loops. Interviewers score the recurrence. The loops are polish.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Filling dp[0..6] for climbing 6 stairs</h3>
+
+<p>One row. The target cell is the one being written; the from cells are the two it adds. Step through it once and the later families will feel like the same movie in more than one dimension.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="dp-foundationsViz"></div>
+  <div class="viz-player" data-viz-target="dp-foundationsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "i",
+      "rowHeads": [
+        "dp"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "vars": [
+        "i",
+        "from",
+        "dp[i]"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Base: dp[0] = 1 (empty climb) and dp[1] = 1 (a single step of 1).",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "i": "base",
+            "from": "—",
+            "dp[i]": "1, 1"
+          }
+        },
+        {
+          "note": "i = 2. Read dp[1] and dp[0], write 1+1 = 2.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 2,
+            "from": "1+0",
+            "dp[i]": 2
+          }
+        },
+        {
+          "note": "i = 3. from dp[2] and dp[1]: 2+1 = 3.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 3,
+            "from": "2+1",
+            "dp[i]": 3
+          }
+        },
+        {
+          "note": "i = 4. 3+2 = 5.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 4,
+              "val": "5",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 4,
+            "from": "3+2",
+            "dp[i]": 5
+          }
+        },
+        {
+          "note": "i = 5. 5+3 = 8.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 5,
+              "val": "8",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "5",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "3",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 5,
+            "from": "4+3",
+            "dp[i]": 8
+          }
+        },
+        {
+          "note": "i = 6. 8+5 = 13. This is the answer for n = 6.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 6,
+              "val": "13",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 5,
+              "val": "8",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "5",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 6,
+            "from": "5+4",
+            "dp[i]": 13
+          }
+        },
+        {
+          "note": "Only the last two cells were live at each step. Space-opt keeps prev2=8, prev1=13 and drops the array.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 5,
+              "val": "8",
+              "cls": "from"
+            },
+            {
+              "r": 0,
+              "c": 6,
+              "val": "13",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "i": "roll",
+            "from": "two ints",
+            "dp[i]": 13
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>dp[i] = dp[i-1] + dp[i-2]. Green is the cell we write; blue is the pair we read. After i = 6 the answer is 13.</figcaption>
+</figure>
+
+<h3>The pipeline you run on every later page</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["what is the question?"]) --&gt; state["name dp of args = one number"]
+  state --&gt; trans["write the transition from smaller states"]
+  trans --&gt; base["fix the bases so every read is defined"]
+  base --&gt; dag{"is the state graph a DAG?"}
+  dag -- no --&gt; more["add a parameter or change the state"]
+  more --&gt; state
+  dag -- yes --&gt; how{"memo or loops?"}
+  how -- memo --&gt; rec["recurse + cache keyed by args"]
+  how -- loops --&gt; ord["pick a topo order and fill"]
+  rec --&gt; space{"only a window of states live?"}
+  ord --&gt; space
+  space -- yes --&gt; roll["roll the array"]
+  space -- no --&gt; doneNode["done"]
+  roll --&gt; doneNode
+  </div>
+  <figcaption>If a box fails, do not skip it. A wrong state cannot be saved by clever loops.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Write the state sentence</strong> with every argument named.</li>
+  <li><strong>Write the transition</strong> as a formula that only reads strictly smaller states.</li>
+  <li><strong>Write the bases</strong> and check the first recursive index against them.</li>
+  <li><strong>Estimate S &times; T</strong> against the constraint. If it dies, shrink the state.</li>
+  <li><strong>Implement memoized recursion</strong> first, on the dry-run sample.</li>
+  <li><strong>Invert into a loop</strong> in a legal order (here, increasing i).</li>
+  <li><strong>Roll the array</strong> if only a constant window is live.</li>
+  <li><strong>Reconstruct</strong> if asked: store the argmax / parent of each transition.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Climb n = 6, steps 1 or 2. Each row writes one new cell.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>dp[i-2]</th><th>dp[i-1]</th><th>dp[i]</th><th>meaning</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>—</td><td>—</td><td>1</td><td>empty</td><td>Base.</td></tr>
+      <tr><td>1</td><td>—</td><td>1</td><td>1</td><td>one single step</td><td>Base.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>1</td><td>1</td><td>2</td><td>1+1 or 2</td><td>First transition.</td></tr>
+      <tr><td>3</td><td>1</td><td>2</td><td>3</td><td>three sequences</td><td></td></tr>
+      <tr><td>4</td><td>2</td><td>3</td><td>5</td><td>Fibonacci</td><td></td></tr>
+      <tr><td>5</td><td>3</td><td>5</td><td>8</td><td></td><td></td></tr>
+      <tr class="trace-table__row--change"><td>6</td><td>5</td><td>8</td><td>13</td><td>answer</td><td>Return 13.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="DP Foundations implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Space-opt</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ClimbRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ClimbRec {
+    
+        static int ways(int n) {
+            if (n &lt; 0) {
+                return 0;
+            }
+            if (n == 0) {
+                return 1;
+            }
+            return ways(n - 1) + ways(n - 2);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(ways(6));
+        }
+        // Input : n = 6
+        // Output: 13
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ClimbMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class ClimbMemo {
+    
+        static int ways(int n, int[] memo) {
+            if (n &lt; 0) {
+                return 0;
+            }
+            if (n == 0) {
+                return 1;
+            }
+            if (memo[n] != -1) {
+                return memo[n];
+            }
+            return memo[n] = ways(n - 1, memo) + ways(n - 2, memo);
+        }
+    
+        public static void main(String[] args) {
+            int n = 6;
+            int[] memo = new int[n + 1];
+            Arrays.fill(memo, -1);
+            System.out.println(ways(n, memo));
+        }
+        // Input : n = 6
+        // Output: 13
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ClimbTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ClimbTab {
+    
+        static int ways(int n) {
+            if (n == 0) {
+                return 1;
+            }
+            int[] dp = new int[n + 1];
+            dp[0] = 1;
+            dp[1] = 1;
+            for (int i = 2; i &lt;= n; i++) {
+                dp[i] = dp[i - 1] + dp[i - 2];
+            }
+            return dp[n];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(ways(6));
+        }
+        // Input : n = 6
+        // Output: 13
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ClimbRoll.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ClimbRoll {
+    
+        static int ways(int n) {
+            int prev2 = 1, prev1 = 1;
+            for (int i = 2; i &lt;= n; i++) {
+                int cur = prev1 + prev2;
+                prev2 = prev1;
+                prev1 = cur;
+            }
+            return prev1;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(ways(6));
+        }
+        // Input : n = 6
+        // Output: 13
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) memo / tab / roll; O(φ^n) naked recursion</span>
+    <span class="badge badge--space">Space O(n) memo/tab; O(1) roll; O(n) recursion depth</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>There are n + 1 states. Each transition reads two earlier cells in O(1):</p>
+    <p><span class="eq">T = &Theta;(n) once each state is stored</span></p>
+    <p>Naked recursion is the Fibonacci tree, &Theta;(&phi;<sup>n</sup>). That gap is exactly what "overlapping subproblems" means, measured.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naked recursion</td><td>O(φ^n)</td><td>O(n) stack</td><td>Only to derive the recurrence</td></tr>
+      <tr><td>Memo</td><td>O(n)</td><td>O(n)</td><td>Interview default</td></tr>
+      <tr><td>Tabulated</td><td>O(n)</td><td>O(n)</td><td>Clear order, easy to roll</td></tr>
+      <tr><td>Rolling</td><td>O(n)</td><td>O(1)</td><td>When only a window is live</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">dp[0] = 0 for ways</span>
+    <div class="pitfalls__bug">Zero ways to do nothing. Then every later cell is 0.</div>
+    <div class="pitfalls__fix">Empty plan is one way for counting problems. Empty cost is 0 for min-cost.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one on n vs n+1 allocation</span>
+    <div class="pitfalls__bug">dp of length n, then write dp[n].</div>
+    <div class="pitfalls__fix">If the state is "first i" or "value i", allocate n+1 and be explicit about whether i is 0-based size or 1-based value.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Reading a cell you have not written</span>
+    <div class="pitfalls__bug">Looping i downwards when the transition reads i-1.</div>
+    <div class="pitfalls__fix">Draw the dependency arrow; walk against it. Memo hides this; tabulation does not.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on ways</span>
+    <div class="pitfalls__bug">Climbing stairs is tiny; knapsack-style counts are not.</div>
+    <div class="pitfalls__fix">long, and the modulus in the addition if the statement gives one.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the state still depends on a choice you discarded</span>
+    <div class="pitfalls__bug">House-robber-style "take or skip" encoded as a 1D array that cannot tell whether i was taken.</div>
+    <div class="pitfalls__fix">Either store two values (took / skipped) or define dp[i] as "best on prefix i with i decided" so the transition can refer to i-2.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Calling it DP when there is no overlap</span>
+    <div class="pitfalls__bug">Memoizing a tree recursion whose every state is unique. You pay for a hashmap and gain nothing.</div>
+    <div class="pitfalls__fix">If each state is hit once, it is just recursion (or a tree DP that still stores per-node answers, which <em>is</em> overlap across queries).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Min-cost climb</td>
+        <td>dp[i] = cost[i] + min(dp[i-1], dp[i-2]). Same skeleton, min instead of +.</td>
+        <td><code>LC 746</code></td>
+        <td><a href="dp-1d.html">1-D DP</a></td>
+      </tr>
+      <tr>
+        <td>k-wide steps</td>
+        <td>dp[i] = sum of dp[i-1] .. dp[i-k]. Sliding window of the last k.</td>
+        <td><code>O(n) after a running sum</code></td>
+        <td>LC 1425 is the hard cousin</td>
+      </tr>
+      <tr>
+        <td>Modulo</td>
+        <td>Every addition becomes (a + b) % MOD. Negative-safe: (a + b) % MOD, with + MOD if you subtract.</td>
+        <td><code>MOD = 1_000_000_007</code></td>
+        <td>Most CF counting DPs</td>
+      </tr>
+      <tr>
+        <td>Reconstruction</td>
+        <td>Store prev[i] = which predecessor won. Walk back from n.</td>
+        <td><code>prev[i] = i-1 or i-2</code></td>
+        <td>Needed when the problem asks for a sequence, not a number</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Memo or tabulation, which do I write first?</summary>
+    <div class="followup__body">
+      <p>Memo. It is the recurrence plus a cache, and it only computes reachable states. Tabulation needs an order and fills everything. After the memo is correct, inverting it is mechanical and often faster by a constant (no call stack, better locality).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if the dependency graph is not obvious?</summary>
+    <div class="followup__body">
+      <p>If every transition strictly decreases some rank (i, i+j, popcount, remaining capacity), an order exists. If you cannot name a rank, you probably have a cycle and the state is wrong (shortest-path-on-states, not DP).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I know the state is complete?</summary>
+    <div class="followup__body">
+      <p>After writing the transition, ask: "is there any information about the past that I still need and did not put in the args?" If yes, add a parameter or change the meaning of the index. Completeness is the only hard part of DP.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is climb-stairs Fibonacci and not 2^n?</summary>
+    <div class="followup__body">
+      <p>Sequences of 1s and 2s that sum to n, not every binary string. The recurrence counts compositions with parts in {1,2}, whose generating function is 1/(1-x-x^2), i.e. Fibonacci. 2^n would be if each stair independently had a yes/no decision.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/climbing-stairs/" target="_blank" rel="noopener">Climbing Stairs</a></td>
+        <td><span class="badge badge--lc">LC 70</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The dry-run problem</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/fibonacci-number/" target="_blank" rel="noopener">Fibonacci Number</a></td>
+        <td><span class="badge badge--lc">LC 509</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Same recurrence, different base</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/min-cost-climbing-stairs/" target="_blank" rel="noopener">Min Cost Climbing Stairs</a></td>
+        <td><span class="badge badge--lc">LC 746</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>min instead of +</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/house-robber/" target="_blank" rel="noopener">House Robber</a></td>
+        <td><span class="badge badge--lc">LC 198</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Take/skip 1D, next page</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/n-th-tribonacci-number/" target="_blank" rel="noopener">N-th Tribonacci Number</a></td>
+        <td><span class="badge badge--lc">LC 1137</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Three-term rolling</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1633" target="_blank" rel="noopener">Dice Combinations</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Climb stairs with faces 1..6, modulo</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/455/A" target="_blank" rel="noopener">Boredom</a></td>
+        <td><span class="badge badge--cf">CF 455A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>House-robber on values, not indices</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_a" target="_blank" rel="noopener">Frog 1</a></td>
+        <td><span class="badge badge--atc">ATC DP-A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Educational DP contest, min-cost jump</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/reach-a-given-score-1587115621/1" target="_blank" rel="noopener">Reach a given score</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Coin-change-style ways</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/unique-paths/" target="_blank" rel="noopener">Unique Paths</a></td>
+        <td><span class="badge badge--lc">LC 62</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same pipeline in 2D, see grid-dp</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CSES Dice Combinations</summary>
+  <div class="spoiler__body">
+    <p>dp[x] = ways to sum to x with faces 1..6, order matters (compositions). dp[0]=1, dp[x] += dp[x-f] for f=1..6 if x-f &ge; 0, mod 1e9+7. That is climb-stairs with k = 6. If order did not matter it would be coin change unbounded, a different loop order &mdash; see knapsack.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 455A Boredom</summary>
+  <div class="spoiler__body">
+    <p>Taking value v deletes v-1 and v+1. Compress to counts cnt[v], then house-robber on the value line: dp[v] = max(dp[v-1], dp[v-2] + v*cnt[v]). The state is the value, not the index. long for the answer.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>State sentence, then transition, then base, then order.</strong></li>
+    <li><strong>Memo is the recurrence plus a cache</strong>; tabulation is the same DAG in loops.</li>
+    <li><strong>S &times; T must fit the constraint</strong> before you code.</li>
+    <li><strong>Roll the window</strong> when only the last few states are live.</li>
+    <li><strong>Counting uses long / modulus; empty ways = 1, empty cost = 0.</strong></li>
+  </ul>
+  <div class="recap__oneliner">name the state | write rec from smaller | base | memo or topo-fill | roll if a window</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

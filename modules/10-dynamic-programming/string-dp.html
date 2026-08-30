@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>String DP &mdash; DSA Course</title>
+<meta name="description" content="Two indices into one or two strings: LCS, edit distance, palindrome partitions &mdash; the cell (i, j) is the answer for the two prefixes.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="string-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>String DP</h1>
+  <p class="hero__tagline">Two indices into one or two strings: LCS, edit distance, palindrome partitions &mdash; the cell <code>(i, j)</code> is the answer for the two prefixes.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="grid-dp.html">Grid DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">LCS</span>
+      <span class="chip">edit distance</span>
+      <span class="chip">palindrome</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>String DP is grid DP on the prefixes of one or two strings. dp[i][j] answers a question about s[0..i) and t[0..j) (or about s[i..j] for palindromes). The alphabet never appears in the state: only whether two characters match, and the three standard moves (drop s, drop t, or consume both).</p>
+<p>LCS and edit distance are the same table with a different combine. Palindrome subsequence is LCS(s, reverse(s)). Palindrome substring / min-cut is a different axis: intervals of one string, which is the bridge to the next page.</p>
+<p>n, m ≤ 1000 is the signature: O(nm) time, O(min(n,m)) space after rolling. Reconstruction of the LCS or the alignment walks the table back from (n, m).</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>If s[i-1] == t[j-1], the pair is free (or worth +1). If not, you must drop one side or substitute. Those three neighbours are the only from-cells.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Longest common subsequence / substring of two strings</li>
+        <li>Edit / Levenshtein distance, insert-delete-replace</li>
+        <li>Distinct subsequences, wildcard matching, regex DP</li>
+        <li>Longest palindromic subsequence = LCS with the reverse</li>
+        <li>Interleaving string, wildcards, min ASCII delete sum</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Longest common <em>substring</em> can also be DP, but sliding / suffix array is often intended</li>
+        <li>Anagrams / character counts only → hashing, not a 2D table</li>
+        <li>LIS in an array of numbers → previous page, even if you cast to a string</li>
+        <li>Interval palindrome cuts with n ≤ 400 and a third loop → interval DP</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LCS length</td>
+        <td>match → diag+1, else max(left, up)</td>
+        <td>LC 1143</td>
+      </tr>
+      <tr>
+        <td>Edit distance</td>
+        <td>match → diag, else 1+min(3 neighbours)</td>
+        <td>LC 72</td>
+      </tr>
+      <tr>
+        <td>Distinct subsequences</td>
+        <td>+= from skip / take-if-match</td>
+        <td>LC 115</td>
+      </tr>
+      <tr>
+        <td>Wildcard matching</td>
+        <td>boolean, '*' eats or not</td>
+        <td>LC 44</td>
+      </tr>
+      <tr>
+        <td>LPS</td>
+        <td>LCS(s, reverse(s))</td>
+        <td>LC 516</td>
+      </tr>
+      <tr>
+        <td>Min insert to palindrome</td>
+        <td>n - LPS</td>
+        <td>LC 1312</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> longest common substring</td>
+        <td>Substring requires a contiguous match; on mismatch the length resets to 0</td>
+        <td>Same table, different recurrence (diag+1 or 0)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 1000</code> → O(nm) is the intended bound. <code>n = 5000</code> still fits if you roll and watch constants. Answers fit in int for lengths; ways need long / modulus.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Prefixes (i, j) and three neighbours</h2>
+<p>LCS: if s[i-1]==t[j-1] then dp[i][j] = dp[i-1][j-1]+1, else max(dp[i-1][j], dp[i][j-1]). First row and col are 0 (empty prefix). This is the dry-run table.</p>
+<p>Edit distance: match copies the diagonal; otherwise 1 + min(insert = left, delete = up, replace = diagonal). First row is 0..m (insert all), first col is 0..n (delete all). Rolling: keep the previous row, or even two cells if you walk carefully. Reconstruction: from (n,m), if match follow diagonal, else follow the neighbour that produced the value, emitting the operation.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>dp[i][j]</code> is the LCS length (or edit distance) of the prefixes <code>s[0..i)</code> and <code>t[0..j)</code>.</p><span class="eq">match: diag + 1 &nbsp;&nbsp; mismatch: max(up, left)</span>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Substring vs subsequence</span>
+    <p>Substring: on mismatch, dp[i][j] = 0, and the answer is the global max in the table, not dp[n][m]. Subsequence: on mismatch, you may still drop a character and keep a positive length. Mixing them is a common WA.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">LPS without building the reverse</span>
+    <p>dp[i][j] = LPS of s[i..j]. If s[i]==s[j], 2+dp[i+1][j-1], else max(dp[i+1][j], dp[i][j-1]). That is interval DP on one string; fill by increasing length. Same answer as LCS(s, reverse(s)).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>LCS of s = "abcde" and t = "ace"</h3>
+
+<p>Rows are prefixes of s (empty, a, ab, abc, abcd, abcde). Columns are prefixes of t (empty, a, ac, ace). Target is the cell we write; from is diag on a match, else up and left.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="string-dpViz"></div>
+  <div class="viz-player" data-viz-target="string-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "s\\t",
+      "rowHeads": [
+        "\"\"",
+        "a",
+        "ab",
+        "abc",
+        "abcd",
+        "abcde"
+      ],
+      "colHeads": [
+        "\"\"",
+        "a",
+        "ac",
+        "ace"
+      ],
+      "vars": [
+        "i,j",
+        "chars",
+        "dp"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Row 0 and col 0 stay 0: LCS with an empty string is 0.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 5,
+              "c": 0,
+              "val": "0"
+            }
+          ],
+          "values": {
+            "i,j": "border",
+            "chars": "empty",
+            "dp": 0
+          }
+        },
+        {
+          "note": "s[0]='a' vs t[0]='a': match. diag 0+1 = 1. Target (1,1), from (0,0).",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i,j": "1,1",
+            "chars": "a / a",
+            "dp": 1
+          }
+        },
+        {
+          "note": "s[1]='b' vs t[0]='a': mismatch. max(up=1, left=0) = 1.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 1,
+              "val": "1",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i,j": "2,1",
+            "chars": "b / a",
+            "dp": 1
+          }
+        },
+        {
+          "note": "s[2]='c' vs t[1]='c': match. diag dp[2][1]+1 = 2. Target (3,2), from (2,1).",
+          "cells": [
+            {
+              "r": 3,
+              "c": 2,
+              "val": "2",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i,j": "3,2",
+            "chars": "c / c",
+            "dp": 2
+          }
+        },
+        {
+          "note": "s[4]='e' vs t[2]='e': match. diag + 1 = 3. Target (5,3).",
+          "cells": [
+            {
+              "r": 5,
+              "c": 3,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i,j": "5,3",
+            "chars": "e / e",
+            "dp": 3
+          }
+        },
+        {
+          "note": "dp[5][3] = 3 is the LCS length of the full strings.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 3,
+              "val": "3",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "i,j": "n,m",
+            "chars": "abcde / ace",
+            "dp": 3
+          }
+        },
+        {
+          "note": "Reconstruction walks diag on matches: (5,3)e, (3,2)c, (1,1)a — \"ace\".",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "from"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "2",
+              "cls": "from"
+            },
+            {
+              "r": 5,
+              "c": 3,
+              "val": "3",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "i,j": "path",
+            "chars": "a,c,e",
+            "dp": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Answer 3: "ace". Each match walks the diagonal and adds 1. The green cell always has its from-cells already filled.</figcaption>
+</figure>
+
+<h3>Which string table?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["string DP"]) --&gt; nstr{"how many strings?"}
+  nstr -- two --&gt; kind{"what is asked?"}
+  kind -- "common subsequence" --&gt; lcs["LCS: match diag+1 else max up left"]
+  kind -- "edit / align" --&gt; ed["edit: 1+min of three"]
+  kind -- "s as subsequence of t" --&gt; ds["distinct subsequences +="]
+  nstr -- one --&gt; pal{"palindrome?"}
+  pal -- subsequence --&gt; lps["LCS with reverse, or interval LPS"]
+  pal -- substring / min cuts --&gt; iv["interval DP, next page"]
+  </div>
+  <figcaption>Two strings → LCS / edit / distinct. One string palindrome → LPS or interval.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Index prefixes as i = 0..n, j = 0..m</strong> with 0 = empty.</li>
+  <li><strong>Base:</strong> first row and col (0 for LCS, 0..n / 0..m for edit).</li>
+  <li><strong>For i = 1..n, j = 1..m:</strong> if s[i-1]==t[j-1] take the match branch, else the mismatch branch.</li>
+  <li><strong>LCS mismatch:</strong> max(up, left). <strong>Edit mismatch:</strong> 1+min(up,left,diag).</li>
+  <li><strong>Roll</strong> the previous row if you only need the number.</li>
+  <li><strong>Reconstruct</strong> from (n,m) following the neighbour that matches the recurrence.</li>
+  <li><strong>LPS:</strong> either LCS(s, reverse(s)) or interval dp on one string.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>LCS "abcde" vs "ace". Only the interesting cells.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i,j</th><th>s[i-1]</th><th>t[j-1]</th><th>match?</th><th>dp[i][j]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1,1</td><td>a</td><td>a</td><td>yes</td><td>1</td><td>diag+1</td></tr>
+      <tr><td>2,1</td><td>b</td><td>a</td><td>no</td><td>1</td><td>max(1,0)</td></tr>
+      <tr><td>3,1</td><td>c</td><td>a</td><td>no</td><td>1</td><td></td></tr>
+      <tr class="trace-table__row--change"><td>3,2</td><td>c</td><td>c</td><td>yes</td><td>2</td><td>diag+1</td></tr>
+      <tr><td>5,2</td><td>e</td><td>c</td><td>no</td><td>2</td><td>max(up,left)</td></tr>
+      <tr class="trace-table__row--change"><td>5,3</td><td>e</td><td>e</td><td>yes</td><td>3</td><td>answer</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="String DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Space-opt</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcsRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LcsRec {
+    
+        static int lcs(String s, String t, int i, int j) {
+            if (i == s.length() || j == t.length()) {
+                return 0;
+            }
+            if (s.charAt(i) == t.charAt(j)) {
+                return 1 + lcs(s, t, i + 1, j + 1);
+            }
+            return Math.max(lcs(s, t, i + 1, j), lcs(s, t, i, j + 1));
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lcs("abcde", "ace", 0, 0));
+        }
+        // Input : s=abcde t=ace
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcsMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class LcsMemo {
+    
+        static int lcs(String s, String t, int i, int j, int[][] memo) {
+            if (i == s.length() || j == t.length()) {
+                return 0;
+            }
+            if (memo[i][j] != -1) {
+                return memo[i][j];
+            }
+            if (s.charAt(i) == t.charAt(j)) {
+                return memo[i][j] = 1 + lcs(s, t, i + 1, j + 1, memo);
+            }
+            return memo[i][j] = Math.max(lcs(s, t, i + 1, j, memo), lcs(s, t, i, j + 1, memo));
+        }
+    
+        public static void main(String[] args) {
+            String s = "abcde", t = "ace";
+            int[][] memo = new int[s.length()][t.length()];
+            for (int[] row : memo) {
+                Arrays.fill(row, -1);
+            }
+            System.out.println(lcs(s, t, 0, 0, memo));
+        }
+        // Input : s=abcde t=ace
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcsTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LcsTab {
+    
+        static int lcs(String s, String t) {
+            int n = s.length(), m = t.length();
+            int[][] dp = new int[n + 1][m + 1];
+            for (int i = 1; i &lt;= n; i++) {
+                for (int j = 1; j &lt;= m; j++) {
+                    if (s.charAt(i - 1) == t.charAt(j - 1)) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    }
+                }
+            }
+            return dp[n][m];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lcs("abcde", "ace"));
+        }
+        // Input : s=abcde t=ace
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcsRoll.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LcsRoll {
+    
+        static int lcs(String s, String t) {
+            if (s.length() &lt; t.length()) {
+                String tmp = s; s = t; t = tmp;
+            }
+            int[] dp = new int[t.length() + 1];
+            for (int i = 1; i &lt;= s.length(); i++) {
+                int prev = 0;
+                for (int j = 1; j &lt;= t.length(); j++) {
+                    int tmp = dp[j];
+                    if (s.charAt(i - 1) == t.charAt(j - 1)) {
+                        dp[j] = prev + 1;
+                    } else {
+                        dp[j] = Math.max(dp[j], dp[j - 1]);
+                    }
+                    prev = tmp;
+                }
+            }
+            return dp[t.length()];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(lcs("abcde", "ace"));
+        }
+        // Input : s=abcde t=ace
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n m)</span>
+    <span class="badge badge--space">Space O(min(n, m)) rolled; O(n m) for reconstruction</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>A constant-time combine at every prefix pair:</p>
+    <p><span class="eq">T = &Theta;(n m)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>LCS / edit</td><td>O(nm)</td><td>O(min(n,m))</td><td>This page</td></tr>
+      <tr><td>Hirschberg LCS reconstruct</td><td>O(nm)</td><td>O(n+m)</td><td>Linear-space sequence</td></tr>
+      <tr><td>LPS via reverse</td><td>O(n²)</td><td>O(n)</td><td>LCS(s, rev(s))</td></tr>
+      <tr><td>Common substring</td><td>O(nm) DP or better suffix</td><td>O(n)</td><td>Reset on mismatch</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Indexing charAt(i) against dp[i] without the empty row</span>
+    <div class="pitfalls__bug">Off-by-one: s[i] vs prefix i+1. The table is n+1 by m+1 for a reason.</div>
+    <div class="pitfalls__fix">dp[i][j] uses s.charAt(i-1) and t.charAt(j-1).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">LCS recurrence for substring</span>
+    <div class="pitfalls__bug">Keeping max(up,left) on a mismatch when the problem wants a contiguous block.</div>
+    <div class="pitfalls__fix">Substring: mismatch → 0, answer = max over the table.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Rolling without saving the diagonal</span>
+    <div class="pitfalls__bug">dp[j] is overwritten before you need it as dp[i-1][j-1].</div>
+    <div class="pitfalls__fix">Stash prev = old dp[j] (which is up-right after you write, i.e. the old diagonal for the next j).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Edit distance first row = 0</span>
+    <div class="pitfalls__bug">Inserting m characters into empty s costs m, not 0.</div>
+    <div class="pitfalls__fix">dp[0][j] = j, dp[i][0] = i.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Modulo on LCS length</span>
+    <div class="pitfalls__bug">Lengths do not wrap. Ways-of-LCS do.</div>
+    <div class="pitfalls__fix">Only modulus counting problems. Lengths are int.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wildcard '*' as a single char</span>
+    <div class="pitfalls__bug">Treating '*' like '?' instead of "empty or eat one and stay".</div>
+    <div class="pitfalls__fix">dp[i][j] |= dp[i][j-1] (eat empty) and dp[i-1][j] (eat s[i-1], star remains).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Edit distance</td>
+        <td>1 + min(insert, delete, replace); match copies diag.</td>
+        <td><code>LC 72</code></td>
+        <td>Same table, min</td>
+      </tr>
+      <tr>
+        <td>Distinct subsequences</td>
+        <td>dp[j] += dp[j-1] when s[i]==t[j], walk t backwards if rolling.</td>
+        <td><code>LC 115</code></td>
+        <td>Counting</td>
+      </tr>
+      <tr>
+        <td>Longest palindromic subsequence</td>
+        <td>LCS(s, reverse(s)) or interval on one string.</td>
+        <td><code>LC 516</code></td>
+        <td>n - LPS = min deletions to palindrome</td>
+      </tr>
+      <tr>
+        <td>Shortest common supersequence</td>
+        <td>n + m - LCS. Reconstruct by emitting the non-LCS chars too.</td>
+        <td><code>LC 1092</code></td>
+        <td>Walk the LCS table, output both sides</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How do I print one LCS?</summary>
+    <div class="followup__body">
+      <p>From (n,m): if s[i-1]==t[j-1], prepend that char and go diag. Else go to the neighbour that equals dp[i][j] (prefer up or left, your choice). Reverse at the end. Need the full table.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is LCS NP-hard?</summary>
+    <div class="followup__body">
+      <p>For two strings it is O(nm). For an arbitrary number of strings it is NP-hard. That is why interviews stick to two.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I do better than O(nm)?</summary>
+    <div class="followup__body">
+      <p>Slightly, with Four-Russians or bit-parallel tricks, and Hunt-Szymanski when the LCS is short. In contests, O(nm) at n=5000 with a rolled int[] is the expected work.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Wildcard vs regex DP?</summary>
+    <div class="followup__body">
+      <p>'?' and '*' globbing is LC 44. Full regex with '*' meaning "previous char, 0 or more" is LC 10 and the star binds to the previous token, so the transition is slightly different. Both are boolean string DP.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/longest-common-subsequence/" target="_blank" rel="noopener">Longest Common Subsequence</a></td>
+        <td><span class="badge badge--lc">LC 1143</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The dry-run problem</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/edit-distance/" target="_blank" rel="noopener">Edit Distance</a></td>
+        <td><span class="badge badge--lc">LC 72</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Three-way min</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/distinct-subsequences/" target="_blank" rel="noopener">Distinct Subsequences</a></td>
+        <td><span class="badge badge--lc">LC 115</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Counting, roll backwards</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/wildcard-matching/" target="_blank" rel="noopener">Wildcard Matching</a></td>
+        <td><span class="badge badge--lc">LC 44</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Boolean, star eats</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/regular-expression-matching/" target="_blank" rel="noopener">Regular Expression Matching</a></td>
+        <td><span class="badge badge--lc">LC 10</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Regex star on previous token</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/longest-palindromic-subsequence/" target="_blank" rel="noopener">Longest Palindromic Subsequence</a></td>
+        <td><span class="badge badge--lc">LC 516</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>LCS with reverse</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_f" target="_blank" rel="noopener">LCS</a></td>
+        <td><span class="badge badge--atc">ATC DP-F</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Print the string, n=3000</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/edit-distance3702/1" target="_blank" rel="noopener">Edit Distance</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Implement Levenshtein</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/550/A" target="_blank" rel="noopener">Two Substrings</a></td>
+        <td><span class="badge badge--cf">CF 550A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Not LCS; contrast. See 10D</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/10/D" target="_blank" rel="noopener">LCS</a></td>
+        <td><span class="badge badge--cf">CF 10D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Printable LCS of two sequences</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-F</summary>
+  <div class="spoiler__body">
+    <p>n, m ≤ 3000, so O(nm) memory of 9e6 ints is tight but fine. Keep the full table (or prev-pointers) and walk back to emit the characters. Rolling only the values is not enough because you must reconstruct.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 72</summary>
+  <div class="spoiler__body">
+    <p>dp[0][j]=j, dp[i][0]=i. Match: dp[i-1][j-1]. Else 1+min(insert dp[i][j-1], delete dp[i-1][j], replace dp[i-1][j-1]). That is the entire algorithm.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>dp[i][j] is the answer for prefixes i and j.</strong></li>
+    <li><strong>LCS match: diag+1; mismatch: max(up, left).</strong></li>
+    <li><strong>Edit: match copies diag; else 1+min of three.</strong></li>
+    <li><strong>Substring resets to 0</strong> on mismatch; subsequence does not.</li>
+    <li><strong>Roll one row</strong> if you only need the number; keep the table to reconstruct.</li>
+  </ul>
+  <div class="recap__oneliner">prefixes (i,j) | match diag+1 | else max(up,left) | edit = 1+min3 | roll + stash diag</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

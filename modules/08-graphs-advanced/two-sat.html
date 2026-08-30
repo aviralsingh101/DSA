@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2-SAT &mdash; DSA Course</title>
+<meta name="description" content="Each clause x ∨ y becomes implications ¬x → y and ¬y → x. Unsatisfiable iff x and ¬x sit in the same SCC.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="two-sat">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>2-SAT</h1>
+  <p class="hero__tagline">Each clause <code>x ∨ y</code> becomes implications <code>¬x → y</code> and <code>¬y → x</code>. Unsatisfiable iff x and ¬x sit in the same SCC.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="scc-tarjan-kosaraju.html">SCC: Tarjan & Kosaraju</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">2-SAT</span>
+      <span class="chip">implication graph</span>
+      <span class="chip">SCC</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>3-SAT is NP-complete. 2-SAT is linear. The trick is an implication graph on 2n vertices (x and ¬x for each variable): a clause of two literals forces two implications, and a valid assignment is a cut of the condensation that never puts x and ¬x together.</p>
+<p>After SCCs, the condensation is a DAG. Assign x true if <code>scc[x] &gt; scc[¬x]</code> (later in reverse-topo, i.e. we pick the sink side). That is the unique forced choice once you decide to make every implication-respecting assignment.</p>
+<p>Recognition: "choose one of two options, with pairwise conflicts" — seating, assigning truth values, choosing an orientation. If a constraint involves three literals, it is not 2-SAT.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>x ∨ y is (¬x → y) ∧ (¬y → x). A path x ⇒ ¬x ⇒ x is a contradiction. SCC is how you find those paths in linear time.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Each constraint is a disjunction of at most two literals</li>
+        <li>"At least one of these two is true", "these two conflict"</li>
+        <li>Choose an orientation / a side / a colour with pairwise implications</li>
+        <li>n, m around 1e5 — need linear</li>
+        <li>You can write every rule as (a or b) after introducing x / not-x nodes</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>A clause with 3+ literals &rarr; NP-complete, not this page</li>
+        <li>XOR-SAT / linear equations over GF(2) &rarr; Gaussian elimination</li>
+        <li>You need the number of satisfying assignments modulo p &rarr; more than a yes/no SCC</li>
+        <li>Constraints are numeric inequalities, not booleans &rarr; 2-SAT only after a binary search on the answer, if at all</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>x OR y</td>
+        <td>¬x→y and ¬y→x</td>
+        <td>Two implication edges</td>
+      </tr>
+      <tr>
+        <td>x</td>
+        <td>¬x→x (force true)</td>
+        <td>Unit clause</td>
+      </tr>
+      <tr>
+        <td>NOT (x AND y)</td>
+        <td>x→¬y and y→¬x</td>
+        <td>Conflict pair</td>
+      </tr>
+      <tr>
+        <td>Unsat test</td>
+        <td>scc[x]==scc[¬x]</td>
+        <td>After Tarjan/Kosaraju</td>
+      </tr>
+      <tr>
+        <td>Assign</td>
+        <td>x true iff scc[x]>scc[¬x]</td>
+        <td>Reverse topo</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> bipartite / 2-colouring</td>
+        <td>2-colouring is 2-SAT with "adjacent differ"; general 2-SAT has arbitrary implications</td>
+        <td>Same SCC engine, different edges</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n</code> variables, <code>m</code> clauses, both ≤ 1e5. Graph has 2n vertices and 2m edges. Recursion / stack same warning as SCC.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Map variable i to node 2i (false) and 2i+1 (true), or i and i+n — pick one and stick to it. For a clause (a ∨ b) add edges (~a 	o b) and (~b 	o a). For a forced literal a add (~a 	o a).</p>
+<p>Run SCC. If any i has scc[i] == scc[~i], unsat. Otherwise set val[i] = scc[i] > scc[~i] (Kosaraju ids assigned in reverse-topo of G^R are already in the right order; Tarjan ids are assigned in reverse-topo of the condensation — same comparison).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>If there is a path a ⇒ b in the implication graph, every satisfying assignment that sets a true must set b true. Therefore a path x ⇒ ¬x and ¬x ⇒ x (i.e. same SCC) is unsatisfiable. The DAG assignment picks, for each pair, the literal whose SCC is the sink-side one.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="two-satViz"></div>
+  <div class="viz-player" data-viz-target="two-satViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "scc =",
+      "array": [
+        0,
+        0,
+        1,
+        2
+      ],
+      "indexLabels": [
+        "x",
+        "~x",
+        "y",
+        "~y"
+      ],
+      "vars": [
+        "clause",
+        "edges",
+        "sat"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Variables x,y. Clause x ∨ y. Edges ~x→y, ~y→x.",
+          "active": [
+            0
+          ],
+          "values": {
+            "clause": "x∨y",
+            "edges": "~x→y, ~y→x",
+            "sat": "?"
+          }
+        },
+        {
+          "note": "Clause ~x ∨ y. Edges x→y, ~y→~x.",
+          "active": [
+            1
+          ],
+          "values": {
+            "clause": "~x∨y",
+            "edges": "x→y, ~y→~x",
+            "sat": "?"
+          }
+        },
+        {
+          "note": "SCCs: {x}, {~x}, {y,~y}? No — y and ~y must stay split. Here y is forced true.",
+          "active": [
+            2
+          ],
+          "values": {
+            "clause": "force y",
+            "edges": "paths into y",
+            "sat": "?"
+          }
+        },
+        {
+          "note": "scc[x]=0, scc[~x]=1, scc[y]=2, scc[~y]=0? Check x vs ~x different ✓.",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "clause": "ids",
+            "edges": "—",
+            "sat": "x and ~x split"
+          }
+        },
+        {
+          "note": "Assign x true if scc[x]>scc[~x] → false; y true. Satisfies both clauses (false∨true, true∨true).",
+          "active": [
+            2
+          ],
+          "values": {
+            "clause": "assign",
+            "edges": "—",
+            "sat": "x=0 y=1"
+          }
+        },
+        {
+          "note": "If we added x ∨ ~y and ~x ∨ ~y, y and ~y would merge → unsat.",
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "clause": "bad extra",
+            "edges": "merge y",
+            "sat": "false"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  nx["not x"] --&gt; y["y"]
+  ny["not y"] --&gt; x["x"]
+  x --&gt; y
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate</strong> 2n nodes. Fix a mapping <code>pos(i)=2*i+1</code>, <code>neg(i)=2*i</code>.</li>
+  <li><strong>For each clause (a ∨ b)</strong> add <code>~a 	o b</code> and <code>~b 	o a</code>.</li>
+  <li><strong>SCC</strong> the implication graph.</li>
+  <li><strong>If scc[pos(i)]==scc[neg(i)]</strong> return unsat.</li>
+  <li><strong>Else</strong> <code>val[i] = scc[pos(i)] &gt; scc[neg(i)]</code>.</li>
+  <li><strong>Verify</strong> on a tiny sample — mapping bugs are silent.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>clause</th><th>edges</th><th>sat</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>x∨y</td><td>~x→y, ~y→x</td><td>?</td><td>Variables x,y. Clause x ∨ y. Edges ~x→y, ~y→x.</td></tr>
+      <tr><td>~x∨y</td><td>x→y, ~y→~x</td><td>?</td><td>Clause ~x ∨ y. Edges x→y, ~y→~x.</td></tr>
+      <tr><td>force y</td><td>paths into y</td><td>?</td><td>SCCs: {x}, {~x}, {y,~y}? No — y and ~y must stay split. Here y is forced true.</td></tr>
+      <tr><td>ids</td><td>—</td><td>x and ~x split</td><td>scc[x]=0, scc[~x]=1, scc[y]=2, scc[~y]=0? Check x vs ~x different ✓.</td></tr>
+      <tr><td>assign</td><td>—</td><td>x=0 y=1</td><td>Assign x true if scc[x]>scc[~x] → false; y true. Satisfies both clauses (false∨true, true∨true).</td></tr>
+      <tr><td>bad extra</td><td>merge y</td><td>false</td><td>If we added x ∨ ~y and ~x ∨ ~y, y and ~y would merge → unsat.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="2-SAT implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TwoSatBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class TwoSatBrute {
+        static boolean sat(int n, int[][] clauses) {
+            int lim = 1 &lt;&lt; n;
+            outer:
+            for (int mask = 0; mask &lt; lim; mask++) {
+                for (int[] c : clauses) {
+                    boolean a = c[0] &gt; 0 ? ((mask &gt;&gt; (c[0] - 1)) &amp; 1) == 1 : ((mask &gt;&gt; (-c[0] - 1)) &amp; 1) == 0;
+                    boolean b = c[1] &gt; 0 ? ((mask &gt;&gt; (c[1] - 1)) &amp; 1) == 1 : ((mask &gt;&gt; (-c[1] - 1)) &amp; 1) == 0;
+                    if (!a &amp;&amp; !b) continue outer;
+                }
+                return true;
+            }
+            return false;
+        }
+        public static void main(String[] args) {
+            System.out.println(sat(2, new int[][] {{1, 2}, {-1, 2}}));
+            System.out.println(sat(1, new int[][] {{1, 1}, {-1, -1}}));
+        }
+        // Input : (x∨y)(~x∨y) ; then (x)(~x)
+        // Output: true
+        //         false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TwoSat.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class TwoSat {
+        int n;
+        List&lt;Integer&gt;[] g;
+        int[] tin, low, id;
+        boolean[] on, val;
+        int timer, cid;
+        Deque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+        TwoSat(int n) {
+            this.n = n;
+            g = new List[2 * n];
+            for (int i = 0; i &lt; 2 * n; i++) g[i] = new ArrayList&lt;&gt;();
+            tin = new int[2 * n]; low = new int[2 * n]; id = new int[2 * n];
+            on = new boolean[2 * n]; val = new boolean[n];
+            Arrays.fill(tin, -1);
+        }
+        int pos(int x) { return x &lt;&lt; 1 | 1; }
+        int neg(int x) { return x &lt;&lt; 1; }
+        void implies(int a, int b) { g[a].add(b); }
+        void or(int x, boolean xv, int y, boolean yv) {
+            int a = xv ? pos(x) : neg(x);
+            int b = yv ? pos(y) : neg(y);
+            implies(a ^ 1, b);
+            implies(b ^ 1, a);
+        }
+        void dfs(int u) {
+            tin[u] = low[u] = timer++;
+            st.push(u); on[u] = true;
+            for (int v : g[u]) {
+                if (tin[v] == -1) { dfs(v); low[u] = Math.min(low[u], low[v]); }
+                else if (on[v]) low[u] = Math.min(low[u], tin[v]);
+            }
+            if (low[u] == tin[u]) {
+                while (true) {
+                    int x = st.pop(); on[x] = false; id[x] = cid;
+                    if (x == u) break;
+                }
+                cid++;
+            }
+        }
+        boolean solve() {
+            for (int i = 0; i &lt; 2 * n; i++) if (tin[i] == -1) dfs(i);
+            for (int i = 0; i &lt; n; i++) {
+                if (id[pos(i)] == id[neg(i)]) return false;
+                val[i] = id[pos(i)] &gt; id[neg(i)];
+            }
+            return true;
+        }
+        public static void main(String[] args) {
+            TwoSat s = new TwoSat(2);
+            s.or(0, true, 1, true);
+            s.or(0, false, 1, true);
+            System.out.println(s.solve() + " " + s.val[0] + " " + s.val[1]);
+        }
+        // Input : (x∨y) (~x∨y)
+        // Output: true false true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TwoSatMap.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class TwoSatMap {
+        static int v(int i, boolean pos, int n) { return pos ? i : i + n; }
+        static int not(int x, int n) { return x &lt; n ? x + n : x - n; }
+        public static void main(String[] args) {
+            int n = 2;
+            System.out.println(v(0, true, n) + " " + not(v(0, true, n), n));
+        }
+        // Input : n=2, literal x0
+        // Output: 0 2
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>2n vertices, 2m implication edges, one SCC. Assignment is a linear scan of the variables.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>2^n brute</td><td>O(2^n m)</td><td>O(1)</td><td>n <= 20</td></tr>
+      <tr><td>2-SAT via SCC</td><td>O(n+m)</td><td>O(n+m)</td><td>Default</td></tr>
+      <tr><td>Gaussian GF(2)</td><td>O(n^3)</td><td>O(n^2)</td><td>XOR / linear clauses</td></tr>
+      <tr><td>3-SAT</td><td>NP</td><td>—</td><td>Do not try SCC</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Swapping the assignment comparison</span>
+    <div class="pitfalls__bug"><code>scc[x] &lt; scc[~x]</code> flips every variable. Sample may still pass if both work.</div>
+    <div class="pitfalls__fix">Tarjan / Kosaraju ids grow in reverse-topo; the larger id is the sink side → set that literal true. Verify on (x) alone.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting unit clauses</span>
+    <div class="pitfalls__bug">A forced x needs (~x → x), not just a mental note.</div>
+    <div class="pitfalls__fix">Encode (x ∨ x).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Odd mapping of ~x</span>
+    <div class="pitfalls__bug"><code>x^1</code> only works if you packed pos/neg as <code>2i / 2i+1</code>.</div>
+    <div class="pitfalls__fix">Pick one encoding. Write <code>not()</code> once and use it everywhere.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Adding only one implication per clause</span>
+    <div class="pitfalls__bug">x ∨ y is two implications. One edge leaves a satisfying assignment that the graph does not force.</div>
+    <div class="pitfalls__fix">Always add both (~a	o b) and (~b	o a).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using undirected edges</span>
+    <div class="pitfalls__bug">Implications are directed. An undirected edge merges too much.</div>
+    <div class="pitfalls__fix">Directed SCC.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>At-most-one</td>
+        <td>For every pair (i,j) in a group, add (~i ∨ ~j).</td>
+        <td><code>O(k^2) clauses</code></td>
+        <td>or a sequential encoding</td>
+      </tr>
+      <tr>
+        <td>2-SAT + binary search</td>
+        <td>Monotone predicate "is there an assignment with answer <= x".</td>
+        <td><code>CF 776D</code></td>
+        <td>doors / switches</td>
+      </tr>
+      <tr>
+        <td>Count solutions</td>
+        <td>2^{number of free SCC-pairs}</td>
+        <td><code>only if no extra constraints</code></td>
+        <td>rare</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why scc[x] > scc[~x] means x is true?</summary>
+    <div class="followup__body">
+      <p>Implication edges go from earlier (source) to later (sink) in the condensation. If ~x can reach x but not vice versa, x is forced true. The larger Tarjan id is later in reverse-topo, i.e. closer to sinks.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can 2-SAT count solutions?</summary>
+    <div class="followup__body">
+      <p>Yes in simple cases: each pair of complementary SCCs that are not forced is a free bit. Extra edges between pairs destroy the 2^{k} formula; then you need a more careful DAG DP.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you force x XOR y?</summary>
+    <div class="followup__body">
+      <p>(x ∨ y) ∧ (~x ∨ ~y). Two clauses, four implications.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>2-SAT vs 2-colouring?</summary>
+    <div class="followup__body">
+      <p>Bipartite checking is 2-SAT with clauses "adjacent vertices differ". General 2-SAT allows arbitrary 2-clauses, including forcing two vertices equal, or forcing a single variable.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/possible-bipartition/" target="_blank" rel="noopener">Possible Bipartition</a></td>
+        <td><span class="badge badge--lc">LC 886</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2-colour; 2-SAT also works</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/776/D" target="_blank" rel="noopener">The Door Problem</a></td>
+        <td><span class="badge badge--cf">CF 776D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2-SAT on switches</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/468/B" target="_blank" rel="noopener">Two Heaps</a></td>
+        <td><span class="badge badge--cf">CF 468B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2-SAT pairing</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/27/D" target="_blank" rel="noopener">Ring Road 2</a></td>
+        <td><span class="badge badge--cf">CF 27D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>2-SAT on chords</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://cses.fi/problemset/task/1684" target="_blank" rel="noopener">Giant Pizza</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2-SAT template</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/practice2/tasks/practice2_h" target="_blank" rel="noopener">ACL 2-SAT</a></td>
+        <td><span class="badge badge--atc">ACL</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Library</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/satisfiability-of-equality-equations/" target="_blank" rel="noopener">Equality Equations</a></td>
+        <td><span class="badge badge--lc">LC 990</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>DSU, not 2-SAT — contrast</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/2SAT/" target="_blank" rel="noopener">2SAT (if present)</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Template</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>x ∨ y becomes ~x	o y and ~y	o x.</li>
+    <li>Unsat iff x and ~x share an SCC.</li>
+    <li>val[x] = scc[x] > scc[~x] (sink side true).</li>
+    <li>Unit clause (x) is (~x 	o x).</li>
+    <li>3-SAT is not this algorithm.</li>
+  </ul>
+  <div class="recap__oneliner">add (~a	o b), (~b	o a); unsat iff scc[x]==scc[~x]; val = scc[x]&gt;scc[~x];</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

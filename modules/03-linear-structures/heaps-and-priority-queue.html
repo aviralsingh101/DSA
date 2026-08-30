@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heaps &amp; Priority Queue &mdash; DSA Course</title>
+<meta name="description" content="A binary heap is an array with parent-child arithmetic: sift in O(log n), heapify in O(n), and the interview patterns are k-largest, merge-k, two-heap median, and lazy deletion.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="heaps-and-priority-queue">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>Heaps & Priority Queue</h1>
+  <p class="hero__tagline">A binary heap is an array with parent-child arithmetic: sift in O(log n), heapify in O(n), and the interview patterns are k-largest, merge-k, two-heap median, and lazy deletion.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../01-arrays-and-windows/kth-and-selection.html">K-th Element & Selection</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">heap</span>
+      <span class="chip">priority queue</span>
+      <span class="chip">heapify</span>
+      <span class="chip">median</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A heap gives the current min (or max) in O(1) and insert / delete-min in O(log n). Problems that look like sorting but only need the extreme of a live set — k largest, merge k sorted lists, running median — are heap problems. Arrays.sort costs an extra log you often do not have to pay, and does not work at all on a stream.</p>
+<p>Two facts separate people who have used PriorityQueue from people who understand it. First, heapify is O(n), not O(n log n): sift down from the last parent, and the geometric series of subtree heights sums to less than 2n. Second, Java's PriorityQueue cannot delete an arbitrary element in log time, so "remove this later" is lazy deletion: leave it in the heap and skip it when it shows up at the top.</p>
+<p>The two-heap median combines both. A max-heap of the lower half and a min-heap of the upper half, kept within one of size, gives the median in O(1) and insertions in O(log n). Sliding-window median adds lazy deletion on top.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A heap answers "what is the best of a live set?" in logarithmic updates. If you need the k-th, keep a heap of size k or two heaps that split at the median. If you need to delete from the middle, fake it with lazy skipping.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"k largest / k smallest / k closest" on an unsorted array or a stream</li>
+        <li>"merge k sorted lists" (or k sorted arrays)</li>
+        <li>"find median from a data stream" / "sliding window median"</li>
+        <li>Scheduling: always process the currently best (earliest, cheapest, highest-profit) item</li>
+        <li>A live set that grows and shrinks, and you must answer after every insertion</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Maximum of a sliding window and k is the window size, not an order statistic → <a href="queues-and-monotonic-deque.html">monotonic deque</a> in O(n)</li>
+        <li>The array is static and you need k-th once → <a href="../01-arrays-and-windows/kth-and-selection.html">quickselect</a></li>
+        <li>You need floor/ceiling/range of keys, not just min → <a href="treemap-treeset-patterns.html">TreeMap</a></li>
+        <li>Graph shortest paths with negative weights → Bellman-Ford, not Dijkstra's heap</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>k largest elements</td>
+        <td>Live set of size k, evict the smallest</td>
+        <td>Min-heap of size k</td>
+      </tr>
+      <tr>
+        <td>k closest points</td>
+        <td>Same, ordered by distance</td>
+        <td>Max-heap of size k, or quickselect</td>
+      </tr>
+      <tr>
+        <td>merge k sorted lists</td>
+        <td>Best current head among k</td>
+        <td>Min-heap of list heads</td>
+      </tr>
+      <tr>
+        <td>median of a stream</td>
+        <td>Need the middle, not the extreme</td>
+        <td>Max-heap lo + min-heap hi</td>
+      </tr>
+      <tr>
+        <td>sliding window median</td>
+        <td>Median plus expiry</td>
+        <td>Two heaps + lazy deletion</td>
+      </tr>
+      <tr>
+        <td>reorganise string / task scheduler</td>
+        <td>Always pick the currently most frequent</td>
+        <td>Max-heap of counts</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> sliding-window maximum</td>
+        <td>You need the extreme of a range, not of a dynamic set of size k</td>
+        <td>Monotonic deque, O(n), not a heap</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with k-largest or a stream of operations is the heap signature. n log n sort is the fallback when k is Θ(n). Never (a,b) → b-a on ints: overflow. Use Integer.compare or reverseOrder().</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>A binary heap is an array h[0..n) with parent (i-1)/2 and children 2i+1, 2i+2. Min-heap: h[parent] ≤ h[child]. Sift-up after insert, sift-down after removing the root. Both O(log n) because height is floor(log n). Heapify builds in O(n) by sifting down from n/2-1 to 0. Java PriorityQueue is a min-heap; max-heap via Collections.reverseOrder().</p>
+<p>For k-largest, a min-heap of size k is the default: the root is the k-th largest, and anything smaller is discarded. Two-heap median: every value in lo (max-heap) is ≤ every value in hi (min-heap), and lo.size() == hi.size() or lo.size() == hi.size()+1. Lazy deletion: a Map of stale counts; prune tops before every peek/poll.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><strong>Heap property:</strong> every parent is at least as extreme as its children, so the root is the global extreme.</p><p><strong>k-largest min-heap:</strong> the heap holds the k largest seen so far; its root is the smallest of those, i.e. the current k-th.</p><p><strong>Two-heap median:</strong> lo.peek() is the median on an odd count, or average the two peeks (even), with a long cast.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Heapify is O(n)</span>
+    <p>Height H = log n. At most n / 2^{h+1} nodes of height h, sifting one costs O(h):</p><span class="eq">T(n) = Σ h · n / 2^h &lt; 2n</span><p>Building by n inserts is O(n log n). new PriorityQueue(list) already heapifies.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>K largest with a min-heap of size k = 2</h3>
+
+<p>Array [3,2,1,5,6,4], k=2. The heap holds the 2 largest seen; its root is the smaller of those two.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="heaps-and-priority-queueViz"></div>
+  <div class="viz-player" data-viz-target="heaps-and-priority-queueViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "incoming stream",
+      "array": [
+        3,
+        2,
+        1,
+        5,
+        6,
+        4
+      ],
+      "vars": [
+        "x",
+        "heap",
+        "kth"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "See 3. Heap not full, insert. Heap [3].",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "x": 3,
+            "heap": "[3]",
+            "kth": "—"
+          }
+        },
+        {
+          "note": "See 2. Insert. Min-heap [2, 3], root 2.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "x": 2,
+            "heap": "[2, 3]",
+            "kth": 2
+          }
+        },
+        {
+          "note": "See 1. Heap full and 1 < root, discard.",
+          "active": [
+            2
+          ],
+          "x": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "x": 1,
+            "heap": "[2, 3]",
+            "kth": 2
+          }
+        },
+        {
+          "note": "See 5. 5 > 2, evict 2, insert 5. Heap [3, 5], root 3.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5
+          ],
+          "values": {
+            "x": 5,
+            "heap": "[3, 5]",
+            "kth": 3
+          }
+        },
+        {
+          "note": "See 6. 6 > 3, evict 3, insert 6. Heap [5, 6], root 5.",
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5
+          ],
+          "values": {
+            "x": 6,
+            "heap": "[5, 6]",
+            "kth": 5
+          }
+        },
+        {
+          "note": "See 4. 4 < 5, discard. Answer: k-th largest is the root 5. O(n log k), not O(n log n).",
+          "active": [
+            5
+          ],
+          "x": [
+            5
+          ],
+          "best": [
+            3,
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "x": 4,
+            "heap": "[5, 6]",
+            "kth": 5
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>A min-heap of size k, not a max-heap of size n. At the end the root is the 2nd largest, 5.</figcaption>
+</figure>
+
+<h3>Which heap, and of what size?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  need["need the best of a live set"] --&gt; which{"what is best?"}
+  which -- min or max --&gt; size{"how many do you keep?"}
+  size -- "exactly k" --&gt; kHeap["heap of size k, opposite polarity to the answer"]
+  size -- all --&gt; pq["PriorityQueue of everything"]
+  which -- median --&gt; two["max-heap lo plus min-heap hi"]
+  which -- "k-th once, static array" --&gt; sel["quickselect, not a heap"]
+  which -- "window max, not k-th" --&gt; dq["monotonic deque"]
+  two --&gt; expire{"do values expire later?"}
+  expire -- yes --&gt; lazy["two heaps plus a stale-count map"]
+  expire -- no --&gt; stream["offer, rebalance, peek"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the live set and the order.</strong> Min-heap or max-heap? Size k or n or two halves?</li>
+  <li><strong>For k-largest:</strong> min-heap of size k. Offer x; if size > k, poll. Root is the k-th.</li>
+  <li><strong>For merge-k:</strong> min-heap of current heads (the node, so you can advance next).</li>
+  <li><strong>For stream median:</strong> offer into lo or hi, then rebalance sizes to differ by at most one.</li>
+  <li><strong>For expiry:</strong> do not call remove. Increment a stale counter and skip tops in prune().</li>
+  <li><strong>Build from an array with heapify</strong> (sift down from n/2-1), not n inserts.</li>
+  <li><strong>Comparators:</strong> Integer.compare or reverseOrder(), never subtraction.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>x</th><th>heap</th><th>kth</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>3</td><td>[3]</td><td>—</td><td>See 3. Heap not full, insert. Heap [3].</td></tr>
+      <tr><td>2</td><td>[2, 3]</td><td>2</td><td>See 2. Insert. Min-heap [2, 3], root 2.</td></tr>
+      <tr><td>1</td><td>[2, 3]</td><td>2</td><td>See 1. Heap full and 1 < root, discard.</td></tr>
+      <tr><td>5</td><td>[3, 5]</td><td>3</td><td>See 5. 5 > 2, evict 2, insert 5. Heap [3, 5], root 3.</td></tr>
+      <tr><td>6</td><td>[5, 6]</td><td>5</td><td>See 6. 6 > 3, evict 3, insert 6. Heap [5, 6], root 5.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>[5, 6]</td><td>5</td><td>See 4. 4 < 5, discard. Answer: k-th largest is the root 5. O(n log k), not O(n log n).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Heaps & Priority Queue implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute (sort)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal heap</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute (sort)">
+    <p>Always mention it. For a one-shot k-th on a static array, sort is honest. For a stream, it is illegal.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KthSort.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class KthSort {
+        static int kthLargest(int[] a, int k) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            return b[b.length - k];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(kthLargest(new int[] {3, 2, 1, 5, 6, 4}, 2));
+        }
+        // Input : [3,2,1,5,6,4], k = 2
+        // Output: 5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal heap">
+    <p>K-largest with a size-k min-heap, in-place max-heapify, and merge-k lists.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HeapsAndPQ.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    import java.util.PriorityQueue;
+    
+    public class HeapsAndPQ {
+        static class ListNode {
+            int val;
+            ListNode next;
+            ListNode(int v) { val = v; }
+            ListNode(int v, ListNode n) { val = v; next = n; }
+        }
+    
+        static int kthLargest(int[] a, int k) {
+            PriorityQueue&lt;Integer&gt; pq = new PriorityQueue&lt;&gt;();
+            for (int x : a) {
+                pq.offer(x);
+                if (pq.size() &gt; k) pq.poll();
+            }
+            return pq.peek();
+        }
+    
+        static void heapify(int[] h) {
+            for (int i = h.length / 2 - 1; i &gt;= 0; i--) siftDown(h, i, h.length);
+        }
+    
+        static void siftDown(int[] h, int i, int n) {
+            while (true) {
+                int l = 2 * i + 1, r = l + 1, best = i;
+                if (l &lt; n &amp;&amp; h[l] &gt; h[best]) best = l;
+                if (r &lt; n &amp;&amp; h[r] &gt; h[best]) best = r;
+                if (best == i) break;
+                int tmp = h[i]; h[i] = h[best]; h[best] = tmp;
+                i = best;
+            }
+        }
+    
+        static ListNode mergeK(ListNode[] lists) {
+            PriorityQueue&lt;ListNode&gt; pq =
+                new PriorityQueue&lt;&gt;((a, b) -&gt; Integer.compare(a.val, b.val));
+            for (ListNode h : lists) if (h != null) pq.offer(h);
+            ListNode dummy = new ListNode(0), tail = dummy;
+            while (!pq.isEmpty()) {
+                ListNode n = pq.poll();
+                tail.next = n;
+                tail = n;
+                if (n.next != null) pq.offer(n.next);
+            }
+            return dummy.next;
+        }
+    
+        static String str(ListNode h) {
+            List&lt;Integer&gt; v = new ArrayList&lt;&gt;();
+            for (; h != null; h = h.next) v.add(h.val);
+            return v.toString();
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(kthLargest(new int[] {3, 2, 1, 5, 6, 4}, 2));
+            int[] h = {4, 10, 3, 5, 1};
+            heapify(h);
+            System.out.println(java.util.Arrays.toString(h));
+            ListNode a = new ListNode(1, new ListNode(4, new ListNode(5)));
+            ListNode b = new ListNode(1, new ListNode(3, new ListNode(4)));
+            ListNode c = new ListNode(2, new ListNode(6));
+            System.out.println(str(mergeK(new ListNode[] {a, b, c})));
+        }
+        // Input : k-th [3,2,1,5,6,4] k=2; heapify [4,10,3,5,1]; lists 1-&gt;4-&gt;5, 1-&gt;3-&gt;4, 2-&gt;6
+        // Output: 5
+        //         [10, 5, 3, 4, 1]
+        //         [1, 1, 2, 3, 4, 4, 5, 6]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Two-heap median plus a prune helper for lazy deletion (sliding-window median).</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MedianFinder.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Collections;
+    import java.util.Map;
+    import java.util.PriorityQueue;
+    
+    public class MedianFinder {
+        final PriorityQueue&lt;Integer&gt; lo = new PriorityQueue&lt;&gt;(Collections.reverseOrder());
+        final PriorityQueue&lt;Integer&gt; hi = new PriorityQueue&lt;&gt;();
+    
+        void add(int x) {
+            if (lo.isEmpty() || x &lt;= lo.peek()) lo.offer(x);
+            else hi.offer(x);
+            rebalance();
+        }
+    
+        void rebalance() {
+            if (lo.size() &gt; hi.size() + 1) hi.offer(lo.poll());
+            else if (hi.size() &gt; lo.size()) lo.offer(hi.poll());
+        }
+    
+        double median() {
+            if (lo.size() &gt; hi.size()) return lo.peek();
+            return ((long) lo.peek() + hi.peek()) / 2.0;
+        }
+    
+        /** Skip cancelled tops. Each insertion is skipped at most once. */
+        static void prune(PriorityQueue&lt;Integer&gt; pq, Map&lt;Integer, Integer&gt; stale) {
+            while (!pq.isEmpty() &amp;&amp; stale.getOrDefault(pq.peek(), 0) &gt; 0) {
+                int v = pq.poll();
+                if (stale.merge(v, -1, Integer::sum) == 0) stale.remove(v);
+            }
+        }
+    
+        public static void main(String[] args) {
+            MedianFinder mf = new MedianFinder();
+            mf.add(1);
+            System.out.println(mf.median());
+            mf.add(2);
+            System.out.println(mf.median());
+            mf.add(3);
+            System.out.println(mf.median());
+        }
+        // Input : add 1, add 2, add 3
+        // Output: 1.0
+        //         1.5
+        //         2.0
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log k) for k-largest; O(n) heapify; O(n log k) merge-k; O(log n) per median insert</span>
+    <span class="badge badge--space">Space O(k) for k-largest; O(n) for a full heap or two-heap median</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>K-largest: n offers into a heap of size at most k:</p><span class="eq">T(n, k) = n log k</span>
+    <p>Heapify: Σ h · n / 2^h &lt; 2n. Merge-k: n polls on a heap of size k. Lazy deletion is amortised O(1) extra polls per inserted element.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Sort, then pick</td><td>O(n log n)</td><td>O(n)</td><td>One-shot, k ~ n, no stream</td></tr>
+      <tr><td>Min-heap of size k</td><td>O(n log k)</td><td>O(k)</td><td>k-largest on an array or stream</td></tr>
+      <tr><td>Quickselect</td><td>O(n) expected</td><td>O(1) extra</td><td>One-shot k-th, mutable array</td></tr>
+      <tr><td>Heapify + k delete-max</td><td>O(n + k log n)</td><td>O(1) extra</td><td>When you already own the array</td></tr>
+      <tr><td>Merge k lists, heap</td><td>O(n log k)</td><td>O(k)</td><td>The default</td></tr>
+      <tr><td>Two-heap median</td><td>O(log n) / insert</td><td>O(n)</td><td>Stream median</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Max-heap via (a, b) → b - a</span>
+    <div class="pitfalls__bug">Overflow on large magnitudes. The comparator contract breaks silently.</div>
+    <div class="pitfalls__fix">new PriorityQueue<>(Collections.reverseOrder()) or Integer.compare(b, a).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Min-heap of size n for k-largest</span>
+    <div class="pitfalls__bug">You keep everything and pay n log n. The point is a heap of size k.</div>
+    <div class="pitfalls__fix">Offer, then if (size > k) poll(). Opposite polarity: min-heap for k-largest.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Calling pq.remove(x) in a loop</span>
+    <div class="pitfalls__bug">remove is linear. Inside n operations it is quadratic.</div>
+    <div class="pitfalls__fix">Lazy deletion: a stale-count map and prune-while-top-is-stale.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to rebalance the two heaps</span>
+    <div class="pitfalls__bug">Sizes drift by more than one. Median is a wrong peek, often passing the first two ops.</div>
+    <div class="pitfalls__fix">After every offer: if lo.size() > hi.size()+1 move lo→hi; if hi.size() > lo.size() move hi→lo.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Averaging two ints without long</span>
+    <div class="pitfalls__bug">(lo.peek() + hi.peek()) / 2.0 overflows int before the promotion to double.</div>
+    <div class="pitfalls__fix">((long) lo.peek() + hi.peek()) / 2.0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Heapifying by n inserts</span>
+    <div class="pitfalls__bug">You tell the interviewer build is O(n log n). It can be O(n).</div>
+    <div class="pitfalls__fix">Sift down from n/2-1. Sketch the geometric series.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>K smallest</td>
+        <td>Max-heap of size k; evict when the new value is smaller than the root.</td>
+        <td><code>PriorityQueue&lt;Integer&gt; pq = new PriorityQueue&lt;&gt;(Collections.reverseOrder());</code></td>
+        <td>Symmetric to LC 215</td>
+      </tr>
+      <tr>
+        <td>K closest points (LC 973)</td>
+        <td>Max-heap of size k ordered by distance, or quickselect on distance.</td>
+        <td><code>pq.offer(p); if (pq.size() &gt; k) pq.poll();</code></td>
+        <td>LC 973</td>
+      </tr>
+      <tr>
+        <td>Task scheduler / reorganise string</td>
+        <td>Max-heap of remaining counts; a cooldown queue of (count, readyTime).</td>
+        <td><code>pq.offer(count); wait.offer(new int[] {count-1, time+n});</code></td>
+        <td>LC 621, LC 767</td>
+      </tr>
+      <tr>
+        <td>Sliding window median (LC 480)</td>
+        <td>Two heaps plus lazy deletion of a[l]. Size accounting must ignore stale elements.</td>
+        <td><code>delayRemove(a[l]); prune both heaps; rebalance live sizes.</code></td>
+        <td>LC 480</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is a min-heap the right polarity for k-largest?</summary>
+    <div class="followup__body">
+      <p>You want to evict the smallest of the k candidates whenever a larger value arrives. The extreme you need to evict is therefore the min of the live set. The root at the end is the smallest of the k largest, which is the k-th largest.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Prove heapify is O(n).</summary>
+    <div class="followup__body">
+      <p>At height h there are at most n/2^{h+1} nodes, each costing O(h). Sum h·n/2^h converges to 2n because Sum h x^h = x/(1-x)^2 at x=1/2. Quoting "geometric series of heights" is the short version.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you delete from a PriorityQueue in log time?</summary>
+    <div class="followup__body">
+      <p>You do not. remove(x) is linear. Options: lazy deletion with a stale map; wrap entries with a dead flag; use TreeMap if you also need floor/ceiling; write your own heap with an index map for decrease-key. In interviews, lazy deletion is expected for window-median and Dijkstra-without-decrease-key.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is quickselect better than a heap for k-th?</summary>
+    <div class="followup__body">
+      <p>When the array is mutable, you need one k-th, and you do not need the k elements as a set. Expected O(n). Heaps are deterministic O(n log k), work on streams, and return the k elements. Lead with the heap in a design-flavoured interview.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Kth Largest Element in an Array</a></td>
+        <td><span class="badge badge--lc">LC 215</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Min-heap of size k, or quickselect</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/merge-k-sorted-lists/" target="_blank" rel="noopener">Merge k Sorted Lists</a></td>
+        <td><span class="badge badge--lc">LC 23</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Min-heap of current heads</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener">Find Median from Data Stream</a></td>
+        <td><span class="badge badge--lc">LC 295</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two heaps, rebalance after each add</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-median/" target="_blank" rel="noopener">Sliding Window Median</a></td>
+        <td><span class="badge badge--lc">LC 480</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two heaps + lazy deletion</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/top-k-frequent-elements/" target="_blank" rel="noopener">Top K Frequent Elements</a></td>
+        <td><span class="badge badge--lc">LC 347</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Min-heap of size k on frequencies</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/k-closest-points-to-origin/" target="_blank" rel="noopener">K Closest Points to Origin</a></td>
+        <td><span class="badge badge--lc">LC 973</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max-heap of size k by distance</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/task-scheduler/" target="_blank" rel="noopener">Task Scheduler</a></td>
+        <td><span class="badge badge--lc">LC 621</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max-heap of counts + cooldown</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/reorganize-string/" target="_blank" rel="noopener">Reorganize String</a></td>
+        <td><span class="badge badge--lc">LC 767</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max-heap of counts; never pick the same twice</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/ugly-number-ii/" target="_blank" rel="noopener">Ugly Number II</a></td>
+        <td><span class="badge badge--lc">LC 264</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Min-heap of candidates, or three pointers</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1140/C" target="_blank" rel="noopener">Playlist</a></td>
+        <td><span class="badge badge--cf">CF 1140C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort by beauty, min-heap of k lengths</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/1353/D" target="_blank" rel="noopener">Constructing the Array</a></td>
+        <td><span class="badge badge--cf">CF 1353D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max-heap of empty segments by length</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 295 &mdash; which heap is allowed to be larger?</summary>
+  <div class="spoiler__body">
+    <p>Convention: lo (max-heap of the lower half) holds one extra, so the median on an odd count is lo.peek() with no branch. Insertion: if x ≤ lo.peek() (or lo is empty) offer lo, else offer hi; then rebalance. Even count: average with a long cast. Getting the polarity backwards is the usual bug.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 480 &mdash; size accounting with stale elements</summary>
+  <div class="spoiler__body">
+    <p>The two heaps' .size() include stale entries, so you cannot rebalance on those sizes. Keep integer counters of the live occupancy of each half. Lazy deletion makes pq.size() a lie.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Heap = array + parent/child index arithmetic</strong>, property at every parent.</li>
+    <li><strong>Heapify is O(n)</strong> by sifting down from the last parent.</li>
+    <li><strong>K-largest: min-heap of size k.</strong> K-smallest: max-heap of size k.</li>
+    <li><strong>Median: max-heap lo + min-heap hi</strong>, sizes differ by at most one. Average with long.</li>
+    <li><strong>No decrease-key:</strong> lazy deletion with a stale map. Never pq.remove in a loop.</li>
+  </ul>
+  <div class="recap__oneliner">pq.offer(x); if (pq.size() &gt; k) pq.poll();  // min-heap of size k is the k-th largest</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

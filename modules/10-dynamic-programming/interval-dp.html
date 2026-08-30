@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interval DP &mdash; DSA Course</title>
+<meta name="description" content="The state is a subarray s[l..r], and the last cut (or last burst, or last merge) splits it into two smaller intervals.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="interval-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Interval DP</h1>
+  <p class="hero__tagline">The state is a subarray <code>s[l..r]</code>, and the last cut (or last burst, or last merge) splits it into two smaller intervals.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="string-dp.html">String DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">interval DP</span>
+      <span class="chip">MCM</span>
+      <span class="chip">burst balloons</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Interval DP is the family where the natural subproblem is a contiguous segment. Matrix-chain multiplication, bursting balloons, palindrome partitioning, merging stones, and "min cost to cut a stick" all ask: given [l, r], what is the best cost, and the last operation happens at some k in between.</p>
+<p>The order is by interval length. Length 1 is the base; a length-L interval only reads strictly shorter pieces. That is a DAG on O(n&sup2;) states with an O(n) transition, hence O(n&sup3;) &mdash; the constraint tell n ≤ 400.</p>
+<p>P1 because the modelling (what is the last action?) is the whole trick, and because you must pad sentinels for balloons / cuts. Once the recurrence is written, the loops are mechanical.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Name the last cut k inside [l, r]. Then dp[l][r] combines dp[l][k] and dp[k][r] with the cost of doing that last operation now.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Min / max cost to process a subarray by repeatedly merging / bursting / cutting</li>
+        <li>Matrix-chain, burst balloons, min cost to cut a stick, merging stones</li>
+        <li>Palindrome partition min cuts, longest palindromic subsequence (already seen)</li>
+        <li>n ≤ 400, O(n&sup3;) fits; n ≤ 100 is even more comfortable</li>
+        <li>The statement talks about a last remaining element or a last cut</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Non-contiguous subsets → knapsack / bitmask</li>
+        <li>n = 2000 with O(n&sup3;) → you need Knuth / D&amp;C opt (later page) or a different state</li>
+        <li>The "interval" is a sliding window with a monotone property → two pointers</li>
+        <li>Only two strings' prefixes → string DP, not a third loop over k</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Matrix chain / min multiplications</td>
+        <td>last multiply at k</td>
+        <td>MCM O(n³)</td>
+      </tr>
+      <tr>
+        <td>Burst balloons</td>
+        <td>k is the last remaining in (l, r)</td>
+        <td>LC 312, pad 1s</td>
+      </tr>
+      <tr>
+        <td>Cut a stick</td>
+        <td>last cut, cost = current length</td>
+        <td>LC 1547, pad ends</td>
+      </tr>
+      <tr>
+        <td>Merging stones</td>
+        <td>m-way merge, extra residue dim</td>
+        <td>LC 1000</td>
+      </tr>
+      <tr>
+        <td>Palindrome min cuts</td>
+        <td>last palindromic suffix</td>
+        <td>LC 132, often O(n²)</td>
+      </tr>
+      <tr>
+        <td>Optimal BST</td>
+        <td>k is the root of [l,r]</td>
+        <td>Classic CLRS</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> gap DP vs prefix DP</td>
+        <td>If the two pieces after a cut must both be solved, it is interval</td>
+        <td>If only a prefix remains, it is 1D</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 400</code> is O(n&sup3;). <code>n &le; 100</code> is the comfortable balloon range. Cost products need <code>long</code>. Knuth optimisation applies when the argmin is monotone (see DP Optimisations).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Length, then left, then the cut</h2>
+<p>Burst balloons as the running example. Pad a with 1s on both ends. dp[l][r] = max coins from bursting everything strictly between l and r, with a[l] and a[r] still alive. The last balloon burst in (l, r) is k, scoring a[l]*a[k]*a[r] plus the two solved interiors.</p>
+<p>Fill by increasing r-l. For length 1 interiors the answer is 0 (nothing to burst). The global answer is dp[0][n+1] after padding. MCM is the same loops: dp[i][j] min cost to multiply matrices i..j, last split k, cost = dp[i][k] + dp[k+1][j] + rows[i]*cols[k]*cols[j].</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>dp[l][r]</code> is the best cost (or coins) to finish the open interval <code>(l, r)</code> while the boundaries stay alive.</p><span class="eq">dp[l][r] = max/min over k of dp[l][k] + dp[k][r] + cost(l,k,r)</span>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Pad, then never burst the sentinels</span>
+    <p>Balloons and stick-cuts become uniform only after you add fake boundaries. Loops over k run from l+1 to r-1. Bursting a sentinel is a meaningless index error or a zero-score bug.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why O(n&sup3;)</span>
+    <p>O(n&sup2;) pairs (l, r) and O(n) candidate k per pair. Nothing is O(n&sup2;) unless you can drop the k-loop (precomputed palindrome table, Knuth on the argmin).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Burst [3, 1, 5] padded to [1, 3, 1, 5, 1]</h3>
+
+<p>dp[l][r] for increasing gap. Target is the interval being solved; from cells are the two pieces after choosing last-burst k.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="interval-dpViz"></div>
+  <div class="viz-player" data-viz-target="interval-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "l\\r",
+      "rowHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "colHeads": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "l,r",
+        "k",
+        "dp"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Gap 1: adjacent boundaries, nothing between them. dp = 0. Not shown as numbers yet.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "0"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "0"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "0"
+            }
+          ],
+          "values": {
+            "l,r": "gap 1",
+            "k": "—",
+            "dp": 0
+          }
+        },
+        {
+          "note": "(0,2): only k=1 (val 3). Coins 1*3*1 = 3. From empty interiors.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "l,r": "0,2",
+            "k": 1,
+            "dp": 3
+          }
+        },
+        {
+          "note": "(1,3): k=2 (val 1). Coins 3*1*5 = 15.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "15",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "l,r": "1,3",
+            "k": 2,
+            "dp": 15
+          }
+        },
+        {
+          "note": "(2,4): k=3 (val 5). Coins 1*5*1 = 5.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 3,
+              "val": "5",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "l,r": "2,4",
+            "k": 3,
+            "dp": 5
+          }
+        },
+        {
+          "note": "(0,3): k=1 or 2. k=1: 3 + 0 + 15? walk the formula. Best 30.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "30",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "3",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "15",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "l,r": "0,3",
+            "k": "1 or 2",
+            "dp": 30
+          }
+        },
+        {
+          "note": "(1,4) fills similarly. Then (0,4): last k=1,2,3. k=3 gives 30+0+5 + 1*5*1 wait: interiors dp[0][3]+dp[3][4] plus 1*5*1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "35",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "30",
+              "cls": "from"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "5",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "l,r": "0,4",
+            "k": 3,
+            "dp": 35
+          }
+        },
+        {
+          "note": "dp[0][4] = 35 is the answer for the padded array. One optimal last burst is the 5.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "35",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "l,r": "ans",
+            "k": 3,
+            "dp": 35
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Answer dp[0][4] = 35. Last burst k=3 (value 5) scores 1*5*1 plus interiors.</figcaption>
+</figure>
+
+<h3>Last burst splits the interval</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  full["dp of l,r"] --&gt; leftP["dp of l,k"]
+  full --&gt; rightP["dp of k,r"]
+  full --&gt; cost["plus a[l] * a[k] * a[r]"]
+  </div>
+  <figcaption>k stays until the end, so the two interiors never see each other except through a[k].</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Pad sentinels</strong> if the cost of an operation uses outside neighbours.</li>
+  <li><strong>State:</strong> dp[l][r] = best on the open interval (l, r).</li>
+  <li><strong>Base:</strong> r = l+1 → 0 (empty interior).</li>
+  <li><strong>For len = 2 .. n+1, for l, r = l+len:</strong> try every k in (l, r).</li>
+  <li><strong>Transition:</strong> combine dp[l][k], dp[k][r], and cost(l,k,r).</li>
+  <li><strong>Take max or min</strong> over k.</li>
+  <li><strong>Answer</strong> is dp[0][padded n+1] (balloons) or dp[0][n-1] (MCM on dimensions).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Padded a = [1, 3, 1, 5, 1]. Evaluate (0,4) candidates after smaller intervals exist.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>l,r</th><th>k</th><th>left</th><th>right</th><th>cost l*k*r</th><th>total</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0,2</td><td>1</td><td>0</td><td>0</td><td>1*3*1=3</td><td>3</td><td>Base-ish length.</td></tr>
+      <tr><td>1,3</td><td>2</td><td>0</td><td>0</td><td>3*1*5=15</td><td>15</td><td></td></tr>
+      <tr><td>2,4</td><td>3</td><td>0</td><td>0</td><td>1*5*1=5</td><td>5</td><td></td></tr>
+      <tr><td>0,4</td><td>1</td><td>0</td><td>dp[1,4]</td><td>1*3*1=3</td><td>uses bigger right</td><td>One candidate.</td></tr>
+      <tr class="trace-table__row--change"><td>0,4</td><td>3</td><td>30</td><td>0</td><td>1*5*1=5</td><td>35</td><td>Best last burst = 5.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The 35 matches the grid's final cell. Reconstruction stores the best k.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Interval DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BurstRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BurstRec {
+    
+        static int rec(int[] a, int l, int r) {
+            int best = 0;
+            for (int k = l + 1; k &lt; r; k++) {
+                best = Math.max(best, rec(a, l, k) + rec(a, k, r) + a[l] * a[k] * a[r]);
+            }
+            return best;
+        }
+    
+        static int maxCoins(int[] nums) {
+            int n = nums.length;
+            int[] a = new int[n + 2];
+            a[0] = 1;
+            a[n + 1] = 1;
+            System.arraycopy(nums, 0, a, 1, n);
+            return rec(a, 0, n + 1);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(maxCoins(new int[] {3, 1, 5}));
+        }
+        // Input : [3, 1, 5]
+        // Output: 35
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BurstMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class BurstMemo {
+    
+        static int rec(int[] a, int l, int r, int[][] memo) {
+            if (r - l &lt;= 1) {
+                return 0;
+            }
+            if (memo[l][r] != -1) {
+                return memo[l][r];
+            }
+            int best = 0;
+            for (int k = l + 1; k &lt; r; k++) {
+                best = Math.max(best, rec(a, l, k, memo) + rec(a, k, r, memo) + a[l] * a[k] * a[r]);
+            }
+            return memo[l][r] = best;
+        }
+    
+        public static void main(String[] args) {
+            int[] nums = {3, 1, 5};
+            int n = nums.length;
+            int[] a = new int[n + 2];
+            a[0] = a[n + 1] = 1;
+            System.arraycopy(nums, 0, a, 1, n);
+            int[][] memo = new int[n + 2][n + 2];
+            for (int[] row : memo) {
+                Arrays.fill(row, -1);
+            }
+            System.out.println(rec(a, 0, n + 1, memo));
+        }
+        // Input : [3, 1, 5]
+        // Output: 35
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BurstTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BurstTab {
+    
+        static int maxCoins(int[] nums) {
+            int n = nums.length;
+            int[] a = new int[n + 2];
+            a[0] = a[n + 1] = 1;
+            System.arraycopy(nums, 0, a, 1, n);
+            int[][] dp = new int[n + 2][n + 2];
+            for (int gap = 2; gap &lt;= n + 1; gap++) {
+                for (int l = 0; l + gap &lt;= n + 1; l++) {
+                    int r = l + gap;
+                    for (int k = l + 1; k &lt; r; k++) {
+                        dp[l][r] = Math.max(dp[l][r],
+                                dp[l][k] + dp[k][r] + a[l] * a[k] * a[r]);
+                    }
+                }
+            }
+            return dp[0][n + 1];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(maxCoins(new int[] {3, 1, 5}));
+        }
+        // Input : [3, 1, 5]
+        // Output: 35
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n³)</span>
+    <span class="badge badge--space">Space O(n²)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>O(n&sup2;) intervals, O(n) cuts each:</p>
+    <p><span class="eq">T = &Theta;(n&sup3;)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive interval</td><td>O(n³)</td><td>O(n²)</td><td>n≤400</td></tr>
+      <tr><td>Knuth opt</td><td>O(n²)</td><td>O(n²)</td><td>When argmin is monotone</td></tr>
+      <tr><td>Palindrome min cuts + precompute</td><td>O(n²)</td><td>O(n²)</td><td>k-loop dropped</td></tr>
+      <tr><td>MCM</td><td>O(n³)</td><td>O(n²)</td><td>Same loops</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Filling by l, r increasing, not by length</span>
+    <div class="pitfalls__bug">dp[l][k] is still 0 because that interval is longer in one index and not yet computed.</div>
+    <div class="pitfalls__fix">Outer loop is gap / length. Then l. Then k.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the pad</span>
+    <div class="pitfalls__bug">Bursting the first balloon uses a missing left neighbour.</div>
+    <div class="pitfalls__fix">a = [1] + nums + [1]. k runs in (l, r).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using closed [l,r] including bursting l</span>
+    <div class="pitfalls__bug">Then the neighbour formula double-counts or uses already-burst values.</div>
+    <div class="pitfalls__fix">Open interval: l and r stay alive. Last burst is strictly inside.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow on a[l]*a[k]*a[r]</span>
+    <div class="pitfalls__bug">Values 100, n=300, the product and the sum of products can exceed int.</div>
+    <div class="pitfalls__fix">long, or the problem's guaranteed bound.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Merging stones without the (len-1)%(K-1)==0 check</span>
+    <div class="pitfalls__bug">You cannot merge an arbitrary pile count into one with K-way merges.</div>
+    <div class="pitfalls__fix">A pile of p stones is mergeable iff (p-1) % (K-1) == 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">n³ at n=2000</span>
+    <div class="pitfalls__bug">8e9 operations.</div>
+    <div class="pitfalls__fix">Knuth / D&C / a different model. See DP Optimisations.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Matrix chain</td>
+        <td>cost = rows[i]*mid*cols[j] + two sides. Min.</td>
+        <td><code>CLRS / GfG MCM</code></td>
+        <td>Same gap loops</td>
+      </tr>
+      <tr>
+        <td>Min cost to cut a stick</td>
+        <td>Pad 0 and n. Cost of a cut is the current length r-l.</td>
+        <td><code>LC 1547</code></td>
+        <td>Last cut, not last remaining</td>
+      </tr>
+      <tr>
+        <td>Palindrome partition</td>
+        <td>dp[r] = 1+min dp[l-1] for palindromic s[l..r]. Precompute isPal[l][r] in n².</td>
+        <td><code>LC 132</code></td>
+        <td>Often no k-loop at query time</td>
+      </tr>
+      <tr>
+        <td>Knuth optimisation</td>
+        <td>opt[l][r-1] ≤ opt[l][r] ≤ opt[l+1][r] lets you shrink the k-range to O(1) amortised.</td>
+        <td><code>&lt;a href="dp-optimizations.html"&gt;DP Optimisations&lt;/a&gt;</code></td>
+        <td>O(n²) MCM-like</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why last, not first?</summary>
+    <div class="followup__body">
+      <p>The first burst of a balloon would leave a new neighbour pair that is hard to name as two independent intervals. The last remaining balloon k splits the original range into two interiors that never interact except through k. Always try "last action" when first action fails to decompose.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is the k-loop droppable?</summary>
+    <div class="followup__body">
+      <p>When the extra cost does not depend on a free k, or when a boolean (is palindrome) can be precomputed. Knuth drops it down to amortised O(1) per interval when the quadrangle inequality holds.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I reconstruct the burst order?</summary>
+    <div class="followup__body">
+      <p>Store bestK[l][r]. The last burst is that k; recurse on (l,k) and (k,r). The actual time order is interiors first, k last — reverse of the stored last-k.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is LPS interval DP or string DP?</summary>
+    <div class="followup__body">
+      <p>Both. LPS as LCS(s, rev(s)) is two-string DP. LPS as dp[i][j] on one string with a match using i+1,j-1 is interval DP of a simpler transition (no k-loop). Same answer.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/burst-balloons/" target="_blank" rel="noopener">Burst Balloons</a></td>
+        <td><span class="badge badge--lc">LC 312</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>The dry-run problem</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/minimum-cost-to-cut-a-stick/" target="_blank" rel="noopener">Minimum Cost to Cut a Stick</a></td>
+        <td><span class="badge badge--lc">LC 1547</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Pad ends, last cut</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/palindrome-partitioning-ii/" target="_blank" rel="noopener">Palindrome Partitioning II</a></td>
+        <td><span class="badge badge--lc">LC 132</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n² with isPal table</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/strange-printer/" target="_blank" rel="noopener">Strange Printer</a></td>
+        <td><span class="badge badge--lc">LC 664</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Last print of a colour</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/minimum-score-triangulation-of-polygon/" target="_blank" rel="noopener">Minimum Score Triangulation of Polygon</a></td>
+        <td><span class="badge badge--lc">LC 1039</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>MCM on a polygon</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/matrix-chain-multiplication0303/1" target="_blank" rel="noopener">Matrix Chain Multiplication</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Classic MCM</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_n" target="_blank" rel="noopener">Zuma Game cousin</a></td>
+        <td><span class="badge badge--atc">ATC DP-N</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Slimes: merge cost prefix sums</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/607/B" target="_blank" rel="noopener">Zuma Game</a></td>
+        <td><span class="badge badge--cf">CF 607B</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Interval, matching colours collapse</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/149/D" target="_blank" rel="noopener">Coloured Balls</a></td>
+        <td><span class="badge badge--cf">CF 149D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bracket colouring, interval + 3 colours</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1155/D" target="_blank" rel="noopener">Beautiful Array</a></td>
+        <td><span class="badge badge--cf">CF 1155D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Kadane-like 3-state, not interval; contrast</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 607B Zuma</summary>
+  <div class="spoiler__body">
+    <p>dp[l][r] = min removals of a[l..r] as a Zuma interval. If a[l]==a[r], you may treat them as collapsing with the interior (dp[l+1][r-1]). Also try a split k. Fill by length. n ≤ 500, O(n&sup3;) is intended.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-N Slimes</summary>
+  <div class="spoiler__body">
+    <p>Cost to merge [l, r] is the sum of that range (prefix sums) plus the two child merges. dp[l][r] = pref[r]-pref[l-1] + min over k of dp[l][k]+dp[k+1][r]. Standard MCM with a prefix-sum cost.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>State is an interval [l, r] (often open).</strong></li>
+    <li><strong>Last action at k</strong> splits into two strictly smaller intervals.</li>
+    <li><strong>Fill by increasing length / gap.</strong></li>
+    <li><strong>Pad sentinels</strong> for balloons and stick cuts.</li>
+    <li><strong>O(n&sup3;), n ≤ 400.</strong> Faster needs Knuth or a dropped k-loop.</li>
+  </ul>
+  <div class="recap__oneliner">dp[l][r] = max/min_k dp[l][k]+dp[k][r]+cost | fill by gap | pad sentinels</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

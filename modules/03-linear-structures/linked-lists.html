@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linked Lists &mdash; DSA Course</title>
+<meta name="description" content="Pointer surgery under a fixed extra-space budget: reverse a range, detect a cycle and its entry, merge two ordered lists, and clone a graph that happens to look like a list.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="linked-lists">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>Linked Lists</h1>
+  <p class="hero__tagline">Pointer surgery under a fixed extra-space budget: reverse a range, detect a cycle and its entry, merge two ordered lists, and clone a graph that happens to look like a list.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">linked list</span>
+      <span class="chip">two pointers</span>
+      <span class="chip">Floyd</span>
+      <span class="chip">in-place</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Linked-list questions are almost never about the node type. They are about rewriting pointers without losing the rest of the list, in O(1) extra memory, on a structure you cannot index into. Reverse, reverse k-group, Floyd cycle+entry, merge, copy-random: five problems, three moves &mdash; save the next, rewire, advance.</p>
+<p>They keep being asked at SDE-2 because they punish sketchy pointer handling the way arrays punish off-by-ones. A missed prev drops a suffix. A cycle detector that returns the meeting point instead of the entry looks like it works on the sample. A k-group reverse that does not check k nodes remain corrupts the tail.</p>
+<p>Floyd is the one piece of theory: 1&times; and 2&times; pointers meet inside a cycle; reset one to the head and walk both at 1&times; to land on the entry. Copy-random is the other classic: HashMap is O(n) space; the weave (clone between originals, wire randoms, unweave) is the O(1)-space follow-up.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Before you rewire curr.next, save it. After you rewire, the old successor is gone unless you held it. Every in-place list algorithm is that sentence plus a dummy node to delete the head-special-case.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>The input is a singly (or doubly) linked list and you must rearrange it in place</li>
+        <li>"Reverse the list" / "reverse nodes in k-group" / "reverse between left and right"</li>
+        <li>"Detect a cycle" or "return the node where the cycle begins"</li>
+        <li>"Merge two (or k) sorted lists"</li>
+        <li>"Copy a list that has an extra random pointer"</li>
+        <li>"Find the middle" / "delete the n-th from the end" &mdash; fast and slow pointers</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need order statistics or binary search on the values &rarr; copy to an array, or a tree</li>
+        <li>Random access by index is the hot path &rarr; ArrayList, not a list of nodes</li>
+        <li>The "list" is actually a graph with branching &rarr; BFS/DFS</li>
+        <li>k-list merge when k is large &rarr; the heap version on the <a href="heaps-and-priority-queue.html">heaps page</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>reverse the whole list</td>
+        <td>Three pointers: prev, curr, next</td>
+        <td>Iterative reverse</td>
+      </tr>
+      <tr>
+        <td>reverse every k nodes</td>
+        <td>Identify a group, reverse, stitch, repeat</td>
+        <td>Dummy + groupPrev + k-check</td>
+      </tr>
+      <tr>
+        <td>does it have a cycle?</td>
+        <td>Fast moves 2, slow moves 1</td>
+        <td>Floyd detect</td>
+      </tr>
+      <tr>
+        <td>where does the cycle begin?</td>
+        <td>After they meet, reset slow to head, both at 1&times;</td>
+        <td>Floyd entry</td>
+      </tr>
+      <tr>
+        <td>merge two sorted lists</td>
+        <td>Dummy + tail, splice the smaller head</td>
+        <td>Same as merge in mergesort</td>
+      </tr>
+      <tr>
+        <td>copy list with random pointer</td>
+        <td>Clone a graph: map old→new, or weave</td>
+        <td>HashMap, or O(1)-space weave</td>
+      </tr>
+      <tr>
+        <td>delete n-th from end</td>
+        <td>Gap of n between two pointers, then splice</td>
+        <td>Dummy so deleting the head is uniform</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> find the duplicate in an array of n+1 values in 1..n</td>
+        <td>The array is a functional graph; Floyd still applies</td>
+        <td>Same algorithm, different wrapper (LC 287)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with O(1) extra space is the usual tell. Recursion n frames deep blows the Java stack around n = 10&#8308;; prefer iterative reverse.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Iterative reverse: prev = null, curr = head. Each step saves nxt = curr.next, sets curr.next = prev, then advances prev = curr, curr = nxt. When curr is null, prev is the new head. k-group is reverse applied to successive slices, with a dummy so the first group is not special. Walk k steps first; if you run out, leave the tail alone.</p>
+<p>Floyd: slow and fast start at head. If there is a cycle they meet at some node on the cycle, not necessarily the entry. Set slow back to head and walk both one step at a time; they meet at the entry. Merge: dummy + tail, attach the smaller head. Copy-random: HashMap first; weave if they forbid extra space.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><strong>Reverse:</strong> the chain from prev backwards is the reversed prefix; from curr forwards is untouched.</p><p><strong>Floyd:</strong> after the first meeting, distance(head, entry) equals distance(meeting, entry) along the cycle. Walking both at speed 1 from those two starts collides at the entry.</p><p>A dummy whose next is the real head makes "what if we replace the head?" the same code path as every other splice.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Floyd's meeting algebra</span>
+    <p>Stem length a, cycle c, meeting b into the cycle. Slow walked a+b, fast 2(a+b). The extra a+b is a whole number of laps: a+b = m c, so a = m c - b. From the meeting point, c-b more steps reach the entry, which is also a steps from the head. Resetting slow to head implements that.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>In-place reverse of 1→2→3→4→5</h3>
+
+<p>Cells are node values in original index order. prev / curr / nxt move left to right; done cells have already had their next flipped.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="linked-listsViz"></div>
+  <div class="viz-player" data-viz-target="linked-listsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "nodes (original order)",
+      "array": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "vars": [
+        "prev",
+        "curr",
+        "nxt"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start: prev = null, curr = head (1).",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "prev": "null",
+            "curr": 1,
+            "nxt": "—"
+          }
+        },
+        {
+          "note": "Save nxt=2, rewire 1.next=null. Advance: prev=1, curr=2.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "prev": 1,
+            "curr": 2,
+            "nxt": 2
+          }
+        },
+        {
+          "note": "Save nxt=3, rewire 2.next=1. Advance: prev=2, curr=3.",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4
+          ],
+          "values": {
+            "prev": 2,
+            "curr": 3,
+            "nxt": 3
+          }
+        },
+        {
+          "note": "Save nxt=4, rewire 3.next=2. Advance: prev=3, curr=4.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4
+          ],
+          "values": {
+            "prev": 3,
+            "curr": 4,
+            "nxt": 4
+          }
+        },
+        {
+          "note": "Save nxt=5, rewire 4.next=3. Advance: prev=4, curr=5.",
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "prev": 4,
+            "curr": 5,
+            "nxt": 5
+          }
+        },
+        {
+          "note": "Save nxt=null, rewire 5.next=4. curr=null. Return prev=5. List is 5→4→3→2→1.",
+          "best": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "prev": 5,
+            "curr": "null",
+            "nxt": "null"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Three pointers, five steps, new head is 5. Losing nxt is the only way to drop the suffix.</figcaption>
+</figure>
+
+<h3>Floyd: detect, then find the entry</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  startNode["slow = fast = head"] --&gt; move["slow plus 1, fast plus 2"]
+  move --&gt; nullQ{"fast is null or fast.next is null?"}
+  nullQ -- yes --&gt; acyclic["no cycle: return null"]
+  nullQ -- no --&gt; meetQ{"slow equals fast?"}
+  meetQ -- no --&gt; move
+  meetQ -- yes --&gt; reset["slow = head  (fast stays at meeting)"]
+  reset --&gt; walk["both plus 1"]
+  walk --&gt; entryQ{"slow equals fast?"}
+  entryQ -- no --&gt; walk
+  entryQ -- yes --&gt; found["this node is the cycle entry"]
+  </div>
+  <figcaption>The meeting point is on the cycle. The entry is a second walk. Returning the meeting point as the answer is the classic half-solved submission.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Draw the nodes and next pointers</strong>, including a dummy if the head might change.</li>
+  <li><strong>Reverse:</strong> save nxt, rewire curr.next = prev, advance prev, curr. Return prev.</li>
+  <li><strong>k-group:</strong> from groupPrev walk k nodes. If fewer remain, stop. Reverse that slice and stitch.</li>
+  <li><strong>Floyd detect:</strong> while (fast != null && fast.next != null), slow+1, fast+2.</li>
+  <li><strong>Floyd entry:</strong> after they meet, slow = head, both at 1&times; until they meet again.</li>
+  <li><strong>Merge:</strong> dummy + tail; attach the smaller of the two heads; drain the rest.</li>
+  <li><strong>Copy random:</strong> HashMap old→new in two passes, or weave / unweave.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Reverse k-group, k=2, on 1→2→3→4→5. groupPrev is the node before the group.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>groupPrev</th><th>group</th><th>k left?</th><th>list after</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>dummy</td><td>1, 2</td><td>yes</td><td>1-2-3-4-5</td><td>First group is complete.</td></tr>
+      <tr class="trace-table__row--change"><td>dummy</td><td>1, 2</td><td>reversing</td><td>2-1-3-4-5</td><td>Stitch dummy.next=2, 1.next=3.</td></tr>
+      <tr><td>1</td><td>3, 4</td><td>yes</td><td>2-1-3-4-5</td><td>Second group is complete.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>3, 4</td><td>reversing</td><td>2-1-4-3-5</td><td>Stitch 1.next=4, 3.next=5.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>5</td><td>no</td><td>2-1-4-3-5</td><td>Fewer than k nodes: stop.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Answer 2→1→4→3→5. Partial groups stay in original order (LC 25).</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Linked Lists implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Reverse / k-group</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Floyd + merge</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Copy random</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Reverse / k-group">
+    <p>Three-pointer reverse, then k-group on top of it. The k-check before reversing is what fails on the leftover tail.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ListReverse.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ListReverse {
+        static class ListNode {
+            int val;
+            ListNode next;
+            ListNode(int v) { val = v; }
+            ListNode(int v, ListNode n) { val = v; next = n; }
+        }
+    
+        static ListNode reverse(ListNode head) {
+            ListNode prev = null, curr = head;
+            while (curr != null) {
+                ListNode nxt = curr.next;
+                curr.next = prev;
+                prev = curr;
+                curr = nxt;
+            }
+            return prev;
+        }
+    
+        static ListNode reverseKGroup(ListNode head, int k) {
+            ListNode dummy = new ListNode(0, head);
+            ListNode groupPrev = dummy;
+            while (true) {
+                ListNode kth = groupPrev;
+                for (int i = 0; i &lt; k &amp;&amp; kth != null; i++) kth = kth.next;
+                if (kth == null) break;
+                ListNode groupNext = kth.next;
+                ListNode prev = groupNext, curr = groupPrev.next;
+                while (curr != groupNext) {
+                    ListNode nxt = curr.next;
+                    curr.next = prev;
+                    prev = curr;
+                    curr = nxt;
+                }
+                ListNode oldHead = groupPrev.next;
+                groupPrev.next = kth;
+                groupPrev = oldHead;
+            }
+            return dummy.next;
+        }
+    
+        static String str(ListNode h) {
+            StringBuilder sb = new StringBuilder();
+            for (; h != null; h = h.next) {
+                if (sb.length() &gt; 0) sb.append("-&gt;");
+                sb.append(h.val);
+            }
+            return sb.toString();
+        }
+    
+        static ListNode build(int... a) {
+            ListNode d = new ListNode(0), t = d;
+            for (int v : a) { t.next = new ListNode(v); t = t.next; }
+            return d.next;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(str(reverse(build(1, 2, 3, 4, 5))));
+            System.out.println(str(reverseKGroup(build(1, 2, 3, 4, 5), 2)));
+            System.out.println(str(reverseKGroup(build(1, 2, 3, 4, 5), 3)));
+        }
+        // Input : 1-&gt;2-&gt;3-&gt;4-&gt;5 ; k = 2 and k = 3
+        // Output: 5-&gt;4-&gt;3-&gt;2-&gt;1
+        //         2-&gt;1-&gt;4-&gt;3-&gt;5
+        //         3-&gt;2-&gt;1-&gt;4-&gt;5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Floyd + merge">
+    <p>Cycle detection, cycle entry, and merge of two sorted lists. Returning the meeting point as the entry is the bug this tab exists to prevent.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ListFloyd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ListFloyd {
+        static class ListNode {
+            int val;
+            ListNode next;
+            ListNode(int v) { val = v; }
+            ListNode(int v, ListNode n) { val = v; next = n; }
+        }
+    
+        static boolean hasCycle(ListNode head) {
+            ListNode slow = head, fast = head;
+            while (fast != null &amp;&amp; fast.next != null) {
+                slow = slow.next;
+                fast = fast.next.next;
+                if (slow == fast) return true;
+            }
+            return false;
+        }
+    
+        static ListNode detectCycle(ListNode head) {
+            ListNode slow = head, fast = head;
+            boolean met = false;
+            while (fast != null &amp;&amp; fast.next != null) {
+                slow = slow.next;
+                fast = fast.next.next;
+                if (slow == fast) { met = true; break; }
+            }
+            if (!met) return null;
+            slow = head;
+            while (slow != fast) {
+                slow = slow.next;
+                fast = fast.next;
+            }
+            return slow;
+        }
+    
+        static ListNode mergeTwo(ListNode a, ListNode b) {
+            ListNode dummy = new ListNode(0), tail = dummy;
+            while (a != null &amp;&amp; b != null) {
+                if (a.val &lt;= b.val) { tail.next = a; a = a.next; }
+                else { tail.next = b; b = b.next; }
+                tail = tail.next;
+            }
+            tail.next = (a != null) ? a : b;
+            return dummy.next;
+        }
+    
+        static String str(ListNode h) {
+            StringBuilder sb = new StringBuilder();
+            for (; h != null; h = h.next) {
+                if (sb.length() &gt; 0) sb.append("-&gt;");
+                sb.append(h.val);
+            }
+            return sb.toString();
+        }
+    
+        public static void main(String[] args) {
+            ListNode n1 = new ListNode(3);
+            ListNode n2 = new ListNode(2);
+            ListNode n3 = new ListNode(0);
+            ListNode n4 = new ListNode(-4);
+            n1.next = n2; n2.next = n3; n3.next = n4; n4.next = n2;
+            System.out.println(hasCycle(n1));
+            System.out.println(detectCycle(n1).val);
+            ListNode a = new ListNode(1, new ListNode(2, new ListNode(4)));
+            ListNode b = new ListNode(1, new ListNode(3, new ListNode(4)));
+            System.out.println(str(mergeTwo(a, b)));
+        }
+        // Input : cycle 3-&gt;2-&gt;0-&gt;-4-&gt;2... ; merge 1-&gt;2-&gt;4 and 1-&gt;3-&gt;4
+        // Output: true
+        //         2
+        //         1-&gt;1-&gt;2-&gt;3-&gt;4-&gt;4
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Copy random">
+    <p>O(n) space with a map first. The weave is the O(1)-space follow-up: clone after each original, wire randoms via orig.random.next, then split.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CopyRandom.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class CopyRandom {
+        static class Node {
+            int val;
+            Node next, random;
+            Node(int v) { val = v; }
+        }
+    
+        static Node copyMap(Node head) {
+            if (head == null) return null;
+            Map&lt;Node, Node&gt; map = new HashMap&lt;&gt;();
+            for (Node p = head; p != null; p = p.next) map.put(p, new Node(p.val));
+            for (Node p = head; p != null; p = p.next) {
+                map.get(p).next = map.get(p.next);
+                map.get(p).random = map.get(p.random);
+            }
+            return map.get(head);
+        }
+    
+        static Node copyWeave(Node head) {
+            if (head == null) return null;
+            for (Node p = head; p != null; p = p.next.next) {
+                Node cl = new Node(p.val);
+                cl.next = p.next;
+                p.next = cl;
+            }
+            for (Node p = head; p != null; p = p.next.next) {
+                if (p.random != null) p.next.random = p.random.next;
+            }
+            Node dummy = new Node(0), tail = dummy;
+            for (Node p = head; p != null; p = p.next) {
+                tail.next = p.next;
+                tail = tail.next;
+                p.next = p.next.next;
+            }
+            return dummy.next;
+        }
+    
+        public static void main(String[] args) {
+            Node a = new Node(7), b = new Node(13), c = new Node(11);
+            a.next = b; b.next = c;
+            a.random = null; b.random = a; c.random = c;
+            Node copied = copyWeave(a);
+            System.out.println(copied.val + " " + copied.next.val + " " + copied.next.next.val);
+            System.out.println(copied.random + " " + copied.next.random.val + " " + copied.next.next.random.val);
+            System.out.println(copyMap(a).val);
+        }
+        // Input : 7-&gt;13-&gt;11 with randoms [null, 7, 11]
+        // Output: 7 13 11
+        //         null 7 11
+        //         7
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) for reverse, Floyd, merge of two, copy</span>
+    <span class="badge badge--space">Space O(1) extra for reverse / Floyd / merge / weave; O(n) for the HashMap copy</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Reverse and k-group visit each node a constant number of times. Floyd: fast walks at most twice the stem plus cycle, then both walk the stem:</p><span class="eq">T(n) = Θ(n) pointer assignments</span>
+    <p>Merge of two lists is Θ(n+m). Merge of k lists by a heap is O(n log k) on the heaps page. Copy-random is two or three linear passes.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Iterative reverse</td><td>O(n)</td><td>O(1)</td><td>Default; does not blow the stack</td></tr>
+      <tr><td>Recursive reverse</td><td>O(n)</td><td>O(n) frames</td><td>Fine for tiny n; not for 1e5</td></tr>
+      <tr><td>Floyd detect + entry</td><td>O(n)</td><td>O(1)</td><td>Do not return the meeting point</td></tr>
+      <tr><td>HashSet of seen nodes</td><td>O(n)</td><td>O(n)</td><td>Detect only; wastes the O(1) follow-up</td></tr>
+      <tr><td>Merge two lists</td><td>O(n+m)</td><td>O(1)</td><td>Dummy + tail</td></tr>
+      <tr><td>Copy random, HashMap</td><td>O(n)</td><td>O(n)</td><td>Write this first</td></tr>
+      <tr><td>Copy random, weave</td><td>O(n)</td><td>O(1) extra</td><td>The follow-up</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Rewiring curr.next before saving it</span>
+    <div class="pitfalls__bug">The suffix becomes unreachable. Works on one node, fails on everything else.</div>
+    <div class="pitfalls__fix">ListNode nxt = curr.next as the first line. Save, rewire, advance.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Returning Floyd's meeting point as the cycle entry</span>
+    <div class="pitfalls__bug">LC 141 is done, LC 142 is not. Meeting point equals the entry only when stem length is a multiple of the cycle.</div>
+    <div class="pitfalls__fix">Reset slow to head, walk both at 1×, return the second meeting.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Reversing a leftover tail in k-group</span>
+    <div class="pitfalls__bug">A final group of size < k is reversed. The spec says leave it.</div>
+    <div class="pitfalls__fix">Walk k steps from groupPrev; if you hit null, break before reversing.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the dummy when the head can change</span>
+    <div class="pitfalls__bug">Merge, delete-head, k-group first group: you return the old head, now in the middle.</div>
+    <div class="pitfalls__fix">ListNode dummy = new ListNode(0, head); return dummy.next.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparing node values instead of references in Floyd</span>
+    <div class="pitfalls__bug">slow.val == fast.val on a list with duplicates. False cycle, or a missed one.</div>
+    <div class="pitfalls__fix">Compare the node objects: slow == fast.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Breaking the original list in the weave copy</span>
+    <div class="pitfalls__bug">clone.random wired to an original, or the caller's list left interleaved with clones.</div>
+    <div class="pitfalls__fix">clone.random = orig.random.next. Restore orig.next = clone.next in the split pass.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Reverse a sublist [left, right] (LC 92)</td>
+        <td>Walk to left-1, reverse the next (right-left+1) nodes, stitch.</td>
+        <td><code>Same three-pointer reverse, bounded by a count.</code></td>
+        <td>LC 92</td>
+      </tr>
+      <tr>
+        <td>Palindrome list (LC 234)</td>
+        <td>Slow/fast to the middle, reverse the second half, compare, optionally restore.</td>
+        <td><code>ListNode second = reverse(slow.next);</code></td>
+        <td>LC 234</td>
+      </tr>
+      <tr>
+        <td>Intersection of two lists (LC 160)</td>
+        <td>When one pointer hits null, jump to the other list's head. They meet at the intersection or at null.</td>
+        <td><code>if (p == null) p = headB; else p = p.next;</code></td>
+        <td>LC 160</td>
+      </tr>
+      <tr>
+        <td>Reorder list 1,n,2,n-1 (LC 143)</td>
+        <td>Middle, reverse second half, merge-interleave. Three primitives from this page composed.</td>
+        <td><code>LC 143</code></td>
+        <td>undefined</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why does resetting one pointer to the head find the entry?</summary>
+    <div class="followup__body">
+      <p>After the first meeting, slow has walked a+b and that is a multiple of the cycle. So a more steps from the meeting point land on the entry, which is also a steps from the head. Walking both at speed 1 from those two starts implements the equality.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can Floyd find a duplicate number in an array?</summary>
+    <div class="followup__body">
+      <p>Yes, LC 287. An array a of n+1 values in 1..n is a functional graph i → a[i]. The cycle entry is the duplicate. Same code with slow = a[slow] and fast = a[a[fast]].</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you reverse groups of k if k does not divide n?</summary>
+    <div class="followup__body">
+      <p>Leave the leftover tail in original order (LC 25). From the node before the would-be group, try to walk k steps; if you cannot, stop. Test n=5 k=3, n=5 k=1, n=5 k=5.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Map vs weave for copy-random in 25 minutes?</summary>
+    <div class="followup__body">
+      <p>The map. Two obvious passes, O(n) extra. Mention the weave as the O(1)-space follow-up and write it if they ask.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you merge k sorted lists?</summary>
+    <div class="followup__body">
+      <p>A min-heap of the current heads, O(n log k). Pairwise tournament merge is the same bound. Repeatedly merging into an accumulator is O(n k). Details on the <a href="heaps-and-priority-queue.html">heaps page</a>.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/reverse-linked-list/" target="_blank" rel="noopener">Reverse Linked List</a></td>
+        <td><span class="badge badge--lc">LC 206</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Three pointers: save, rewire, advance</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/reverse-nodes-in-k-group/" target="_blank" rel="noopener">Reverse Nodes in k-Group</a></td>
+        <td><span class="badge badge--lc">LC 25</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Dummy + k-check + reverse a slice</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/linked-list-cycle/" target="_blank" rel="noopener">Linked List Cycle</a></td>
+        <td><span class="badge badge--lc">LC 141</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Floyd detect</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/linked-list-cycle-ii/" target="_blank" rel="noopener">Linked List Cycle II</a></td>
+        <td><span class="badge badge--lc">LC 142</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Floyd entry: reset slow to head</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/merge-two-sorted-lists/" target="_blank" rel="noopener">Merge Two Sorted Lists</a></td>
+        <td><span class="badge badge--lc">LC 21</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Dummy + tail, splice the smaller</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/copy-list-with-random-pointer/" target="_blank" rel="noopener">Copy List with Random Pointer</a></td>
+        <td><span class="badge badge--lc">LC 138</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>HashMap, or weave / unweave</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/remove-nth-node-from-end-of-list/" target="_blank" rel="noopener">Remove Nth Node From End of List</a></td>
+        <td><span class="badge badge--lc">LC 19</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dummy + gap of n, then splice</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/palindrome-linked-list/" target="_blank" rel="noopener">Palindrome Linked List</a></td>
+        <td><span class="badge badge--lc">LC 234</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Middle + reverse second half + compare</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/reorder-list/" target="_blank" rel="noopener">Reorder List</a></td>
+        <td><span class="badge badge--lc">LC 143</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Middle + reverse + merge-interleave</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/sort-list/" target="_blank" rel="noopener">Sort List</a></td>
+        <td><span class="badge badge--lc">LC 148</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Mergesort: middle split + merge two</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/find-the-duplicate-number/" target="_blank" rel="noopener">Find the Duplicate Number</a></td>
+        <td><span class="badge badge--lc">LC 287</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Floyd on the functional graph of an array</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 25 &mdash; reverse a slice with prev initialised to groupNext</summary>
+  <div class="spoiler__body">
+    <p>Reverse in place between groupPrev.next and groupNext by running the standard reverse with prev initialised to groupNext (not null). Then every node's next already points at the correct successor, including the tail wiring to the next group. After the loop, the old group head is the new tail and the k-th node is the new head.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 138 weave &mdash; random of a clone is next of random of original</summary>
+  <div class="spoiler__body">
+    <p>After the weave the list is A → A' → B → B'. The clone of X sits at X.next, so the clone of X.random sits at X.random.next. The split pass must restore A.next = B as well as collect A', otherwise you destroy the input.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Save, rewire, advance.</strong> Lose nxt and you lose the suffix.</li>
+    <li><strong>Dummy node</strong> whenever the head might change (merge, k-group, delete).</li>
+    <li><strong>Floyd detect is not Floyd entry.</strong> Reset slow to head, walk both at 1×.</li>
+    <li><strong>k-group:</strong> walk k first; leftover tail stays in original order.</li>
+    <li><strong>Copy random:</strong> HashMap first; weave if they forbid extra space.</li>
+  </ul>
+  <div class="recap__oneliner">nxt = curr.next; curr.next = prev; prev = curr; curr = nxt;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KMP &amp; the Prefix Function &mdash; DSA Course</title>
+<meta name="description" content="The prefix function &pi;[i] is the longest proper prefix of s[0..i] that is also a suffix &mdash; KMP matching is one scan using those borders.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="kmp-and-prefix-function">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 12 &middot; Strings, Advanced</span>
+  <h1>KMP & the Prefix Function</h1>
+  <p class="hero__tagline">The prefix function <code>&pi;[i]</code> is the longest proper prefix of <code>s[0..i]</code> that is also a suffix &mdash; KMP matching is one scan using those borders.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>,
+      <a href="../02-sorting-hashing-bits/hashing-patterns.html">Hashing Patterns</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">KMP</span>
+      <span class="chip">prefix function</span>
+      <span class="chip">string</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Naive string matching retries after every mismatch and is O(nm). Knuth-Morris-Pratt never rewinds the text pointer: a mismatch jumps the pattern to its next possible border, computed once as the prefix function.</p>
+<p>&pi;[i] is the longest proper prefix of s[0..i] that is also a suffix of s[0..i]. Those borders nest, so a mismatch at i walks &pi; like a failure link. The same array finds periods (i+1 is divisible by i+1-&pi;[i]), counts occurrences, and builds the KMP automaton.</p>
+<p>Contest problems hide this as "shortest period", "string that is a prefix of every cyclic shift", and "count pattern hits allowing overlap". Rolling hash is the randomised alternative; KMP is deterministic linear time.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A mismatch at i means the candidate border of length q failed. The next candidate is &pi;[q-1], the longest border of that border. You never skip a possible alignment.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Find all occurrences of pattern p in text t, overlaps allowed, in O(|t|+|p|)</li>
+        <li>Shortest period of a string: n % (n - &pi;[n-1]) == 0</li>
+        <li>Build a failure automaton and feed many texts</li>
+        <li>"String matching without hashing / without false positives"</li>
+        <li>Compress a string by its border structure</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Many different patterns in one text &rarr; Aho-Corasick</li>
+        <li>You only need palindromes &rarr; Manacher</li>
+        <li>You need lexicographic suffix order &rarr; suffix array</li>
+        <li>One equality test of two whole strings &rarr; just compare, or a hash</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Occurrences of one pattern</td>
+        <td>Build &pi; of p+#+t</td>
+        <td>KMP</td>
+      </tr>
+      <tr>
+        <td>Shortest period</td>
+        <td>n % (n-&pi;[n-1])==0 then n-&pi;[n-1]</td>
+        <td>Prefix function</td>
+      </tr>
+      <tr>
+        <td>Many patterns</td>
+        <td>Automaton of all patterns</td>
+        <td>Aho-Corasick</td>
+      </tr>
+      <tr>
+        <td>Palindromes</td>
+        <td>Radii, not borders</td>
+        <td>Manacher</td>
+      </tr>
+      <tr>
+        <td>Equality of substrings</td>
+        <td>Hash or SA+LCP</td>
+        <td>Rolling hash</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Z-function</td>
+        <td>Z[i] is longest prefix starting at i; &pi;[i] is longest border ending at i</td>
+        <td>Z and &pi; convert in linear time</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|s| &le; 10&#8310;</code> is the linear-string window. Build is strictly O(n). Recursion is not involved.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Compute &pi; in one pass. Keep the current border length q. For each i, while q>0 and s[i]!=s[q], q=&pi;[q-1]. Then if s[i]==s[q] q++. &pi;[i]=q.</p>
+<p>To match p in t, compute &pi; of p + '#' + t (the sentinel must not appear in either). Every index in the t-region with &pi;[i]==|p| is an occurrence ending at that index.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>&pi;[i] = max { k : k &lt; i+1, s[0..k) = s[i-k+1..i] }, or 0. After processing i, q is that value, and it is the only border length you need to try next.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="kmp-and-prefix-functionViz"></div>
+  <div class="viz-player" data-viz-target="kmp-and-prefix-functionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "π =",
+      "array": [
+        0,
+        0,
+        1,
+        2,
+        3,
+        0
+      ],
+      "indexLabels": [
+        "a",
+        "b",
+        "a",
+        "b",
+        "a",
+        "c"
+      ],
+      "vars": [
+        "i",
+        "q",
+        "pi"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "s = ababac. i=0: no proper prefix. π[0]=0. q=0.",
+          "active": [
+            0
+          ],
+          "values": {
+            "i": 0,
+            "q": 0,
+            "pi": "[0]"
+          }
+        },
+        {
+          "note": "i=1 'b' vs s[0]='a': mismatch, q stays 0. π[1]=0.",
+          "active": [
+            1
+          ],
+          "values": {
+            "i": 1,
+            "q": 0,
+            "pi": "[0,0]"
+          }
+        },
+        {
+          "note": "i=2 'a'==s[0]. q becomes 1. π[2]=1. Border \"a\".",
+          "active": [
+            2
+          ],
+          "values": {
+            "i": 2,
+            "q": 1,
+            "pi": "[0,0,1]"
+          }
+        },
+        {
+          "note": "i=3 'b'==s[1]. q becomes 2. π[3]=2. Border \"ab\".",
+          "active": [
+            3
+          ],
+          "values": {
+            "i": 3,
+            "q": 2,
+            "pi": "[0,0,1,2]"
+          }
+        },
+        {
+          "note": "i=4 'a'==s[2]. q becomes 3. π[4]=3. Border \"aba\".",
+          "active": [
+            4
+          ],
+          "values": {
+            "i": 4,
+            "q": 3,
+            "pi": "[0,0,1,2,3]"
+          }
+        },
+        {
+          "note": "i=5 'c'!=s[3]='b'. q=π[2]=1, 'c'!=s[1], q=π[0]=0, 'c'!=s[0]. π[5]=0.",
+          "active": [
+            5
+          ],
+          "values": {
+            "i": 5,
+            "q": 0,
+            "pi": "[0,0,1,2,3,0]"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Full failure-function automaton for s = ababac</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  q0["0"] --&gt;|"a"| q1["1 a"]
+  q1 --&gt;|"b"| q2["2 ab"]
+  q2 --&gt;|"a"| q3["3 aba"]
+  q3 --&gt;|"b"| q4["4 abab"]
+  q4 --&gt;|"a"| q5["5 ababa"]
+  q5 --&gt;|"c"| q6["6 ababac"]
+  q1 -.-&gt;|"fail pi0=0"| q0
+  q2 -.-&gt;|"fail pi1=0"| q0
+  q3 -.-&gt;|"fail pi2=1"| q1
+  q4 -.-&gt;|"fail pi3=2"| q2
+  q5 -.-&gt;|"fail pi4=3"| q3
+  q6 -.-&gt;|"fail pi5=0"| q0
+  </div>
+  <figcaption>Solid arrows consume the next character. Dotted arrows are fail links: after reading s[0..i], the automaton sits in state i+1 and fail[i+1] = π[i]. A mismatch retries the same character from the fail state. Borders nest: 5 → 3 → 1 → 0.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate</strong> <code>int[] pi = new int[n]</code>. q starts at 0.</li>
+  <li><strong>For i = 1..n-1</strong> (pi[0] is always 0).</li>
+  <li><strong>While</strong> q&gt;0 and s[i]!=s[q], q = pi[q-1].</li>
+  <li><strong>If</strong> s[i]==s[q], q++.</li>
+  <li><strong>pi[i] = q</strong>.</li>
+  <li><strong>Match:</strong> build pi of p+'#'+t; report every i with pi[i]==p.length().</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>q</th><th>pi</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>[0]</td><td>s = ababac. i=0: no proper prefix. π[0]=0. q=0.</td></tr>
+      <tr><td>1</td><td>0</td><td>[0,0]</td><td>i=1 'b' vs s[0]='a': mismatch, q stays 0. π[1]=0.</td></tr>
+      <tr><td>2</td><td>1</td><td>[0,0,1]</td><td>i=2 'a'==s[0]. q becomes 1. π[2]=1. Border "a".</td></tr>
+      <tr><td>3</td><td>2</td><td>[0,0,1,2]</td><td>i=3 'b'==s[1]. q becomes 2. π[3]=2. Border "ab".</td></tr>
+      <tr><td>4</td><td>3</td><td>[0,0,1,2,3]</td><td>i=4 'a'==s[2]. q becomes 3. π[4]=3. Border "aba".</td></tr>
+      <tr><td>5</td><td>0</td><td>[0,0,1,2,3,0]</td><td>i=5 'c'!=s[3]='b'. q=π[2]=1, 'c'!=s[1], q=π[0]=0, 'c'!=s[0]. π[5]=0.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="KMP & the Prefix Function implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Try every alignment. Overlaps handled, quadratic.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MatchBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class MatchBrute {
+        static List&lt;Integer&gt; find(String t, String p) {
+            List&lt;Integer&gt; ans = new ArrayList&lt;&gt;();
+            for (int i = 0; i + p.length() &lt;= t.length(); i++) {
+                if (t.regionMatches(i, p, 0, p.length())) ans.add(i);
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(find("ababa", "aba"));
+        }
+        // Input : text ababa, pattern aba
+        // Output: [0, 2]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Prefix function, then match via the sentinel concatenation.</p>
+    <div class="code" data-highlight="6-14">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Kmp.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Kmp {
+        static int[] prefix(String s) {
+            int n = s.length();
+            int[] pi = new int[n];
+            for (int i = 1, q = 0; i &lt; n; i++) {
+                while (q &gt; 0 &amp;&amp; s.charAt(i) != s.charAt(q)) q = pi[q - 1];
+                if (s.charAt(i) == s.charAt(q)) q++;
+                pi[i] = q;
+            }
+            return pi;
+        }
+        static List&lt;Integer&gt; find(String t, String p) {
+            int[] pi = prefix(p + "#" + t);
+            List&lt;Integer&gt; ans = new ArrayList&lt;&gt;();
+            int m = p.length();
+            for (int i = 0; i &lt; t.length(); i++) {
+                if (pi[m + 1 + i] == m) ans.add(i - m + 1);
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(find("ababa", "aba"));
+            System.out.println(Arrays.toString(prefix("ababac")));
+        }
+        // Input : ababa / aba, and pi of ababac
+        // Output: [0, 2]
+        //         [0, 0, 1, 2, 3, 0]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Shortest period from the last prefix value.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Period.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Period {
+        static int period(String s) {
+            int n = s.length();
+            int[] pi = new int[n];
+            for (int i = 1, q = 0; i &lt; n; i++) {
+                while (q &gt; 0 &amp;&amp; s.charAt(i) != s.charAt(q)) q = pi[q - 1];
+                if (s.charAt(i) == s.charAt(q)) q++;
+                pi[i] = q;
+            }
+            int p = n - pi[n - 1];
+            return n % p == 0 ? p : n;
+        }
+        public static void main(String[] args) {
+            System.out.println(period("ababab"));
+            System.out.println(period("abcab"));
+        }
+        // Input : ababab, then abcab
+        // Output: 2
+        //         5
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>q increases by at most 1 per i, and every while-iteration decreases q by at least 1. So the inner loop runs &le; n times total. Matching is one prefix-function call on |p|+|t|+1 characters.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive align</td><td>O(n m)</td><td>O(1)</td><td>tiny strings</td></tr>
+      <tr><td>KMP / prefix function</td><td>O(n+m)</td><td>O(n+m)</td><td>One pattern, deterministic</td></tr>
+      <tr><td>Z-function</td><td>O(n)</td><td>O(n)</td><td>Prefix matches at every index</td></tr>
+      <tr><td>Rolling hash</td><td>O(n+m)</td><td>O(n)</td><td>Faster to write, randomised</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Missing the sentinel</span>
+    <div class="pitfalls__bug">Computing &pi; of p+t without '#'. A border can cross the boundary and invent fake matches.</div>
+    <div class="pitfalls__fix">A character that appears in neither string, or match with a separate automaton.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one on occurrence index</span>
+    <div class="pitfalls__bug">&pi;[i]==|p| means the match <em>ends</em> at i in the concatenated string.</div>
+    <div class="pitfalls__fix">Start index in t is <code>i - |p| - |p| - 1 + 1</code> wait: i is in concat; t-index = i - (m+1) - m + 1 = i - 2m. Prefer looping i over t as in the code.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Period formula without the divisibility check</span>
+    <div class="pitfalls__bug">abcab has &pi;[n-1]=2, n-&pi;=3, but the string is not (abc) repeating.</div>
+    <div class="pitfalls__fix">Period is n-&pi;[n-1] only when that value divides n.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using &pi;[q] instead of &pi;[q-1]</span>
+    <div class="pitfalls__bug">Infinite loop or skipped borders. The border of a string of length q lives at index q-1.</div>
+    <div class="pitfalls__fix">The while is <code>q = pi[q-1]</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">char vs Character in Java</span>
+    <div class="pitfalls__bug">Building the concat with a char that exists in the input (space, '#', '$').</div>
+    <div class="pitfalls__fix">Pick a char outside the alphabet, or use an int[] with a sentinel code.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>KMP automaton</td>
+        <td>trans[q][c] = next state. Fill using &pi;.</td>
+        <td><code>for c: trans[i][c] = s[i]==c ? i+1 : trans[pi[i-1]][c]</code></td>
+        <td>many texts, one pattern</td>
+      </tr>
+      <tr>
+        <td>Count overlapping hits</td>
+        <td>Every time state hits |p|, add 1 and go to &pi;[|p|-1].</td>
+        <td><code>state = pi[m-1]</code></td>
+        <td>the default</td>
+      </tr>
+      <tr>
+        <td>Border tree</td>
+        <td>parent of i+1 is &pi;[i]; tree of all borders.</td>
+        <td><code>useful for counting distinct borders</code></td>
+        <td>CF 432D</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Z-function vs prefix function?</summary>
+    <div class="followup__body">
+      <p>Z[i] is the longest substring starting at i that matches a prefix. &pi;[i] is the longest border ending at i. You can convert either way in O(n). KMP matching is more natural from &pi;.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is the inner loop amortised O(1)?</summary>
+    <div class="followup__body">
+      <p>Think of q as a potential. Each i increases it by at most 1. Each while-step decreases it. Total decreases &le; total increases &le; n.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you match without concatenating?</summary>
+    <div class="followup__body">
+      <p>Build &pi; of p only. Scan t with the same while/if, and when q==|p| record a hit and set q=&pi;[q-1].</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can KMP find the lexicographically smallest rotation?</summary>
+    <div class="followup__body">
+      <p>Booth's algorithm: KMP on s+s, keep the smallest border-aware start. Duval / Lyndon is the other school.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-the-index-of-the-first-occurrence-in-a-string/" target="_blank" rel="noopener">Find The Index Of The First Occurrence In A String</a></td>
+        <td><span class="badge badge--lc">LC 28</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>KMP or rolling hash</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/longest-happy-prefix/" target="_blank" rel="noopener">Longest Happy Prefix</a></td>
+        <td><span class="badge badge--lc">LC 1392</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Exactly &pi;[n-1] as a prefix</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/repeated-substring-pattern/" target="_blank" rel="noopener">Repeated Substring Pattern</a></td>
+        <td><span class="badge badge--lc">LC 459</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Period divides n</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/432/D" target="_blank" rel="noopener">Prefixes and Suffixes</a></td>
+        <td><span class="badge badge--cf">CF 432D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>All borders + occurrence counts</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/126/B" target="_blank" rel="noopener">Password</a></td>
+        <td><span class="badge badge--cf">CF 126B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Border that also appears in the middle</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1753" target="_blank" rel="noopener">String Matching</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Count occurrences</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/abc135/tasks/abc135_f" target="_blank" rel="noopener">ABC 135 F</a></td>
+        <td><span class="badge badge--atc">ABC 135F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>KMP on infinite repetitions</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/NHAY/" target="_blank" rel="noopener">A Needle in the Haystack</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Streaming KMP</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>π[i] = longest proper border of s[0..i].</li>
+    <li>On mismatch, q = π[q-1], never i-- on the text.</li>
+    <li>Match via p+'#'+t, or an automaton on p.</li>
+    <li>Period p = n-π[n-1] when p divides n.</li>
+    <li>Inner while is amortised O(1) by a potential on q.</li>
+  </ul>
+  <div class="recap__oneliner">while(q&gt;0 &amp;&amp; s[i]!=s[q]) q=pi[q-1]; if(s[i]==s[q]) q++; pi[i]=q;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

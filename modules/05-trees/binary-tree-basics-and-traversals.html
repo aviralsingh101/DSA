@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Tree Basics &amp; Traversals &mdash; DSA Course</title>
+<meta name="description" content="A binary tree is a recursive pair of subtrees. Every classic walk &mdash; preorder, inorder, postorder, level order &mdash; is the same recursion with the visit moved.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="binary-tree-basics-and-traversals">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Binary Tree Basics & Traversals</h1>
+  <p class="hero__tagline">A binary tree is a recursive pair of subtrees. Every classic walk &mdash; preorder, inorder, postorder, level order &mdash; is the same recursion with the visit moved.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../04-recursion-and-dnc/recursion-fundamentals.html">Recursion Fundamentals</a>,
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">binary tree</span>
+      <span class="chip">DFS</span>
+      <span class="chip">BFS</span>
+      <span class="chip">traversal</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Almost every binary-tree question is a traversal wearing a costume. Diameter, path sum, symmetry, serialisation, construction from two orders &mdash; each is "walk every node exactly once and combine the children's answers". If you cannot write the four walks without looking them up, the later pages in this module feel like magic.</p>
+<p>The recursive definition is the whole data structure: a node holds a value and two optional children. Height, size, and "is this a leaf" fall out of that definition in three lines. Interviewers ask for both recursive and iterative forms because a linked-list-shaped degenerate of n = 1e5 overflows the JVM stack.</p>
+<p>The four orders are not four algorithms. They are one DFS with the visit placed before, between, or after the two recursive calls, plus one BFS that swaps the implicit stack for an ArrayDeque.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Preorder / inorder / postorder are the same DFS with the visit moved. Level order is the same walk with a queue instead of a stack. Learn one walk, then move the visit.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Return the preorder / inorder / postorder / level-order list of values</li>
+        <li>Height, depth, number of nodes, or is this a leaf / full / complete tree</li>
+        <li>A problem that is "do something at every node, using answers from children"</li>
+        <li>Reconstruct a tree from two of the three DFS orders</li>
+        <li>Iterative traversal is requested, or n is large enough that recursion may overflow</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The input is a general graph with cycles &rarr; BFS/DFS on graphs, not a tree walk</li>
+        <li>You need ancestor queries or path aggregates on a static tree &rarr; LCA or Euler tour</li>
+        <li>The tree is a BST and the question uses the search-tree invariant &rarr; BST page</li>
+        <li>You are counting strings or XOR pairs &rarr; trie / XOR trie</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>List nodes in preorder / inorder / postorder</td>
+        <td>DFS, visit placement differs</td>
+        <td>Recursive or iterative DFS</td>
+      </tr>
+      <tr>
+        <td>Level by level, left to right by depth</td>
+        <td>BFS, one queue</td>
+        <td>ArrayDeque level-order</td>
+      </tr>
+      <tr>
+        <td>Height / maximum depth</td>
+        <td>1 + max of children's heights</td>
+        <td>Postorder combine</td>
+      </tr>
+      <tr>
+        <td>Invert / flip / mirror the tree</td>
+        <td>Swap children, then recurse</td>
+        <td>Preorder or postorder swap</td>
+      </tr>
+      <tr>
+        <td>Same tree / symmetric</td>
+        <td>Pairwise walk of two pointers</td>
+        <td>Simultaneous recursion or BFS</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> topological order on a DAG</td>
+        <td>A tree walk has no incoming-edge count and no cycle</td>
+        <td>Topo sort on graphs</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5 is fine for an iterative walk. Recursive DFS on a skew tree of that size overflows the Java stack (typically a few thousand frames). Prefer iterative whenever the statement does not promise a balanced tree.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>A binary tree node is (val, left, right). The recursive walk is: optionally visit, walk left, optionally visit, walk right, optionally visit. Preorder visits first, inorder between the children, postorder last. Height = 1 + max(hL, hR) with null contributing 0 (nodes) or -1 (edges).</p>
+<p>Iterative preorder: stack, pop, visit, push right then left. Iterative inorder: walk cur left while pushing, then pop-visit and step right. Level order: queue, snapshot size to group by depth. Use ArrayDeque, never java.util.Stack.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Every node is entered once and left once. The three DFS orders are the same walk; only the moment of recording node.val changes:</p><span class="eq">pre = visit, L, R &nbsp;|&nbsp; in = L, visit, R &nbsp;|&nbsp; post = L, R, visit</span><p>Interview sentence: <em>"I walk every node once; the order is where I put the visit."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Preorder filling a flat output array</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="binary-tree-basics-and-traversalsViz"></div>
+  <div class="viz-player" data-viz-target="binary-tree-basics-and-traversalsViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "preorder output",
+      "array": [
+        1,
+        2,
+        4,
+        5,
+        3
+      ],
+      "vars": [
+        "node",
+        "phase",
+        "written"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Enter 1. Preorder writes on entry, slot 0 becomes 1. Next: left child 2.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "node": 1,
+            "phase": "visit",
+            "written": 1
+          }
+        },
+        {
+          "note": "Enter 2. Write 2 at slot 1. Next: left child 4.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "node": 2,
+            "phase": "visit",
+            "written": 2
+          }
+        },
+        {
+          "note": "Enter 4. Write 4. Both children null, subtree done.",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4
+          ],
+          "values": {
+            "node": 4,
+            "phase": "visit leaf",
+            "written": 3
+          }
+        },
+        {
+          "note": "Back at 2, walk right child 5. Write 5 at slot 3.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4
+          ],
+          "values": {
+            "node": 5,
+            "phase": "visit leaf",
+            "written": 4
+          }
+        },
+        {
+          "note": "Subtree of 2 finished. Back at 1, walk right child 3. Write 3.",
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "node": 3,
+            "phase": "visit leaf",
+            "written": 5
+          }
+        },
+        {
+          "note": "Done. Preorder [1,2,4,5,3]. Inorder would be [4,2,5,1,3]; postorder [4,5,2,3,1]; level order [1,2,3,4,5].",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "node": "done",
+            "phase": "all four orders",
+            "written": 5
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>The sample tree</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t1["1"] --&gt; t2["2"]
+  t1 --&gt; t3["3"]
+  t2 --&gt; t4["4"]
+  t2 --&gt; t5["5"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Represent</strong> Node(val, left, right). Missing child is null.</li>
+  <li><strong>Recursive DFS:</strong> base-case on null, place out.add before, between, or after the two rec calls.</li>
+  <li><strong>Iterative preorder:</strong> stack starts with root; pop, visit, push right then left. ArrayDeque.</li>
+  <li><strong>Iterative inorder:</strong> walk cur left while pushing, pop-visit, cur = popped.right.</li>
+  <li><strong>Level order:</strong> queue root; drain sz = q.size() each layer.</li>
+  <li><strong>Height / size</strong> are postorder combines; if n can be a skew chain, prefer iterative.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>node</th><th>phase</th><th>written</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td>visit</td><td>1</td><td>Enter 1. Preorder writes on entry, slot 0 becomes 1. Next: left child 2.</td></tr>
+      <tr><td>2</td><td>visit</td><td>2</td><td>Enter 2. Write 2 at slot 1. Next: left child 4.</td></tr>
+      <tr><td>4</td><td>visit leaf</td><td>3</td><td>Enter 4. Write 4. Both children null, subtree done.</td></tr>
+      <tr><td>5</td><td>visit leaf</td><td>4</td><td>Back at 2, walk right child 5. Write 5 at slot 3.</td></tr>
+      <tr><td>3</td><td>visit leaf</td><td>5</td><td>Subtree of 2 finished. Back at 1, walk right child 3. Write 3.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>all four orders</td><td>5</td><td>Done. Preorder [1,2,4,5,3]. Inorder would be [4,2,5,1,3]; postorder [4,5,2,3,1]; level order [1,2,3,4,5].</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Binary Tree Basics & Traversals implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HeightOnly.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class HeightOnly {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static int height(Node n) {
+            if (n == null) return 0;
+            return 1 + Math.max(height(n.left), height(n.right));
+        }
+        public static void main(String[] args) {
+            Node r = new Node(1);
+            r.left = new Node(2); r.right = new Node(3);
+            r.left.left = new Node(4); r.left.right = new Node(5);
+            System.out.println(height(r));
+        }
+        // Input : tree 1 / 2 3 / 4 5
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TreeTraversals.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class TreeTraversals {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static void preorder(Node n, List&lt;Integer&gt; out) {
+            if (n == null) return;
+            out.add(n.val);
+            preorder(n.left, out);
+            preorder(n.right, out);
+        }
+        static void inorder(Node n, List&lt;Integer&gt; out) {
+            if (n == null) return;
+            inorder(n.left, out);
+            out.add(n.val);
+            inorder(n.right, out);
+        }
+        static void postorder(Node n, List&lt;Integer&gt; out) {
+            if (n == null) return;
+            postorder(n.left, out);
+            postorder(n.right, out);
+            out.add(n.val);
+        }
+        public static void main(String[] args) {
+            Node r = new Node(1);
+            r.left = new Node(2); r.right = new Node(3);
+            r.left.left = new Node(4); r.left.right = new Node(5);
+            List&lt;Integer&gt; pre = new ArrayList&lt;&gt;(), in = new ArrayList&lt;&gt;(), post = new ArrayList&lt;&gt;();
+            preorder(r, pre); inorder(r, in); postorder(r, post);
+            System.out.println(pre);
+            System.out.println(in);
+            System.out.println(post);
+        }
+        // Input : tree 1 / 2 3 / 4 5
+        // Output: [1, 2, 4, 5, 3]
+        //         [4, 2, 5, 1, 3]
+        //         [4, 5, 2, 3, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LevelOrder.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.ArrayList;
+    import java.util.List;
+    
+    public class LevelOrder {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static List&lt;List&lt;Integer&gt;&gt; levelOrder(Node root) {
+            List&lt;List&lt;Integer&gt;&gt; out = new ArrayList&lt;&gt;();
+            if (root == null) return out;
+            ArrayDeque&lt;Node&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(root);
+            while (!q.isEmpty()) {
+                int sz = q.size();
+                List&lt;Integer&gt; row = new ArrayList&lt;&gt;();
+                for (int i = 0; i &lt; sz; i++) {
+                    Node u = q.poll();
+                    row.add(u.val);
+                    if (u.left != null) q.add(u.left);
+                    if (u.right != null) q.add(u.right);
+                }
+                out.add(row);
+            }
+            return out;
+        }
+        public static void main(String[] args) {
+            Node r = new Node(1);
+            r.left = new Node(2); r.right = new Node(3);
+            r.left.left = new Node(4); r.left.right = new Node(5);
+            System.out.println(levelOrder(r));
+        }
+        // Input : tree 1 / 2 3 / 4 5
+        // Output: [[1], [2, 3], [4, 5]]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(h) recursion / stack, O(w) for BFS</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each node is pushed and popped a constant number of times, so every walk is linear in the number of nodes.</p>
+    <p><span class="eq">T(n) = T(n_L) + T(n_R) + &Theta;(1) = &Theta;(n)</span></p>
+    <p>Auxiliary space is the height h (skew = n) or the BFS width w (complete last level = n/2).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Recursive DFS</td><td>O(n)</td><td>O(h) stack</td><td>Default; fine when balanced</td></tr>
+      <tr><td>Iterative DFS</td><td>O(n)</td><td>O(h) heap</td><td>Skew trees, or recursion banned</td></tr>
+      <tr><td>Level-order BFS</td><td>O(n)</td><td>O(w)</td><td>Anything that needs depth grouping</td></tr>
+      <tr><td>Morris traversal</td><td>O(n)</td><td>O(1)</td><td>Rare; temporarily threads the tree</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using java.util.Stack</span>
+    <div class="pitfalls__bug">Synchronised Vector subclass, wrong methods, slower.</div>
+    <div class="pitfalls__fix">ArrayDeque: push/pop/peek for DFS, add/poll for BFS.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the null base case</span>
+    <div class="pitfalls__bug">NPE on a missing child; only shows up on trees that are not perfectly full.</div>
+    <div class="pitfalls__fix">First line: if (node == null) return (or the identity of the combine).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Height off-by-one (nodes vs edges)</span>
+    <div class="pitfalls__bug">LC 104 wants 1 for a single node; LC 543 diameter is in edges.</div>
+    <div class="pitfalls__fix">State the convention in a comment. Edge-height: null returns -1.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Level-order without snapshotting queue size</span>
+    <div class="pitfalls__bug">Cannot tell where one level ends. Flat list is still correct; grouped list is not.</div>
+    <div class="pitfalls__fix">int sz = q.size(); then a for of that many polls.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recursive walk on a linked-list-shaped tree</span>
+    <div class="pitfalls__bug">n=1e5 right spine, StackOverflowError.</div>
+    <div class="pitfalls__fix">Write the iterative version.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Morris inorder</td>
+        <td>Thread predecessor.right back to cur; restore on the second visit.</td>
+        <td><code>pred.right = cur; later pred.right = null;</code></td>
+        <td>LC 94 follow-up</td>
+      </tr>
+      <tr>
+        <td>Zigzag level order</td>
+        <td>Same BFS, reverse every other level.</td>
+        <td><code>if ((out.size() &amp; 1) == 1) Collections.reverse(level);</code></td>
+        <td>LC 103</td>
+      </tr>
+      <tr>
+        <td>N-ary walks</td>
+        <td>Loop children; no unique inorder.</td>
+        <td><code>for (Node c : node.children) rec(c);</code></td>
+        <td>LC 429 / 589 / 590</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How do you reconstruct from preorder and inorder?</summary>
+    <div class="followup__body">
+      <p>First preorder value is the root. Find it in inorder: left of it is the left subtree. Map values to indices for O(1) splits, total O(n). Preorder+postorder is ambiguous unless the tree is full.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is inorder of a BST sorted?</summary>
+    <div class="followup__body">
+      <p>Left &lt; root &lt; right, and inorder is L, root, R. See the BST page.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>O(1) extra space with parent pointers?</summary>
+    <div class="followup__body">
+      <p>Walk to parent and decide whether you arrived from the left child. Same three-colour state machine as iterative postorder, stored in the current position.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What changes for an n-ary tree?</summary>
+    <div class="followup__body">
+      <p>DFS becomes visit then loop children. Level order is unchanged except the enqueue loop. There is no unique inorder.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-preorder-traversal/" target="_blank" rel="noopener">Binary Tree Preorder Traversal</a></td>
+        <td><span class="badge badge--lc">LC 144</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>DFS, visit first</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-inorder-traversal/" target="_blank" rel="noopener">Binary Tree Inorder Traversal</a></td>
+        <td><span class="badge badge--lc">LC 94</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>DFS, visit between</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-postorder-traversal/" target="_blank" rel="noopener">Binary Tree Postorder Traversal</a></td>
+        <td><span class="badge badge--lc">LC 145</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>DFS, visit last</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-level-order-traversal/" target="_blank" rel="noopener">Binary Tree Level Order Traversal</a></td>
+        <td><span class="badge badge--lc">LC 102</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>BFS with size snapshot</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/maximum-depth-of-binary-tree/" target="_blank" rel="noopener">Maximum Depth Of Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 104</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Postorder height in nodes</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/minimum-depth-of-binary-tree/" target="_blank" rel="noopener">Minimum Depth Of Binary Tree</a></td>
+        <td><span class="badge badge--lc">LC 111</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>BFS first leaf</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/same-tree/" target="_blank" rel="noopener">Same Tree</a></td>
+        <td><span class="badge badge--lc">LC 100</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Simultaneous walk</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/symmetric-tree/" target="_blank" rel="noopener">Symmetric Tree</a></td>
+        <td><span class="badge badge--lc">LC 101</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Mirror pair</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>One DFS, three visit placements</strong> give preorder, inorder, postorder.</li>
+    <li><strong>Level order is BFS</strong> with sz = q.size().</li>
+    <li><strong>Height and size are postorder combines</strong> with a null identity of 0.</li>
+    <li><strong>Iterative forms</strong> are required on skew trees.</li>
+    <li><strong>ArrayDeque</strong>, never java.util.Stack.</li>
+  </ul>
+  <div class="recap__oneliner">if (n==null) return; visit/L/R placements | BFS: while q, sz=q.size(), drain, enqueue children</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

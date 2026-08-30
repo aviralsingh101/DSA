@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disjoint Set Union &mdash; DSA Course</title>
+<meta name="description" content="Maintain a forest of rooted trees, one per component, so that union and find are almost O(1) after path compression and union by rank.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="dsu">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 06 &middot; Range Query Structures</span>
+  <h1>Disjoint Set Union</h1>
+  <p class="hero__tagline">Maintain a forest of rooted trees, one per component, so that union and find are almost O(1) after path compression and union by rank.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="../07-graphs-core/dfs-and-components.html">DFS & Connected Components</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">DSU</span>
+      <span class="chip">union-find</span>
+      <span class="chip">components</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A graph that only grows (edges are added, never deleted) has a running question: "are u and v already connected?" DFS from scratch is O(n) per query. A disjoint-set union (union-find) stores each component as a rooted tree and answers the question by comparing two roots, in essentially constant time.</p>
+<p>The two standard accelerations are path compression (find flattens the path to the root, so the next find is a single hop) and union by rank or size (always hang the smaller tree under the larger, so height stays logarithmic even without compression). Together they are inverse-Ackermann, which for all n you will ever see is &le; 4.</p>
+<p>Interviews love DSU because the code is twenty lines and the applications are not obvious: redundant edges, equality equations, accounts merge, offline connectivity, Kruskal's MST, and "number of islands" on a grid. If the graph is static, a DFS is simpler; DSU is the tool for <em>incremental</em> connectivity.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>find is "who is the root"; union hangs one root under the other. Path compression plus union by rank makes both operations effectively constant.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Edges arrive one by one; after each, ask whether two nodes are connected</li>
+        <li>"Redundant connection", "number of connected components after adding edges"</li>
+        <li>Equality / inequality constraints (union equals, reject conflicting unequals)</li>
+        <li>Merging sets of names / emails / accounts</li>
+        <li>Kruskal's MST: add the next lightest edge if it does not form a cycle</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The graph is given all at once and never changes &rarr; <a href="../07-graphs-core/dfs-and-components.html">DFS / BFS components</a></li>
+        <li>Edges are deleted, or you need connectivity at many historical times without rollback &rarr; link-cut, or offline divide-and-conquer on a DSU with rollback</li>
+        <li>Shortest paths, not just connectivity &rarr; Dijkstra / BFS</li>
+        <li>Directed reachability &rarr; DSU is undirected; use SCC / topo</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"are u and v connected after adding this edge?"</td>
+        <td>Incremental connectivity</td>
+        <td>DSU</td>
+      </tr>
+      <tr>
+        <td>"this extra edge forms a cycle"</td>
+        <td>union returns false</td>
+        <td>LC 684</td>
+      </tr>
+      <tr>
+        <td>"merge emails of the same person"</td>
+        <td>Union on shared emails, then group</td>
+        <td>LC 721</td>
+      </tr>
+      <tr>
+        <td>"a == b, a != c equations"</td>
+        <td>Union equals; unequals must have different roots</td>
+        <td>LC 990</td>
+      </tr>
+      <tr>
+        <td>"Kruskal MST"</td>
+        <td>Sort edges, union if different roots</td>
+        <td>Classic</td>
+      </tr>
+      <tr>
+        <td>"components after adding edges in weight order"</td>
+        <td>Offline sort + DSU</td>
+        <td>CF 1213G</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> heap / priority queue</td>
+        <td>Union-find is not an ordered set; it only answers same-component</td>
+        <td>TreeMap / BIT for order statistics</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> incremental connectivity. Without the two accelerations, a skew chain is O(n) per find and you TLE. With them, q operations are comfortably linear-ish.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Each element x stores parent[x], initially itself. find(x) walks parent until parent[r] == r; that r is the representative. Path compression sets every node on the walk to r (recursive: <code>parent[x] = find(parent[x])</code>). After that, the tree is almost flat.</p>
+<p>union(a, b) finds both roots. If they match, the edge is redundant. Otherwise hang one root under the other. Union by rank: hang the lower rank under the higher, and increment rank only on a tie. Union by size: hang the smaller component under the larger and add the sizes. Either keeps height O(log n) even without compression.</p>
+<p>The inverse-Ackermann bound is the combination. You never need to quote Ackermann in an interview; say "effectively O(1) per operation with path compression and union by rank". For Kruskal, sort the edges first; DSU then tells you which ones are tree edges.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>x and y are in the same component iff they have the same root:</p><span class="eq">connected(x, y) &hArr; find(x) = find(y)</span><p>Interview sentence: <em>"I hang roots, not arbitrary nodes, and I flatten paths on the way up."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Union the roots, not the original nodes</span>
+    <p><code>parent[a] = b</code> without find breaks the tree if a or b is not a root: you can detach a whole subtree from its component. Always <code>a = find(a); b = find(b); parent[a] = b</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Iterative find avoids deep recursion</span>
+    <p>A pathological chain (union without rank, then find the bottom) is depth n before compression. Recursive find can overflow the Java stack once. Two-pass iterative find (walk to root, walk again to flatten) is stack-safe.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>parent[] through four unions</h3>
+
+<p>Five elements. Unions (0,1), (1,2), (3,4), (2,3). Watch the parent array; find compresses on the last query.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="dsuViz"></div>
+  <div class="viz-player" data-viz-target="dsuViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "parent[0..4]",
+      "array": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "op",
+        "ra",
+        "rb",
+        "comps"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start: five singleton components. parent[i] = i.",
+          "arr": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "op": "init",
+            "ra": "—",
+            "rb": "—",
+            "comps": 5
+          }
+        },
+        {
+          "note": "union(0,1): both rank 0, attach 1 under 0, rank[0] becomes 1.",
+          "arr": [
+            0,
+            0,
+            2,
+            3,
+            4
+          ],
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "op": "union 0-1",
+            "ra": 0,
+            "rb": 1,
+            "comps": 4
+          }
+        },
+        {
+          "note": "union(1,2): find(1)=0, find(2)=2. rank[0] > rank[2], attach 2 under 0.",
+          "arr": [
+            0,
+            0,
+            0,
+            3,
+            4
+          ],
+          "active": [
+            0,
+            2
+          ],
+          "done": [
+            1
+          ],
+          "values": {
+            "op": "union 1-2",
+            "ra": 0,
+            "rb": 2,
+            "comps": 3
+          }
+        },
+        {
+          "note": "union(3,4): attach 4 under 3, rank[3] becomes 1. Two components remain.",
+          "arr": [
+            0,
+            0,
+            0,
+            3,
+            3
+          ],
+          "active": [
+            3,
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "op": "union 3-4",
+            "ra": 3,
+            "rb": 4,
+            "comps": 2
+          }
+        },
+        {
+          "note": "union(2,3): find(2)=0, find(3)=3. Ranks equal (1 and 1), attach 3 under 0, rank[0] becomes 2.",
+          "arr": [
+            0,
+            0,
+            0,
+            0,
+            3
+          ],
+          "active": [
+            0,
+            3
+          ],
+          "done": [
+            1,
+            2
+          ],
+          "values": {
+            "op": "union 2-3",
+            "ra": 0,
+            "rb": 3,
+            "comps": 1
+          }
+        },
+        {
+          "note": "find(4): parent[4] is 3, parent[3] is 0. Compress: parent[4] = 0. One hop next time.",
+          "arr": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "best": [
+            0,
+            4
+          ],
+          "done": [
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "op": "find 4",
+            "ra": 0,
+            "rb": "—",
+            "comps": 1
+          }
+        },
+        {
+          "note": "connected(1, 4) is true: both find to 0. The last union was the one that merged the two remaining trees.",
+          "arr": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "best": [
+            1,
+            4
+          ],
+          "values": {
+            "op": "same set",
+            "ra": 0,
+            "rb": 0,
+            "comps": 1
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>After the four unions everything shares root 0. find(4) then compresses parent[4] from 3 to 0 in one hop.</figcaption>
+</figure>
+
+<h3>The forest just after union(2, 3), before compressing 4</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  u0["0 rank 2"] --&gt; u1["1"]
+  u0 --&gt; u2["2"]
+  u0 --&gt; u3["3"]
+  u3 --&gt; u4["4"]
+  </div>
+  <figcaption>One tree rooted at 0. Node 4 still points at 3 until the next find. Path compression will flatten it.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>parent[i] = i</strong>, <code>rank[i] = 0</code> (or <code>size[i] = 1</code>). Start with n components.</li>
+  <li><strong>find(x):</strong> if parent[x] != x, parent[x] = find(parent[x]). Return parent[x].</li>
+  <li><strong>union(a, b):</strong> a = find(a), b = find(b). If equal, return false (cycle / already connected).</li>
+  <li><strong>Hang by rank:</strong> if rank[a] &lt; rank[b] swap. parent[b] = a. If ranks were equal, rank[a]++.</li>
+  <li><strong>connected</strong> is find(a) == find(b). Count components by decrementing on a successful union.</li>
+  <li><strong>Do not parent[a] = b without find.</strong> Hang roots only.</li>
+  <li><strong>Iterative find</strong> if n can be 10&#8309; and the tree might be a chain (forgotten rank).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>The four unions on n = 5. <code>ra, rb</code> are roots at the moment of union.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>op</th><th>ra</th><th>rb</th><th>comps</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>—</td><td>5</td><td>Start: five singleton components. parent[i] = i.</td></tr>
+      <tr><td>union 0-1</td><td>0</td><td>1</td><td>4</td><td>union(0,1): both rank 0, attach 1 under 0, rank[0] becomes 1.</td></tr>
+      <tr><td>union 1-2</td><td>0</td><td>2</td><td>3</td><td>union(1,2): find(1)=0, find(2)=2. rank[0] > rank[2], attach 2 under 0.</td></tr>
+      <tr><td>union 3-4</td><td>3</td><td>4</td><td>2</td><td>union(3,4): attach 4 under 3, rank[3] becomes 1. Two components remain.</td></tr>
+      <tr><td>union 2-3</td><td>0</td><td>3</td><td>1</td><td>union(2,3): find(2)=0, find(3)=3. Ranks equal (1 and 1), attach 3 under 0, rank[0] becomes 2.</td></tr>
+      <tr class="trace-table__row--change"><td>find 4</td><td>0</td><td>—</td><td>1</td><td>find(4): parent[4] is 3, parent[3] is 0. Compress: parent[4] = 0. One hop next time.</td></tr>
+      <tr class="trace-table__row--change"><td>same set</td><td>0</td><td>0</td><td>1</td><td>connected(1, 4) is true: both find to 0. The last union was the one that merged the two remaining trees.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>union(2, 3) was the only call that could have returned false later; a fifth union of any pair now returns false (redundant edge).</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Disjoint Set Union implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute DFS</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">DSU</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">By size + Kruskal</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Rebuild the graph and DFS after every edge. Correct, O(n) per query.</p>
+    <div class="code" data-highlight="16-24">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BruteComponents.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class BruteComponents {
+    
+        static boolean dfs(List&lt;Integer&gt;[] g, boolean[] seen, int u, int t) {
+            if (u == t) return true;
+            seen[u] = true;
+            for (int v : g[u]) if (!seen[v] &amp;&amp; dfs(g, seen, v, t)) return true;
+            return false;
+        }
+    
+        @SuppressWarnings("unchecked")
+        public static void main(String[] args) {
+            int n = 5;
+            List&lt;Integer&gt;[] g = new ArrayList[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new ArrayList&lt;&gt;();
+            int[][] edges = {{0, 1}, {1, 2}, {3, 4}, {2, 3}};
+            for (int[] e : edges) {
+                g[e[0]].add(e[1]);
+                g[e[1]].add(e[0]);
+            }
+            System.out.println(dfs(g, new boolean[n], 1, 4));
+            System.out.println(dfs(g, new boolean[n], 0, 3));
+        }
+        // Input : n=5 edges 0-1, 1-2, 3-4, 2-3
+        // Output: true
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Path compression plus union by rank. The dry-run unions, then a redundant edge.</p>
+    <div class="code" data-highlight="14-17,20-31">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DisjointSet.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class DisjointSet {
+    
+        final int[] parent, rank;
+        int comps;
+    
+        DisjointSet(int n) {
+            parent = new int[n];
+            rank = new int[n];
+            comps = n;
+            for (int i = 0; i &lt; n; i++) parent[i] = i;
+        }
+    
+        int find(int x) {
+            if (parent[x] != x) parent[x] = find(parent[x]);
+            return parent[x];
+        }
+    
+        boolean union(int a, int b) {
+            a = find(a);
+            b = find(b);
+            if (a == b) return false;
+            if (rank[a] &lt; rank[b]) { int t = a; a = b; b = t; }
+            parent[b] = a;
+            if (rank[a] == rank[b]) rank[a]++;
+            comps--;
+            return true;
+        }
+    
+        public static void main(String[] args) {
+            DisjointSet d = new DisjointSet(5);
+            System.out.println(d.union(0, 1));
+            System.out.println(d.union(1, 2));
+            System.out.println(d.union(3, 4));
+            System.out.println(d.union(2, 3));
+            System.out.println(d.union(1, 4));
+            System.out.println(d.comps);
+            System.out.println(d.find(4) == d.find(1));
+        }
+        // Input : n=5, unions 0-1, 1-2, 3-4, 2-3, then 1-4
+        // Output: true
+        //         true
+        //         true
+        //         true
+        //         false
+        //         1
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Union by size (also stores component sizes) and a tiny Kruskal on a 4-edge graph. MST weight is the sum of edges that union returned true on.</p>
+    <div class="code" data-highlight="14-24,36-42">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DsuKruskal.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class DsuKruskal {
+    
+        static class Dsu {
+            int[] p, sz;
+            Dsu(int n) {
+                p = new int[n];
+                sz = new int[n];
+                for (int i = 0; i &lt; n; i++) { p[i] = i; sz[i] = 1; }
+            }
+            int find(int x) { return p[x] == x ? x : (p[x] = find(p[x])); }
+            boolean union(int a, int b) {
+                a = find(a);
+                b = find(b);
+                if (a == b) return false;
+                if (sz[a] &lt; sz[b]) { int t = a; a = b; b = t; }
+                p[b] = a;
+                sz[a] += sz[b];
+                return true;
+            }
+        }
+    
+        public static void main(String[] args) {
+            int n = 4;
+            int[][] edges = {{0, 1, 1}, {1, 2, 2}, {0, 2, 4}, {2, 3, 3}};
+            Arrays.sort(edges, (x, y) -&gt; Integer.compare(x[2], y[2]));
+            Dsu d = new Dsu(n);
+            int weight = 0, used = 0;
+            for (int[] e : edges) {
+                if (d.union(e[0], e[1])) {
+                    weight += e[2];
+                    used++;
+                }
+            }
+            System.out.println(weight);
+            System.out.println(used);
+        }
+        // Input : 4 nodes, edges (0,1,1), (1,2,2), (0,2,4), (2,3,3)
+        // Output: 6
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time Almost O(1) per find/union (inverse Ackermann)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Union by rank alone makes every tree height O(log n), so find is O(log n). Path compression alone is amortised O(log n). Together they are amortised <code>&alpha;(n)</code>, the inverse Ackermann function, with <code>&alpha;(n) &le; 4</code> for n up to the number of atoms in the universe:</p>
+    <p><span class="eq">T(q) = &Theta;(q &middot; &alpha;(n)) &approx; &Theta;(q)</span></p>
+    <p>Naive parent-pointer without either optimisation is &Theta;(n) per find on a chain, so q finds are &Theta;(n q). Kruskal is sorting O(m log m) plus O(m &alpha;(n)) DSU, dominated by the sort.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>DFS per query</td><td><code>O(n)</code> / query</td><td><code>O(n + m)</code></td><td>Graph is static</td></tr>
+      <tr><td>DSU, no rank / compress</td><td><code>O(n)</code> worst find</td><td><code>O(n)</code></td><td>Wrong; will TLE</td></tr>
+      <tr><td>DSU + rank + compress</td><td><code>O(&alpha;(n))</code></td><td><code>O(n)</code></td><td>Incremental connectivity</td></tr>
+      <tr><td>DSU with rollback</td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>No path compression; undo unions</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Linking the original nodes instead of the roots</span>
+    <div class="pitfalls__bug"><code>parent[a] = b</code> when a is already a child. The subtree of a is detached from its old root and the structure is no longer a forest of valid components.</div>
+    <div class="pitfalls__fix">Always <code>a = find(a); b = find(b);</code> first.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Skipping union by rank and path compression</span>
+    <div class="pitfalls__bug">A sequence of unions that always hangs the old root under a new singleton builds a linked list. The next find is O(n) and q of them TLE.</div>
+    <div class="pitfalls__fix">Both accelerations, always. Rank (or size) plus recursive or two-pass compress.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Path compression on a DSU you need to roll back</span>
+    <div class="pitfalls__bug">Compression rewrites parent[] along the whole path, so you cannot undo a union by popping one parent assignment. Offline "delete edge" tricks break.</div>
+    <div class="pitfalls__fix">Rollback DSU: union by rank only (no compression), push (node, oldParent) on a stack, pop to undo. Finds are O(log n).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">1-based nodes in a 0-based array</span>
+    <div class="pitfalls__bug">n nodes labelled 1..n stored in parent[0..n-1], or parent[n] missing, so node n throws. Mixing both conventions in find vs union.</div>
+    <div class="pitfalls__fix">Allocate n+1 and ignore index 0, or remap labels to 0..n-1 at the input boundary.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using DSU on a directed graph</span>
+    <div class="pitfalls__bug">"Can I reach t from s" is not "are they in the same undirected component". Union-find will happily merge both directions of an edge you only had one way.</div>
+    <div class="pitfalls__fix">DSU is undirected. Directed reachability is DFS / SCC / 2-SAT, not this page.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Union by size</td>
+        <td>Hang the smaller component under the larger; size[root] is maintained. Same complexity as rank, and you get component sizes for free (LC 947, CF 1213G).</td>
+        <td><code>if (sz[a] &lt; sz[b]) swap; parent[b]=a; sz[a]+=sz[b];</code></td>
+        <td>When the answer needs |component|</td>
+      </tr>
+      <tr>
+        <td>Bipartite DSU / parity</td>
+        <td>Store relation-to-parent (XOR of a bit). find returns (root, parity). Union of an odd edge is a constraint; a conflict is an odd cycle. LC 886 / bipartite incremental.</td>
+        <td><code>parity[x] ^= parity[parent[x]] on the compress walk</code></td>
+        <td>Odd-cycle detection online</td>
+      </tr>
+      <tr>
+        <td>Rollback DSU</td>
+        <td>No path compression. Stack of (node, oldParent, oldRank). Used for offline edge deletes via divide-and-conquer on time, or for persistent connectivity.</td>
+        <td><code>st.push(b); parent[b]=a;  undo: parent[st.pop()] = st.pop();</code></td>
+        <td>CF 1213G alternative, DSU on tree</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the bound inverse Ackermann, not just O(1)?</summary>
+    <div class="followup__body">
+      <p>Path compression without rank is already almost linear; rank without compression is O(log n). The combination is one of the most analysed bounds in algorithms, and it is not quite O(1). In every contest and interview you may treat it as O(1). Do not write <code>&alpha;(n)</code> on a whiteboard unless asked; say "effectively constant".</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you handle weighted edges / MST?</summary>
+    <div class="followup__body">
+      <p>Kruskal: sort edges by weight, then union each if the endpoints have different roots. The unions that return true are the MST edges; their weights sum to the MST cost. If you need the MST as a graph, store those edges. Prim is the heap-based alternative and does not use DSU.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can DSU do deletions?</summary>
+    <div class="followup__body">
+      <p>Not online with path compression. Offline: time-split the interval an edge is alive and add it in a segment tree of edges, then DFS the segment tree with a rollback DSU (DSU on tree). Online deletions need link-cut trees or Euler-tour trees. Interviews almost never go there; they ask incremental unions.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does LC 128 (longest consecutive sequence) use DSU?</summary>
+    <div class="followup__body">
+      <p>It does not have to: a HashSet plus a scan of runs is the intended O(n) solution. A DSU version unions each value with value+1 when both exist, then the answer is the maximum component size. Same complexity, more code, a useful way to see "consecutive" as "an edge of weight 1".</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener">Number of Provinces</a></td>
+        <td><span class="badge badge--lc">LC 547</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Union every connected pair, count roots</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/redundant-connection/" target="_blank" rel="noopener">Redundant Connection</a></td>
+        <td><span class="badge badge--lc">LC 684</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The edge whose union returns false</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/accounts-merge/" target="_blank" rel="noopener">Accounts Merge</a></td>
+        <td><span class="badge badge--lc">LC 721</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Union accounts that share an email</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/satisfiability-of-equality-equations/" target="_blank" rel="noopener">Satisfiability of Equality Equations</a></td>
+        <td><span class="badge badge--lc">LC 990</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Union equals first, then check unequals</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/longest-consecutive-sequence/" target="_blank" rel="noopener">Longest Consecutive Sequence</a></td>
+        <td><span class="badge badge--lc">LC 128</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>HashSet runs, or DSU on value+1</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/number-of-operations-to-make-network-connected/" target="_blank" rel="noopener">Number of Operations to Make Network Connected</a></td>
+        <td><span class="badge badge--lc">LC 1319</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Spare edges vs components-1</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/" target="_blank" rel="noopener">Most Stones Removed with Same Row or Column</a></td>
+        <td><span class="badge badge--lc">LC 947</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Union stones by row and by column</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/graph-valid-tree/" target="_blank" rel="noopener">Graph Valid Tree</a></td>
+        <td><span class="badge badge--lc">LC 261</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n-1 edges and one component, no cycle</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/25/D" target="_blank" rel="noopener">Roads not only in Berland</a></td>
+        <td><span class="badge badge--cf">CF 25D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Redundant roads vs needed roads</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1213/G" target="_blank" rel="noopener">Path Queries</a></td>
+        <td><span class="badge badge--cf">CF 1213G</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Offline sort edges, add by weight, size products</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 990 &mdash; two passes</summary>
+  <div class="spoiler__body">
+    <p>First union every <code>a == b</code> equation. Then, for every <code>a != b</code>, if find(a) == find(b) the system is unsatisfiable. Doing unequals first, or interleaving, can reject a legal system because the equal- classes are not yet merged. Letters are 26 nodes; the DSU is tiny.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 721 &mdash; union on the email, not the name</summary>
+  <div class="spoiler__body">
+    <p>Names are not unique. Build a map email &rarr; first account index that used it. For each later account that repeats an email, union the two account indices. Then group emails by find(account). Sort each group, prefix the name from any account in the component. The DSU lives on accounts, not on email strings.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>find returns the root;</strong> path compression flattens the walk.</li>
+    <li><strong>union hangs one root under the other</strong> by rank or size.</li>
+    <li><strong>union returning false</strong> means the edge was redundant (a cycle).</li>
+    <li><strong>Effectively O(1)</strong> per op with both accelerations.</li>
+    <li><strong>Undirected and incremental.</strong> Deletions need rollback; directed needs a different tool.</li>
+  </ul>
+  <div class="recap__oneliner">find: p[x]==x?x:p[x]=find(p[x]) | union roots by rank | false if already same</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

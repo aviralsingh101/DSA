@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probability &amp; Expectation DP &mdash; DSA Course</title>
+<meta name="description" content="Expectation is linear, and E[state] is 1 (or a cost) plus a weighted sum of neighbour expectations &mdash; a linear system that DP solves when the state DAG is acyclic.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="probability-and-expectation-dp">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>Probability & Expectation DP</h1>
+  <p class="hero__tagline">Expectation is linear, and E[state] is 1 (or a cost) plus a weighted sum of neighbour expectations &mdash; a linear system that DP solves when the state DAG is acyclic.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>,
+      <a href="game-theory-and-grundy.html">Game Theory &amp; Grundy</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">expectation</span>
+      <span class="chip">probability</span>
+      <span class="chip">coupon</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Expected number of rolls until all faces have appeared", "expected days until n coupons", "probability of ruin", and "expected score of an optimal player" are the same writing task: name a state, write E[s] or P[s] in terms of neighbours, and solve the system in a legal order (or by Gaussian elimination if there are cycles).</p>
+<p>Linearity of expectation is the cheat code that removes dependence: you do not need the distribution of a sum to know its mean. Indicator variables turn "expected count of X" into a sum of probabilities, often without any DP at all. Use DP when the next step depends on a compact state.</p>
+<p>P2 because floating-point, self-loops (the "stay with probability p" term that you must algebraically move to the left side), and cyclic graphs (Gaussian) are the usual sources of WA. The dry run is coupon collector for n = 3.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>If from state i you always spend 1 and then go to j with probability p_j, then E[i] = 1 + sum p_j E[j]. If a p_i term points back at i, subtract it: E[i] = (1 + sum_{j
+eq i} p_j E[j]) / (1 - p_i).</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Expected time / expected score / probability of reaching a set of states</li>
+        <li>Coupon collector, dice until a pattern, frog on a line with random jumps</li>
+        <li>Optimal play that maximises expected value (not just win/lose)</li>
+        <li>Linearity: expected number of something = sum of indicator probabilities</li>
+        <li>n states, each with a known distribution over next states</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the full distribution, not the mean → track more, or generating functions</li>
+        <li>Adversarial (worst-case) play, not random → game DP / grundy</li>
+        <li>The graph of states has cycles and you only have an iterative "relax E" without solving the linear system</li>
+        <li>n is 1e5 and each state has a dense transition → the system is too big</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Coupon collector</td>
+        <td>E[k] from k distinct</td>
+        <td>E[k]=(n/(n-k))+E[k+1]</td>
+      </tr>
+      <tr>
+        <td>Probability of reaching t</td>
+        <td>P[s] = sum p_j P[j], P[t]=1, P[absorb lose]=0</td>
+        <td>DAG or Gaussian</td>
+      </tr>
+      <tr>
+        <td>Expected steps on a DAG</td>
+        <td>Post-order / reverse topo</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>Expected steps with self-loops</td>
+        <td>Move E[i] to the left, divide by 1-p_stay</td>
+        <td>Algebra</td>
+      </tr>
+      <tr>
+        <td>Expected count of events</td>
+        <td>Linearity, no DP</td>
+        <td>Indicators</td>
+      </tr>
+      <tr>
+        <td>Optimal expected score</td>
+        <td>max over actions of the expected next</td>
+        <td>Bellman</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> most probable path</td>
+        <td>That is max-product (or log-sum), not expectation</td>
+        <td>Viterbi vs this page</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> States ≤ 1e4 for a DAG. Cyclic systems of size n ≤ 200 need Gaussian O(n&sup3;). Use double; print with a fixed precision. n coupons is O(n).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Write the equation, then pick an order</h2>
+<p>Coupon collector, n faces, E[k] = expected extra rolls when you already have k distinct. E[n] = 0. From k you roll: stay with k/n, advance with (n-k)/n. So E[k] = 1 + (k/n) E[k] + ((n-k)/n) E[k+1]. Rearrange: E[k] = n/(n-k) + E[k+1]. Walk k = n-1 down to 0. For n=3: E[2]=3, E[1]=3/2+3=4.5, E[0]=1+4.5=5.5 = 3 H_3.</p>
+<p>Probability DP is the same skeleton without the "+1" and with absorbing 0/1 bases. On a DAG, fill sinks first. On a cycle, write every equation and Gaussian-eliminate. Linearity: expected number of distinct values in a random sample is sum_v (1 - (1-1/n)^k), no state required. Reach for indicators before you reach for a table.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>For a state with a forced step of cost c and transition probabilities p_j (including possibly j = i):</p><span class="eq">E[i] = c + &sum; p<sub>j</sub> E[j] &nbsp;&nbsp;⇒&nbsp;&nbsp; E[i] = (c + &sum;<sub>j≠i</sub> p<sub>j</sub> E[j]) / (1-p<sub>i</sub>)</span>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Forgetting to move the self-loop</span>
+    <p>If you code E[i] = 1 + p*E[i] + (1-p)*E[next] as a one-liner that reads the old E[i] (0), you compute a wrong smaller value. Always solve for E[i] algebraically when p_stay &gt; 0.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Coupon collector closed form</span>
+    <p>E = n (1 + 1/2 + … + 1/n) = n H_n. The DP is how you derive it, and how you handle variants (only a subset of faces, a pattern of last rolls, a max-face constraint) where no closed form is sitting around.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Coupon collector n = 3, E[k] extra rolls from k distinct</h3>
+
+<p>One row, k = 3 down to 0. Target is the cell we solve; from is the already-known E[k+1] (and the implicit self-loop we divided out).</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="probability-and-expectation-dpViz"></div>
+  <div class="viz-player" data-viz-target="probability-and-expectation-dpViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "k",
+      "rowHeads": [
+        "E"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "k",
+        "formula",
+        "E[k]"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "E[3] = 0. You already have every face.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "k": 3,
+            "formula": "absorb",
+            "E[k]": 0
+          }
+        },
+        {
+          "note": "k=2. Stay 2/3, advance 1/3. E[2] = 1 + (2/3)E[2] + (1/3)*0 ⇒ E[2] = 3. Target 2, from 3.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "k": 2,
+            "formula": "3/(3-2)",
+            "E[k]": 3
+          }
+        },
+        {
+          "note": "k=1. E[1] = 3/(3-1) + E[2] = 1.5 + 3 = 4.5. Target 1, from 2.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4.5",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "k": 1,
+            "formula": "3/2 + E[2]",
+            "E[k]": 4.5
+          }
+        },
+        {
+          "note": "k=0. E[0] = 3/3 + E[1] = 1 + 4.5 = 5.5. Target 0, from 1.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "5.5",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4.5",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "k": 0,
+            "formula": "1 + E[1]",
+            "E[k]": 5.5
+          }
+        },
+        {
+          "note": "Check: 3 * (1 + 1/2 + 1/3) = 3 * 11/6 = 5.5. Matches.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "5.5",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "4.5"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0"
+            }
+          ],
+          "values": {
+            "k": "H_3",
+            "formula": "3 H_3",
+            "E[k]": 5.5
+          }
+        },
+        {
+          "note": "If you had forgotten the self-loop algebra at k=2 and coded E=1+(1/3)*0, you would have written 1 instead of 3.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 2,
+              "val": "1",
+              "cls": "block"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "3",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "k": "bug",
+            "formula": "forgot stay",
+            "E[k]": 1
+          }
+        },
+        {
+          "note": "Start at 0 distinct. Answer 5.5 expected rolls for 3 faces.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "5.5",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "k": 0,
+            "formula": "start",
+            "E[k]": 5.5
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>E[3]=0, E[2]=3, E[1]=4.5, E[0]=5.5. That 5.5 is 3(1+1/2+1/3).</figcaption>
+</figure>
+
+<h3>Solving the self-loop</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  write["write E[i] = c + sum p_j E[j]"] --&gt; stay{"is p_i &gt; 0?"}
+  stay -- no --&gt; dag["fill children first, then assign"]
+  stay -- yes --&gt; alg["E[i] = (c + sum of others) / (1 - p_i)"]
+  alg --&gt; dag
+  dag --&gt; cyc{"any cycle among states?"}
+  cyc -- yes --&gt; gauss["Gaussian elimination on the system"]
+  cyc -- no --&gt; doneNode["done"]
+  </div>
+  <figcaption>Any p_stay must be moved to the left-hand side before you code the assignment.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the state</strong> so the future is independent of the past given that state.</li>
+  <li><strong>Write E[s] or P[s]</strong> as cost + sum p * next.</li>
+  <li><strong>Algebraically remove self-loops.</strong></li>
+  <li><strong>If the graph is a DAG,</strong> fill sinks first (reverse topo / decreasing rank).</li>
+  <li><strong>If there are cycles,</strong> build the linear system and Gaussian-eliminate.</li>
+  <li><strong>Check a closed form</strong> on a tiny n (coupon: n H_n) before submitting.</li>
+  <li><strong>Use double</strong> and the required print precision.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Coupon n = 3. Rearranged E[k] = n/(n-k) + E[k+1].</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>k</th><th>n/(n-k)</th><th>E[k+1]</th><th>E[k]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>3</td><td>—</td><td>—</td><td>0</td><td>Done.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>3/1=3</td><td>0</td><td>3</td><td>Self-loop divided out.</td></tr>
+      <tr><td>1</td><td>3/2=1.5</td><td>3</td><td>4.5</td><td></td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>3/3=1</td><td>4.5</td><td>5.5</td><td>Answer.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Probability & Expectation DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo / Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Space-opt</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExpRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ExpRec {
+    
+        static double e(int k, int n) {
+            if (k == n) {
+                return 0;
+            }
+            return (double) n / (n - k) + e(k + 1, n);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(e(0, 3));
+        }
+        // Input : n = 3 coupons, start with 0
+        // Output: 5.5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo / Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExpTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ExpTab {
+    
+        static double coupon(int n) {
+            double[] e = new double[n + 1];
+            e[n] = 0;
+            for (int k = n - 1; k &gt;= 0; k--) {
+                e[k] = (double) n / (n - k) + e[k + 1];
+            }
+            return e[0];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(coupon(3));
+        }
+        // Input : n = 3
+        // Output: 5.5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExpRoll.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ExpRoll {
+    
+        static double coupon(int n) {
+            double e = 0;
+            for (int have = n - 1; have &gt;= 0; have--) {
+                e = (double) n / (n - have) + e;
+            }
+            return e;
+        }
+    
+        public static void main(String[] args) {
+            double e = coupon(3);
+            double h = 1 + 0.5 + 1.0 / 3.0;
+            System.out.println(e + " " + (3 * h));
+        }
+        // Input : n = 3
+        // Output: 5.5 5.5
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(states) on a DAG; O(n³) Gaussian on a cyclic system of n states</span>
+    <span class="badge badge--space">Space O(states)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Coupon collector is n decreasing assignments:</p>
+    <p><span class="eq">T = &Theta;(n) &nbsp;&nbsp; E = n H<sub>n</sub></span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>DAG expectation</td><td>O(S + transitions)</td><td>O(S)</td><td>Fill sinks first</td></tr>
+      <tr><td>Self-loop algebra</td><td>O(1) extra</td><td>—</td><td>Divide by 1-p</td></tr>
+      <tr><td>Gaussian</td><td>O(n³)</td><td>O(n²)</td><td>Cycles, n≤200</td></tr>
+      <tr><td>Linearity only</td><td>O(terms)</td><td>O(1)</td><td>When indicators suffice</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not dividing out p_stay</span>
+    <div class="pitfalls__bug">E coded as 1 + p*E + (1-p)*Enext using E=0, so you miss the geometric waiting time.</div>
+    <div class="pitfalls__fix">E = (1 + (1-p)*Enext) / (1-p) = 1/(1-p) + Enext. For coupon, 1/(1-k/n) = n/(n-k).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Cyclic system filled in an arbitrary order</span>
+    <div class="pitfalls__bug">Each assignment uses stale neighbours; the numbers never become consistent.</div>
+    <div class="pitfalls__fix">Gaussian (or iterate to convergence only if you prove contraction and the judge's epsilon is loose).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Probability not expectation, but you add +1</span>
+    <div class="pitfalls__bug">P[s] does not pay a cost. The +1 is for time.</div>
+    <div class="pitfalls__fix">P[s] = sum p_j P[j]. E[s] = c + sum p_j E[j].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using float</span>
+    <div class="pitfalls__bug">Precision WA on 1e-9 relative.</div>
+    <div class="pitfalls__fix">double, and print 10+ decimals if asked. Sometimes the answer is a rational you should output as a fraction.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Linearity forgotten, huge DP built</span>
+    <div class="pitfalls__bug">Expected number of distinct = n * (1 - ((n-1)/n)^k), one line.</div>
+    <div class="pitfalls__fix">Ask whether the question is a sum of indicators before designing a state.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Absorbing states not pinned</span>
+    <div class="pitfalls__bug">E[n] left uninitialised, or P[lose] left as a variable.</div>
+    <div class="pitfalls__fix">Write the bases first: E[done]=0, P[success]=1, P[fail]=0.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Probability of reaching t</td>
+        <td>Same DAG, no +1, bases 0/1.</td>
+        <td><code>P[s] = sum p P[next]</code></td>
+        <td>Gambler's ruin has a closed form too</td>
+      </tr>
+      <tr>
+        <td>Expected max / optimal play</td>
+        <td>At a state, max (or min) over actions of the expected next. Still a DAG if the state rank decreases.</td>
+        <td><code>AtCoder DP-I / J</code></td>
+        <td>Bellman expectation</td>
+      </tr>
+      <tr>
+        <td>Pattern on a die / string</td>
+        <td>State = current KMP prefix of the pattern. Expected extra rolls to absorb.</td>
+        <td><code>Classic string-expectation</code></td>
+        <td>Self-loops from KMP fail</td>
+      </tr>
+      <tr>
+        <td>Gaussian on a graph</td>
+        <td>E[v] = 1 + average of neighbours, E[t]=0. n≤200.</td>
+        <td><code>CF 148D is different (game); CF 280C uses linearity on a tree</code></td>
+        <td>When cycles exist</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>When is linearity enough?</summary>
+    <div class="followup__body">
+      <p>Whenever the question is a sum (count, total length, total cost) and each term's expectation is easy. Indicators for "does event i happen" are the usual. You need a state DP when the question is a waiting time whose rate depends on progress, or a max, or a probability of a path property.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I handle a cycle of two states?</summary>
+    <div class="followup__body">
+      <p>Two equations, two unknowns. Substitute. For larger cycles, Gaussian with partial pivot on doubles. If the chain is absorbing, the system is non-singular.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Expected value of a max?</summary>
+    <div class="followup__body">
+      <p>Linearity does <em>not</em> pass through max. You need the distribution (or a state that is the current max). That is why "expected maximum of k dice" is a distribution DP, not a one-line indicator.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why coupon is n H_n?</summary>
+    <div class="followup__body">
+      <p>Waiting to hit a new face when k are known is geometric with success (n-k)/n, mean n/(n-k). Sum from k=0 to n-1. That is n H_n.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/new-21-game/" target="_blank" rel="noopener">New 21 Game</a></td>
+        <td><span class="badge badge--lc">LC 837</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Probability DP, sliding window of W</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/soup-servings/" target="_blank" rel="noopener">Soup Servings</a></td>
+        <td><span class="badge badge--lc">LC 808</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>P[empty A first], memo + limit</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/knight-probability-in-chessboard/" target="_blank" rel="noopener">Knight Probability in Chessboard</a></td>
+        <td><span class="badge badge--lc">LC 688</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>P on a grid, k steps</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_i" target="_blank" rel="noopener">Coins</a></td>
+        <td><span class="badge badge--atc">ATC DP-I</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>P[heads > tails] after n tosses</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_j" target="_blank" rel="noopener">Sushi</a></td>
+        <td><span class="badge badge--atc">ATC DP-J</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>3D expectation, self-loops</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/148/D" target="_blank" rel="noopener">Bag of mice</a></td>
+        <td><span class="badge badge--cf">CF 148D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>P[princess wins], game + random</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/280/C" target="_blank" rel="noopener">Game on Tree</a></td>
+        <td><span class="badge badge--cf">CF 280C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Linearity: 1/depth contribution</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/453/A" target="_blank" rel="noopener">Expectation</a></td>
+        <td><span class="badge badge--cf">CF 453A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>E[max of n dice]</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://cses.fi/problemset/task/1725" target="_blank" rel="noopener">Dice Probability</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Distribution of sum of n dice</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://www.geeksforgeeks.org/expected-number-of-trials-until-n-consecutive-heads/" target="_blank" rel="noopener">Expected steps</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Pattern expectation, KMP-like state</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-J Sushi</summary>
+  <div class="spoiler__body">
+    <p>State (a,b,c) = counts of 1-sushi, 2-sushi, 3-sushi dishes. From (a,b,c) you may draw empty (n-a-b-c)/n and stay. Divide that self-loop out. Transitions: a 3 becomes a 2, etc. E[0,0,0]=0. Memo on the triple. n≤300 is O(n^3).</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 280C</summary>
+  <div class="spoiler__body">
+    <p>A random permutation of deletion order. A vertex v survives in its "component" until the first of its ancestors (including itself) is deleted. E[contribution of v] = 1 / depth(v) from the root (size of the ancestor chain). Sum over v. Linearity, no DP table. Tree DFS for depths.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Write the equation first</strong>, then pick DAG order or Gaussian.</li>
+    <li><strong>Self-loops: divide by 1-p_stay.</strong></li>
+    <li><strong>Coupon: E[k] = n/(n-k) + E[k+1]</strong>, total n H_n.</li>
+    <li><strong>Linearity beats a table</strong> when the question is a sum of indicators.</li>
+    <li><strong>double, pin absorbing bases</strong> (0 / 1 / E=0).</li>
+  </ul>
+  <div class="recap__oneliner">E=c+sum p E[next] | divide out p_stay | DAG sinks first else Gaussian | try linearity</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

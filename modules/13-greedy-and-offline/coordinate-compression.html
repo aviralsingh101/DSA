@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coordinate Compression &mdash; DSA Course</title>
+<meta name="description" content="Replace huge or sparse values by their ranks 0..k-1 so Fenwick trees, arrays, and DP tables fit in memory &mdash; the ranks preserve order.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="coordinate-compression">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 13 &middot; Greedy & Offline Techniques</span>
+  <h1>Coordinate Compression</h1>
+  <p class="hero__tagline">Replace huge or sparse values by their ranks 0..k-1 so Fenwick trees, arrays, and DP tables fit in memory &mdash; the ranks preserve order.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../06-range-queries/fenwick-tree.html">Fenwick Tree</a>,
+      <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">compression</span>
+      <span class="chip">ranking</span>
+      <span class="chip">offline</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Values live in 1..1e9 but there are only n of them. A Fenwick of size 1e9 is impossible; a Fenwick of size n on ranks is O(n). Compression is the map value → rank that keeps &lt; and =.</p>
+<p>Offline algorithms collect every coordinate that will ever appear (array values, query bounds, rectangle y's), sort-unique, then replace each by lower_bound. Online structures that must accept new keys use a balanced tree instead.</p>
+<p>It shows up in inversion counts, 2D Fenwick, sweep-line y-axes, and DP on "the next larger value". Forgetting to unique duplicates maps two equal values to different ranks if you used a raw sort index.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Order is all you need. Ranks 0..k-1 are a strictly increasing relabelling of the distinct keys.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Fenwick / segtree on values from 1e9, only n distinct</li>
+        <li>2D points with large x,y</li>
+        <li>Offline queries whose bounds are in the input</li>
+        <li>Need an array indexed by value</li>
+        <li>Discrete version of a sweep y-axis</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the actual numeric gaps (distance 1e9 vs 2) in the index &rarr; compression loses gaps</li>
+        <li>Online arbitrary new keys without rebuild → TreeMap / dynamic segtree</li>
+        <li>Values already in 1..n → nothing to do</li>
+        <li>Hashing as identity, not order → HashMap, not ranks</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Inversion count, values 1e9</td>
+        <td>Rank then Fenwick</td>
+        <td>This page + BIT</td>
+      </tr>
+      <tr>
+        <td>Rectangle y for segtree</td>
+        <td>Collect y, unique, rank</td>
+        <td>Sweep</td>
+      </tr>
+      <tr>
+        <td>Need distances between keys</td>
+        <td>Do not compress the axis you measure</td>
+        <td>Keep originals</td>
+      </tr>
+      <tr>
+        <td>Online inserts of new keys</td>
+        <td>Dynamic segtree / treap</td>
+        <td>Not static rank</td>
+      </tr>
+      <tr>
+        <td>Map for equality only</td>
+        <td>HashMap</td>
+        <td>No order</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> discretisation vs hashing</td>
+        <td>Ranks preserve order; hashes do not</td>
+        <td>Fenwick needs order</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> k distinct ≤ n or 3n (values + query bounds). Java <code>Arrays.binarySearch</code> on the unique array is the rank.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Copy all relevant numbers into a list, sort, unique. Rank of x is the lowest index with unique[i]==x (binary search). Replace a[i] with rank(a[i]).</p>
+<p>Queries with bounds [L,R] on the value axis: rankL = lower_bound(L), rankR = upper_bound(R)-1. Off-by-one here is the usual WA.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>rank(x) &lt; rank(y) iff x &lt; y, and rank(x)==rank(y) iff x==y, for every x,y that appeared in the collected set.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="coordinate-compressionViz"></div>
+  <div class="viz-player" data-viz-target="coordinate-compressionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        100,
+        3,
+        100,
+        50
+      ],
+      "vars": [
+        "x",
+        "unique",
+        "rank"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "a = [100, 3, 100, 50]. Collect, sort: 3,50,100,100.",
+          "active": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "x": "all",
+            "unique": "3,50,100,100",
+            "rank": "—"
+          }
+        },
+        {
+          "note": "Unique: [3, 50, 100]. k=3.",
+          "active": [
+            1
+          ],
+          "values": {
+            "x": "uniq",
+            "unique": "[3,50,100]",
+            "rank": "—"
+          }
+        },
+        {
+          "note": "3 → 0, 50 → 1, 100 → 2. Compressed a = [2,0,2,1].",
+          "active": [
+            0
+          ],
+          "values": {
+            "x": 100,
+            "unique": "[3,50,100]",
+            "rank": 2
+          }
+        },
+        {
+          "note": "Fenwick of size 3 now counts frequencies. Inversions: walk left-to-right, query how many ranks already seen are larger.",
+          "active": [
+            1
+          ],
+          "values": {
+            "x": 3,
+            "unique": "bit n=3",
+            "rank": 0
+          }
+        },
+        {
+          "note": "Query \"count values in [40,100]\": lower_bound 40 = 1 (50), upper_bound 100 = 3, ranks [1,2].",
+          "active": [
+            0,
+            2,
+            3
+          ],
+          "values": {
+            "x": "q",
+            "unique": "lb/ub",
+            "rank": "1..2"
+          }
+        },
+        {
+          "note": "If you needed a[i+1]-a[i] as a length, you would still use original values for the length and ranks only as indices.",
+          "active": [
+            3
+          ],
+          "values": {
+            "x": "gap",
+            "unique": "keep 50",
+            "rank": "index 1"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Collect, unique, lower_bound</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  collect["collect every key"] --&gt; sortU["sort and unique"]
+  sortU --&gt; lb["rank x = lower_bound"]
+  lb --&gt; idx["Fenwick / array index"]
+  idx --&gt; q["query bounds also ranked"]
+  </div>
+  <figcaption>Equal values must share a rank. Unique is not optional.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Collect</strong> every integer that will be an index (values, query L/R, y1/y2).</li>
+  <li><strong>Sort</strong> and <code>unique</code> (compact equal runs).</li>
+  <li><strong>rank(x)</strong> = lower_bound in the unique array.</li>
+  <li><strong>Rewrite</strong> the data. Fenwick size = unique.length (or +2).</li>
+  <li><strong>Query [L,R]</strong> on values: [lower_bound(L), upper_bound(R)-1].</li>
+  <li><strong>Keep originals</strong> if you still need numeric differences.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>x</th><th>unique</th><th>rank</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>all</td><td>3,50,100,100</td><td>—</td><td>a = [100, 3, 100, 50]. Collect, sort: 3,50,100,100.</td></tr>
+      <tr><td>uniq</td><td>[3,50,100]</td><td>—</td><td>Unique: [3, 50, 100]. k=3.</td></tr>
+      <tr><td>100</td><td>[3,50,100]</td><td>2</td><td>3 → 0, 50 → 1, 100 → 2. Compressed a = [2,0,2,1].</td></tr>
+      <tr><td>3</td><td>bit n=3</td><td>0</td><td>Fenwick of size 3 now counts frequencies. Inversions: walk left-to-right, query how many ranks already seen are larger.</td></tr>
+      <tr><td>q</td><td>lb/ub</td><td>1..2</td><td>Query "count values in [40,100]": lower_bound 40 = 1 (50), upper_bound 100 = 3, ranks [1,2].</td></tr>
+      <tr><td>gap</td><td>keep 50</td><td>index 1</td><td>If you needed a[i+1]-a[i] as a length, you would still use original values for the length and ranks only as indices.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Coordinate Compression implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Cannot allocate 1e9. Shown as the thing we refuse.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FenwickHuge.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FenwickHuge {
+        public static void main(String[] args) {
+            // long[] bit = new long[1_000_000_001]; // OOM
+            System.out.println("compress first");
+        }
+        // Input : values up to 1e9
+        // Output: compress first
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Unique + binarySearch. Ranks of the sample.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Compress.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Compress {
+        static int[] unique(int[] a) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            int k = 0;
+            for (int i = 0; i &lt; b.length; i++)
+                if (k == 0 || b[i] != b[k - 1]) b[k++] = b[i];
+            return Arrays.copyOf(b, k);
+        }
+        static int rank(int[] u, int x) {
+            int r = Arrays.binarySearch(u, x);
+            return r &lt; 0 ? -1 : r;
+        }
+        public static void main(String[] args) {
+            int[] a = {100, 3, 100, 50};
+            int[] u = unique(a);
+            for (int x : a) System.out.print(rank(u, x) + " ");
+            System.out.println();
+        }
+        // Input : [100,3,100,50]
+        // Output: 2 0 2 1
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Inversions with Fenwick on ranks.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">InvCountCompressed.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class InvCountCompressed {
+        static long inv(int[] a) {
+            int[] u = a.clone();
+            Arrays.sort(u);
+            int k = 0;
+            for (int x : u) if (k == 0 || x != u[k - 1]) u[k++] = x;
+            int n = a.length;
+            long[] bit = new long[k + 2];
+            long ans = 0;
+            for (int i = n - 1; i &gt;= 0; i--) {
+                int r = Arrays.binarySearch(u, 0, k, a[i]) + 1;
+                long s = 0;
+                for (int j = r - 1; j &gt; 0; j -= j &amp; -j) s += bit[j];
+                ans += s;
+                for (int j = r; j &lt;= k; j += j &amp; -j) bit[j]++;
+            }
+            return ans;
+        }
+        public static void main(String[] args) {
+            System.out.println(inv(new int[] {3, 1, 2}));
+        }
+        // Input : [3,1,2]
+        // Output: 2
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Sort + unique is O(n log n). Each rank is a binary search. The later Fenwick is O(n log k).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Array of size maxA</td><td>O(maxA)</td><td>O(maxA)</td><td>maxA <= 1e6</td></tr>
+      <tr><td>Compression</td><td>O(n log n)</td><td>O(n)</td><td>maxA = 1e9, n = 1e5</td></tr>
+      <tr><td>TreeMap Fenwick</td><td>O(n log n)</td><td>O(n)</td><td>Online, slower constants</td></tr>
+      <tr><td>Dynamic segtree</td><td>O(n log MAX)</td><td>O(n log MAX)</td><td>Online ranks</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Not uniquing</span>
+    <div class="pitfalls__bug">binarySearch on a sorted array with duplicates returns an arbitrary duplicate index; equal values get different ranks across calls.</div>
+    <div class="pitfalls__fix">Unique first, then search on the compact array.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting query bounds in the collected set</span>
+    <div class="pitfalls__bug">A query L that never appeared has no rank; binarySearch returns -insertion-1, which you must treat as lower_bound.</div>
+    <div class="pitfalls__fix">Insert all L/R into the list before unique, or use the insertion point as rank.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Compressing an axis you still measure</span>
+    <div class="pitfalls__bug">Rectangle width becomes rank difference 1, area is wrong.</div>
+    <div class="pitfalls__fix">Store original coordinates for lengths; ranks only index the tree.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">1-based Fenwick vs 0-based ranks</span>
+    <div class="pitfalls__bug">rank 0 never updates bit[0] which is unused — you skip all minima, or you AIOOB.</div>
+    <div class="pitfalls__fix">Use rank+1 as Fenwick index.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">long vs int keys</span>
+    <div class="pitfalls__bug">1e18 coordinates in int[] overflow.</div>
+    <div class="pitfalls__fix"><code>long[]</code> unique.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>With query bounds</td>
+        <td>Push L and R into the list even if they are not array values.</td>
+        <td><code>offline 2D count</code></td>
+        <td>CF problems</td>
+      </tr>
+      <tr>
+        <td>Dynamic</td>
+        <td>Don't compress; use a Treap / dynamic segtree keyed by the raw value.</td>
+        <td><code>online</code></td>
+        <td>when keys appear later</td>
+      </tr>
+      <tr>
+        <td>Pair compression</td>
+        <td>(x,y) as one long: x<<32|y, then unique.</td>
+        <td><code>when order is lexicographic on pairs</code></td>
+        <td>rare</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>lower_bound vs rank of an absent L?</summary>
+    <div class="followup__body">
+      <p>lower_bound(L) is the first stored key ≥ L. That is the first rank that should be included in "values ≥ L". upper_bound(R) is the first key &gt; R.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why not HashMap to dense ids?</summary>
+    <div class="followup__body">
+      <p>HashMap assignment order is insertion, not value order. Fenwick prefix would no longer mean "all smaller values".</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you compress online?</summary>
+    <div class="followup__body">
+      <p>If all keys are known up front, yes (offline). If not, you cannot pre-assign ranks without leaving gaps. Use a BBST.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>2D compression?</summary>
+    <div class="followup__body">
+      <p>Compress x and y independently. A 2D Fenwick is then k_x by k_y. If that product is too big, sweep one axis and Fenwick the other.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener">Count Of Smaller Numbers After Self</a></td>
+        <td><span class="badge badge--lc">LC 315</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Rank + Fenwick</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/count-of-range-sum/" target="_blank" rel="noopener">Count Of Range Sum</a></td>
+        <td><span class="badge badge--lc">LC 327</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Prefix sums compressed</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/reverse-pairs/" target="_blank" rel="noopener">Reverse Pairs</a></td>
+        <td><span class="badge badge--lc">LC 493</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Rank of 2*val</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/61/E" target="_blank" rel="noopener">Enemy is Weak</a></td>
+        <td><span class="badge badge--cf">CF 61E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>3-layer inversions, compress</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/459/D" target="_blank" rel="noopener">Pashmak and Parmida's Problem</a></td>
+        <td><span class="badge badge--cf">CF 459D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Compress frequencies</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/540/E" target="_blank" rel="noopener">Infinite Inversions</a></td>
+        <td><span class="badge badge--cf">CF 540E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Compress huge indices</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/1311/F" target="_blank" rel="noopener">Moving Points</a></td>
+        <td><span class="badge badge--cf">CF 1311F</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Compress position + BIT</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener">Range Sum Query Mutable</a></td>
+        <td><span class="badge badge--lc">LC 307</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>If coords huge, compress first</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Collect, sort, unique, lower_bound.</li>
+    <li>Equal keys → equal ranks. Unique is required.</li>
+    <li>Fenwick size is k, not 1e9.</li>
+    <li>Lengths still use original coordinates.</li>
+    <li>Query bounds must be in the collected set or handled as insertion points.</li>
+  </ul>
+  <div class="recap__oneliner">sort unique; rank(x)=lower_bound(unique, x);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

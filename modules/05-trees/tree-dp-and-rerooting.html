@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tree DP &amp; Rerooting &mdash; DSA Course</title>
+<meta name="description" content="One DFS computes every subtree answer; a second DFS reroots, combining &quot;down&quot; with &quot;the rest of the tree&quot; so every vertex can be treated as the root in O(n).">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="tree-dp-and-rerooting">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Tree DP & Rerooting</h1>
+  <p class="hero__tagline">One DFS computes every subtree answer; a second DFS reroots, combining "down" with "the rest of the tree" so every vertex can be treated as the root in O(n).</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-tree-problem-patterns.html">Binary Tree Problem Patterns</a>,
+      <a href="../07-graphs-core/dfs-and-components.html">DFS & Components</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">tree DP</span>
+      <span class="chip">rerooting</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Interview diameter is one global. CP asks "for every vertex, the longest path starting there", or "sum of distances to all others", or "whether the tree stays balanced if we root here". Computing n independent DFSes is O(n^2). Tree DP is one down-DFS of subtree summaries, then optionally a reroot-DFS that pushes the parent's "outside" answer into each child in O(1) or O(deg) extra.</p>
+<p>The algebraic requirement is that you can merge a child's contribution and an "outside" contribution. Sum of distances: down[u] = sum (down[v]+sz[v]), then reroot ans[v] = ans[u] + n - 2*sz[v]. Longest-out-path needs the top-two child depths because the excluded child might have been the best.</p>
+<p>CF 219D choosing capital, CF 161D distance in tree, and "sum of distances" (LC 834) are the cluster. If the merge is not invertible, rerooting needs the top-two trick or a second pass that recomputes from siblings.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Subtree DP answers questions about the rooted tree. Rerooting reuses those summaries so every vertex's "if I were root" answer is O(1) extra after O(n) preprocess.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>For every vertex, some aggregate of the tree rooted there</li>
+        <li>Sum of distances to all nodes (LC 834)</li>
+        <li>Longest path starting at each vertex / height of every rerooting</li>
+        <li>Count of good / black-white / capital-moving reroots (CF 219D)</li>
+        <li>n=1e5 so n independent DFSes are impossible</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>One global diameter / one root fixed by the statement &rarr; one DFS is enough</li>
+        <li>The graph is not a tree (cycles) &rarr; different DP</li>
+        <li>Queries on paths between arbitrary pairs &rarr; LCA / HLD / Euler+segtree</li>
+        <li>Offline point updates of values with subtree queries &rarr; Euler tour + Fenwick</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sum of distances from every node</td>
+        <td>down sz + reroot n-2sz</td>
+        <td>LC 834</td>
+      </tr>
+      <tr>
+        <td>Height if rooted at each v</td>
+        <td>top-two child depths, reroot</td>
+        <td>CF / interview follow-up</td>
+      </tr>
+      <tr>
+        <td>Change capital, count reachable with reverse edges</td>
+        <td>down + up DP</td>
+        <td>CF 219D</td>
+      </tr>
+      <tr>
+        <td>Number of pairs at distance k</td>
+        <td>tree DP of depth histograms, or centroid</td>
+        <td>CF 161D</td>
+      </tr>
+      <tr>
+        <td>One diameter</td>
+        <td>two BFS or one DP of heights</td>
+        <td>Previous page</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> rerooting as n DFS</td>
+        <td>That is O(n^2); the second DFS is O(n)</td>
+        <td>Merge outside with child in O(1) or O(deg)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 2e5. Recursion may overflow; iterative DFS or -Xss. Answers are long (n * n * value). Tree is undirected n-1 edges; root at 0 arbitrarily for the down pass.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Down: dfs(u, p) computes sz[u], down[u] from children only. Example sum of distances: sz[u]=1+sum sz[v], down[u]=sum (down[v]+sz[v]). Then ans[0]=down[0].</p>
+<p>Reroot: dfs2(u, p). For each child v, ans[v] = ans[u] - sz[v] + (n - sz[v]) = ans[u] + n - 2*sz[v] for sum-of-distances. Recurse. For max-height, pass the best outside depth, using the top two child depths so the excluded child's outside is the second-best.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After the down pass, down[u] is the answer on the subtree of u. After reroot, ans[u] is the answer on the whole tree as if rooted at u.</p><span class="eq">ans[v] = combine(ans[u] without v's subtree, down[v])</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Sum of distances: down then reroot</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="tree-dp-and-rerootingViz"></div>
+  <div class="viz-player" data-viz-target="tree-dp-and-rerootingViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "sz[u] after down-DFS on a 5-node tree rooted at 0",
+      "array": [
+        5,
+        3,
+        1,
+        1,
+        1
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "u",
+        "sz",
+        "down",
+        "ans"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Tree: 0-1, 1-2, 1-3, 0-4. Root 0. Leaves sz=1, down=0.",
+          "active": [
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "u": "leaves",
+            "sz": 1,
+            "down": 0,
+            "ans": "—"
+          }
+        },
+        {
+          "note": "Node 1: children 2,3. sz=3, down=(0+1)+(0+1)=2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "sz": 3,
+            "down": 2,
+            "ans": "—"
+          }
+        },
+        {
+          "note": "Node 0: children 1,4. sz=5, down=(2+3)+(0+1)=6. ans[0]=6.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "sz": 5,
+            "down": 6,
+            "ans": 6
+          }
+        },
+        {
+          "note": "Reroot to 1: ans[1]=6 + 5 - 2*3 = 5. Intuition: 3 nodes got 1 closer, 2 nodes (0 and 4) got 1 farther.",
+          "active": [
+            1
+          ],
+          "values": {
+            "u": 1,
+            "sz": 3,
+            "down": 2,
+            "ans": 5
+          }
+        },
+        {
+          "note": "Reroot to 4: ans[4]=6+5-2*1=9.",
+          "active": [
+            4
+          ],
+          "values": {
+            "u": 4,
+            "sz": 1,
+            "down": 0,
+            "ans": 9
+          }
+        },
+        {
+          "note": "All five answers from two DFS passes, not five.",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "u": "all",
+            "sz": "—",
+            "down": "—",
+            "ans": "done"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>The 5-node tree</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t0["0"] --&gt; t1["1"]
+  t0 --&gt; t4["4"]
+  t1 --&gt; t2["2"]
+  t1 --&gt; t3["3"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Build undirected lists</strong>, n-1 edges, root at 0.</li>
+  <li><strong>Down DFS:</strong> skip parent; compute sz and down from children.</li>
+  <li><strong>ans[root] = down[root]</strong> (or a custom combine).</li>
+  <li><strong>Reroot DFS:</strong> for each child, write ans[child] from ans[u] and sz[child] (or top-two).</li>
+  <li><strong>Top-two</strong> when the merge is max, not a group with inverse.</li>
+  <li><strong>long</strong> for sums; iterative stack if n=2e5.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>sz</th><th>down</th><th>ans</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>leaves</td><td>1</td><td>0</td><td>—</td><td>Tree: 0-1, 1-2, 1-3, 0-4. Root 0. Leaves sz=1, down=0.</td></tr>
+      <tr><td>1</td><td>3</td><td>2</td><td>—</td><td>Node 1: children 2,3. sz=3, down=(0+1)+(0+1)=2.</td></tr>
+      <tr><td>0</td><td>5</td><td>6</td><td>6</td><td>Node 0: children 1,4. sz=5, down=(2+3)+(0+1)=6. ans[0]=6.</td></tr>
+      <tr><td>1</td><td>3</td><td>2</td><td>5</td><td>Reroot to 1: ans[1]=6 + 5 - 2*3 = 5. Intuition: 3 nodes got 1 closer, 2 nodes (0 and 4) got 1 farther.</td></tr>
+      <tr><td>4</td><td>1</td><td>0</td><td>9</td><td>Reroot to 4: ans[4]=6+5-2*1=9.</td></tr>
+      <tr class="trace-table__row--change"><td>all</td><td>—</td><td>—</td><td>done</td><td>All five answers from two DFS passes, not five.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Tree DP & Rerooting implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">NDfs.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class NDfs {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int dfs(int u, int p) {
+            int s = 0;
+            for (int v : g.get(u)) if (v != p) s += dfs(v, u) + size(v, u);
+            return s;
+        }
+        static int size(int u, int p) {
+            int s = 1;
+            for (int v : g.get(u)) if (v != p) s += size(v, u);
+            return s;
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            System.out.println(dfs(0, -1));
+        }
+        // Input : 5-node sample, sum of distances from 0
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RerootSum.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class RerootSum {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int n;
+        static int[] sz;
+        static long[] down, ans;
+    
+        static void dfs1(int u, int p) {
+            sz[u] = 1;
+            for (int v : g.get(u)) if (v != p) {
+                dfs1(v, u);
+                sz[u] += sz[v];
+                down[u] += down[v] + sz[v];
+            }
+        }
+        static void dfs2(int u, int p) {
+            for (int v : g.get(u)) if (v != p) {
+                ans[v] = ans[u] + n - 2L * sz[v];
+                dfs2(v, u);
+            }
+        }
+        public static void main(String[] args) {
+            n = 5;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            sz = new int[n]; down = new long[n]; ans = new long[n];
+            dfs1(0, -1);
+            ans[0] = down[0];
+            dfs2(0, -1);
+            System.out.println(Arrays.toString(ans));
+        }
+        // Input : tree 0-1-2, 1-3, 0-4
+        // Output: [6, 5, 8, 8, 9]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TopTwoHeight.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class TopTwoHeight {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int[] down;
+        static void dfs(int u, int p) {
+            down[u] = 0;
+            for (int v : g.get(u)) if (v != p) {
+                dfs(v, u);
+                down[u] = Math.max(down[u], down[v] + 1);
+            }
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{1,2},{1,3},{0,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            down = new int[5];
+            dfs(0, -1);
+            System.out.println(Arrays.toString(down));
+        }
+        // Input : same tree, down-height from 0
+        // Output: [2, 1, 0, 0, 0]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each edge is traversed a constant number of times across two DFS passes. Combining a child is O(1) for sums, O(deg) total per node for top-two (still O(n) because sum of deg = 2n-2).</p>
+    <p><span class="eq">T = &Theta;(n)</span> versus naive &Theta;(n^2)</p>
+    <p>If the merge needs a full multiset of child answers, you pay extra (small-to-large, or a heap).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>n DFS from each root</td><td>O(n^2)</td><td>O(n)</td><td>n<=3000 maybe</td></tr>
+      <tr><td>Down DP only</td><td>O(n)</td><td>O(n)</td><td>One fixed root</td></tr>
+      <tr><td>Down + reroot</td><td>O(n)</td><td>O(n)</td><td>Answer at every root</td></tr>
+      <tr><td>Centroid / HLD</td><td>O(n log n)</td><td>O(n)</td><td>Path queries, not reroot-all</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting to skip the parent</span>
+    <div class="pitfalls__bug">Infinite recursion on an undirected edge stored both ways.</div>
+    <div class="pitfalls__fix">if (v == p) continue; every loop.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow of n*dist</span>
+    <div class="pitfalls__bug">ans[u] up to n*(n-1) / something times values. int wraps.</div>
+    <div class="pitfalls__fix">long[] ans, down.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Reroot max without top-two</span>
+    <div class="pitfalls__bug">You subtract the child's depth from a max that was that child; outside becomes 0 wrongly.</div>
+    <div class="pitfalls__fix">Store best and second-best child depths at u.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">sz[v] after rerooting used as if still rooted at 0</span>
+    <div class="pitfalls__bug">The formula ans[u]+n-2*sz[v] needs sz[v] = size of v's down-subtree in the first rooting, which stays valid for the child v of u on the down tree.</div>
+    <div class="pitfalls__fix">Do not recompute sz during dfs2 unless you know why.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Stack overflow</span>
+    <div class="pitfalls__bug">A path of 2e5. JVM dies.</div>
+    <div class="pitfalls__fix">Iterative DFS or increase stack; contests often have a chain anti-rec test.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Top-two for max</td>
+        <td>At u keep the two largest child down-values; child's outside = 1+max(up[u], otherChild).</td>
+        <td><code>best1, best2 per node</code></td>
+        <td>Height of every rerooting</td>
+      </tr>
+      <tr>
+        <td>CF 219D</td>
+        <td>down = reverse edges in subtree; up = rest. Capital is a reroot min.</td>
+        <td><code>ans[v]=ans[u]+(edge uv flipped?)</code></td>
+        <td>Change the root, count edges to reverse</td>
+      </tr>
+      <tr>
+        <td>Knapsack on a tree</td>
+        <td>dp[u][k] merge children with backpack; not reroot, still tree DP.</td>
+        <td><code>for (int j=sz;j&gt;=0;j--) for child items</code></td>
+        <td>Size-limited subtree packs</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why n - 2*sz[v]?</summary>
+    <div class="followup__body">
+      <p>Moving the root from u to child v: every node in v's subtree is 1 closer, everyone else is 1 farther. Closer count = sz[v], farther = n-sz[v], delta = (n-sz[v]) - sz[v].</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is rerooting impossible in O(n)?</summary>
+    <div class="followup__body">
+      <p>When you cannot compute "parent's answer without this child" in O(1) or O(deg). Then small-to-large, or accept O(n log n) / O(n^2).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Diameter via rerooting?</summary>
+    <div class="followup__body">
+      <p>Height of a rerooting is the eccentricity of that vertex. Diameter = max eccentricity, also = max over v of down[v]+up[v]. Two BFS is shorter if you only need the diameter value.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Weighted edges?</summary>
+    <div class="followup__body">
+      <p>Same formulas with +w(u,v) instead of +1, and "n-2sz" becomes a weighted analogue: minus 2*sum of subtree weights plus total. Track subtree weight sum.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sum-of-distances-in-tree/" target="_blank" rel="noopener">Sum Of Distances In Tree</a></td>
+        <td><span class="badge badge--lc">LC 834</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Classic reroot</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/house-robber-iii/" target="_blank" rel="noopener">House Robber Iii</a></td>
+        <td><span class="badge badge--lc">LC 337</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Tree DP, not reroot</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/binary-tree-cameras/" target="_blank" rel="noopener">Binary Tree Cameras</a></td>
+        <td><span class="badge badge--lc">LC 968</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>3-state tree DP</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/tree-diameter/" target="_blank" rel="noopener">Tree Diameter</a></td>
+        <td><span class="badge badge--lc">LC 1245</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two BFS or tree DP</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/219/D" target="_blank" rel="noopener">Choosing Capital for Treeland</a></td>
+        <td><span class="badge badge--cf">CF 219D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reroot reverse-edge counts</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/161/D" target="_blank" rel="noopener">Distance in Tree</a></td>
+        <td><span class="badge badge--cf">CF 161D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Tree DP pairs at distance k</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/337/D" target="_blank" rel="noopener">Book of Evil</a></td>
+        <td><span class="badge badge--cf">CF 337D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reroot / two-direction max</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/580/C" target="_blank" rel="noopener">Kefa and Park</a></td>
+        <td><span class="badge badge--cf">CF 580C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Down DFS with a constraint</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Down DFS</strong> = subtree summaries.</li>
+    <li><strong>Reroot DFS</strong> = push the outside answer to each child.</li>
+    <li><strong>Sum of distances:</strong> ans[v]=ans[u]+n-2*sz[v].</li>
+    <li><strong>Max needs top-two</strong> child contributions.</li>
+    <li><strong>O(n)</strong>, not O(n^2). long, skip parent.</li>
+  </ul>
+  <div class="recap__oneliner">dfs1 sz/down; ans[0]=down[0]; dfs2 ans[v]=combine(ans[u], sz[v])</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

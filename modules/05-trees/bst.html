@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Search Trees &mdash; DSA Course</title>
+<meta name="description" content="Left &lt; node &lt; right on every subtree: inorder is sorted, k-th smallest is an inorder walk, and validate is a range (lo, hi) passed down, not a local comparison.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bst">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 05 &middot; Trees</span>
+  <h1>Binary Search Trees</h1>
+  <p class="hero__tagline">Left &lt; node &lt; right on every subtree: inorder is sorted, k-th smallest is an inorder walk, and validate is a range (lo, hi) passed down, not a local comparison.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>,
+      <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">BST</span>
+      <span class="chip">inorder</span>
+      <span class="chip">validate</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A BST is a binary tree plus an invariant, and almost every BST bug is a local check that is not the invariant. "Left child &lt; me &lt; right child" is necessary and not sufficient: a right grandchild can still violate the ancestor. The real invariant is a range: every node sits in (lo, hi) inherited from its ancestors.</p>
+<p>Because inorder is sorted, k-th smallest is "walk inorder, stop at k", and "two-sum in a BST" is a two-pointer on the iterator, not a hash set you needed for an unsorted tree. Delete is the one structural operation people fumble (two children: splice the inorder successor).</p>
+<p>Balanced BSTs (TreeMap) are a later Java page. This page is the interview BST: validate, search, insert, delete, k-th, LCA using values, convert sorted array to BST.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Validate with a range, not a local compare. Inorder of a BST is strictly increasing (if unique keys). k-th smallest is inorder that stops early.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Validate binary search tree</li>
+        <li>k-th smallest / k-th largest in a BST</li>
+        <li>Insert / delete / search</li>
+        <li>LCA in a BST (walk from the root using values)</li>
+        <li>Convert a sorted array to a height-balanced BST</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The tree is not ordered &rarr; general binary-tree patterns</li>
+        <li>You need O(1) extra k-th after many inserts &rarr; store subtree sizes (order-statistic tree)</li>
+        <li>String prefixes &rarr; trie</li>
+        <li>n=1e5 and you need log queries on a static tree of un-ordered values &rarr; not a BST</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Is this a BST?</td>
+        <td>Every node in (lo, hi)</td>
+        <td>DFS with range, or inorder increasing</td>
+      </tr>
+      <tr>
+        <td>k-th smallest</td>
+        <td>Inorder, stop at k</td>
+        <td>O(h+k) / O(n)</td>
+      </tr>
+      <tr>
+        <td>LCA of two values</td>
+        <td>Walk until p and q split</td>
+        <td>O(h)</td>
+      </tr>
+      <tr>
+        <td>Delete a node with two children</td>
+        <td>Replace with inorder successor</td>
+        <td>Min of right subtree</td>
+      </tr>
+      <tr>
+        <td>Sorted array to BST</td>
+        <td>Mid as root, rec sides</td>
+        <td>O(n)</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> heap</td>
+        <td>Heap is only parent vs children, not a total inorder</td>
+        <td>Heap for priority; BST for ordered keys</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e4 in interviews, n &le; 1e5 in contests. Skew BST is a linked list: search is O(n). TreeMap/TreeSet are red-black, O(log n) guaranteed. Duplicate policy: usually unique; if not, pick &le; on one side and document it.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Validate: ok(node, lo, hi) with long sentinels (or null bounds). Fail if val &le; lo or val &ge; hi. Recurse left with hi=val, right with lo=val. Inorder alternative: prev pointer, fail if node.val &le; prev.</p>
+<p>Insert: empty slot is the new node; go left if val &lt; cur, else right. Delete: 0 children drop; 1 child replace; 2 children copy successor.val then delete successor (which has no left). LCA: while node is not between p and q, step left or right.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>For every node, all keys in its left subtree are &lt; node.val and all keys in its right subtree are &gt; node.val (unique keys).</p><span class="eq">lo &lt; node.val &lt; hi, inherited from ancestors</span>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Validate BST: range tightens on the way down</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bstViz"></div>
+  <div class="viz-player" data-viz-target="bstViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "inorder values (must be strictly increasing)",
+      "array": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "vars": [
+        "node",
+        "lo",
+        "hi",
+        "ok"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Tree 4 / 2 5 / 1 3. Root 4 in (-inf, +inf).",
+          "active": [
+            3
+          ],
+          "values": {
+            "node": 4,
+            "lo": "-inf",
+            "hi": "+inf",
+            "ok": true
+          }
+        },
+        {
+          "note": "Left child 2 must be in (-inf, 4).",
+          "active": [
+            1
+          ],
+          "values": {
+            "node": 2,
+            "lo": "-inf",
+            "hi": 4,
+            "ok": true
+          }
+        },
+        {
+          "note": "1 in (-inf, 2), 3 in (2, 4). Both ok.",
+          "active": [
+            0,
+            2
+          ],
+          "values": {
+            "node": 3,
+            "lo": 2,
+            "hi": 4,
+            "ok": true
+          }
+        },
+        {
+          "note": "Right child 5 in (4, +inf). Ok. Whole tree valid.",
+          "active": [
+            4
+          ],
+          "values": {
+            "node": 5,
+            "lo": 4,
+            "hi": "+inf",
+            "ok": true
+          }
+        },
+        {
+          "note": "If 3 were 6, local 2<6 but 6 is not <4. Range check catches it; a local left<me<right on 2 would not see 6.",
+          "values": {
+            "node": 6,
+            "lo": 2,
+            "hi": 4,
+            "ok": false
+          }
+        },
+        {
+          "note": "Inorder 1,2,3,4,5 is strictly increasing, the other validator.",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "node": "inorder",
+            "lo": "prev",
+            "hi": "—",
+            "ok": true
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>A valid BST</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  t4["4"] --&gt; t2["2"]
+  t4 --&gt; t5["5"]
+  t2 --&gt; t1["1"]
+  t2 --&gt; t3["3"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Validate:</strong> dfs(n, lo, hi), fail unless lo &lt; n.val &lt; hi; rec left (lo,val), right (val,hi).</li>
+  <li><strong>Or inorder:</strong> prev, fail if n.val &le; prev.</li>
+  <li><strong>Search / insert:</strong> compare and step, like binary search.</li>
+  <li><strong>Delete two-children:</strong> successor = min of right; copy; delete successor.</li>
+  <li><strong>k-th:</strong> inorder until count==k, or sizes on nodes for O(h).</li>
+  <li><strong>LCA:</strong> from root, step until p and q are on different sides (or one equals the node).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>node</th><th>lo</th><th>hi</th><th>ok</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>4</td><td>-inf</td><td>+inf</td><td>true</td><td>Tree 4 / 2 5 / 1 3. Root 4 in (-inf, +inf).</td></tr>
+      <tr><td>2</td><td>-inf</td><td>4</td><td>true</td><td>Left child 2 must be in (-inf, 4).</td></tr>
+      <tr><td>3</td><td>2</td><td>4</td><td>true</td><td>1 in (-inf, 2), 3 in (2, 4). Both ok.</td></tr>
+      <tr><td>5</td><td>4</td><td>+inf</td><td>true</td><td>Right child 5 in (4, +inf). Ok. Whole tree valid.</td></tr>
+      <tr><td>6</td><td>2</td><td>4</td><td>false</td><td>If 3 were 6, local 2<6 but 6 is not <4. Range check catches it; a local left<me<right on 2 would not see 6.</td></tr>
+      <tr class="trace-table__row--change"><td>inorder</td><td>prev</td><td>—</td><td>true</td><td>Inorder 1,2,3,4,5 is strictly increasing, the other validator.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Binary Search Trees implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BstLocalCheck.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BstLocalCheck {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static boolean local(Node n) {
+            if (n == null) return true;
+            if (n.left != null &amp;&amp; n.left.val &gt;= n.val) return false;
+            if (n.right != null &amp;&amp; n.right.val &lt;= n.val) return false;
+            return local(n.left) &amp;&amp; local(n.right);
+        }
+        public static void main(String[] args) {
+            Node r = new Node(4);
+            r.left = new Node(2); r.right = new Node(5);
+            r.left.left = new Node(1); r.left.right = new Node(6);
+            System.out.println(local(r));
+        }
+        // Input : invalid BST (6 in left of 4) that local-check misses
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ValidateBst.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ValidateBst {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static boolean ok(Node n, long lo, long hi) {
+            if (n == null) return true;
+            if (n.val &lt;= lo || n.val &gt;= hi) return false;
+            return ok(n.left, lo, n.val) &amp;&amp; ok(n.right, n.val, hi);
+        }
+        static int kth(Node n, int[] k) {
+            if (n == null) return -1;
+            int L = kth(n.left, k);
+            if (k[0] == 0) return L;
+            if (--k[0] == 0) return n.val;
+            return kth(n.right, k);
+        }
+        public static void main(String[] args) {
+            Node r = new Node(4);
+            r.left = new Node(2); r.right = new Node(5);
+            r.left.left = new Node(1); r.left.right = new Node(3);
+            System.out.println(ok(r, Long.MIN_VALUE, Long.MAX_VALUE));
+            System.out.println(kth(r, new int[]{3}));
+        }
+        // Input : BST 4 / 2 5 / 1 3 , k=3
+        // Output: true
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LcaBst.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class LcaBst {
+        static class Node {
+            int val; Node left, right;
+            Node(int v) { val = v; }
+        }
+        static Node lca(Node n, int p, int q) {
+            while (n != null) {
+                if (p &lt; n.val &amp;&amp; q &lt; n.val) n = n.left;
+                else if (p &gt; n.val &amp;&amp; q &gt; n.val) n = n.right;
+                else return n;
+            }
+            return null;
+        }
+        public static void main(String[] args) {
+            Node r = new Node(6);
+            r.left = new Node(2); r.right = new Node(8);
+            r.left.left = new Node(0); r.left.right = new Node(4);
+            System.out.println(lca(r, 2, 8).val);
+            System.out.println(lca(r, 2, 4).val);
+        }
+        // Input : LC 235 sample
+        // Output: 6
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(h) search/insert/delete/LCA; O(n) validate / k-th naive</span>
+    <span class="badge badge--space">Space O(h)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>h is log n on a balanced tree and n on a skew tree. Validate must see every node, O(n).</p>
+    <p><span class="eq">T_search = O(h), T_validate = &Theta;(n)</span></p>
+    <p>Order-statistic trees store sz[] so k-th is O(h) after each insert.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Range DFS validate</td><td>O(n)</td><td>O(h)</td><td>Correct invariant</td></tr>
+      <tr><td>Local child compare</td><td>O(n) but wrong</td><td>O(h)</td><td>Never</td></tr>
+      <tr><td>Inorder + prev</td><td>O(n)</td><td>O(h)</td><td>Also correct</td></tr>
+      <tr><td>TreeMap</td><td>O(log n) guaranteed</td><td>O(n)</td><td>Java library balanced BST</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Local left < me < right only</span>
+    <div class="pitfalls__bug">A 6 sitting in the left subtree of 4 passes the local check at 2.</div>
+    <div class="pitfalls__fix">Pass (lo, hi). Use long so Integer.MIN_VALUE is a legal node value.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow sentinels</span>
+    <div class="pitfalls__bug">lo = Integer.MIN_VALUE, node.val is also MIN_VALUE, lo < val fails or you use <= wrong.</div>
+    <div class="pitfalls__fix">long lo, hi with Long.MIN/MAX, or Integer bounds as objects.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Delete successor incorrectly</span>
+    <div class="pitfalls__bug">You delete the successor's value from the wrong parent, or forget it has no left child only.</div>
+    <div class="pitfalls__fix">successor = min(right); node.val = s.val; node.right = delete(node.right, s.val).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Duplicates</span>
+    <div class="pitfalls__bug"><= on both sides, or a validate that uses < both ways, rejects a legal duplicate policy.</div>
+    <div class="pitfalls__fix">Pick a side for equals (usually right) and match validate to it.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">k-th by converting to an array always</span>
+    <div class="pitfalls__bug">Fine for one query; wasteful if the follow-up is many k-th with inserts.</div>
+    <div class="pitfalls__fix">Subtree sizes, or a persistent inorder iterator.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Recover BST</td>
+        <td>Two nodes swapped; inorder finds two inversions, swap values.</td>
+        <td><code>first.val &lt;-&gt; second.val</code></td>
+        <td>LC 99</td>
+      </tr>
+      <tr>
+        <td>Iterator two-sum</td>
+        <td>Inorder stack + reverse-inorder stack as two pointers.</td>
+        <td><code>left++ / right-- on two iterators</code></td>
+        <td>LC 653</td>
+      </tr>
+      <tr>
+        <td>Size-augmented</td>
+        <td>sz[u]=1+sz[L]+sz[R]; k-th compares k to sz[L]+1.</td>
+        <td><code>if (k == szL+1) return u;</code></td>
+        <td>Order-statistic tree</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why long bounds?</summary>
+    <div class="followup__body">
+      <p>The node type is int, so MIN_VALUE and MAX_VALUE are legal keys. If you pass those as the initial lo/hi with int, a root equal to MIN_VALUE is rejected. long sentinels sit strictly outside.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is every inorder-sorted tree a BST?</summary>
+    <div class="followup__body">
+      <p>Yes for unique keys: the BST invariant is equivalent to inorder being strictly increasing. Building a tree from an increasing inorder still needs a structure (balanced mid split) if you also want height log n.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Delete complexity?</summary>
+    <div class="followup__body">
+      <p>O(h) to find, O(h) to find the successor, O(h) to splice. Still O(h). Hibbard deletion unbalances over time; interviews ignore that.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>LCA in BST vs general tree?</summary>
+    <div class="followup__body">
+      <p>BST: walk from the root using values, no extra memory. General: postorder both-sides (previous page) or binary lifting (later).</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/validate-binary-search-tree/" target="_blank" rel="noopener">Validate Binary Search Tree</a></td>
+        <td><span class="badge badge--lc">LC 98</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Range DFS</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/kth-smallest-element-in-a-bst/" target="_blank" rel="noopener">Kth Smallest Element In A Bst</a></td>
+        <td><span class="badge badge--lc">LC 230</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Inorder stop at k</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/insert-into-a-binary-search-tree/" target="_blank" rel="noopener">Insert Into A Binary Search Tree</a></td>
+        <td><span class="badge badge--lc">LC 701</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Walk to a null</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/delete-node-in-a-bst/" target="_blank" rel="noopener">Delete Node In A Bst</a></td>
+        <td><span class="badge badge--lc">LC 450</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Successor splice</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/" target="_blank" rel="noopener">Lowest Common Ancestor Of A Binary Search Tree</a></td>
+        <td><span class="badge badge--lc">LC 235</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Split walk</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/convert-sorted-array-to-binary-search-tree/" target="_blank" rel="noopener">Convert Sorted Array To Binary Search Tree</a></td>
+        <td><span class="badge badge--lc">LC 108</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Mid as root</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/recover-binary-search-tree/" target="_blank" rel="noopener">Recover Binary Search Tree</a></td>
+        <td><span class="badge badge--lc">LC 99</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two inorder inversions</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/two-sum-iv-input-is-a-bst/" target="_blank" rel="noopener">Two Sum Iv Input Is A Bst</a></td>
+        <td><span class="badge badge--lc">LC 653</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Hash or two iterators</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Invariant is a range</strong>, not a local child compare.</li>
+    <li><strong>Inorder is sorted</strong> (unique keys).</li>
+    <li><strong>k-th = inorder that stops</strong>, or sz[] for O(h).</li>
+    <li><strong>Delete two children via successor.</strong></li>
+    <li><strong>long sentinels</strong> for validate.</li>
+  </ul>
+  <div class="recap__oneliner">ok(n,lo,hi): lo&lt;n.val&lt;hi then ok(L,lo,val) &amp;&amp; ok(R,val,hi)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

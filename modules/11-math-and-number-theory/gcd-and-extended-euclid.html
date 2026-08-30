@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GCD &amp; Extended Euclid &mdash; DSA Course</title>
+<meta name="description" content="Euclid's algorithm is O(log min(a,b)). Extended Euclid also returns x,y with ax+by=gcd, which is the inverse of a mod m when gcd=1.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="gcd-and-extended-euclid">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 11 &middot; Math & Number Theory</span>
+  <h1>GCD & Extended Euclid</h1>
+  <p class="hero__tagline">Euclid's algorithm is O(log min(a,b)). Extended Euclid also returns x,y with ax+by=gcd, which is the inverse of a mod m when gcd=1.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="modular-arithmetic.html">Modular Arithmetic</a>,
+      <a href="../04-recursion-and-dnc/recursion-fundamentals.html">Recursion Fundamentals</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">gcd</span>
+      <span class="chip">exgcd</span>
+      <span class="chip">Bezout</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>gcd appears in fractions, lattice points, frog jumps (chicken nugget / Frobenius), and modular inverses when M is not prime. lcm(a,b)=a/gcd*b, carefully in long.</p>
+<p>Bézout: there exist x,y with ax+by=gcd(a,b). Extended Euclid finds them. a has an inverse mod m iff gcd(a,m)=1, and that inverse is x normalised.</p>
+<p>The subtractive version is slow (Fibonacci worst case is already logarithmic for modulo Euclid). Always %.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>gcd(a,b)=gcd(b, a%b). Unrolling the remainders gives the inverse as a back-substitution — that is extended Euclid.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Compute gcd / lcm, reduce fractions</li>
+        <li>Inverse of a modulo m when m is not prime</li>
+        <li>Integer solutions to ax+by=c</li>
+        <li>Lattice points on a segment (gcd of the delta)</li>
+        <li>When you can jump by a and b and want gcd-step</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Polynomial GCD → different Euclid</li>
+        <li>Need all inverses 1..n-1 mod P → linear inverse sieve, not n exgcds</li>
+        <li>Real numbers → floating gcd is meaningless</li>
+        <li>Prime modulus and one inverse → Fermat is fine too</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>gcd(a,b)</td>
+        <td>Euclid %</td>
+        <td>O(log)</td>
+      </tr>
+      <tr>
+        <td>ax+by=gcd</td>
+        <td>Extended Euclid</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>a^{-1} mod m</td>
+        <td>exgcd if gcd=1</td>
+        <td>Or Fermat if prime</td>
+      </tr>
+      <tr>
+        <td>ax+by=c</td>
+        <td>c must be multiple of gcd; scale x,y</td>
+        <td>Diophantine</td>
+      </tr>
+      <tr>
+        <td>lcm</td>
+        <td>a/gcd*b in long</td>
+        <td>overflow</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> binary GCD (Stein)</td>
+        <td>Uses shifts; similar speed</td>
+        <td>optional</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> a,b up to 1e18: use long, and % is O(1). Fibonacci pairs are the worst case, still &lt; 100 steps.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>exgcd(a,b): if b==0, return (a,1,0) meaning a*1+b*0=a. Else (g,x1,y1)=exgcd(b,a%b); then x=y1, y=x1-(a/b)*y1.</p>
+<p>Solve ax+by=c: if c%g !=0, no solution. Else multiply x,y by c/g. General solution x+=b/g*t, y-=a/g*t.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>At every recursive call, the current pair still generates the same gcd. The returned (x,y) satisfy ax+by=g for the current (a,b).</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="gcd-and-extended-euclidViz"></div>
+  <div class="viz-player" data-viz-target="gcd-and-extended-euclidViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "Euclid remainders =",
+      "array": [
+        30,
+        18,
+        12,
+        6,
+        0
+      ],
+      "vars": [
+        "a,b",
+        "q",
+        "g"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "gcd(30,18). 30=1*18+12.",
+          "active": [
+            0,
+            1
+          ],
+          "values": {
+            "a,b": "30,18",
+            "q": 1,
+            "g": "—"
+          }
+        },
+        {
+          "note": "gcd(18,12). 18=1*12+6.",
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "a,b": "18,12",
+            "q": 1,
+            "g": "—"
+          }
+        },
+        {
+          "note": "gcd(12,6). 12=2*6+0. gcd=6.",
+          "active": [
+            2,
+            3
+          ],
+          "values": {
+            "a,b": "12,6",
+            "q": 2,
+            "g": 6
+          }
+        },
+        {
+          "note": "Back: 6=18-1*12. 12=30-1*18. So 6=18-1*(30-18)=2*18-1*30. x=-1, y=2.",
+          "active": [
+            0
+          ],
+          "values": {
+            "a,b": "Bézout",
+            "q": "—",
+            "g": "30(-1)+18(2)"
+          }
+        },
+        {
+          "note": "inv of 18 mod 30 does not exist (gcd=6≠1).",
+          "active": [
+            4
+          ],
+          "values": {
+            "a,b": "18 vs 30",
+            "q": "—",
+            "g": "no inv"
+          }
+        },
+        {
+          "note": "inv of 7 mod 30: gcd=1. exgcd gives 7*(-17)+30*4=1, inv ≡ 13.",
+          "active": [
+            3
+          ],
+          "values": {
+            "a,b": "7,30",
+            "q": "—",
+            "g": 1
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Recurse on remainders, back-substitute</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  ab["exgcd a b"] --&gt; base{"b == 0?"}
+  base -- yes --&gt; ret["return a, 1, 0"]
+  base -- no --&gt; rec["exgcd b, a mod b"]
+  rec --&gt; back["x = y1; y = x1 - (a/b)*y1"]
+  </div>
+  <figcaption>The iterative version keeps old x,y and is nicer in Java (no stack).</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>gcd:</strong> while b!=0, (a,b)=(b,a%b). Return |a|.</li>
+  <li><strong>exgcd recursive</strong> as above, or iterative with x=1,y=0,x1=0,y1=1.</li>
+  <li><strong>Inverse:</strong> (g,x,y)=exgcd(a,m); if g!=1 fail; return (x%m+m)%m.</li>
+  <li><strong>ax+by=c:</strong> scale by c/g; parametrise by t.</li>
+  <li><strong>lcm:</strong> a/g*b with g=gcd, after confirming no overflow.</li>
+  <li><strong>n variables:</strong> iterate gcd, or lattice reduction — rare.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>a,b</th><th>q</th><th>g</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>30,18</td><td>1</td><td>—</td><td>gcd(30,18). 30=1*18+12.</td></tr>
+      <tr><td>18,12</td><td>1</td><td>—</td><td>gcd(18,12). 18=1*12+6.</td></tr>
+      <tr><td>12,6</td><td>2</td><td>6</td><td>gcd(12,6). 12=2*6+0. gcd=6.</td></tr>
+      <tr><td>Bézout</td><td>—</td><td>30(-1)+18(2)</td><td>Back: 6=18-1*12. 12=30-1*18. So 6=18-1*(30-18)=2*18-1*30. x=-1, y=2.</td></tr>
+      <tr><td>18 vs 30</td><td>—</td><td>no inv</td><td>inv of 18 mod 30 does not exist (gcd=6≠1).</td></tr>
+      <tr><td>7,30</td><td>—</td><td>1</td><td>inv of 7 mod 30: gcd=1. exgcd gives 7*(-17)+30*4=1, inv ≡ 13.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="GCD & Extended Euclid implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Subtract. Worst-case linear in a+b.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GcdSub.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class GcdSub {
+        static int gcd(int a, int b) {
+            while (a != b) { if (a &gt; b) a -= b; else b -= a; }
+            return a;
+        }
+        public static void main(String[] args) {
+            System.out.println(gcd(30, 18));
+        }
+        // Input : 30,18
+        // Output: 6
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Iterative extended Euclid and modular inverse.</p>
+    <div class="code" data-highlight="3-16">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExGcd.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ExGcd {
+        static long gcd(long a, long b) { return b == 0 ? a : gcd(b, a % b); }
+        static long[] exgcd(long a, long b) {
+            long x = 1, y = 0, x1 = 0, y1 = 1;
+            while (b != 0) {
+                long q = a / b;
+                long nb = a % b; a = b; b = nb;
+                long nx = x - q * x1; x = x1; x1 = nx;
+                long ny = y - q * y1; y = y1; y1 = ny;
+            }
+            return new long[] {a, x, y};
+        }
+        static long inv(long a, long m) {
+            long[] g = exgcd(a, m);
+            if (g[0] != 1) return -1;
+            long x = g[1] % m;
+            return x &lt; 0 ? x + m : x;
+        }
+        public static void main(String[] args) {
+            System.out.println(gcd(30, 18));
+            System.out.println(inv(7, 30));
+        }
+        // Input : gcd 30,18 and inv 7 mod 30
+        // Output: 6
+        //         13
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>One particular solution of ax+by=c, or null.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Diophantine.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class Diophantine {
+        static long[] exgcd(long a, long b) {
+            if (b == 0) return new long[] {a, 1, 0};
+            long[] r = exgcd(b, a % b);
+            return new long[] {r[0], r[2], r[1] - (a / b) * r[2]};
+        }
+        static long[] solve(long a, long b, long c) {
+            long[] t = exgcd(a, b);
+            if (c % t[0] != 0) return null;
+            long k = c / t[0];
+            return new long[] {t[1] * k, t[2] * k};
+        }
+        public static void main(String[] args) {
+            long[] s = solve(30, 18, 12);
+            System.out.println(s[0] + " " + s[1]);
+        }
+        // Input : 30x+18y=12
+        // Output: -2 4
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(log min(a,b))</span>
+    <span class="badge badge--space">Space O(1) iterative / O(log) recursive</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each remainder is at most 2/3 of the previous (Lamé). Worst case consecutive Fibonacci numbers, O(log_phi a) steps.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Subtractive Euclid</td><td>O(a+b)</td><td>O(1)</td><td>Never</td></tr>
+      <tr><td>Euclid %</td><td>O(log)</td><td>O(1)</td><td>gcd/lcm</td></tr>
+      <tr><td>Exgcd</td><td>O(log)</td><td>O(1)</td><td>Inverse, Bezout</td></tr>
+      <tr><td>Fermat inv</td><td>O(log M)</td><td>O(1)</td><td>Prime M only</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">lcm overflow</span>
+    <div class="pitfalls__bug"><code>a*b/gcd</code> overflows before divide.</div>
+    <div class="pitfalls__fix"><code>a / gcd * b</code> in long, gcd first.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Negative a,b</span>
+    <div class="pitfalls__bug">Java % sign follows dividend; gcd may be negative.</div>
+    <div class="pitfalls__fix">Work with abs, or normalise at the end.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Ignoring g!=1 for inverse</span>
+    <div class="pitfalls__bug">You still return x, and a*x ≡ 0 or other junk.</div>
+    <div class="pitfalls__fix">If g!=1, no inverse. For ax≡b, need g|b.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recursive exgcd on Fibonacci 1e18</span>
+    <div class="pitfalls__bug">Depth ~ 90, fine actually. Still prefer iterative.</div>
+    <div class="pitfalls__fix">Iterative is clearer for the x,y updates.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">General solution forgetting t step b/g</span>
+    <div class="pitfalls__bug">You add b instead of b/g and skip solutions.</div>
+    <div class="pitfalls__fix">x += (b/g)*t; y -= (a/g)*t.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Linear inverses 1..n</td>
+        <td>inv[1]=1; inv[i]=P-P/i*inv[P%i]%P.</td>
+        <td><code>O(n)</code></td>
+        <td>combinatorics</td>
+      </tr>
+      <tr>
+        <td>CRT two mods</td>
+        <td>Need inv of m1 mod m2, i.e. exgcd.</td>
+        <td><code>x=a1+m1*((a2-a1)*inv m1)</code></td>
+        <td>inclusion later</td>
+      </tr>
+      <tr>
+        <td>Lattice points on (x1,y1)-(x2,y2)</td>
+        <td>gcd(|x2-x1|,|y2-y1|)-1 interior.</td>
+        <td><code>Pick's theorem cousin</code></td>
+        <td>geometry</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why does Euclid terminate?</summary>
+    <div class="followup__body">
+      <p>Remainders are non-negative and strictly decrease. gcd is preserved because a divisor of a,b divides a%b and conversely.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Binary GCD?</summary>
+    <div class="followup__body">
+      <p>Stein: divide out 2, then subtract odds. Good on huge bit-integers. For 64-bit, % is faster in Java.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Frobenius coin problem?</summary>
+    <div class="followup__body">
+      <p>For coprime a,b the largest impossible amount is ab-a-b. If gcd&gt;1, all large enough multiples of the gcd are possible, but not all integers.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>n-dimensional ax=c?</summary>
+    <div class="followup__body">
+      <p>Gcd of all coefficients must divide c. Finding one solution uses iterative exgcd. The kernel is a lattice of rank n-1.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-greatest-common-divisor-of-array/" target="_blank" rel="noopener">Find Greatest Common Divisor Of Array</a></td>
+        <td><span class="badge badge--lc">LC 1979</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>gcd of min and max</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/water-and-jug-problem/" target="_blank" rel="noopener">Water And Jug Problem</a></td>
+        <td><span class="badge badge--lc">LC 365</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Bezout: z multiple of gcd, zle a+b</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://cses.fi/problemset/task/1079" target="_blank" rel="noopener">Binomial Coefficients</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>inv via Fermat/exgcd</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://cses.fi/problemset/task/1713" target="_blank" rel="noopener">Counting Divisors</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>not gcd — nearby</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/182/D" target="_blank" rel="noopener">Common Divisors</a></td>
+        <td><span class="badge badge--cf">CF 182D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>gcd of lengths, string periods</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/7/C" target="_blank" rel="noopener">Line</a></td>
+        <td><span class="badge badge--cf">CF 7C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>ax+by+c=0 integer points, exgcd</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/abc105/tasks/abc105_d" target="_blank" rel="noopener">ABC 105 D</a></td>
+        <td><span class="badge badge--atc">ABC 105D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>prefix gcd-ish; use ABC 149 C? ABC 118 C</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/abc118/tasks/abc118_c" target="_blank" rel="noopener">ABC 118 C</a></td>
+        <td><span class="badge badge--atc">ABC 118C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>gcd of all</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>gcd(a,b)=gcd(b,a%b). Never subtract in a loop.</li>
+    <li>exgcd returns Bezout coefficients.</li>
+    <li>Inverse iff gcd(a,m)=1; normalise x.</li>
+    <li>lcm = a/gcd*b in long.</li>
+    <li>ax+by=c solvable iff gcd|c.</li>
+  </ul>
+  <div class="recap__oneliner">while(b!=0){ t=a%b; a=b; b=t; }  // exgcd also tracks x,y</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bellman-Ford &amp; Negative Cycles &mdash; DSA Course</title>
+<meta name="description" content="Relax every edge n-1 times. A successful relaxation on the n-th pass is a negative cycle that can reach the target.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="bellman-ford-and-negative-cycles">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>Bellman-Ford & Negative Cycles</h1>
+  <p class="hero__tagline">Relax every edge <code>n-1</code> times. A successful relaxation on the n-th pass is a negative cycle that can reach the target.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/dijkstra.html">Dijkstra's Algorithm</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">Bellman-Ford</span>
+      <span class="chip">negative cycle</span>
+      <span class="chip">shortest path</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Dijkstra assumes non-negative weights. One negative edge and the extracted-min order is a lie. Bellman-Ford only assumes there is no negative cycle on the path you care about, and it <em>detects</em> the ones that exist.</p>
+<p>The algorithm is the definition of a shortest path of at most <code>k</code> edges: after <code>i</code> full relax passes, <code>dist[v]</code> is the cheapest walk from the source that uses at most <code>i</code> edges. A simple path has at most <code>n-1</code> edges, so <code>n-1</code> passes suffice. A cheap n-th relaxation means a cycle with negative total weight.</p>
+<p>Interview and contest uses: "cheapest flights with at most k stops" is Bellman-Ford stopped early; "can I make money forever on these exchange rates" is a negative cycle on <code>-log(rate)</code>.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>After i relax-all-edges passes, dist is exact for paths of at most i edges. One more success on pass n is a negative cycle, not a longer simple path.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Directed (or undirected) graph with negative weights, single source</li>
+        <li>Detect whether a negative cycle exists, or can reach a given node</li>
+        <li>"At most k edges / k stops" — stop after k relax passes</li>
+        <li>Arbitrage / exchange rates (negate the log of the rate)</li>
+        <li>n is a few thousand, m a few thousand — O(nm) fits</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Non-negative weights and you need speed &rarr; Dijkstra</li>
+        <li>All-pairs on a dense graph of n <= 400 &rarr; Floyd-Warshall</li>
+        <li>0-1 weights &rarr; 0-1 BFS</li>
+        <li>You only need a spanning tree &rarr; MST, not shortest paths</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Negative weights, single source</td>
+        <td>Relax all edges n-1 times</td>
+        <td>Bellman-Ford</td>
+      </tr>
+      <tr>
+        <td>Negative cycle detect / reach</td>
+        <td>One more pass; walk parents</td>
+        <td>SPFA / BF + extra pass</td>
+      </tr>
+      <tr>
+        <td>At most k edges</td>
+        <td>Stop after k passes</td>
+        <td>LC 787</td>
+      </tr>
+      <tr>
+        <td>Non-negative, sparse</td>
+        <td>Faster</td>
+        <td>Dijkstra</td>
+      </tr>
+      <tr>
+        <td>All-pairs, n <= 400</td>
+        <td>Dense DP</td>
+        <td>Floyd-Warshall</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Dijkstra with a decrease-key skip</td>
+        <td>Skipping stale heap entries does not make Dijkstra correct on negatives</td>
+        <td>Use BF</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 2&times;10&#179;</code>, <code>m &le; 5&times;10&#179;</code> is the O(nm) window. Distances need <code>long</code>: n * |w| can hit 1e14. Undirected negative edges are already a negative cycle of length 2.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Store an edge list. <code>dist[src] = 0</code>, rest INF. Repeat n-1 times: for every edge <code>u	o v</code> of weight w, if <code>dist[u]</code> is finite and <code>dist[u]+w &lt; dist[v]</code>, write the new distance and <code>par[v] = u</code>.</p>
+<p>Nth pass: any successful relax is a node on (or reachable from) a negative cycle. To recover the cycle, walk parent pointers n times from that node to enter the cycle, then walk once more to print it. To mark every node that can be driven to -INF, BFS/DFS from all nth-pass victims along the graph (or the reverse graph, depending on the question).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>After pass i, <code>dist[v]</code> equals the minimum weight of a walk from the source to v that uses at most i edges, or INF if none exists. A simple path cannot need more than n-1 edges, so pass n-1 is exact in a graph with no negative cycle on that path.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bellman-ford-and-negative-cyclesViz"></div>
+  <div class="viz-player" data-viz-target="bellman-ford-and-negative-cyclesViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "dist =",
+      "array": [
+        0,
+        5,
+        2,
+        6
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "pass",
+        "edge",
+        "dist"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Edges: 0\to1 w=5, 0\to2 w=4, 2\to1 w=-2, 1\to3 w=1, 2\to3 w=3. src=0. dist=[0,inf,inf,inf].",
+          "active": [
+            0
+          ],
+          "values": {
+            "pass": 0,
+            "edge": "init",
+            "dist": "0,inf,inf,inf"
+          }
+        },
+        {
+          "note": "Pass 1: relax 0\to1 → dist[1]=5; 0\to2 → dist[2]=4.",
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "pass": 1,
+            "edge": "0-1, 0-2",
+            "dist": "0,5,4,inf"
+          }
+        },
+        {
+          "note": "Still pass 1: 2\to1 improves 5 to 2. 1\to3 sets dist[3]=6. 2\to3 would be 7, worse.",
+          "active": [
+            1,
+            3
+          ],
+          "values": {
+            "pass": 1,
+            "edge": "2-1, 1-3",
+            "dist": "0,2,4,3"
+          }
+        },
+        {
+          "note": "Wait: 1\to3 after dist[1]=2 gives dist[3]=3. Array is [0,2,4,3].",
+          "active": [
+            3
+          ],
+          "values": {
+            "pass": 1,
+            "edge": "1-3 again",
+            "dist": "0,2,4,3"
+          }
+        },
+        {
+          "note": "Pass 2: 2\to1 already 2; 1\to3 already 3. No change. Passes 3 have nothing to do.",
+          "active": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "pass": 2,
+            "edge": "none",
+            "dist": "0,2,4,3"
+          }
+        },
+        {
+          "note": "Pass n=4 finds no improvement: no negative cycle reachable from 0.",
+          "active": [
+            0
+          ],
+          "values": {
+            "pass": 4,
+            "edge": "detect",
+            "dist": "stable"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  n0["0"] --&gt;|"5"| n1["1"]
+  n0 --&gt;|"4"| n2["2"]
+  n2 --&gt;|"-2"| n1
+  n1 --&gt;|"1"| n3["3"]
+  n2 --&gt;|"3"| n3
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>dist[src] = 0</strong>, others INF, parent = -1.</li>
+  <li><strong>Repeat n-1 times:</strong> for every edge, relax <code>dist[v] = min(dist[v], dist[u]+w)</code> when dist[u] is finite.</li>
+  <li><strong>Optional early exit</strong> if a pass changes nothing.</li>
+  <li><strong>Nth pass:</strong> collect every vertex whose distance still drops.</li>
+  <li><strong>Cycle recover:</strong> from any victim walk parent n times, then walk until repeat.</li>
+  <li><strong>-INF reach:</strong> flood from those victims (forward or reverse, as the question asks).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>pass</th><th>edge</th><th>dist</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>init</td><td>0,inf,inf,inf</td><td>Edges: 0	o1 w=5, 0	o2 w=4, 2	o1 w=-2, 1	o3 w=1, 2	o3 w=3. src=0. dist=[0,inf,inf,inf].</td></tr>
+      <tr><td>1</td><td>0-1, 0-2</td><td>0,5,4,inf</td><td>Pass 1: relax 0	o1 → dist[1]=5; 0	o2 → dist[2]=4.</td></tr>
+      <tr><td>1</td><td>2-1, 1-3</td><td>0,2,4,3</td><td>Still pass 1: 2	o1 improves 5 to 2. 1	o3 sets dist[3]=6. 2	o3 would be 7, worse.</td></tr>
+      <tr><td>1</td><td>1-3 again</td><td>0,2,4,3</td><td>Wait: 1	o3 after dist[1]=2 gives dist[3]=3. Array is [0,2,4,3].</td></tr>
+      <tr><td>2</td><td>none</td><td>0,2,4,3</td><td>Pass 2: 2	o1 already 2; 1	o3 already 3. No change. Passes 3 have nothing to do.</td></tr>
+      <tr><td>4</td><td>detect</td><td>stable</td><td>Pass n=4 finds no improvement: no negative cycle reachable from 0.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Bellman-Ford & Negative Cycles implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BellmanFordBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    public class BellmanFordBrute {
+        static long[] bf(int n, int[][] edges, int src) {
+            long[] d = new long[n];
+            Arrays.fill(d, Long.MAX_VALUE / 4);
+            d[src] = 0;
+            for (int i = 0; i &lt; n - 1; i++)
+                for (int[] e : edges)
+                    if (d[e[0]] + e[2] &lt; d[e[1]]) d[e[1]] = d[e[0]] + e[2];
+            return d;
+        }
+        public static void main(String[] args) {
+            int[][] e = {{0,1,5},{0,2,4},{2,1,-2},{1,3,1},{2,3,3}};
+            System.out.println(Arrays.toString(bf(4, e, 0)));
+        }
+        // Input : 4 nodes, edges as above, src 0
+        // Output: [0, 2, 4, 3]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BellmanFord.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class BellmanFord {
+        static boolean hasNegCycle(int n, int[][] edges, int src) {
+            long[] d = new long[n];
+            Arrays.fill(d, Long.MAX_VALUE / 4);
+            d[src] = 0;
+            for (int i = 0; i &lt; n - 1; i++)
+                for (int[] e : edges)
+                    if (d[e[0]] + (long) e[2] &lt; d[e[1]]) d[e[1]] = d[e[0]] + e[2];
+            for (int[] e : edges)
+                if (d[e[0]] + (long) e[2] &lt; d[e[1]]) return true;
+            return false;
+        }
+        public static void main(String[] args) {
+            int[][] e = {{0,1,5},{0,2,4},{2,1,-2},{1,3,1},{2,3,3}};
+            System.out.println(hasNegCycle(4, e, 0));
+            int[][] cyc = {{0,1,1},{1,2,-3},{2,0,1},{0,3,4}};
+            System.out.println(hasNegCycle(4, cyc, 0));
+        }
+        // Input : first graph no cycle; second 0-1-2-0 weight -1
+        // Output: false
+        //         true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KStops.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    public class KStops {
+        static int cheapest(int n, int[][] flights, int src, int dst, int k) {
+            long[] d = new long[n];
+            Arrays.fill(d, Long.MAX_VALUE / 4);
+            d[src] = 0;
+            for (int i = 0; i &lt;= k; i++) {
+                long[] nd = d.clone();
+                for (int[] e : flights)
+                    if (d[e[0]] + e[2] &lt; nd[e[1]]) nd[e[1]] = d[e[0]] + e[2];
+                d = nd;
+            }
+            return d[dst] &gt;= Long.MAX_VALUE / 8 ? -1 : (int) d[dst];
+        }
+        public static void main(String[] args) {
+            int[][] f = {{0,1,100},{1,2,100},{0,2,500}};
+            System.out.println(cheapest(3, f, 0, 2, 1));
+        }
+        // Input : flights 0-1 100, 1-2 100, 0-2 500; k=1
+        // Output: 200
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>n-1 passes, each scans m edges, so <code>O(nm)</code>. SPFA is faster on random graphs and worst-case exponential — do not use it when an adversary exists unless you have a queue-count cutoff that falls back to BF.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Bellman-Ford</td><td>O(nm)</td><td>O(n)</td><td>Negatives, cycle detect</td></tr>
+      <tr><td>Dijkstra</td><td>O(m log n)</td><td>O(n)</td><td>Non-negative only</td></tr>
+      <tr><td>0-1 BFS</td><td>O(n+m)</td><td>O(n)</td><td>Weights 0/1</td></tr>
+      <tr><td>Floyd-Warshall</td><td>O(n^3)</td><td>O(n^2)</td><td>All-pairs, n<=400</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Relaxing from INF</span>
+    <div class="pitfalls__bug"><code>INF + negative</code> becomes a finite junk distance and "reaches" a node that the source cannot.</div>
+    <div class="pitfalls__fix">Only relax when <code>dist[u]</code> is finite.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int overflow</span>
+    <div class="pitfalls__bug"><code>n * |w|</code> exceeds Integer.MAX_VALUE and a real shortest path looks like a negative cycle.</div>
+    <div class="pitfalls__fix"><code>long[] dist</code>. Sentinel <code>Long.MAX_VALUE/4</code> so additions do not overflow.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Nth-pass victim is not on the cycle</span>
+    <div class="pitfalls__bug">It is only reachable <em>from</em> the cycle. Walking parents once may stop at a tree edge.</div>
+    <div class="pitfalls__fix">Walk parent n times first to land on the cycle, then walk until you repeat.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Undirected negative edge</span>
+    <div class="pitfalls__bug">Storing both directions of a negative edge is a 2-cycle of negative weight.</div>
+    <div class="pitfalls__fix">Undirected negatives are almost always a modelling error. Confirm the statement.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">In-place relax for "at most k edges"</span>
+    <div class="pitfalls__bug">Using one array lets a pass use a distance written earlier in the same pass, which is a path of more than one extra edge.</div>
+    <div class="pitfalls__fix">Clone <code>dist</code> each pass (LC 787).</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>k stops</td>
+        <td>Exactly k extra edges: k+1 passes, two arrays.</td>
+        <td><code>LC 787</code></td>
+        <td>cheapest flights</td>
+      </tr>
+      <tr>
+        <td>SPFA</td>
+        <td>Queue only vertices that improved. Fast typical, worst-case exponential.</td>
+        <td><code>cutoff visits &gt; n</code></td>
+        <td>use with care</td>
+      </tr>
+      <tr>
+        <td>Arbitrage</td>
+        <td>Edge weight = -log(rate). A negative cycle is a profitable loop.</td>
+        <td><code>print the cycle</code></td>
+        <td>CF 15D-ish</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why n-1, not n?</summary>
+    <div class="followup__body">
+      <p>A simple path has at most n-1 edges. If a cheaper walk uses n edges it repeats a vertex, hence contains a cycle, hence (if it is cheaper) a negative cycle.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Does BF work on undirected graphs?</summary>
+    <div class="followup__body">
+      <p>Yes if every weight is non-negative. A single negative undirected edge is a negative cycle. Model the graph as directed with both orientations only when weights are ≥ 0.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you list every node that can be driven to -INF?</summary>
+    <div class="followup__body">
+      <p>After the nth pass, the victims are nodes that improved. DFS/BFS forward from them (and, if the question is "source can cheat to reach t", also require they are reachable from the source).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Bellman-Ford vs Dijkstra with potentials?</summary>
+    <div class="followup__body">
+      <p>Johnson's algorithm runs BF once from a dummy source to compute potentials, then Dijkstra with non-negative reduced costs for every source. That is the all-pairs algorithm when n is too big for Floyd and weights can be negative but there is no negative cycle.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/cheapest-flights-within-k-stops/" target="_blank" rel="noopener">Cheapest Flights Within K Stops</a></td>
+        <td><span class="badge badge--lc">LC 787</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>BF with k passes</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/network-delay-time/" target="_blank" rel="noopener">Network Delay Time</a></td>
+        <td><span class="badge badge--lc">LC 743</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dijkstra usually; BF also works</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/20/C" target="_blank" rel="noopener">Dijkstra?</a></td>
+        <td><span class="badge badge--cf">CF 20C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Non-negative; parent recover</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/449/B" target="_blank" rel="noopener">Jzzhu and Cities</a></td>
+        <td><span class="badge badge--cf">CF 449B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Shortest paths + extra train edges</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1213/G" target="_blank" rel="noopener">Path Queries</a></td>
+        <td><span class="badge badge--cf">CF 1213G</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Offline MST, not BF — contrast</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/path-with-minimum-effort/" target="_blank" rel="noopener">Path With Minimum Effort</a></td>
+        <td><span class="badge badge--lc">LC 1631</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dijkstra / 0-1 thinking</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/1197" target="_blank" rel="noopener">Cycle Finding</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Recover a negative cycle</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://cses.fi/problemset/task/1673" target="_blank" rel="noopener">High Score</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Negate weights, -INF reach</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>Relax all edges n-1 times; dist is then exact for simple paths.</li>
+    <li>A success on pass n is a negative cycle.</li>
+    <li>Do not relax from INF.</li>
+    <li>k-stop problems use a cloned array per pass.</li>
+    <li>Walk parent n times before printing the cycle.</li>
+  </ul>
+  <div class="recap__oneliner">for n-1 passes: for each edge relax dist[v] with dist[u]+w; one more success =&gt; neg cycle;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

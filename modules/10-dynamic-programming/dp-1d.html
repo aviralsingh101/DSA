@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1-D DP &mdash; DSA Course</title>
+<meta name="description" content="One index, two choices &mdash; take it or skip it &mdash; is house robber, frog jumps, decode ways, and most &quot;best on a prefix&quot; problems.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="dp-1d">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 10 &middot; Dynamic Programming</span>
+  <h1>1-D DP</h1>
+  <p class="hero__tagline">One index, two choices &mdash; take it or skip it &mdash; is house robber, frog jumps, decode ways, and most "best on a prefix" problems.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="dp-foundations.html">DP Foundations</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">1D DP</span>
+      <span class="chip">house robber</span>
+      <span class="chip">prefix</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Once the state is "best / ways using the first i elements", a surprising fraction of array DP collapses to one loop. The live question is only what the last decision was: did we take a[i], and what does that forbid?</p>
+<p>House robber is the mascot: taking i forbids i-1, so <code>dp[i] = max(dp[i-1], dp[i-2] + a[i])</code>. Decode ways, delete-and-earn, and frog-jump costs are the same shape with a different combine. Learn the shape, not the story.</p>
+<p>The space trick is automatic: two (or k) previous answers replace the array. That is why 1D DP is the first family after foundations &mdash; it is foundations with an array of weights attached.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Define dp[i] as the answer for the prefix a[0..i]. The transition looks only at a constant number of earlier prefixes plus a[i] itself.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Best / ways / possibility on a prefix of an array</li>
+        <li>"Cannot pick two adjacent" / "jump at most k" / "last decision is local"</li>
+        <li>Delete-and-earn, house robber, decode ways, frog 1/2</li>
+        <li>A linear scan would work if you stored a few running answers</li>
+        <li>n = 1e5 rules out n&sup2;, and the dependency is local</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The answer for prefix i depends on an arbitrary earlier j &rarr; LIS / nested loops / n log n</li>
+        <li>Capacity / remaining budget is a second dimension &rarr; knapsack</li>
+        <li>A grid, not an array &rarr; grid DP</li>
+        <li>Subarrays as intervals [l,r] &rarr; interval DP</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cannot pick adjacent</td>
+        <td>Take or skip</td>
+        <td>dp[i]=max(dp[i-1], dp[i-2]+a[i])</td>
+      </tr>
+      <tr>
+        <td>Jump 1..k with a cost</td>
+        <td>min over a window</td>
+        <td>dp[i]=a[i]+min(dp[i-1]..dp[i-k])</td>
+      </tr>
+      <tr>
+        <td>Decode / split a string</td>
+        <td>Last 1 or 2 chars valid?</td>
+        <td>ways[i]+=ways[i-1]/i-2</td>
+      </tr>
+      <tr>
+        <td>Delete-and-earn</td>
+        <td>House robber on compressed values</td>
+        <td>Same rec on cnt[v]</td>
+      </tr>
+      <tr>
+        <td>Max sum with no two adjacent</td>
+        <td>House robber</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>Kadane (any subarray)</td>
+        <td>Different invariant: reset vs extend</td>
+        <td><a href="../01-arrays-and-windows/kadane.html">Kadane</a></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Kadane</td>
+        <td>Kadane allows a reset to a[i]; house robber cannot drop the prefix freely</td>
+        <td>If you may start a new segment anywhere, it is Kadane</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> wants O(n) after you roll. Answers are <code>long</code> when values are 1e9. A window of k with a naive min is O(nk) and dies at k = n; then you need a monotonic deque (still 1D DP).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Take or skip, written as a prefix</h2>
+<p>Let <code>dp[i]</code> be the maximum money from houses <code>0..i</code>. If you skip i you already have <code>dp[i-1]</code>. If you take i you cannot have taken i-1, so you add <code>a[i]</code> to <code>dp[i-2]</code>. The max of those two is optimal, because every plan decides i one way or the other.</p>
+<p>Bases: <code>dp[0] = a[0]</code>, <code>dp[1] = max(a[0], a[1])</code>. The loop runs i = 2 .. n-1. Rolling: keep <code>prev2, prev1</code> and write <code>cur = max(prev1, prev2 + a[i])</code>. Decode ways is the counting twin: a valid last digit uses ways[i-1], a valid last pair uses ways[i-2]. Same indices, <code>+</code> instead of <code>max</code>, and a validity predicate on the characters.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><code>dp[i]</code> is the best answer that is allowed to use any subset of <code>a[0..i]</code> obeying the local constraint (no two adjacent, jump limit, &hellip;). After i = n-1 you have the full-array answer.</p><span class="eq">dp[i] = max(dp[i-1], dp[i-2] + a[i])</span>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Circular house robber</span>
+    <p>If n and 0 are adjacent, you cannot take both. Run the linear DP twice, once on [0..n-2] and once on [1..n-1], and take the max. The empty / single-house cases are the only extra bases.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Window of k, O(n) with a deque</span>
+    <p>dp[i] = a[i] + min_{i-k &le; j &lt; i} dp[j]. A monotonic deque of increasing dp values with indices, popping the front when it leaves the window, makes each i O(1). That is still 1D DP; the deque is the data structure, not a new family.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>House robber on [2, 7, 9, 3, 1]</h3>
+
+<p>One row of dp[i]. Target is the cell we write; from cells are the skip (i-1) and the take (i-2) options.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="dp-1dViz"></div>
+  <div class="viz-player" data-viz-target="dp-1dViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "i",
+      "rowHeads": [
+        "a",
+        "dp"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "vars": [
+        "i",
+        "choice",
+        "dp[i]"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "a = [2, 7, 9, 3, 1]. Base dp[0] = 2.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "2"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "7"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "9"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "3"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "2",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "i": 0,
+            "choice": "must take 2",
+            "dp[i]": 2
+          }
+        },
+        {
+          "note": "dp[1] = max(2, 7) = 7. Better to take the second house alone.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "7",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 1,
+            "choice": "max(skip, take)",
+            "dp[i]": 7
+          }
+        },
+        {
+          "note": "i=2. skip = dp[1]=7, take = dp[0]+9=11. Write 11.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "11",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "7",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "2",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 2,
+            "choice": "take 9",
+            "dp[i]": 11
+          }
+        },
+        {
+          "note": "i=3. skip=11, take=7+3=10. Skip wins: 11.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 3,
+              "val": "11",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "11",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "7",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 3,
+            "choice": "skip 3",
+            "dp[i]": 11
+          }
+        },
+        {
+          "note": "i=4. skip=11, take=11+1=12. Take the last house. Answer 12.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 4,
+              "val": "12",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "11",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "11",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": 4,
+            "choice": "take 1",
+            "dp[i]": 12
+          }
+        },
+        {
+          "note": "Rolling view: only dp[i-1]=11 and dp[i-2]=11 were needed to write 12.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 4,
+              "val": "12",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "11",
+              "cls": "from"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "11",
+              "cls": "from"
+            }
+          ],
+          "values": {
+            "i": "roll",
+            "choice": "two ints",
+            "dp[i]": 12
+          }
+        },
+        {
+          "note": "Reconstruction: 12 came from take, so include a[4], jump to i=2. 11 came from take, include a[2], jump to i=0. Include a[0]. Set {0,2,4}.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "2",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "9",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "1",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 4,
+              "val": "12",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "i": "path",
+            "choice": "0,2,4",
+            "dp[i]": 12
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Answer 12 = 2+9+1, which is take / skip / take / skip / take. The table never stores the subset, only the best value.</figcaption>
+</figure>
+
+<h3>Which 1D template?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q(["array, best or ways"]) --&gt; adj{"adjacent constraint?"}
+  adj -- "no two adjacent" --&gt; hr["house robber max"]
+  adj -- "last 1 or 2 tokens" --&gt; dec["decode-ways +="]
+  adj -- "jump 1..k" --&gt; jmp["min over window, maybe deque"]
+  adj -- "value line, delete neighbours" --&gt; de["compress, then house robber"]
+  hr --&gt; roll["roll two integers"]
+  dec --&gt; roll
+  jmp --&gt; roll
+  de --&gt; roll
+  </div>
+  <figcaption>Local constraint plus a prefix state. If the second index is a capacity, leave this page.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>State:</strong> dp[i] = answer on prefix 0..i.</li>
+  <li><strong>Decision at i:</strong> skip (read i-1) or take (read i-2, or a window).</li>
+  <li><strong>Bases</strong> for i = 0 and i = 1, written out, not stuffed into the loop.</li>
+  <li><strong>Loop i = 2 .. n-1</strong> and apply the formula.</li>
+  <li><strong>Roll</strong> to two (or k) running values if you do not need the table.</li>
+  <li><strong>Circular:</strong> run twice, drop the first house or the last.</li>
+  <li><strong>Reconstruct</strong> by comparing which branch produced dp[i].</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>House robber on [2, 7, 9, 3, 1].</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>a[i]</th><th>skip dp[i-1]</th><th>take dp[i-2]+a[i]</th><th>dp[i]</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>2</td><td>—</td><td>2</td><td>2</td><td>Base.</td></tr>
+      <tr><td>1</td><td>7</td><td>2</td><td>7</td><td>7</td><td>max(a[0], a[1]).</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>9</td><td>7</td><td>2+9=11</td><td>11</td><td>Take.</td></tr>
+      <tr><td>3</td><td>3</td><td>11</td><td>7+3=10</td><td>11</td><td>Skip.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>1</td><td>11</td><td>11+1=12</td><td>12</td><td>Take. Answer 12.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="1-D DP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Recursion</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Memo</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Tabulated</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Space-opt</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Recursion">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RobRec.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class RobRec {
+    
+        static int rob(int[] a, int i) {
+            if (i &gt;= a.length) {
+                return 0;
+            }
+            return Math.max(rob(a, i + 1), a[i] + rob(a, i + 2));
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(rob(new int[] {2, 7, 9, 3, 1}, 0));
+        }
+        // Input : [2, 7, 9, 3, 1]
+        // Output: 12
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Memo">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RobMemo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class RobMemo {
+    
+        static int rob(int[] a, int i, int[] memo) {
+            if (i &gt;= a.length) {
+                return 0;
+            }
+            if (memo[i] != -1) {
+                return memo[i];
+            }
+            return memo[i] = Math.max(rob(a, i + 1, memo), a[i] + rob(a, i + 2, memo));
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {2, 7, 9, 3, 1};
+            int[] memo = new int[a.length];
+            Arrays.fill(memo, -1);
+            System.out.println(rob(a, 0, memo));
+        }
+        // Input : [2, 7, 9, 3, 1]
+        // Output: 12
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Tabulated">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RobTab.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class RobTab {
+    
+        static int rob(int[] a) {
+            int n = a.length;
+            if (n == 1) {
+                return a[0];
+            }
+            int[] dp = new int[n];
+            dp[0] = a[0];
+            dp[1] = Math.max(a[0], a[1]);
+            for (int i = 2; i &lt; n; i++) {
+                dp[i] = Math.max(dp[i - 1], dp[i - 2] + a[i]);
+            }
+            return dp[n - 1];
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(rob(new int[] {2, 7, 9, 3, 1}));
+        }
+        // Input : [2, 7, 9, 3, 1]
+        // Output: 12
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Space-opt">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RobRoll.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class RobRoll {
+    
+        static int rob(int[] a) {
+            int prev2 = 0, prev1 = 0;
+            for (int x : a) {
+                int cur = Math.max(prev1, prev2 + x);
+                prev2 = prev1;
+                prev1 = cur;
+            }
+            return prev1;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(rob(new int[] {2, 7, 9, 3, 1}));
+        }
+        // Input : [2, 7, 9, 3, 1]
+        // Output: 12
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n)</span>
+    <span class="badge badge--space">Space O(1) rolled; O(n) table</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>n states, O(1) transition (or O(k) for a naive window, O(1) with a deque):</p>
+    <p><span class="eq">T = &Theta;(n)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>House robber</td><td>O(n)</td><td>O(1)</td><td>Take / skip adjacent</td></tr>
+      <tr><td>Decode ways</td><td>O(n)</td><td>O(1)</td><td>Counting twin</td></tr>
+      <tr><td>Jump min, window k naive</td><td>O(nk)</td><td>O(n)</td><td>k small</td></tr>
+      <tr><td>Jump min + deque</td><td>O(n)</td><td>O(k)</td><td>k up to n</td></tr>
+      <tr><td>Kadane</td><td>O(n)</td><td>O(1)</td><td>Different reset rule</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Empty array / single house</span>
+    <div class="pitfalls__bug">Reading dp[1] on n = 1.</div>
+    <div class="pitfalls__fix">Guard n == 0 / n == 1 before the loop, or use the rolling form which starts at 0,0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Circular without splitting</span>
+    <div class="pitfalls__bug">Running linear DP on a ring. Taking both ends is legal in the table and illegal in the house.</div>
+    <div class="pitfalls__fix">max(rob(0..n-2), rob(1..n-1)).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mixing Kadane's reset into house robber</span>
+    <div class="pitfalls__bug">cur = max(a[i], cur + a[i]) drops the prefix and can pick two adjacent houses after a skip of thinking.</div>
+    <div class="pitfalls__fix">House robber never resets to "start here ignoring the constraint history". It only skips or takes.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Delete-and-earn without compressing</span>
+    <div class="pitfalls__bug">Treating indices as the line. Deleting a value deletes every copy and the neighbours' values.</div>
+    <div class="pitfalls__fix">cnt[v], then house-robber on v = 1..maxA.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">int when a[i] is 1e4 and n is 100</span>
+    <div class="pitfalls__bug">Usually fine; on CF with 1e9 values it overflows.</div>
+    <div class="pitfalls__fix">long running totals whenever the statement's product n * maxA can exceed 2e9.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one in decode ways on leading zeros</span>
+    <div class="pitfalls__bug">"06" is not a valid pair, "0" is not a valid single. Counting them inflates the answer.</div>
+    <div class="pitfalls__fix">A single digit is valid iff it is 1..9. A pair is valid iff 10..26.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>House robber II (circle)</td>
+        <td>Two linear runs, drop an endpoint each time.</td>
+        <td><code>max(rob(a,0,n-2), rob(a,1,n-1))</code></td>
+        <td>LC 213</td>
+      </tr>
+      <tr>
+        <td>Delete and earn</td>
+        <td>cnt[v] * v is the take-value; taking v skips v-1 and v+1.</td>
+        <td><code>Same rec on the value axis</code></td>
+        <td>LC 740</td>
+      </tr>
+      <tr>
+        <td>Decode ways</td>
+        <td>ways[i] += ways[i-1] if a[i] valid; += ways[i-2] if pair valid.</td>
+        <td><code>LC 91</code></td>
+        <td>Counting, not max</td>
+      </tr>
+      <tr>
+        <td>Frog with k</td>
+        <td>dp[i] = cost + min of last k. Deque if k is large.</td>
+        <td><code>AtCoder DP-B</code></td>
+        <td>Window minimum</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How is this different from Kadane?</summary>
+    <div class="followup__body">
+      <p>Kadane's decision is "extend the current subarray or start a new one at i". House robber's decision is "take i (and skip i-1) or skip i". Both are 1D DP. The constraint is what changes the formula.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I reconstruct the subset in O(1) space?</summary>
+    <div class="followup__body">
+      <p>Not from the two rolling integers alone. Keep the full dp[] (or a parent bit) if the subset is required. Rolling is for the value.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if taking i forbids the previous k houses?</summary>
+    <div class="followup__body">
+      <p>dp[i] = max(dp[i-1], dp[i-k-1] + a[i]). Still O(n). The "k" sits in the index, not in a new dimension.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why does delete-and-earn become house robber?</summary>
+    <div class="followup__body">
+      <p>Once you decide to take value v you must take all copies and you cannot take v-1. Adjacent values on the number line behave exactly like adjacent houses.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/house-robber/" target="_blank" rel="noopener">House Robber</a></td>
+        <td><span class="badge badge--lc">LC 198</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The dry-run problem</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/house-robber-ii/" target="_blank" rel="noopener">House Robber II</a></td>
+        <td><span class="badge badge--lc">LC 213</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Circle: two linear runs</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/delete-and-earn/" target="_blank" rel="noopener">Delete and Earn</a></td>
+        <td><span class="badge badge--lc">LC 740</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Compress values, then robber</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/decode-ways/" target="_blank" rel="noopener">Decode Ways</a></td>
+        <td><span class="badge badge--lc">LC 91</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Counting twin</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/jump-game-ii/" target="_blank" rel="noopener">Jump Game II</a></td>
+        <td><span class="badge badge--lc">LC 45</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Greedy is intended; DP is O(n^2)</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_b" target="_blank" rel="noopener">Frog 2</a></td>
+        <td><span class="badge badge--atc">ATC DP-B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Window of k jumps</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/455/A" target="_blank" rel="noopener">Boredom</a></td>
+        <td><span class="badge badge--cf">CF 455A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Delete-and-earn on CF</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/dp/tasks/dp_c" target="_blank" rel="noopener">Vacation</a></td>
+        <td><span class="badge badge--atc">ATC DP-C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>1D with 3 last-choices</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/stickler-theif-1587115621/1" target="_blank" rel="noopener">Stickler Thief</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>House robber wording</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/maximum-sum-of-non-adjacent-nodes/1" target="_blank" rel="noopener">Maximum sum of non-adjacent nodes</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same rec on a tree</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 213</summary>
+  <div class="spoiler__body">
+    <p>Houses 0 and n-1 are adjacent. Any legal plan misses at least one of them. So the answer is max(linear on 0..n-2, linear on 1..n-1). n = 1 is just a[0].</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for AtCoder DP-C Vacation</summary>
+  <div class="spoiler__body">
+    <p>dp[i][c] = max happiness on day i if you do activity c. Transition: max over c' != c of dp[i-1][c'] + a[i][c]. Three last-choices, still 1D in the day index. Roll the 3-array.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>dp[i] is the answer on the prefix 0..i.</strong></li>
+    <li><strong>House robber:</strong> max(skip i-1, take i-2 + a[i]).</li>
+    <li><strong>Circle = two linear runs.</strong></li>
+    <li><strong>Roll to two integers</strong> unless you must reconstruct.</li>
+    <li><strong>Kadane is a different 1D rec</strong> (reset vs extend).</li>
+  </ul>
+  <div class="recap__oneliner">dp[i]=max(dp[i-1], dp[i-2]+a[i]) | circle: drop an end | roll two ints</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

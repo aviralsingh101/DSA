@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rolling Hash &mdash; DSA Course</title>
+<meta name="description" content="Map every substring to a polynomial s[l] b^{len-1} + … + s[r] modulo a prime so equality (and 2D / palindrome checks) become a few multiplies.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="rolling-hash">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 12 &middot; Strings, Advanced</span>
+  <h1>Rolling Hash</h1>
+  <p class="hero__tagline">Map every substring to a polynomial <code>s[l] b^{len-1} + … + s[r]</code> modulo a prime so equality (and 2D / palindrome checks) become a few multiplies.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../11-math-and-number-theory/modular-arithmetic.html">Modular Arithmetic</a>,
+      <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">hashing</span>
+      <span class="chip">polynomial hash</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Substring equality, longest common substring, palindrome checks, and "does this pattern appear" are O(n) with KMP/Z for one pattern, but hashing stays O(1) per query after an O(n) prefix, and extends to 2D, trees, and sets of strings without a specialised automaton.</p>
+<p>The polynomial hash is a prefix array in the ring Z/MZ: H[i] = s[0]b^{i-1} + s[1]b^{i-2} + … + s[i-1]. A substring is H[r]-H[l]*b^{r-l}, computed with a precomputed pow[]. Two 64-bit moduli (or one 2^64 unsigned plus one prime) make collisions a non-issue in contests.</p>
+<p>The interview sentence is "compare hashes first, verify on a collision if the modulus is small". On Codeforces, anti-hash tests exist: use a randomised base, two moduli, or 2^61-1.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A substring hash is a prefix-hash difference scaled by a power of the base &mdash; the same identity as prefix sums, in a modular ring.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>O(1) substring equality after O(n) preprocess</li>
+        <li>Longest common prefix of two suffixes via binary search + hash</li>
+        <li>Palindrome check: hash(s[l..r]) == reverse-hash of that range</li>
+        <li>2D grid matching (Rabin-Karp 2D)</li>
+        <li>You need to put substrings in a HashSet</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You must be deterministic with no collision risk and one pattern &rarr; KMP</li>
+        <li>Need the suffix order, not equality &rarr; suffix array</li>
+        <li>Alphabet is huge and you need frequency maps &rarr; different tool</li>
+        <li>Single comparison of two whole strings &rarr; <code>equals</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Substring equality, many queries</td>
+        <td>Prefix hashes + pow</td>
+        <td>Rolling hash</td>
+      </tr>
+      <tr>
+        <td>One pattern search</td>
+        <td>Rabin-Karp slide, or KMP</td>
+        <td>Either</td>
+      </tr>
+      <tr>
+        <td>Palindrome queries</td>
+        <td>Forward + reverse hashes</td>
+        <td>This page</td>
+      </tr>
+      <tr>
+        <td>Deterministic matching</td>
+        <td>KMP / Z / SA</td>
+        <td>Not hash</td>
+      </tr>
+      <tr>
+        <td>Lexicographic suffix order</td>
+        <td>Compare via LCP of hashes, or SA</td>
+        <td>SA is cleaner</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Java String.hashCode</td>
+        <td>32-bit, not prefix-subtractable the same way, collisions easy</td>
+        <td>Roll your own 64-bit</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code>. Two 64-bit moduli, base random in [256, 1e9). Never use mod 1e9+7 alone on CF.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Fix base b and mod M. H[0]=0, H[i+1] = (H[i]*b + s[i]) % M. pow[0]=1, pow[i+1]=pow[i]*b % M. Substring [l, r) has hash (H[r] - H[l]*pow[r-l]) % M, add M if negative.</p>
+<p>Collision probability for one comparison is about (length)/M with a random base. q comparisons → q/M. Two independent hashes make it q/M^2. Anti-hash: randomise b at startup, or use unsigned long overflow as a free 2^64 ring plus a prime.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>H[i] = sum_{j=0}^{i-1} s[j] * b^{i-1-j} (mod M). Then hash[l, r) = H[r] - H[l] * b^{r-l} (mod M), the unique polynomial of that substring.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="rolling-hashViz"></div>
+  <div class="viz-player" data-viz-target="rolling-hashViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "H (base 3, a=1, b=2) =",
+      "array": [
+        0,
+        1,
+        5,
+        16
+      ],
+      "indexLabels": [
+        "ε",
+        "a",
+        "ab",
+        "aba"
+      ],
+      "vars": [
+        "i",
+        "H",
+        "sub"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "s = aba, map a=1, b=2, b_base=3, no mod for the toy. H[0]=0.",
+          "active": [
+            0
+          ],
+          "values": {
+            "i": 0,
+            "H": 0,
+            "sub": "empty"
+          }
+        },
+        {
+          "note": "H[1] = 0*3+1 = 1. Hash of \"a\".",
+          "active": [
+            1
+          ],
+          "values": {
+            "i": 1,
+            "H": 1,
+            "sub": "a"
+          }
+        },
+        {
+          "note": "H[2] = 1*3+2 = 5. Hash of \"ab\".",
+          "active": [
+            2
+          ],
+          "values": {
+            "i": 2,
+            "H": 5,
+            "sub": "ab"
+          }
+        },
+        {
+          "note": "H[3] = 5*3+1 = 16. Whole string.",
+          "active": [
+            3
+          ],
+          "values": {
+            "i": 3,
+            "H": 16,
+            "sub": "aba"
+          }
+        },
+        {
+          "note": "hash[1,3) = H[3]-H[1]*3^2 = 16-1*9 = 7. That is \"ba\" = 2*3+1 = 7. Match.",
+          "active": [
+            1,
+            3
+          ],
+          "values": {
+            "i": "q",
+            "H": 16,
+            "sub": "ba=7"
+          }
+        },
+        {
+          "note": "hash[0,2) vs hash[1,3): \"ab\"=5 vs \"ba\"=7, not equal. Palindrome would compare forward [0,3) to reverse hash.",
+          "active": [
+            0,
+            2
+          ],
+          "values": {
+            "i": "cmp",
+            "H": "5 vs 7",
+            "sub": "not palindrome slice"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Prefix polynomial, then a difference</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  pref["prefix H and pow"] --&gt; sub["hash l r = H r minus H l times pow r-l"]
+  sub --&gt; eq{"hashes equal?"}
+  eq -- yes --&gt; maybe["probably equal strings"]
+  eq -- no --&gt; noEq["definitely different"]
+  maybe --&gt; twoMod["second modulus / verify"]
+  </div>
+  <figcaption>Same shape as prefix sums. The extra multiply by pow[len] aligns the powers.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Pick</strong> a random odd base &gt; alphabet, and one or two moduli (2^61-1, 1e9+9, unsigned 2^64).</li>
+  <li><strong>Build</strong> H and pow of length n+1 in one pass.</li>
+  <li><strong>hash(l, r)</strong> half-open: <code>h = H[r] - H[l]*pow[r-l]; if (h<0) h+=M;</code></li>
+  <li><strong>Compare</strong> two ranges by hash; optionally verify with char loop if M is small.</li>
+  <li><strong>Rabin-Karp slide:</strong> window := window*b - s[i-len]*pow[len] + s[i].</li>
+  <li><strong>Reverse hash</strong> on the reversed string (or a second prefix from the right) for palindromes.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>H</th><th>sub</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>empty</td><td>s = aba, map a=1, b=2, b_base=3, no mod for the toy. H[0]=0.</td></tr>
+      <tr><td>1</td><td>1</td><td>a</td><td>H[1] = 0*3+1 = 1. Hash of "a".</td></tr>
+      <tr><td>2</td><td>5</td><td>ab</td><td>H[2] = 1*3+2 = 5. Hash of "ab".</td></tr>
+      <tr><td>3</td><td>16</td><td>aba</td><td>H[3] = 5*3+1 = 16. Whole string.</td></tr>
+      <tr><td>q</td><td>16</td><td>ba=7</td><td>hash[1,3) = H[3]-H[1]*3^2 = 16-1*9 = 7. That is "ba" = 2*3+1 = 7. Match.</td></tr>
+      <tr><td>cmp</td><td>5 vs 7</td><td>not palindrome slice</td><td>hash[0,2) vs hash[1,3): "ab"=5 vs "ba"=7, not equal. Palindrome would compare forward [0,3) to reverse hash.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Rolling Hash implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>substring equals. Correct, O(n) per query.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SubEqBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SubEqBrute {
+        static boolean eq(String s, int l1, int r1, int l2, int r2) {
+            return s.substring(l1, r1).equals(s.substring(l2, r2));
+        }
+        public static void main(String[] args) {
+            String s = "abacaba";
+            System.out.println(eq(s, 0, 3, 4, 7));
+        }
+        // Input : abacaba, [0,3) vs [4,7)
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Single 64-bit unsigned ring via long overflow (mod 2^64). Fast and usually enough with a random base.</p>
+    <div class="code" data-highlight="16-20">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RollingHash.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Random;
+    public class RollingHash {
+        long[] H, p;
+        RollingHash(String s, long base) {
+            int n = s.length();
+            H = new long[n + 1];
+            p = new long[n + 1];
+            p[0] = 1;
+            for (int i = 0; i &lt; n; i++) {
+                H[i + 1] = H[i] * base + s.charAt(i);
+                p[i + 1] = p[i] * base;
+            }
+        }
+        long hash(int l, int r) { return H[r] - H[l] * p[r - l]; }
+        public static void main(String[] args) {
+            long base = new Random().nextInt(1_000_000) + 257;
+            RollingHash h = new RollingHash("abacaba", base);
+            System.out.println(h.hash(0, 3) == h.hash(4, 7));
+        }
+        // Input : abacaba, [0,3) vs [4,7)  ("aba" vs "aba")
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Two prime moduli. Safer on CF anti-hash.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DoubleHash.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class DoubleHash {
+        static final long M1 = 1_000_000_007L, M2 = 1_000_000_009L, B = 911382323L;
+        long[] h1, h2, p1, p2;
+        DoubleHash(String s) {
+            int n = s.length();
+            h1 = new long[n + 1]; h2 = new long[n + 1];
+            p1 = new long[n + 1]; p2 = new long[n + 1];
+            p1[0] = p2[0] = 1;
+            for (int i = 0; i &lt; n; i++) {
+                h1[i + 1] = (h1[i] * B + s.charAt(i)) % M1;
+                h2[i + 1] = (h2[i] * B + s.charAt(i)) % M2;
+                p1[i + 1] = p1[i] * B % M1;
+                p2[i + 1] = p2[i] * B % M2;
+            }
+        }
+        long hash(int l, int r) {
+            long x = (h1[r] - h1[l] * p1[r - l] % M1 + M1) % M1;
+            long y = (h2[r] - h2[l] * p2[r - l] % M2 + M2) % M2;
+            return (x &lt;&lt; 32) ^ y;
+        }
+        public static void main(String[] args) {
+            DoubleHash h = new DoubleHash("abacaba");
+            System.out.println(h.hash(0, 3) == h.hash(4, 7));
+        }
+        // Input : same aba vs aba
+        // Output: true
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) build, O(1) substring hash</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Prefix and powers are one pass. Each query is a multiply and a subtract. Binary search on LCP is O(log n) hashes = O(log n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>char loop equals</td><td>O(n) / query</td><td>O(1)</td><td>few queries</td></tr>
+      <tr><td>Rolling hash</td><td>O(1) / query</td><td>O(n)</td><td>Many equality tests</td></tr>
+      <tr><td>KMP / Z</td><td>O(n+m) deterministic</td><td>O(n)</td><td>One pattern</td></tr>
+      <tr><td>Suffix array + LCP</td><td>O(n log n) build</td><td>O(n)</td><td>All LCP / distinct substrings</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Negative mod in Java</span>
+    <div class="pitfalls__bug"><code>(h[r] - h[l]*pow) % M</code> can be negative, and HashSet treats -3 and M-3 as different.</div>
+    <div class="pitfalls__fix"><code>x %= M; if (x < 0) x += M;</code></div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Fixed base 31 and mod 1e9+7 on CF</span>
+    <div class="pitfalls__bug">Anti-hash tests exist. Single small prime with a famous base will get WA.</div>
+    <div class="pitfalls__fix">Random base per run, two moduli, or unsigned 64 + one prime.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mapping letters to 0</span>
+    <div class="pitfalls__bug">Leading zeros make "a" and "aa" collide when a maps to 0.</div>
+    <div class="pitfalls__fix">Map 'a'.. to 1..26, or use the raw char code which is never 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">pow overflow before mod</span>
+    <div class="pitfalls__bug"><code>p[i]*B</code> overflows long if you meant a 1e18 modulus.</div>
+    <div class="pitfalls__fix">Use a mul-mod, 2^61-1 trick, or stay in unsigned 2^64.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Half-open vs inclusive mix</span>
+    <div class="pitfalls__bug">hash(l,r) as inclusive but multiplied by pow[r-l] instead of pow[r-l+1].</div>
+    <div class="pitfalls__fix">Pick [l, r) everywhere, including the dry run.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Reverse hash</td>
+        <td>Build on reversed s, or a second prefix from the right, for palindrome queries.</td>
+        <td><code>fwd(l,r)==rev(n-1-r, n-1-l)</code></td>
+        <td>LC 5 / queries</td>
+      </tr>
+      <tr>
+        <td>2D Rabin-Karp</td>
+        <td>Hash rows, then hash the column of row-hashes.</td>
+        <td><code>O(nm) after O(nm)</code></td>
+        <td>pattern in a grid</td>
+      </tr>
+      <tr>
+        <td>Hash of a path</td>
+        <td>Reroot / binomial of depth; or tree isomorphism hashes.</td>
+        <td><code>AHU-style</code></td>
+        <td>rooted-tree iso</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why a random base?</summary>
+    <div class="followup__body">
+      <p>For a fixed base, an adversary can build collisions (especially with small M). A random base unknown at test-generation time makes the polynomial random, and the Schwartz-Zippel bound applies.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is 2^64 overflow OK?</summary>
+    <div class="followup__body">
+      <p>It is a ring, not a field, so it has zero divisors. Thue-Morse / overflow attacks exist but are rarer. Pair it with a prime modulus if the contest is known-hostile.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>LCP of two suffixes?</summary>
+    <div class="followup__body">
+      <p>Binary search the length: hash equality is the predicate. O(log n) per LCP. Suffix arrays give all adjacent LCPs faster if you need them all.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Hash vs KMP in an interview?</summary>
+    <div class="followup__body">
+      <p>Mention both. If they want worst-case linear, write KMP. If they want substring queries or a set of strings, write hashing and name the collision policy.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-the-index-of-the-first-occurrence-in-a-string/" target="_blank" rel="noopener">Find The Index Of The First Occurrence In A String</a></td>
+        <td><span class="badge badge--lc">LC 28</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Rabin-Karp</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/longest-duplicate-substring/" target="_blank" rel="noopener">Longest Duplicate Substring</a></td>
+        <td><span class="badge badge--lc">LC 1044</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search length + hash set</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/maximum-length-of-repeated-subarray/" target="_blank" rel="noopener">Maximum Length Of Repeated Subarray</a></td>
+        <td><span class="badge badge--lc">LC 718</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Binary search + hash, or DP</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/514/C" target="_blank" rel="noopener">Watto and Mechanism</a></td>
+        <td><span class="badge badge--cf">CF 514C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Set of hashes, one-char mismatch</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/7/D" target="_blank" rel="noopener">Palindrome Degree</a></td>
+        <td><span class="badge badge--cf">CF 7D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix palindromes via hash</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1753" target="_blank" rel="noopener">String Matching</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Rabin-Karp accepted</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://atcoder.jp/contests/abc141/tasks/abc141_e" target="_blank" rel="noopener">ABC 141 E</a></td>
+        <td><span class="badge badge--atc">ABC 141E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search + hash</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1200/E" target="_blank" rel="noopener">Compress Words</a></td>
+        <td><span class="badge badge--cf">CF 1200E</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Hash the overlap of prefix/suffix</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>H[i+1] = H[i]*b + s[i]. hash[l,r) = H[r]-H[l]*b^{r-l}.</li>
+    <li>Random base, two moduli on CF.</li>
+    <li>Java % can be negative — fix it.</li>
+    <li>Map letters to non-zero.</li>
+    <li>KMP if they demand deterministic one-pattern search.</li>
+  </ul>
+  <div class="recap__oneliner">h[i+1]=h[i]*B+s[i]; hash(l,r)=h[r]-h[l]*pow[r-l];</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

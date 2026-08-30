@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segment Tree &mdash; DSA Course</title>
+<meta name="description" content="A binary tree over the array: each node is an associative combine of a dyadic segment, so point updates and range queries are O(log n) for any combine, not just sums.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="segment-tree">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 06 &middot; Range Query Structures</span>
+  <h1>Segment Tree</h1>
+  <p class="hero__tagline">A binary tree over the array: each node is an associative combine of a dyadic segment, so point updates and range queries are <code>O(log n)</code> for any combine, not just sums.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="fenwick-tree.html">Fenwick Tree</a>,
+      <a href="sparse-table-and-rmq.html">Sparse Table & RMQ</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">segment tree</span>
+      <span class="chip">range query</span>
+      <span class="chip">associative</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A Fenwick tree is perfect for prefix sums and a sparse table is perfect for static idempotent queries. Everything else &mdash; range minimum with updates, range gcd, range merge of two sorted lists, "number of brackets sequences in a segment" &mdash; needs a node that can store an arbitrary associative value. That node layout is a segment tree.</p>
+<p>The array is the leaves. Each internal node stores op(left, right) of a contiguous segment whose length is a power of two in the heap layout (or an arbitrary split in the recursive layout). A point update walks the O(log n) ancestors of a leaf. A range query is covered by O(log n) canonical nodes, never more than two per level.</p>
+<p>Once you can write build / update / query for a sum, swapping the combine for min, gcd, or a struct (CF 380C's bracket pair) is a one-line change. Lazy propagation, the next page, is what you add when the <em>update</em> is also a range.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Any associative op gets O(log n) point update and range query. The query touches O(log n) canonical nodes that exactly partition the range.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Point update + range query for min, max, gcd, or a custom struct</li>
+        <li>The operation is associative but not invertible (so Fenwick prefixes do not work)</li>
+        <li>You need both the combine and the ability to update, ruling out a sparse table</li>
+        <li>Merge-sort tree / number of values in [L,R] that are &le; x (offline or with a Fenwick in each node)</li>
+        <li><code>n, q &le; 2&times;10&#8309;</code> and the interviewer said "segment tree"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Static range min &rarr; <a href="sparse-table-and-rmq.html">sparse table</a> is simpler and O(1)</li>
+        <li>Point update + range sum &rarr; <a href="fenwick-tree.html">Fenwick</a> is shorter</li>
+        <li>Range update + range query &rarr; <a href="segment-tree-lazy.html">lazy propagation</a></li>
+        <li>No updates, range sum &rarr; prefix array</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"point set, range min"</td>
+        <td>Associative, has updates, no inverse</td>
+        <td>Segment tree</td>
+      </tr>
+      <tr>
+        <td>"point add, range sum"</td>
+        <td>Invertible prefix</td>
+        <td>Fenwick is enough</td>
+      </tr>
+      <tr>
+        <td>"range add, range sum"</td>
+        <td>Needs delayed tags</td>
+        <td>Lazy segment tree</td>
+      </tr>
+      <tr>
+        <td>"Sereja and Brackets, merge two halves"</td>
+        <td>Node stores a small struct</td>
+        <td>CF 380C</td>
+      </tr>
+      <tr>
+        <td>"Xenia and Bit Operations"</td>
+        <td>Alternate XOR/OR by depth</td>
+        <td>CF 339D</td>
+      </tr>
+      <tr>
+        <td>"count of values &le; x in [L,R]", static</td>
+        <td>Merge-sort tree or wavelet</td>
+        <td>Segtree of vectors</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> Fenwick tree</td>
+        <td>BIT is a compressed segtree for prefixes of an invertible op</td>
+        <td>Write a segtree when the node is not a prefix sum</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code>. Allocate <code>4n</code> nodes for the recursive tree (or <code>2n</code> for the iterative one). Recursion depth is log n, safe. Combine must be associative; it need not be commutative or invertible.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Recursive layout: node p covers [l, r]. If l == r it holds a[l]. Otherwise <code>m = l + (r - l) / 2</code>, the left child p<<1 covers [l, m], the right child p<<1|1 covers [m+1, r], and <code>t[p] = op(t[left], t[right])</code>. Build is a postorder fill. A point update at i walks to the leaf and recomputes on the way up.</p>
+<p>A query [ql, qr] at node [l, r] has three cases: no overlap (return identity), complete cover (return t[p]), partial overlap (recurse both children and combine). The identity is 0 for sum, +&infin; for min, 0 for XOR, 0 for gcd. Completely covered nodes are the canonical partition; there are O(log n) of them.</p>
+<p>Iterative layout packs the tree into <code>t[n..2n)</code> as leaves and parents at i>>1. It is faster and has no recursion, but the recursive form is what you want in an interview because the overlap cases are explicit and lazy tags later hang on the same nodes.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Every node stores the combine of its segment. A query returns the combine of O(log n) canonical nodes that partition [ql, qr]:</p><span class="eq">t[p] = op(a[l], a[l+1], &hellip;, a[r])</span><p>Interview sentence: <em>"I recurse until a node is either disjoint or fully inside; the fully-inside nodes are the answer."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Identity of the op</span>
+    <p>The no-overlap return value must be the identity: combining it with anything does nothing. Sum/XOR: 0. Min: Integer.MAX_VALUE. Gcd: 0 (because gcd(x, 0) = x). Getting this wrong poisons every query that does not cover a whole child.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Allocate 4n, not 2n, for the recursive tree</span>
+    <p>A complete binary tree on n leaves has 2n nodes, but the recursive heap-indexing with uneven splits can index up to about 4n. <code>new long[4 * n]</code> (or n<<2) is the standard allocation. Iterative trees use 2n.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Range sum [2, 6] on the 8-leaf tree</h3>
+
+<p>Array <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>. Heap-indexed nodes 1..15. The query [2, 6] is covered by three canonical nodes: [2,3], [4,5], [6,6].</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="segment-treeViz"></div>
+  <div class="viz-player" data-viz-target="segment-treeViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "t[1..15] heap layout",
+      "array": [
+        31,
+        9,
+        22,
+        4,
+        5,
+        14,
+        8,
+        3,
+        1,
+        4,
+        1,
+        5,
+        9,
+        2,
+        6
+      ],
+      "indexLabels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "vars": [
+        "node",
+        "seg",
+        "add",
+        "acc"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Built tree. t[1] = 31 is the whole array. Query sum[2, 6] = 4+1+5+9+2 = 21.",
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "values": {
+            "node": 1,
+            "seg": "0-7",
+            "add": 0,
+            "acc": 0
+          }
+        },
+        {
+          "note": "Root [0,7] partially overlaps. Recurse both children.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "values": {
+            "node": 1,
+            "seg": "0-7 split",
+            "add": 0,
+            "acc": 0
+          }
+        },
+        {
+          "note": "Node 5 covers [2,3] and sits fully inside [2,6]. Add t[5] = 5. acc = 5.",
+          "active": [
+            4
+          ],
+          "best": [
+            4
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "values": {
+            "node": 5,
+            "seg": "2-3 full",
+            "add": 5,
+            "acc": 5
+          }
+        },
+        {
+          "note": "Node 6 covers [4,5], fully inside. Add t[6] = 14. acc = 19.",
+          "active": [
+            5
+          ],
+          "best": [
+            4,
+            5
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "values": {
+            "node": 6,
+            "seg": "4-5 full",
+            "add": 14,
+            "acc": 19
+          }
+        },
+        {
+          "note": "Node 7 covers [6,7], partial (we need only index 6). Recurse. Leaf 14 covers [6,6], full. Add 2. acc = 21.",
+          "active": [
+            13
+          ],
+          "best": [
+            4,
+            5,
+            13
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            14
+          ],
+          "values": {
+            "node": 14,
+            "seg": "6-6 full",
+            "add": 2,
+            "acc": 21
+          }
+        },
+        {
+          "note": "Leaf 15 covers [7,7], disjoint from [2,6]. Identity 0. Query done: 21.",
+          "x": [
+            14
+          ],
+          "best": [
+            4,
+            5,
+            13
+          ],
+          "values": {
+            "node": 15,
+            "seg": "7-7 miss",
+            "add": 0,
+            "acc": 21
+          }
+        },
+        {
+          "note": "A point update at index 3 walks the ancestors 11, 5, 2, 1 and recomputes each from its two children.",
+          "active": [
+            10,
+            4,
+            1,
+            0
+          ],
+          "values": {
+            "node": "upd 3",
+            "seg": "ancestors",
+            "add": "—",
+            "acc": "11-5-2-1"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Canonical cover: node 5 (sum 5), node 6 (sum 14), node 14 (sum 2). Total 21. Those three slots are the whole query; the other twelve are not added.</figcaption>
+</figure>
+
+<h3>The heap-indexed tree over eight leaves</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  s1["1: 0-7 = 31"] --&gt; s2["2: 0-3 = 9"]
+  s1 --&gt; s3["3: 4-7 = 22"]
+  s2 --&gt; s4["4: 0-1 = 4"]
+  s2 --&gt; s5["5: 2-3 = 5"]
+  s3 --&gt; s6["6: 4-5 = 14"]
+  s3 --&gt; s7["7: 6-7 = 8"]
+  s4 --&gt; s8["8: 0 = 3"]
+  s4 --&gt; s9["9: 1 = 1"]
+  s5 --&gt; s10["10: 2 = 4"]
+  s5 --&gt; s11["11: 3 = 1"]
+  s6 --&gt; s12["12: 4 = 5"]
+  s6 --&gt; s13["13: 5 = 9"]
+  s7 --&gt; s14["14: 6 = 2"]
+  s7 --&gt; s15["15: 7 = 6"]
+  </div>
+  <figcaption>Query [2, 6] returns nodes 5, 6, and 14. Node 7 is visited but not fully covered, so it is split rather than added.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate <code>t[4n]</code></strong> and pick the identity of the op (0 for sum).</li>
+  <li><strong>Build(p, l, r):</strong> leaf copies a[l]; otherwise split at <code>m = l + (r-l)/2</code>, build children, <code>t[p] = t[p<<1] + t[p<<1|1]</code>.</li>
+  <li><strong>Update(p, l, r, i, v):</strong> if leaf, store v. Else recurse into the child that contains i, then recompute t[p].</li>
+  <li><strong>Query(p, l, r, ql, qr):</strong> disjoint &rarr; identity; fully inside &rarr; t[p]; else combine the two recursive calls.</li>
+  <li><strong>Never add t[p] on a partial overlap.</strong> That would include indices outside the query.</li>
+  <li><strong>Use <code>long</code></strong> for sums. Use <code>m = l + (r - l) / 2</code>, never <code>(l+r)/2</code> on large indices.</li>
+  <li><strong>Swap the combine</strong> (and the identity) to get min, gcd, XOR, or a struct.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Query sum[2, 6] walking the tree. Only the canonical (fully covered) nodes contribute to acc.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>node</th><th>seg</th><th>add</th><th>acc</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td>0-7</td><td>0</td><td>0</td><td>Built tree. t[1] = 31 is the whole array. Query sum[2, 6] = 4+1+5+9+2 = 21.</td></tr>
+      <tr><td>1</td><td>0-7 split</td><td>0</td><td>0</td><td>Root [0,7] partially overlaps. Recurse both children.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>2-3 full</td><td>5</td><td>5</td><td>Node 5 covers [2,3] and sits fully inside [2,6]. Add t[5] = 5. acc = 5.</td></tr>
+      <tr class="trace-table__row--change"><td>6</td><td>4-5 full</td><td>14</td><td>19</td><td>Node 6 covers [4,5], fully inside. Add t[6] = 14. acc = 19.</td></tr>
+      <tr class="trace-table__row--change"><td>14</td><td>6-6 full</td><td>2</td><td>21</td><td>Node 7 covers [6,7], partial (we need only index 6). Recurse. Leaf 14 covers [6,6], full. Add 2. acc = 21.</td></tr>
+      <tr class="trace-table__row--change"><td>15</td><td>7-7 miss</td><td>0</td><td>21</td><td>Leaf 15 covers [7,7], disjoint from [2,6]. Identity 0. Query done: 21.</td></tr>
+      <tr><td>upd 3</td><td>ancestors</td><td>—</td><td>11-5-2-1</td><td>A point update at index 3 walks the ancestors 11, 5, 2, 1 and recomputes each from its two children.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Node 4 [0,1] and node 15 [7,7] are disjoint and return 0. Three additions, answer 21.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Segment Tree implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Segment tree</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Range min</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Point set is O(1), range scan is O(n). The tree makes both O(log n).</p>
+    <div class="code" data-highlight="8-12">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BrutePointRange.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class BrutePointRange {
+    
+        static int[] a;
+    
+        static void set(int i, int v) { a[i] = v; }
+    
+        static long rangeSum(int l, int r) {
+            long s = 0;
+            for (int i = l; i &lt;= r; i++) s += a[i];
+            return s;
+        }
+    
+        public static void main(String[] args) {
+            a = new int[] {3, 1, 4, 1, 5, 9, 2, 6};
+            System.out.println(rangeSum(2, 6));
+            set(3, 3);
+            System.out.println(rangeSum(2, 6));
+            System.out.println(rangeSum(0, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], then a[3]=3
+        // Output: 21
+        //         23
+        //         33
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Recursive sum tree. Query [2, 6] then a point set, matching the dry run.</p>
+    <div class="code" data-highlight="18-24,27-35,38-47">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SegmentTree.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SegmentTree {
+    
+        final int n;
+        final long[] t;
+    
+        SegmentTree(int[] a) {
+            n = a.length;
+            t = new long[Math.max(4, n * 4)];
+            build(1, 0, n - 1, a);
+        }
+    
+        void build(int p, int l, int r, int[] a) {
+            if (l == r) { t[p] = a[l]; return; }
+            int m = l + (r - l) / 2;
+            build(p &lt;&lt; 1, l, m, a);
+            build(p &lt;&lt; 1 | 1, m + 1, r, a);
+            t[p] = t[p &lt;&lt; 1] + t[p &lt;&lt; 1 | 1];
+        }
+    
+        void set(int p, int l, int r, int i, long v) {
+            if (l == r) { t[p] = v; return; }
+            int m = l + (r - l) / 2;
+            if (i &lt;= m) set(p &lt;&lt; 1, l, m, i, v);
+            else set(p &lt;&lt; 1 | 1, m + 1, r, i, v);
+            t[p] = t[p &lt;&lt; 1] + t[p &lt;&lt; 1 | 1];
+        }
+    
+        long query(int p, int l, int r, int ql, int qr) {
+            if (qr &lt; l || r &lt; ql) return 0;              // identity
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) return t[p];         // canonical node
+            int m = l + (r - l) / 2;
+            return query(p &lt;&lt; 1, l, m, ql, qr)
+                 + query(p &lt;&lt; 1 | 1, m + 1, r, ql, qr);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            SegmentTree st = new SegmentTree(a);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            st.set(1, 0, st.n - 1, 3, 3);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            System.out.println(st.query(1, 0, st.n - 1, 0, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], then a[3]=3
+        // Output: 21
+        //         23
+        //         33
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Same skeleton, identity is <code>Integer.MAX_VALUE</code>, combine is min. This is the structure a sparse table cannot be once updates exist.</p>
+    <div class="code" data-highlight="18-24,38-47">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SegmentTreeMin.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SegmentTreeMin {
+    
+        final int n;
+        final int[] t;
+    
+        SegmentTreeMin(int[] a) {
+            n = a.length;
+            t = new int[Math.max(4, n * 4)];
+            build(1, 0, n - 1, a);
+        }
+    
+        void build(int p, int l, int r, int[] a) {
+            if (l == r) { t[p] = a[l]; return; }
+            int m = l + (r - l) / 2;
+            build(p &lt;&lt; 1, l, m, a);
+            build(p &lt;&lt; 1 | 1, m + 1, r, a);
+            t[p] = Math.min(t[p &lt;&lt; 1], t[p &lt;&lt; 1 | 1]);
+        }
+    
+        void set(int p, int l, int r, int i, int v) {
+            if (l == r) { t[p] = v; return; }
+            int m = l + (r - l) / 2;
+            if (i &lt;= m) set(p &lt;&lt; 1, l, m, i, v);
+            else set(p &lt;&lt; 1 | 1, m + 1, r, i, v);
+            t[p] = Math.min(t[p &lt;&lt; 1], t[p &lt;&lt; 1 | 1]);
+        }
+    
+        int query(int p, int l, int r, int ql, int qr) {
+            if (qr &lt; l || r &lt; ql) return Integer.MAX_VALUE;
+            if (ql &lt;= l &amp;&amp; r &lt;= qr) return t[p];
+            int m = l + (r - l) / 2;
+            return Math.min(query(p &lt;&lt; 1, l, m, ql, qr),
+                            query(p &lt;&lt; 1 | 1, m + 1, r, ql, qr));
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6};
+            SegmentTreeMin st = new SegmentTreeMin(a);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            st.set(1, 0, st.n - 1, 6, 0);
+            System.out.println(st.query(1, 0, st.n - 1, 2, 6));
+            System.out.println(st.query(1, 0, st.n - 1, 0, 7));
+        }
+        // Input : [3,1,4,1,5,9,2,6], then a[6]=0
+        // Output: 1
+        //         0
+        //         0
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) build, O(log n) per update or query</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Build visits each of the O(n) nodes once. Update and query each descend one path (or two, for a query that splits) of length O(log n), and a query adds O(1) work per visited node:</p>
+    <p><span class="eq">T<sub>build</sub> = &Theta;(n),&nbsp;&nbsp; T<sub>op</sub> = O(log n)</span></p>
+    <p>At each of the log n levels a query takes at most two canonical nodes, which is why the cover size is O(log n) and not O(n). A Fenwick tree is the same bound with a smaller constant, but only for prefix-invertible ops. A sparse table is O(1) query with no updates.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Scan</td><td><code>O(n)</code> / query</td><td><code>O(1)</code></td><td>q is 1</td></tr>
+      <tr><td>Fenwick</td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>Prefix-invertible only</td></tr>
+      <tr><td>Segment tree</td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>Any associative op + updates</td></tr>
+      <tr><td>Sparse table</td><td><code>O(1)</code> query</td><td><code>O(n log n)</code></td><td>Idempotent, no updates</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Adding t[p] on a partial overlap</span>
+    <div class="pitfalls__bug">Missing the complete-cover check and always combining children, or worse, returning t[p] whenever the node overlaps at all. The second includes indices outside [ql, qr].</div>
+    <div class="pitfalls__fix">Three-way branch: disjoint / complete / partial. Only complete returns t[p].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Wrong identity</span>
+    <div class="pitfalls__bug">Range min returns 0 for a disjoint child. Any query that does not cover both children is then capped at 0, which looks like a plausible minimum.</div>
+    <div class="pitfalls__fix">Min identity is MAX_VALUE (or a sentinel bigger than any array value). Sum/XOR identity is 0. Gcd identity is 0.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Allocating 2n for the recursive heap</span>
+    <div class="pitfalls__bug">Indices run past 2n on non-power-of-two n (the right spine goes to about 4n). Silent corruption or AIOOB.</div>
+    <div class="pitfalls__fix"><code>new long[n * 4]</code>. Iterative trees may use 2n.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>(l + r) / 2</code> overflow</span>
+    <div class="pitfalls__bug">On large index ranges (coordinate-compressed to 10&#8313; in a dynamic tree) l+r overflows int and the split goes negative.</div>
+    <div class="pitfalls__fix"><code>int m = l + (r - l) / 2;</code> everywhere, including lazy.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Updating t[p] before the recursive call returns</span>
+    <div class="pitfalls__bug">Recompute from children that still hold the old value. The new leaf is written but ancestors stay stale, and later queries on large ranges miss the update.</div>
+    <div class="pitfalls__fix">Recurse first, then <code>t[p] = op(t[left], t[right])</code>.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Iterative / bottom-up</td>
+        <td>Leaves at t[n..2n). Parent of i is i>>1. Query walks L and R inward, combining odd nodes. Faster, no recursion, harder to hang lazy tags on.</td>
+        <td><code>for (int i = n + l, j = n + r; i &lt; j; i &gt;&gt;= 1, j &gt;&gt;= 1)</code></td>
+        <td>e-maxx iterative template</td>
+      </tr>
+      <tr>
+        <td>Struct nodes (brackets, max+count)</td>
+        <td>Each node stores several fields; combine is a small function. CF 380C stores (matched, leftover opens, leftover closes) so two halves merge in O(1).</td>
+        <td><code>Node merge(Node a, Node b) { take min(a.open, b.close) as new matches; ... }</code></td>
+        <td>CF 380C, LC 732 My Calendar III</td>
+      </tr>
+      <tr>
+        <td>Dynamic / implicit</td>
+        <td>Nodes allocated on demand for a huge index universe (coordinates 10&sup1;&#8312;). Left/right children are pointers, not p<<1. Memory is O(q log U).</td>
+        <td><code>if (left == null) left = new Node();</code></td>
+        <td>Online coordinate compression alternative</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>How many canonical nodes does a query use?</summary>
+    <div class="followup__body">
+      <p>At most two per level, so &le; 2 log n. Proof: once a level has a partial node, the next step either takes a complete child (canonical) or continues into one partial child; you cannot keep two partials on the same path for long. This is why query is O(log n), not O(n).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can the combine be non-commutative?</summary>
+    <div class="followup__body">
+      <p>Yes, as long as it is associative. Always combine left child then right child in that order. Matrix products on a path, or string concatenation, work. Do not swap children.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is a merge-sort tree?</summary>
+    <div class="followup__body">
+      <p>Each node stores the sorted list of its segment (merge of the two children). A query [ql, qr] binary-searches "how many values &le; x" in each canonical node's list, totalling O(log&sup2; n). Build is O(n log n) memory and time. Fractional cascading removes one log; a Fenwick of Fenwicks or a wavelet tree are the usual contest substitutes.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is the iterative form worth it?</summary>
+    <div class="followup__body">
+      <p>When you are tight on time in a contest and the tree is not lazy. In an interview the recursive form is clearer, and it is the one you will extend with lazy tags on the next page. Learn recursive first.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener">Range Sum Query - Mutable</a></td>
+        <td><span class="badge badge--lc">LC 307</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Point set, range sum</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/falling-squares/" target="_blank" rel="noopener">Range Minimum Query with updates</a></td>
+        <td><span class="badge badge--lc">LC 699</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Compress coords, range max, point/range set</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-iii/" target="_blank" rel="noopener">My Calendar III</a></td>
+        <td><span class="badge badge--lc">LC 732</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Dynamic segtree of occupancy</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/count-of-range-sum/" target="_blank" rel="noopener">Count of Range Sum</a></td>
+        <td><span class="badge badge--lc">LC 327</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Merge-sort tree / BIT on prefixes</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/339/D" target="_blank" rel="noopener">Xenia and Bit Operations</a></td>
+        <td><span class="badge badge--cf">CF 339D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>OR/XOR alternating by level</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/380/C" target="_blank" rel="noopener">Sereja and Brackets</a></td>
+        <td><span class="badge badge--cf">CF 380C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Struct node, merge two bracket halves</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/356/A" target="_blank" rel="noopener">Knight Tournament</a></td>
+        <td><span class="badge badge--cf">CF 356A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Range assign who-wins, DSU skip, or segtree</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/339/D" target="_blank" rel="noopener">Dynamic Range Minimum Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Point set, range min</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener">Dynamic Range Sum Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Point set, range sum</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/380/C" target="_blank" rel="noopener">Range Update Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Teaser for lazy, or difference + Fenwick</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for CF 380C &mdash; what a node stores</summary>
+  <div class="spoiler__body">
+    <p>A segment of brackets is not a single integer. Store three numbers: how many matched pairs sit entirely inside, how many unmatched '(' remain, how many unmatched ')' remain. Merging left and right: new matches = left.matches + right.matches + min(left.open, right.close); leftover opens and closes follow. The answer for a query is 2 * matches of that canonical combine. Associative, not commutative in an interesting way, and a poster-child struct node.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 339D &mdash; the op depends on depth</summary>
+  <div class="spoiler__body">
+    <p>n is a power of two. Leaves are the array. Odd-height parents OR their children, even-height parents XOR (or the other way around, matching the statement). A point update recomputes ancestors, switching the op at each level. The root is the answer after each update. Implementation is a segment tree whose combine is not uniform; pass a boolean down, or key off the node's range length.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Three-way branch:</strong> disjoint (identity), complete (return t[p]), partial (recurse).</li>
+    <li><strong>O(log n) canonical nodes</strong> partition any query range.</li>
+    <li><strong>Allocate 4n</strong> for the recursive heap. Mid is <code>l + (r-l)/2</code>.</li>
+    <li><strong>Any associative op</strong> works; pick the identity carefully.</li>
+    <li><strong>Range updates need lazy tags,</strong> the next page.</li>
+  </ul>
+  <div class="recap__oneliner">if disjoint: id; if ql&lt;=l &amp;&amp; r&lt;=qr: t[p]; else op(query L, query R) | t[p]=op(t[L],t[R])</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

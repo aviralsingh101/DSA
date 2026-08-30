@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subsets, Permutations, Combinations &mdash; DSA Course</title>
+<meta name="description" content="Every generation problem is include/exclude or &quot;place the next choice&quot;, and almost every bug is a broken duplicate rule &mdash; the rules below are exact, not folklore.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="subsets-permutations-combinations">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 04 &middot; Recursion, Backtracking & D&C</span>
+  <h1>Subsets, Permutations, Combinations</h1>
+  <p class="hero__tagline">Every generation problem is include/exclude or "place the next choice", and almost every bug is a broken duplicate rule &mdash; the rules below are exact, not folklore.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">28 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="recursion-fundamentals.html">Recursion Fundamentals</a>,
+      <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">backtracking</span>
+      <span class="chip">subsets</span>
+      <span class="chip">permutations</span>
+      <span class="chip">bitmask</span>
+      <span class="chip">dedup</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Return all subsets / permutations / combinations" is a single family. The search tree is always the same shape: at each position you either take an element or you do not, or you try every unused element as the next pick. The code is twenty lines. The reason this page is long is <strong>duplicates</strong>: the same multiset can be reached by many paths, and interviewers grade the skip rule, not the recursion.</p>
+<p>There are two mechanical implementations and they are not interchangeable. <strong>Include/exclude</strong> (or the equivalent bitmask loop) builds subsets. <strong>Swap / <code>used[]</code></strong> builds permutations. Combinations are subsets of a fixed size, generated with a <code>start</code> index so order does not explode into permutations. Combination-sum is the same tree with a remaining-target and a reuse policy.</p>
+<p>Memorise the four skip predicates below as if they were an API. "Sort, then skip equals" is not a rule; it is four different rules that happen to start with a sort.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Duplicates are equal values at the <em>same depth</em> of the tree. Skip the second equal when its previous copy was not taken in this path; never skip across depths.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Return all subsets / all permutations / all combinations of size k"</li>
+        <li>"Combination sum": pick numbers that add to a target, with or without reuse</li>
+        <li><code>n &le; 20</code> and you need every subset, or <code>n &le; 10</code> and you need every permutation</li>
+        <li>The statement says "unique" or the input contains duplicates</li>
+        <li>Letter combinations of a phone number, generate parentheses, restore IP addresses &mdash; the same tree with a different child-generation rule</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the <em>count</em> of subsets with a property, not the list, and <code>n</code> is large &rarr; <a href="../10-dynamic-programming/knapsack-family.html">DP / knapsack</a></li>
+        <li>You need any one subset that works &rarr; you may still backtrack, but you return on the first success; or you use meet-in-the-middle / DP</li>
+        <li><code>n &le; 40</code> subset-sum &rarr; <a href="meet-in-the-middle.html">meet in the middle</a>, not <code>2&#8319;</code></li>
+        <li>The objects being chosen have a forced order (LIS, scheduling) &rarr; greedy or DP, not generation</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"all subsets" / power set</td>
+        <td>Include or exclude each index once</td>
+        <td>include/exclude or bitmask 0 .. 2^n-1</td>
+      </tr>
+      <tr>
+        <td>"all permutations"</td>
+        <td>Every unused item as the next position</td>
+        <td>swap in place, or used[]</td>
+      </tr>
+      <tr>
+        <td>"combinations of size k"</td>
+        <td>Subsets, order does not matter</td>
+        <td>start index; recurse i+1</td>
+      </tr>
+      <tr>
+        <td>"combination sum", reuse allowed</td>
+        <td>Same value many times</td>
+        <td>recurse with start = i, not i+1</td>
+      </tr>
+      <tr>
+        <td>"combination sum", each number once</td>
+        <td>0/1 choice plus dups in the array</td>
+        <td>sort; start = i+1; skip equals at this depth</td>
+      </tr>
+      <tr>
+        <td>Input has duplicates, unique outputs required</td>
+        <td>Many paths, one multiset</td>
+        <td>Apply the exact skip rule for that tree</td>
+      </tr>
+      <tr>
+        <td>n <= 20 and a numeric property of subsets</td>
+        <td>Enumerate, do not generate lists</td>
+        <td>bitmask loop, accumulate a sum / xor</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> permutations of a subset vs combinations</td>
+        <td>Permutations care about order; combinations do not</td>
+        <td>If the answer list treats [1,2] and [2,1] as the same, you want combinations</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>2&#8319;</code> is comfortable at <code>n &le; 20</code>, tight at 22, dead at 30. <code>n!</code> is comfortable at <code>n &le; 9</code>, optional at 10, dead at 12. If the output itself is exponential, the time lower bound is the output size &mdash; do not hunt for a polynomial.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the exact dedup rules</h2>
+<p>Include/exclude walks indices left to right. From index <code>i</code> you either skip <code>a[i]</code> and go to <code>i+1</code>, or you append it, go to <code>i+1</code>, and pop on the way back. Every subset appears once. The bitmask form is the same tree flattened: bit <code>j</code> of mask <code>m</code> means "include <code>a[j]</code>".</p>
+<p>Permutations fill positions. The swap implementation puts every remaining index into slot <code>i</code> by swapping <code>a[i]</code> with <code>a[j]</code> for <code>j &ge; i</code>, then recurses on <code>i+1</code>, then swaps back. The <code>used[]</code> implementation keeps the array intact and tracks which indices are already in the path. Both are <code>O(n &middot; n!)</code> including output copies.</p>
+<p>Dedup is a predicate on <em>siblings</em>, not on the whole path. Sort first so equals are adjacent. Then apply exactly one of the four rules below &mdash; mixing them is how you drop a valid subset or emit <code>[1,2]</code> twice.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The four skip predicates (memorise these)</span>
+    <p>Always <code>Arrays.sort(a)</code> first when the input can contain duplicates and the output must be unique.</p><ul><li><strong>Subsets II / combination sum II</strong> (start-index tree, each value at most once): at a fixed <code>start</code>, skip <code>i</code> when <code>i &gt; start &amp;&amp; a[i] == a[i-1]</code>. Same-depth equals share a parent; the first copy is allowed to be chosen or not, the rest must not start a new sibling.</li><li><strong>Permutations II</strong> (<code>used[]</code> tree): skip index <code>i</code> when <code>used[i]</code>, <em>or</em> when <code>i &gt; 0 &amp;&amp; a[i] == a[i-1] &amp;&amp; !used[i-1]</code>. The previous equal must already be in the path; otherwise this pick is a sibling permutation of an earlier pick.</li><li><strong>Combination sum (unlimited reuse)</strong>: do not skip equals; recurse with <code>start = i</code> so you may pick <code>a[i]</code> again, and never pick an earlier index, so <code>[2,3]</code> and <code>[3,2]</code> cannot both appear.</li><li><strong>Bitmask subsets</strong>: no skip rule. Each mask is a unique index-set. If values duplicate, two masks can have the same multiset &mdash; bitmask is the wrong tool for "unique value subsets".</li></ul>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Swap vs used[]</span>
+    <p>Swap mutates the array and needs no extra boolean array; the remaining suffix <code>a[i..]</code> <em>is</em> the unused set. Dedup with swap is awkward (you must skip a value already swapped into this slot). Prefer <code>used[]</code> the moment the input has duplicates. Prefer swap when the values are unique and you want cache-friendly in-place code.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Copy the path when you record it</span>
+    <p><code>ans.add(path)</code> stores a reference. The next <code>path.add</code> mutates every previously stored answer. Always <code>ans.add(new ArrayList&lt;&gt;(path))</code>. This is the single most common backtracking bug in Java interviews.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Bitmasks when you do not need the lists</span>
+    <p>If you only need a count, a min, or an XOR of subsets, loop <code>m = 0 .. (1&lt;&lt;n)-1</code> and walk set bits. No recursion, no allocation, and the inner loop is <code>O(n)</code> or <code>O(popcount)</code>. This is the default at <code>n &le; 20</code> on Codeforces.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Include/exclude on [1, 2, 3]</h3>
+
+<p>The path is the current subset. Green is chosen, dim is not yet considered, red is excluded. Every leaf is one subset, including the empty one.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="subIncExc"></div>
+  <div class="viz-player" data-viz-target="subIncExc">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a = [1, 2, 3]",
+      "array": [
+        1,
+        2,
+        3
+      ],
+      "vars": [
+        "i",
+        "path",
+        "decision"
+      ],
+      "speed": 900,
+      "frames": [
+        {
+          "note": "Start. i = 0, path empty. Two children: exclude 1, or include 1.",
+          "dim": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "i": 0,
+            "path": "[]",
+            "decision": "root"
+          }
+        },
+        {
+          "note": "Exclude 1. Path still []. Now decide about 2.",
+          "x": [
+            0
+          ],
+          "dim": [
+            1,
+            2
+          ],
+          "values": {
+            "i": 1,
+            "path": "[]",
+            "decision": "exclude 1"
+          }
+        },
+        {
+          "note": "Exclude 2 as well. Path []. Decide about 3.",
+          "x": [
+            0,
+            1
+          ],
+          "dim": [
+            2
+          ],
+          "values": {
+            "i": 2,
+            "path": "[]",
+            "decision": "exclude 2"
+          }
+        },
+        {
+          "note": "Exclude 3. Leaf: record []. First of eight subsets.",
+          "x": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "i": 3,
+            "path": "[]",
+            "decision": "record empty"
+          }
+        },
+        {
+          "note": "Backtrack and include 3 instead. Record [3].",
+          "x": [
+            0,
+            1
+          ],
+          "best": [
+            2
+          ],
+          "values": {
+            "i": 3,
+            "path": "[3]",
+            "decision": "include 3"
+          }
+        },
+        {
+          "note": "Backtrack to i = 1, include 2. Path [2]. The next decisions about 3 produce [2] and [2,3].",
+          "x": [
+            0
+          ],
+          "best": [
+            1
+          ],
+          "dim": [
+            2
+          ],
+          "values": {
+            "i": 2,
+            "path": "[2]",
+            "decision": "include 2"
+          }
+        },
+        {
+          "note": "The include-1 branch is the other half of the tree. Same shape, paths start with 1: [1], [1,3], [1,2], [1,2,3].",
+          "best": [
+            0
+          ],
+          "dim": [
+            1,
+            2
+          ],
+          "values": {
+            "i": 1,
+            "path": "[1]",
+            "decision": "include 1"
+          }
+        },
+        {
+          "note": "Eight subsets, no duplicates, because each index is decided once. If a were [1,2,2], this tree would emit [1,2] twice — that is when the skip rule fires.",
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "i": "done",
+            "path": "8 subsets",
+            "decision": "2^n leaves"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Eight leaves for three elements. Recording happens at the leaf (or at every node, which is equivalent for subsets). The pop after include is the "backtrack".</figcaption>
+</figure>
+
+<h3>Which generator and which skip rule?</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q{"what must be unique?"}
+  q -- "index-sets, values unique" --&gt; bits["bitmask 0 to 2^n-1, or include/exclude"]
+  q -- "value-subsets, input has dups" --&gt; sub2["sort; start-index; skip i greater than start and a[i]==a[i-1]"]
+  q -- "order matters" --&gt; perm{"input has dups?"}
+  perm -- no --&gt; swapWay["in-place swap, no skip"]
+  perm -- yes --&gt; usedWay["used array; skip if a[i]==a[i-1] and previous unused"]
+  q -- "size k, order ignored" --&gt; comb["start-index, recurse i+1, stop at path size k"]
+  q -- "sum to target" --&gt; reuse{"may reuse a value?"}
+  reuse -- yes --&gt; combSum["start stays i; no sibling skip"]
+  reuse -- no --&gt; combSum2["start becomes i+1; same skip as Subsets II"]
+  </div>
+  <figcaption>Pick the tree first, then the skip predicate. The most common mix-up is using the permutation skip on a combination-sum tree, which drops valid answers.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Classify the tree.</strong> Subsets / combinations &rarr; start index. Permutations &rarr; swap or <code>used[]</code>. Target sum &rarr; add a remaining.</li>
+  <li><strong>Sort</strong> if the output must be unique and the input can contain duplicates.</li>
+  <li><strong>Write the skip predicate</strong> for that tree before any other line. Do not improvise a third rule.</li>
+  <li><strong>Record a copy of the path</strong> at the right moment: leaf for permutations and combinations of size k; every node (or the leaf of include/exclude) for subsets.</li>
+  <li><strong>Push, recurse, pop.</strong> The pop is mandatory even on early returns; a <code>finally</code>-shaped pair of lines, not a hope.</li>
+  <li><strong>For unlimited combination-sum</strong>, recurse with <code>start = i</code> and subtract <code>a[i]</code>. Guard <code>remain &lt; 0</code> as a prune.</li>
+  <li><strong>Prefer a bitmask loop</strong> when you need a numeric aggregate over subsets, not the lists themselves.</li>
+  <li><strong>Price the output.</strong> If you emit <code>k</code> arrays of length <code>n</code>, you have already paid <code>O(kn)</code>; the recursion is not the cost.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Subsets II on <code>[1, 2, 2]</code> with the start-index skip. Highlighted rows are the skipped sibling &mdash; the whole point of the rule.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>start</th><th>i</th><th>a[i]</th><th>path after</th><th>action</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>0</td><td>1</td><td>[1]</td><td>include 1, recurse start=1</td><td>First copy of 1; no skip possible.</td></tr>
+      <tr><td>1</td><td>1</td><td>2</td><td>[1,2]</td><td>include first 2, recurse start=2</td><td>First 2 at this depth.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>2</td><td>[1,2,2]</td><td>include second 2; record</td><td>Different depth, so the equal is allowed.</td></tr>
+      <tr><td>2</td><td>—</td><td>—</td><td>[1,2]</td><td>pop; no more i at start=2</td><td>Record [1,2] on the way, depending on style.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>2</td><td>2</td><td>[1]</td><td>skip: i>start and a[i]==a[i-1]</td><td>Sibling of the first 2. Emitting it would duplicate [1,2].</td></tr>
+      <tr><td>0</td><td>1</td><td>2</td><td>[2]</td><td>exclude 1, include first 2</td><td>Paths without 1.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>2</td><td>2</td><td>[]</td><td>skip the second 2 as a sibling of the first</td><td>Same rule at the root depth.</td></tr>
+      <tr><td>done</td><td>—</td><td>—</td><td>6 subsets</td><td>[], [1], [1,2], [1,2,2], [2], [2,2]</td><td>No [2] twice, no [1,2] twice.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Subsets, Permutations, Combinations implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Bitmask subsets">
+    <p>The loop you write when values are unique and you want every subset. No stack, no path copies until you decide to materialise one.</p>
+    <div class="code" data-highlight="8-16">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SubsetsBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.List;
+    
+    public class SubsetsBrute {
+    
+        static List&lt;List&lt;Integer&gt;&gt; subsets(int[] a) {
+            int n = a.length;
+            List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+            for (int m = 0; m &lt; (1 &lt;&lt; n); m++) {
+                List&lt;Integer&gt; path = new ArrayList&lt;&gt;();
+                for (int i = 0; i &lt; n; i++) {
+                    if ((m &amp; (1 &lt;&lt; i)) != 0) {
+                        path.add(a[i]);
+                    }
+                }
+                ans.add(path);
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subsets(new int[] {1, 2, 3}));
+        }
+        // Input : [1, 2, 3]
+        // Output: [[], [1], [2], [1, 2], [3], [1, 3], [2, 3], [1, 2, 3]]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Deduped generators">
+    <p>Subsets II and Permutations II with the exact skip predicates. Sort is not optional.</p>
+    <div class="code" data-highlight="18,37">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SubsetsOptimal.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class SubsetsOptimal {
+    
+        static List&lt;List&lt;Integer&gt;&gt; subsetsWithDup(int[] a) {
+            Arrays.sort(a);
+            List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+            goSub(a, 0, new ArrayList&lt;&gt;(), ans);
+            return ans;
+        }
+    
+        static void goSub(int[] a, int start, List&lt;Integer&gt; path, List&lt;List&lt;Integer&gt;&gt; ans) {
+            ans.add(new ArrayList&lt;&gt;(path));
+            for (int i = start; i &lt; a.length; i++) {
+                if (i &gt; start &amp;&amp; a[i] == a[i - 1]) {   // Subsets II skip
+                    continue;
+                }
+                path.add(a[i]);
+                goSub(a, i + 1, path, ans);
+                path.remove(path.size() - 1);
+            }
+        }
+    
+        static List&lt;List&lt;Integer&gt;&gt; permuteUnique(int[] a) {
+            Arrays.sort(a);
+            List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+            goPerm(a, new boolean[a.length], new ArrayList&lt;&gt;(), ans);
+            return ans;
+        }
+    
+        static void goPerm(int[] a, boolean[] used, List&lt;Integer&gt; path, List&lt;List&lt;Integer&gt;&gt; ans) {
+            if (path.size() == a.length) {
+                ans.add(new ArrayList&lt;&gt;(path));
+                return;
+            }
+            for (int i = 0; i &lt; a.length; i++) {
+                if (used[i]) {
+                    continue;
+                }
+                if (i &gt; 0 &amp;&amp; a[i] == a[i - 1] &amp;&amp; !used[i - 1]) {  // Perm II skip
+                    continue;
+                }
+                used[i] = true;
+                path.add(a[i]);
+                goPerm(a, used, path, ans);
+                path.remove(path.size() - 1);
+                used[i] = false;
+            }
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subsetsWithDup(new int[] {1, 2, 2}));
+            System.out.println(permuteUnique(new int[] {1, 1, 2}));
+        }
+        // Input : [1,2,2] and [1,1,2]
+        // Output: [[], [1], [1, 2], [1, 2, 2], [2], [2, 2]]
+        //         [[1, 1, 2], [1, 2, 1], [2, 1, 1]]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Combination sum">
+    <p>Unlimited reuse versus 0/1. The only structural difference is <code>i</code> versus <code>i+1</code> and whether equals are skipped.</p>
+    <div class="code" data-highlight="16,35-37">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CombinationSum.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class CombinationSum {
+    
+        /** Reuse allowed. Candidates are usually unique. */
+        static List&lt;List&lt;Integer&gt;&gt; combinationSum(int[] a, int target) {
+            Arrays.sort(a);
+            List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+            go(a, 0, target, new ArrayList&lt;&gt;(), ans);
+            return ans;
+        }
+    
+        static void go(int[] a, int start, int remain, List&lt;Integer&gt; path, List&lt;List&lt;Integer&gt;&gt; ans) {
+            if (remain == 0) {
+                ans.add(new ArrayList&lt;&gt;(path));
+                return;
+            }
+            for (int i = start; i &lt; a.length &amp;&amp; a[i] &lt;= remain; i++) {
+                path.add(a[i]);
+                go(a, i, remain - a[i], path, ans);   // reuse: start stays i
+                path.remove(path.size() - 1);
+            }
+        }
+    
+        /** Each index at most once; input may contain duplicates. */
+        static List&lt;List&lt;Integer&gt;&gt; combinationSum2(int[] a, int target) {
+            Arrays.sort(a);
+            List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+            go2(a, 0, target, new ArrayList&lt;&gt;(), ans);
+            return ans;
+        }
+    
+        static void go2(int[] a, int start, int remain, List&lt;Integer&gt; path, List&lt;List&lt;Integer&gt;&gt; ans) {
+            if (remain == 0) {
+                ans.add(new ArrayList&lt;&gt;(path));
+                return;
+            }
+            for (int i = start; i &lt; a.length &amp;&amp; a[i] &lt;= remain; i++) {
+                if (i &gt; start &amp;&amp; a[i] == a[i - 1]) {
+                    continue;
+                }
+                path.add(a[i]);
+                go2(a, i + 1, remain - a[i], path, ans);
+                path.remove(path.size() - 1);
+            }
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(combinationSum(new int[] {2, 3, 6, 7}, 7));
+            System.out.println(combinationSum2(new int[] {2, 1, 2, 5}, 5));
+        }
+        // Input : candidates [2,3,6,7] target 7; [2,1,2,5] target 5
+        // Output: [[2, 2, 3], [7]]
+        //         [[1, 2, 2], [5]]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n * 2^n) / O(n * n!)</span>
+    <span class="badge badge--space">Space O(n) plus output</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Subsets: <code>2&#8319;</code> nodes if you recurse include/exclude, or <code>2&#8319;</code> masks. Materialising each subset of average size <code>n/2</code> costs another <code>O(n)</code>, hence <code>O(n &middot; 2&#8319;)</code>.</p>
+    <p><span class="eq">permutations = n! leaves, O(n) work to copy each &rArr; O(n &middot; n!)</span></p>
+    <p>Combinations of size <code>k</code> produce <code>C(n,k)</code> leaves. Combination sum is output-sensitive and can be exponential in the target when 1 is a candidate.</p>
+    <p>The skip rules do not change the worst-case class; they only remove duplicate leaves. Sorting is <code>O(n log n)</code> and is dominated.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Bitmask subsets</td><td>O(n 2^n)</td><td>O(n) per mask</td><td>Unique indices; numeric aggregates</td></tr>
+      <tr><td>Include/exclude</td><td>O(n 2^n)</td><td>O(n) stack</td><td>Same tree, easier to prune</td></tr>
+      <tr><td>Permutations, unique</td><td>O(n n!)</td><td>O(n)</td><td>Swap in place</td></tr>
+      <tr><td>Permutations II</td><td>O(n n!)</td><td>O(n) used[]</td><td>used[] plus the sibling skip</td></tr>
+      <tr><td>Combination sum, reuse</td><td>output-sensitive</td><td>O(target / min a)</td><td>start stays i</td></tr>
+      <tr><td>Combination sum II</td><td>output-sensitive</td><td>O(n)</td><td>start = i+1 plus skip</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Storing the path by reference</span>
+    <div class="pitfalls__bug"><code>ans.add(path)</code> then <code>path.add(x)</code>. Every stored list mutates. The judge shows n copies of the last path.</div>
+    <div class="pitfalls__fix"><code>ans.add(new ArrayList&lt;&gt;(path))</code> at every record point.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">The wrong skip predicate</span>
+    <div class="pitfalls__bug">Using <code>!used[i-1]</code> on a start-index tree, or <code>i &gt; start &amp;&amp; a[i]==a[i-1]</code> on a permutation tree.</div>
+    <div class="pitfalls__fix">Subsets II / Comb Sum II: same-depth skip via <code>i &gt; start</code>. Permutations II: previous equal must already be used. Do not mix.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to sort before skipping</span>
+    <div class="pitfalls__bug">The skip looks at <code>a[i-1]</code>, which is only the previous equal after a sort. Unsorted <code>[2,1,2]</code> will emit duplicate subsets.</div>
+    <div class="pitfalls__fix"><code>Arrays.sort(a)</code> is part of the contract of every unique-output generator except pure bitmask-on-unique-indices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Reuse going backwards</span>
+    <div class="pitfalls__bug">Combination-sum with <code>start = 0</code> on every call, so <code>[2,3]</code> and <code>[3,2]</code> both appear.</div>
+    <div class="pitfalls__fix">Never decrease <code>start</code>. Unlimited reuse keeps <code>start = i</code>; 0/1 use advances to <code>i+1</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Bitmask on duplicate values when uniqueness is required</span>
+    <div class="pitfalls__bug">Looping <code>0 .. 2^n-1</code> on <code>[1,2,2]</code> and dumping every mask. [1,2] appears twice.</div>
+    <div class="pitfalls__fix">Bitmasks identify index-sets. For unique value-subsets, use the start-index tree. For unique index-sets, bitmask is correct and simpler.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Generate parentheses / phone letters</td>
+        <td>The children are not array elements; they are a small explicit alphabet that depends on the path (open/close counts, or the next digit's letters).</td>
+        <td><code>if (open &lt; n) go(open+1, close); if (close &lt; open) go(open, close+1);</code></td>
+        <td><a href="https://leetcode.com/problems/generate-parentheses/" target="_blank" rel="noopener">LC 22</a></td>
+      </tr>
+      <tr>
+        <td>k-subsets only</td>
+        <td>Stop when <code>path.size() == k</code>. Prune when <code>path.size() + (n-i) &lt; k</code>.</td>
+        <td><code>if (path.size() == k) { record; return; }</code></td>
+        <td>LC 77 Combinations</td>
+      </tr>
+      <tr>
+        <td>Count, do not list</td>
+        <td>Drop the path and the copies. Return a long. Or loop bitmasks and increment.</td>
+        <td><code>return go(i+1, remain) + go(i+1, remain-a[i]);</code></td>
+        <td>Becomes knapsack DP the moment n exceeds ~20</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is <code>!used[i-1]</code> the right permutation skip?</summary>
+    <div class="followup__body">
+      <p>Equals are adjacent after sorting. If <code>a[i-1]</code> is unused, then this call is trying to pick the second equal <em>before</em> the first, at the same path prefix &mdash; a sibling of a permutation you already produced (or will produce) by picking the first equal first. Forcing <code>used[i-1]</code> linearises the equals: they may only be taken left-to-right.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can I dedup by stuffing paths into a <code>Set&lt;List&gt;</code>?</summary>
+    <div class="followup__body">
+      <p>Yes, and it is correct, and it is the wrong answer. It costs a hash of every path and hides a broken generator. The skip rules remove the duplicates at the source in <code>O(1)</code> per sibling. Interviewers ask you to write the rule.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Swap or <code>used[]</code> for unique permutations?</summary>
+    <div class="followup__body">
+      <p>Swap. There is nothing to skip. <code>used[]</code> is extra memory and extra branches. Use swap until the input has duplicates, then switch &mdash; swap-plus-skip is easy to get wrong because the suffix is no longer a clean unused multiset after previous swaps.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When does combination sum become DP?</summary>
+    <div class="followup__body">
+      <p>The moment they ask for the <em>number</em> of combinations (order irrelevant) and <code>n</code> or the target is large. That is unbounded knapsack. If they want the lists, you are stuck with output-sensitive backtracking no matter how large the target is.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Do LC 78, LC 46, LC 90 and LC 47 in that order. Those four are the two trees and the two skip rules. Combination sum is the same page with a remaining integer.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/subsets/" target="_blank" rel="noopener">Subsets</a></td>
+        <td><span class="badge badge--lc">LC 78</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Pure include/exclude or bitmask</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/subsets-ii/" target="_blank" rel="noopener">Subsets II</a></td>
+        <td><span class="badge badge--lc">LC 90</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort + start-index skip</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/permutations/" target="_blank" rel="noopener">Permutations</a></td>
+        <td><span class="badge badge--lc">LC 46</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Swap or used[]; no skip</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/permutations-ii/" target="_blank" rel="noopener">Permutations II</a></td>
+        <td><span class="badge badge--lc">LC 47</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>used[] and !used[i-1] skip</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/combinations/" target="_blank" rel="noopener">Combinations</a></td>
+        <td><span class="badge badge--lc">LC 77</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>start-index, size k</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/combination-sum/" target="_blank" rel="noopener">Combination Sum</a></td>
+        <td><span class="badge badge--lc">LC 39</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reuse: recurse with start = i</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/combination-sum-ii/" target="_blank" rel="noopener">Combination Sum II</a></td>
+        <td><span class="badge badge--lc">LC 40</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>0/1 + Subsets II skip</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/generate-parentheses/" target="_blank" rel="noopener">Generate Parentheses</a></td>
+        <td><span class="badge badge--lc">LC 22</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two counters as the state</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/letter-combinations-of-a-phone-number/" target="_blank" rel="noopener">Letter Combinations of a Phone Number</a></td>
+        <td><span class="badge badge--lc">LC 17</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Children = letters of digits[i]</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://cses.fi/problemset/task/1622" target="_blank" rel="noopener">Creating Strings</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Permutations of a multiset</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/550/B" target="_blank" rel="noopener">Preparing Olympiad</a></td>
+        <td><span class="badge badge--cf">CF 550B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Bitmask subsets with sum / min / max filters</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://atcoder.jp/contests/abc128/tasks/abc128_c" target="_blank" rel="noopener">Switches</a></td>
+        <td><span class="badge badge--atc">ABC 128C</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>2^n masks of switch on/off</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 47 &mdash; why used[i-1] must be true</summary>
+  <div class="spoiler__body">
+    <p>Take <code>[1a, 1b, 2]</code>. The permutations that start with 1 must all use 1a before 1b. If you allow a path to pick 1b while 1a is still free, you rebuild the same sequences the 1a-first branch already emitted. The predicate <code>!used[i-1]</code> is exactly "I am picking this equal while the previous equal is still free" &mdash; the sibling you must kill.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 40 &mdash; combination sum II</summary>
+  <div class="spoiler__body">
+    <p>This is Subsets II plus a remaining-target prune. Sort, walk <code>i</code> from <code>start</code>, skip <code>i &gt; start &amp;&amp; a[i]==a[i-1]</code>, recurse <code>i+1</code>, and bail when <code>a[i] &gt; remain</code> (legal only because you sorted). Reuse is forbidden, so <code>start</code> must advance.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Subsets = include/exclude or bitmasks.</strong> Permutations = swap or used[].</li>
+    <li><strong>Combinations keep a start index</strong> so order cannot explode.</li>
+    <li><strong>Subsets II skip:</strong> <code>i &gt; start &amp;&amp; a[i]==a[i-1]</code>.</li>
+    <li><strong>Permutations II skip:</strong> <code>a[i]==a[i-1] &amp;&amp; !used[i-1]</code>.</li>
+    <li><strong>Combination sum:</strong> reuse keeps <code>start = i</code>; 0/1 uses <code>i+1</code> plus the Subsets II skip.</li>
+    <li><strong>Always copy the path</strong> when you record it.</li>
+  </ul>
+  <div class="recap__oneliner">if (i&gt;start &amp;&amp; a[i]==a[i-1]) continue; path.add(a[i]); go(i+1); path.remove(path.size()-1);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

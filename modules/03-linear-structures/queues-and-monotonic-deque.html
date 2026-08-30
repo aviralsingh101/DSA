@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Queues &amp; Monotonic Deque &mdash; DSA Course</title>
+<meta name="description" content="A deque drops candidates from both ends: the front expires by age, the back is dominated by a better newer value &mdash; sliding-window maximum in O(n).">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="queues-and-monotonic-deque">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 03 &middot; Linear Data Structures</span>
+  <h1>Queues & Monotonic Deque</h1>
+  <p class="hero__tagline">A deque drops candidates from both ends: the front expires by age, the back is dominated by a better newer value &mdash; sliding-window maximum in O(n).</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="stacks-and-monotonic-stack.html">Stacks & Monotonic Stack</a>,
+      <a href="../01-arrays-and-windows/sliding-window.html">Sliding Window</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">queue</span>
+      <span class="chip">deque</span>
+      <span class="chip">sliding window max</span>
+      <span class="chip">monotonic deque</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A queue is FIFO: BFS, moving averages, "first task that arrived". The structure that actually wins interviews is the <em>monotonic deque</em>: indices of candidates for the window maximum (or minimum), increasing in index and decreasing in value. The front is the answer for the current window; the back is where new arrivals land after popping everything they dominate.</p>
+<p>Without the deque, window-max is O(nk) or O(n log k) with a heap that cannot cheaply delete the element that just left. The deque deletes expired indices from the front in O(1) and dominated indices from the back in amortised O(1). Same bound as a monotonic stack, plus age.</p>
+<p>The same deque solves shortest subarray with sum ≥ k (on prefixes), jump game VI, and constrained subsequence sum. Structural queues (recent calls, circular queue, implement queue with stacks) are a different, easier family.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>The front of a decreasing deque is the max of the live window because everything older and smaller has been popped from the back, and everything too old has been popped from the front.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Maximum / minimum of every window of size k"</li>
+        <li>"Longest subarray whose max-min ≤ limit" (two deques, or one TreeMap)</li>
+        <li>"Shortest subarray with sum ≥ k" allowing negatives (prefix + increasing deque)</li>
+        <li>Jump game VI / constrained subsequence: dp[i] = a[i] + max of a window of dp</li>
+        <li>BFS, moving average, recent-calls queue (structural FIFO)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Next greater with no window expiry &rarr; <a href="stacks-and-monotonic-stack.html">monotonic stack</a> (one end only)</li>
+        <li>k-th of a window, not max/min &rarr; two heaps or a policy-based tree</li>
+        <li>Need floor/ceiling of arbitrary keys &rarr; <a href="treemap-treeset-patterns.html">TreeMap</a></li>
+        <li>Single running max with no expiry &rarr; a variable, not a deque</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>sliding window maximum</td>
+        <td>Decreasing deque of indices</td>
+        <td>LC 239</td>
+      </tr>
+      <tr>
+        <td>window min</td>
+        <td>Increasing deque</td>
+        <td>Same template, flipped cmp</td>
+      </tr>
+      <tr>
+        <td>max-min ≤ limit</td>
+        <td>Two deques, grow/shrink r and l</td>
+        <td>LC 1438</td>
+      </tr>
+      <tr>
+        <td>shortest subarray sum ≥ k</td>
+        <td>Increasing deque of prefixes</td>
+        <td>LC 862</td>
+      </tr>
+      <tr>
+        <td>dp[i] = a[i] + max(dp[i-k..i-1])</td>
+        <td>Deque of dp indices</td>
+        <td>LC 1696</td>
+      </tr>
+      <tr>
+        <td>BFS / level order</td>
+        <td>FIFO ArrayDeque of nodes</td>
+        <td>Trees / graphs</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> monotonic stack</td>
+        <td>Stack has no cheap front-expiry; windows need a deque</td>
+        <td>If candidates only die by domination, a stack suffices</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, window k up to n: the deque must be O(n), not O(n log k). Prefix sums for LC 862 need <code>long</code>. Use ArrayDeque, not LinkedList (cache) and not Stack.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Maintain indices with a[dq] strictly decreasing. For each i: pop back while <code>a[dq.peekLast()] ≤ a[i]</code> (i is better and newer); push i; pop front while <code>dq.peekFirst() ≤ i-k</code> (expired). The answer for window ending at i is <code>a[dq.peekFirst()]</code>. Push after cleaning so the new index is live.</p>
+<p>For prefix-minima (shortest subarray sum ≥ k): the deque holds increasing prefixes. If <code>P[i] - P[dq.front] ≥ k</code>, the front can be popped as a candidate start (later starts only make the subarray shorter once this one already works). Negatives make sliding-window-on-values illegal; the deque on prefixes is the repair.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>The deque is increasing in index and decreasing in value (for window max):</p><span class="eq">idx0 &lt; idx1 &lt; … and a[idx0] ≥ a[idx1] ≥ … , all idx in (i-k, i]</span><p>Interview sentence: <em>"Front is the max of the live window; back pops everyone the new arrival dominates."</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="queues-and-monotonic-dequeViz"></div>
+  <div class="viz-player" data-viz-target="queues-and-monotonic-dequeViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [
+        1,
+        3,
+        -1,
+        -3,
+        5,
+        3,
+        6,
+        7
+      ],
+      "vars": [
+        "i",
+        "window",
+        "deque",
+        "max"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, push 0. Deque [0].",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": 0,
+            "window": "[1]",
+            "deque": "[0]",
+            "max": "—"
+          }
+        },
+        {
+          "note": "i=1, a=3 ≥ 1, pop 0, push 1. Deque [1].",
+          "active": [
+            1
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": 1,
+            "window": "[1,3]",
+            "deque": "[1]",
+            "max": "—"
+          }
+        },
+        {
+          "note": "i=2, a=-1 < 3, push 2. First full window: max = a[1]=3.",
+          "window": [
+            0,
+            2
+          ],
+          "best": [
+            1
+          ],
+          "values": {
+            "i": 2,
+            "window": "[1,3,-1]",
+            "deque": "[1,2]",
+            "max": 3
+          }
+        },
+        {
+          "note": "i=3, a=-3. Push 3. Front 1 is still in window (3-3=0, 1>0). Max still 3.",
+          "window": [
+            1,
+            3
+          ],
+          "best": [
+            1
+          ],
+          "values": {
+            "i": 3,
+            "window": "[3,-1,-3]",
+            "deque": "[1,2,3]",
+            "max": 3
+          }
+        },
+        {
+          "note": "i=4, a=5. Pop back -3,-1,3 (all ≤ 5). Front 1 expires (1≤4-3). Push 4. Max=5.",
+          "window": [
+            2,
+            4
+          ],
+          "best": [
+            4
+          ],
+          "values": {
+            "i": 4,
+            "window": "[-1,-3,5]",
+            "deque": "[4]",
+            "max": 5
+          }
+        },
+        {
+          "note": "i=5, a=3 < 5, push 5. Max=5. Then 6 and 7 will drain the deque to a new max each time.",
+          "window": [
+            3,
+            5
+          ],
+          "best": [
+            4
+          ],
+          "values": {
+            "i": 5,
+            "window": "[-3,5,3]",
+            "deque": "[4,5]",
+            "max": 5
+          }
+        },
+        {
+          "note": "Finish: windows maxima [3,3,5,5,6,7]. Each index entered and left the deque at most once.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "i": "done",
+            "window": "all",
+            "deque": "[7]",
+            "max": "[3,3,5,5,6,7]"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Queue vs monotonic deque</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  q["queue-shaped question"] --&gt; kind{"FIFO, or window max/min?"}
+  kind -- FIFO --&gt; bfs["ArrayDeque addLast / pollFirst"]
+  kind -- window agg --&gt; which{"max/min, or k-th?"}
+  which -- max or min --&gt; dq["monotonic deque of indices"]
+  which -- k-th --&gt; heap["wrong page: two heaps / TreeMap"]
+  dq --&gt; ends["pop front by age, pop back by domination"]
+  kind -- two stacks --&gt; impl["implement queue with two deques"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Window max:</strong> decreasing deque of indices.</li>
+  <li><strong>For each i:</strong> pop back while a[back] ≤ a[i].</li>
+  <li><strong>Push i.</strong> Then pop front while front ≤ i-k.</li>
+  <li><strong>Record</strong> a[peekFirst] once i ≥ k-1.</li>
+  <li><strong>Prefix variant:</strong> increasing deque of P[i]; pop front when P[i]-P[front] ≥ k.</li>
+  <li><strong>BFS:</strong> addLast / pollFirst; never mix with peekLast unless it is a 0-1 BFS.</li>
+  <li><strong>ArrayDeque</strong>, 4-space, long for prefix sums.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>window</th><th>deque</th><th>max</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>[1]</td><td>[0]</td><td>—</td><td>Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, push 0. Deque [0].</td></tr>
+      <tr><td>1</td><td>[1,3]</td><td>[1]</td><td>—</td><td>i=1, a=3 ≥ 1, pop 0, push 1. Deque [1].</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>[1,3,-1]</td><td>[1,2]</td><td>3</td><td>i=2, a=-1 < 3, push 2. First full window: max = a[1]=3.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>[3,-1,-3]</td><td>[1,2,3]</td><td>3</td><td>i=3, a=-3. Push 3. Front 1 is still in window (3-3=0, 1>0). Max still 3.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>[-1,-3,5]</td><td>[4]</td><td>5</td><td>i=4, a=5. Pop back -3,-1,3 (all ≤ 5). Front 1 expires (1≤4-3). Push 4. Max=5.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>[-3,5,3]</td><td>[4,5]</td><td>5</td><td>i=5, a=3 < 5, push 5. Max=5. Then 6 and 7 will drain the deque to a new max each time.</td></tr>
+      <tr><td>done</td><td>all</td><td>[7]</td><td>[3,3,5,5,6,7]</td><td>Finish: windows maxima [3,3,5,5,6,7]. Each index entered and left the deque at most once.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Queues & Monotonic Deque implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute window</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal deque</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute window">
+    <p>Scan each window. O(nk). Fine for teaching, dead at n=1e5, k=n/2.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">WindowBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class WindowBrute {
+        static int[] maxSliding(int[] a, int k) {
+            int n = a.length;
+            int[] ans = new int[n - k + 1];
+            for (int i = 0; i + k &lt;= n; i++) {
+                int m = a[i];
+                for (int j = i + 1; j &lt; i + k; j++) {
+                    m = Math.max(m, a[j]);
+                }
+                ans[i] = m;
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(
+                maxSliding(new int[] {1, 3, -1, -3, 5, 3, 6, 7}, 3)));
+        }
+        // Input : [1,3,-1,-3,5,3,6,7], k=3
+        // Output: [3, 3, 5, 5, 6, 7]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal deque">
+    <p>Sliding-window max in O(n). Front is the answer; back is the insertion end.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MonoDeque.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.Arrays;
+    
+    public class MonoDeque {
+        static int[] maxSliding(int[] a, int k) {
+            int n = a.length;
+            int[] ans = new int[n - k + 1];
+            ArrayDeque&lt;Integer&gt; dq = new ArrayDeque&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) {
+                while (!dq.isEmpty() &amp;&amp; a[dq.peekLast()] &lt;= a[i]) {
+                    dq.pollLast();
+                }
+                dq.addLast(i);
+                if (dq.peekFirst() &lt;= i - k) {
+                    dq.pollFirst();
+                }
+                if (i &gt;= k - 1) {
+                    ans[i - k + 1] = a[dq.peekFirst()];
+                }
+            }
+            return ans;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(
+                maxSliding(new int[] {1, 3, -1, -3, 5, 3, 6, 7}, 3)));
+        }
+        // Input : [1, 3, -1, -3, 5, 3, 6, 7], k=3
+        // Output: [3, 3, 5, 5, 6, 7]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>LC 862: increasing deque of prefix indices. Negatives make a plain window illegal.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ShortestSubarray.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    
+    public class ShortestSubarray {
+        static int shortest(int[] a, int k) {
+            int n = a.length;
+            long[] p = new long[n + 1];
+            for (int i = 0; i &lt; n; i++) {
+                p[i + 1] = p[i] + a[i];
+            }
+            int best = n + 1;
+            ArrayDeque&lt;Integer&gt; dq = new ArrayDeque&lt;&gt;();
+            for (int i = 0; i &lt;= n; i++) {
+                while (!dq.isEmpty() &amp;&amp; p[i] - p[dq.peekFirst()] &gt;= k) {
+                    best = Math.min(best, i - dq.pollFirst());
+                }
+                while (!dq.isEmpty() &amp;&amp; p[dq.peekLast()] &gt;= p[i]) {
+                    dq.pollLast();
+                }
+                dq.addLast(i);
+            }
+            return best &lt;= n ? best : -1;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(shortest(new int[] {1}, 1));
+            System.out.println(shortest(new int[] {1, 2}, 4));
+            System.out.println(shortest(new int[] {2, -1, 2}, 3));
+        }
+        // Input : [1] k=1; [1,2] k=4; [2,-1,2] k=3
+        // Output: 1
+        //         -1
+        //         3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) amortised</span>
+    <span class="badge badge--space">Space O(k) for a window of size k, O(n) worst case</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each index is pushed at most once and popped at most once from each end:</p><span class="eq">T(n) = Θ(n)</span>
+    <p>A heap of size k is O(n log k) and cannot delete the expired max without a lazy deletion map. The deque wins whenever you only need min or max, not k-th.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Scan each window</td><td>O(n k)</td><td>O(1)</td><td>k tiny</td></tr>
+      <tr><td>Heap + lazy delete</td><td>O(n log n)</td><td>O(n)</td><td>Works; heavier</td></tr>
+      <tr><td>Monotonic deque</td><td>O(n)</td><td>O(k)</td><td>Window max/min default</td></tr>
+      <tr><td>TreeMap of window</td><td>O(n log k)</td><td>O(k)</td><td>When you need min and max, or k-th</td></tr>
+      <tr><td>Monotonic stack</td><td>O(n)</td><td>O(n)</td><td>No age expiry</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Popping the front with < instead of ≤ i-k</span>
+    <div class="pitfalls__bug">An index exactly k ago stays and poisons the max.</div>
+    <div class="pitfalls__fix">while peekFirst ≤ i-k (strictly outside the window of size k ending at i).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using < instead of ≤ when popping the back</span>
+    <div class="pitfalls__bug">Equal values pile up; the older equal expires later and you keep a stale index.</div>
+    <div class="pitfalls__fix">Pop back on ≤ so the newest equal sits at the front when the older expires.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recording the max before the window is full</span>
+    <div class="pitfalls__bug">ans[0] written at i=0 for k=3.</div>
+    <div class="pitfalls__fix">Only record when i ≥ k-1.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Sliding window on values when negatives exist</span>
+    <div class="pitfalls__bug">Two pointers for sum≥k is wrong if a[i] can be negative.</div>
+    <div class="pitfalls__fix">Prefix + increasing deque (LC 862), not a shrinkable positive window.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">LinkedList as a deque</span>
+    <div class="pitfalls__bug">Pointer chasing, extra objects. Correct but slow in Java.</div>
+    <div class="pitfalls__fix">ArrayDeque. pollFirst/Last, peekFirst/Last, addFirst/Last.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Longest window with max-min ≤ limit</td>
+        <td>Two deques (max and min); advance r, then advance l until max-min ≤ limit.</td>
+        <td><code>LC 1438. TreeMap of counts also works in n log n.</code></td>
+        <td>LC 1438.</td>
+      </tr>
+      <tr>
+        <td>Jump Game VI</td>
+        <td>dq holds dp indices decreasing in dp; dp[i]=a[i]+dp[front]; expire i-k.</td>
+        <td><code>Same template with dp as the array.</code></td>
+        <td>LC 1696.</td>
+      </tr>
+      <tr>
+        <td>Moving average / recent calls</td>
+        <td>Structural FIFO: addLast, pollFirst while expired, peek size.</td>
+        <td><code>No monotonicity needed.</code></td>
+        <td>LC 346, LC 933.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why not a max-heap of the window?</summary>
+    <div class="followup__body">
+      <p>You can, with lazy deletion of indices ≤ i-k when they appear at the top. It is O(n log n) and more code. The deque is linear and the intended answer.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can the deque store values instead of indices?</summary>
+    <div class="followup__body">
+      <p>Only if you also store the index beside the value (a pair). Age tests need the index. A value-only deque cannot tell whether the front has left the window.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Shortest subarray with sum ≥ k and all positives?</summary>
+    <div class="followup__body">
+      <p>Then a two-pointer sliding window on the array itself is enough (prefix is increasing). The deque is what you reach for once negatives appear.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Implement a queue with two stacks?</summary>
+    <div class="followup__body">
+      <p>Inbox stack for push, outbox stack for pop: dump inbox into outbox when outbox is empty. Amortised O(1). ArrayDeque already is a queue; this is the design question.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Sliding Window Maximum</a></td>
+        <td><span class="badge badge--lc">LC 239</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Decreasing deque of indices</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/longest-continuous-subarray-with-absolute-diff-less-than-or-equal-to-limit/" target="_blank" rel="noopener">Longest Continuous Subarray Diff ≤ Limit</a></td>
+        <td><span class="badge badge--lc">LC 1438</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two deques, max-min</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/shortest-subarray-with-sum-at-least-k/" target="_blank" rel="noopener">Shortest Subarray with Sum at Least K</a></td>
+        <td><span class="badge badge--lc">LC 862</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Increasing deque of prefixes</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/jump-game-vi/" target="_blank" rel="noopener">Jump Game VI</a></td>
+        <td><span class="badge badge--lc">LC 1696</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Deque of dp indices</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/constrained-subsequence-sum/" target="_blank" rel="noopener">Constrained Subsequence Sum</a></td>
+        <td><span class="badge badge--lc">LC 1425</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Same as jump VI with max(0, dp)</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/moving-average-from-data-stream/" target="_blank" rel="noopener">Moving Average from Data Stream</a></td>
+        <td><span class="badge badge--lc">LC 346</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>FIFO queue of last k, long sum</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/number-of-recent-calls/" target="_blank" rel="noopener">Number of Recent Calls</a></td>
+        <td><span class="badge badge--lc">LC 933</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Poll expired, addLast, size</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/implement-queue-using-stacks/" target="_blank" rel="noopener">Implement Queue using Stacks</a></td>
+        <td><span class="badge badge--lc">LC 232</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Inbox / outbox ArrayDeque</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://cses.fi/problemset/task/1076" target="_blank" rel="noopener">Sliding Window Median</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Contrast: two heaps, not a max-deque</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://cses.fi/problemset/task/3226" target="_blank" rel="noopener">Sliding Window Maximum</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same deque as LC 239, larger n</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 862 &mdash; two pops, two reasons</summary>
+  <div class="spoiler__body">
+    <p>Front pop: P[r]-P[front] ≥ k, that left end is used up (later r only makes it longer). Back pop: P[r] ≤ P[back], a later smaller-or-equal prefix is a strictly better left end. After both, push r. Miss either pop and you TLE or return a longer answer.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 1696 &mdash; DP with a sliding max</summary>
+  <div class="spoiler__body">
+    <p>dp[i] = a[i] + max(dp[i-k..i-1]). That inner max is window-maximum on the dp array: decreasing deque of indices, expire i-k. Do not scan k previous states.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Front expires by age</strong>, back by domination.</li>
+    <li><strong>Decreasing deque</strong> for window max; increasing for min / prefix.</li>
+    <li><strong>Store indices</strong>, pop back on ≤ so equals do not stale.</li>
+    <li><strong>Negatives + range sum</strong> → prefix deque, not a two-pointer window.</li>
+    <li><strong>ArrayDeque</strong> is both the queue and the deque.</li>
+  </ul>
+  <div class="recap__oneliner">while (!dq.isEmpty() &amp;&amp; a[dq.peekLast()] &lt;= a[i]) dq.pollLast(); dq.addLast(i);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

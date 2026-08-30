@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCC: Tarjan &amp; Kosaraju &mdash; DSA Course</title>
+<meta name="description" content="An SCC is a maximal set where every vertex can reach every other. Kosaraju is two DFS passes; Tarjan is one DFS with a low-link stack.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="scc-tarjan-kosaraju">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 08 &middot; Graphs: Advanced</span>
+  <h1>SCC: Tarjan & Kosaraju</h1>
+  <p class="hero__tagline">An SCC is a maximal set where every vertex can reach every other. Kosaraju is two DFS passes; Tarjan is one DFS with a low-link stack.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/dfs-and-components.html">DFS & Connected Components</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">SCC</span>
+      <span class="chip">Tarjan</span>
+      <span class="chip">Kosaraju</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Reachability on a directed graph is not symmetric. The condensation of SCCs is a DAG — the structure every "eventual safe node", "2-SAT", and "minimum edges to make strongly connected" problem sits on.</p>
+<p>Kosaraju: DFS to record finish order, reverse every edge, DFS again in reverse-finish order. Each second-pass tree is an SCC. Tarjan: one DFS, a stack of the current path, <code>low[u] = min(tin[u], tin of back-edges, low of children)</code>; when <code>low[u] == tin[u]</code> you pop an SCC.</p>
+<p>Write Kosaraju if you want the simpler proof. Write Tarjan if you already have tin/low from bridges and want one pass. Both are linear.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>In the reverse graph, the sources of the condensation are the sinks of the original. Processing vertices in reverse-finish order hits those sources first, so each second-pass DFS stays inside one SCC.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Partition a directed graph into strongly connected components</li>
+        <li>Condensation DAG: contract each SCC to a node</li>
+        <li>2-SAT (x and not-x in the same SCC is unsat)</li>
+        <li>"Minimum edges so the graph is strongly connected" — count DAG sources and sinks</li>
+        <li>Eventual safe nodes — SCCs that cannot reach a cycle (or outdegree 0 in the condensation)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Undirected connected components &rarr; one DFS, no reverse graph</li>
+        <li>Bridges / articulation points &rarr; tin/low on an undirected graph</li>
+        <li>Weakly connected (ignore direction) &rarr; treat edges as undirected</li>
+        <li>You only need reachability from one source &rarr; one DFS / BFS</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Directed, partition into SCCs</td>
+        <td>Two DFS or one tin/low</td>
+        <td>Kosaraju / Tarjan</td>
+      </tr>
+      <tr>
+        <td>2-SAT</td>
+        <td>Implication graph SCCs</td>
+        <td>this page + two-sat</td>
+      </tr>
+      <tr>
+        <td>Undirected components</td>
+        <td>No direction</td>
+        <td>plain DFS</td>
+      </tr>
+      <tr>
+        <td>Bridges</td>
+        <td>Undirected tin/low</td>
+        <td>bridges page</td>
+      </tr>
+      <tr>
+        <td>Condensation is a DAG</td>
+        <td>Edges only SCC_i to SCC_j if i cannot return</td>
+        <td>contract</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> weakly connected</td>
+        <td>Ignoring direction over-merges</td>
+        <td>Keep the arrows</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Both algorithms are O(n+m). Recursion depth can be n — convert to an explicit stack on Java if the judge's stack is 1 MB.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Kosaraju. Pass 1: DFS on G, push u after exploring children (finish order). Reverse the edges. Pass 2: pop the finish stack; each unvisited pop starts an SCC DFS on G^R.</p>
+<p>Tarjan. DFS with tin, low, and a stack of nodes on the current exploration path (an onStack flag). A back-edge to an on-stack node updates low. When low[u]==tin[u], pop until u — that slice is an SCC. Do not use a back-edge to a finished (popped) node; that is a cross edge into another SCC.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p>Kosaraju: reverse-finish order of G is a topological order of the condensation of G^R. Tarjan: low[u] is the smallest tin reachable from u via a path of tree edges plus at most one back-edge into the current stack.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="scc-tarjan-kosarajuViz"></div>
+  <div class="viz-player" data-viz-target="scc-tarjan-kosarajuViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "scc =",
+      "array": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "indexLabels": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "u",
+        "scc",
+        "stack"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Graph: 0\to1\to2\to0, 1\to3. One cycle and a sink.",
+          "active": [
+            0
+          ],
+          "values": {
+            "u": 0,
+            "scc": "—",
+            "stack": "0"
+          }
+        },
+        {
+          "note": "DFS 0-1-2, back to 0. Tarjan low[0]==tin[0], pop 2,1,0 as SCC 0.",
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": 0,
+            "scc": "0",
+            "stack": "pop 2,1,0"
+          }
+        },
+        {
+          "note": "Node 3 is still on the stack of the earlier branch from 1? After pop, 3 is visited next.",
+          "active": [
+            3
+          ],
+          "values": {
+            "u": 3,
+            "scc": "—",
+            "stack": "3"
+          }
+        },
+        {
+          "note": "3 has no back-edge. low[3]==tin[3], pop SCC 1 = {3}.",
+          "active": [
+            3
+          ],
+          "values": {
+            "u": 3,
+            "scc": 1,
+            "stack": "empty"
+          }
+        },
+        {
+          "note": "Condensation: SCC0 \to SCC1. Sources=1, sinks=1.",
+          "active": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": "dag",
+            "scc": "0\to1",
+            "stack": "—"
+          }
+        },
+        {
+          "note": "ids [0,0,0,1]. 0,1,2 are mutually reachable; 3 is not.",
+          "active": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "u": "done",
+            "scc": "0,0,0,1",
+            "stack": "—"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  n0["0"] --&gt; n1["1"]
+  n1 --&gt; n2["2"]
+  n2 --&gt; n0
+  n1 --&gt; n3["3"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Kosaraju 1:</strong> DFS G, record finish order.</li>
+  <li><strong>Reverse</strong> every edge.</li>
+  <li><strong>Kosaraju 2:</strong> DFS G^R in reverse-finish order; each tree is an SCC.</li>
+  <li><strong>Tarjan:</strong> tin/low/stack; pop when low[u]==tin[u].</li>
+  <li><strong>Condense:</strong> map each vertex to its SCC id; add edges between different ids.</li>
+  <li><strong>DAG facts:</strong> sources and sinks of the condensation solve the "make strongly connected" problem.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>scc</th><th>stack</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>—</td><td>0</td><td>Graph: 0	o1	o2	o0, 1	o3. One cycle and a sink.</td></tr>
+      <tr><td>0</td><td>0</td><td>pop 2,1,0</td><td>DFS 0-1-2, back to 0. Tarjan low[0]==tin[0], pop 2,1,0 as SCC 0.</td></tr>
+      <tr><td>3</td><td>—</td><td>3</td><td>Node 3 is still on the stack of the earlier branch from 1? After pop, 3 is visited next.</td></tr>
+      <tr><td>3</td><td>1</td><td>empty</td><td>3 has no back-edge. low[3]==tin[3], pop SCC 1 = {3}.</td></tr>
+      <tr><td>dag</td><td>0	o1</td><td>—</td><td>Condensation: SCC0 	o SCC1. Sources=1, sinks=1.</td></tr>
+      <tr><td>done</td><td>0,0,0,1</td><td>—</td><td>ids [0,0,0,1]. 0,1,2 are mutually reachable; 3 is not.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="SCC: Tarjan & Kosaraju implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SccBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class SccBrute {
+        static boolean reaches(List&lt;Integer&gt;[] g, int a, int b) {
+            boolean[] vis = new boolean[g.length];
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
+            q.add(a); vis[a] = true;
+            while (!q.isEmpty()) {
+                int u = q.poll();
+                if (u == b) return true;
+                for (int v : g[u]) if (!vis[v]) { vis[v] = true; q.add(v); }
+            }
+            return false;
+        }
+        public static void main(String[] args) {
+            List&lt;Integer&gt;[] g = new List[4];
+            for (int i = 0; i &lt; 4; i++) g[i] = new ArrayList&lt;&gt;();
+            g[0].add(1); g[1].add(2); g[2].add(0); g[1].add(3);
+            System.out.println(reaches(g, 0, 2) &amp;&amp; reaches(g, 2, 0));
+            System.out.println(reaches(g, 0, 3) &amp;&amp; reaches(g, 3, 0));
+        }
+        // Input : 0	o1	o2	o0, 1	o3
+        // Output: true
+        //         false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Kosaraju.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Kosaraju {
+        List&lt;Integer&gt;[] g, rg;
+        boolean[] vis;
+        int[] id;
+        List&lt;Integer&gt; order = new ArrayList&lt;&gt;();
+        int cid;
+        Kosaraju(int n) {
+            g = new List[n]; rg = new List[n];
+            for (int i = 0; i &lt; n; i++) { g[i] = new ArrayList&lt;&gt;(); rg[i] = new ArrayList&lt;&gt;(); }
+            vis = new boolean[n]; id = new int[n];
+        }
+        void add(int u, int v) { g[u].add(v); rg[v].add(u); }
+        void dfs1(int u) {
+            vis[u] = true;
+            for (int v : g[u]) if (!vis[v]) dfs1(v);
+            order.add(u);
+        }
+        void dfs2(int u) {
+            id[u] = cid;
+            for (int v : rg[u]) if (id[v] == 0 &amp;&amp; vis[v]) { /* vis reused */ }
+            for (int v : rg[u]) if (id[v] == -1) { id[v] = cid; dfs2(v); }
+        }
+        int[] scc() {
+            int n = g.length;
+            Arrays.fill(id, -1);
+            for (int i = 0; i &lt; n; i++) if (!vis[i]) dfs1(i);
+            Arrays.fill(vis, false);
+            cid = 0;
+            for (int i = n - 1; i &gt;= 0; i--) {
+                int u = order.get(i);
+                if (id[u] == -1) { dfs2(u); cid++; }
+            }
+            return id;
+        }
+        public static void main(String[] args) {
+            Kosaraju k = new Kosaraju(4);
+            k.add(0, 1); k.add(1, 2); k.add(2, 0); k.add(1, 3);
+            System.out.println(Arrays.toString(k.scc()));
+        }
+        // Input : 0	o1	o2	o0, 1	o3
+        // Output: [0, 0, 0, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">TarjanScc.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class TarjanScc {
+        List&lt;Integer&gt;[] g;
+        int[] tin, low, id;
+        boolean[] on;
+        int timer, cid;
+        Deque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+        TarjanScc(int n) {
+            g = new List[n];
+            for (int i = 0; i &lt; n; i++) g[i] = new ArrayList&lt;&gt;();
+            tin = new int[n]; low = new int[n]; id = new int[n];
+            on = new boolean[n]; Arrays.fill(tin, -1);
+        }
+        void add(int u, int v) { g[u].add(v); }
+        void dfs(int u) {
+            tin[u] = low[u] = timer++;
+            st.push(u); on[u] = true;
+            for (int v : g[u]) {
+                if (tin[v] == -1) { dfs(v); low[u] = Math.min(low[u], low[v]); }
+                else if (on[v]) low[u] = Math.min(low[u], tin[v]);
+            }
+            if (low[u] == tin[u]) {
+                while (true) {
+                    int x = st.pop(); on[x] = false; id[x] = cid;
+                    if (x == u) break;
+                }
+                cid++;
+            }
+        }
+        public static void main(String[] args) {
+            TarjanScc t = new TarjanScc(4);
+            t.add(0, 1); t.add(1, 2); t.add(2, 0); t.add(1, 3);
+            for (int i = 0; i &lt; 4; i++) if (t.tin[i] == -1) t.dfs(i);
+            System.out.println(Arrays.toString(t.id));
+        }
+        // Input : same graph
+        // Output: [0, 0, 0, 1]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n + m)</span>
+    <span class="badge badge--space">Space O(n + m)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each vertex and edge is processed a constant number of times. Kosaraju pays for a reverse-edge list. Tarjan pays for a stack of size n.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pairwise reach</td><td>O(n(n+m))</td><td>O(n)</td><td>n <= 200</td></tr>
+      <tr><td>Kosaraju</td><td>O(n+m)</td><td>O(n+m)</td><td>Simplest proof</td></tr>
+      <tr><td>Tarjan</td><td>O(n+m)</td><td>O(n+m)</td><td>One pass, shared with bridges</td></tr>
+      <tr><td>Floyd reachability</td><td>O(n^3)</td><td>O(n^2)</td><td>Also want distances</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using a back-edge to a finished node in Tarjan</span>
+    <div class="pitfalls__bug">Updating low from a popped node merges two SCCs.</div>
+    <div class="pitfalls__fix">Only update from <code>onStack[v]</code> nodes.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Kosaraju second pass on G, not G^R</span>
+    <div class="pitfalls__bug">You walk outgoing edges and glue extra vertices into the SCC.</div>
+    <div class="pitfalls__fix">Pass 2 is on the reversed graph.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Finish-order vs discovery-order</span>
+    <div class="pitfalls__bug">Processing in tin order on pass 2 is wrong. You need reverse finish.</div>
+    <div class="pitfalls__fix">Push after the recursive calls, then iterate the list backwards.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Java recursion on a 2e5 path</span>
+    <div class="pitfalls__bug">StackOverflowError.</div>
+    <div class="pitfalls__fix">Iterative DFS, or raise the stack (<code>-Xss256m</code>) in local tests; prefer iterative on CF Java.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Condensing without skipping intra-SCC edges</span>
+    <div class="pitfalls__bug">Self-loops on the DAG, which then looks cyclic.</div>
+    <div class="pitfalls__fix">Add a condensation edge only when <code>id[u] != id[v]</code>.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Make strongly connected</td>
+        <td>If already 1 SCC, 0. Else max(sources, sinks) of the DAG.</td>
+        <td><code>CF 732F</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Eventual safe</td>
+        <td>Nodes whose SCC cannot reach a cycle — outdegree 0 in condensation after removing trivial loops, or LC 802 colouring.</td>
+        <td><code>LC 802</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>2-SAT</td>
+        <td>Implication graph; unsat iff x and ~x share an SCC.</td>
+        <td><code>next page</code></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why reverse finish order?</summary>
+    <div class="followup__body">
+      <p>Finish times of a first DFS are a reverse topological order of the condensation. Reversing edges flips that into a genuine topo order of G^R's condensation, so each second-pass root owns exactly one SCC.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Tarjan vs Kosaraju in an interview?</summary>
+    <div class="followup__body">
+      <p>Kosaraju is easier to get right. Tarjan is one pass and shares tin/low with bridges. Either is acceptable if you can prove the condensation is a DAG.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How many edges to make the graph strongly connected?</summary>
+    <div class="followup__body">
+      <p>Contract SCCs. If one node, 0. Else let A = number of sources, B = number of sinks; answer max(A, B). You can always add that many edges (pair sinks to sources).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can an SCC be a single node with no loop?</summary>
+    <div class="followup__body">
+      <p>Yes. A trivial SCC. It is still a DAG node. A self-loop makes that singleton a cycle, which matters for "safe nodes".</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/find-eventual-safe-states/" target="_blank" rel="noopener">Find Eventual Safe States</a></td>
+        <td><span class="badge badge--lc">LC 802</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Reverse edges / SCC</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/critical-connections-in-a-network/" target="_blank" rel="noopener">Critical Connections In A Network</a></td>
+        <td><span class="badge badge--lc">LC 1192</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Bridges — contrast with SCC</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/427/C" target="_blank" rel="noopener">Checkposts</a></td>
+        <td><span class="badge badge--cf">CF 427C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>SCC + min cost / ways</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/732/F" target="_blank" rel="noopener">Tourist Reform</a></td>
+        <td><span class="badge badge--cf">CF 732F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Condensation + make strongly connected</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://codeforces.com/problemset/problem/1213/F" target="_blank" rel="noopener">Unstable String Sort</a></td>
+        <td><span class="badge badge--cf">CF 1213F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Implication / components</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://cses.fi/problemset/task/1682" target="_blank" rel="noopener">Flight Routes Check</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>One SCC?</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://cses.fi/problemset/task/1683" target="_blank" rel="noopener">Planets and Kingdoms</a></td>
+        <td><span class="badge badge--gfg">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Print SCC ids</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://atcoder.jp/contests/practice2/tasks/practice2_g" target="_blank" rel="noopener">ACL SCC</a></td>
+        <td><span class="badge badge--atc">ACL</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Library check</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li>SCC: maximal mutually-reachable set in a directed graph.</li>
+    <li>Kosaraju: finish order, reverse edges, DFS again.</li>
+    <li>Tarjan: pop the stack when low[u]==tin[u].</li>
+    <li>Update Tarjan low only from on-stack nodes.</li>
+    <li>The condensation is a DAG; sources/sinks are the usual follow-up.</li>
+  </ul>
+  <div class="recap__oneliner">dfs finish order; reverse edges; dfs again = SCC; // or Tarjan low==tin pop</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>
