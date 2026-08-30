@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Problem-Solving Framework &mdash; DSA Course</title>
+<meta name="description" content="A repeatable forty-five minute procedure for turning an unfamiliar problem into working code, so that under pressure you execute a process instead of hoping for inspiration.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="problem-solving-framework">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 00 &middot; Foundations</span>
+  <h1>Problem-Solving Framework</h1>
+  <p class="hero__tagline">A repeatable forty-five minute procedure for turning an unfamiliar problem into working code, so that under pressure you execute a process instead of hoping for inspiration.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="constraints-to-complexity.html">Constraints to Complexity</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">meta</span>
+      <span class="chip">interview</span>
+      <span class="chip">process</span>
+      <span class="chip">debugging</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>The difference between people who solve interview problems reliably and people who solve them sometimes is rarely knowledge. It is process. Under pressure, an unstructured solver reads the statement once, pattern-matches to the first vaguely similar thing they remember, starts coding, discovers a flaw at minute twenty-five, and has no time to recover. A structured solver spends ten minutes not writing code and finishes early.</p>
+<p>The procedure below is deliberately mechanical. Each phase has an exit condition, so you always know whether you are allowed to move on. That matters most exactly when you are anxious, because it replaces the question "am I stuck?" &mdash; which has no useful answer &mdash; with "have I met the exit condition for this phase?", which does.</p>
+<p>It also gives you something to say out loud. Interviewers score communication, and narrating "let me restate the problem, then check the constraints, then try a small example" is both genuinely useful and exactly the signal they are looking for. Silence while you think is the most common avoidable loss in an interview.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The core discipline</span>
+    <p>Do not write code until you can state the algorithm in one or two sentences and have verified it by hand on a small example. Every minute spent there saves three minutes of debugging, and debugging is where interviews are lost.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>You are in a timed interview or contest and the problem is unfamiliar</li>
+        <li>You have read the statement twice and still do not know where to start</li>
+        <li>You started coding, and now the code does not match what you meant &rarr; go back to phase 3 rather than patching</li>
+        <li>Your solution fails on a test you cannot reproduce &rarr; the systematic debugging section applies</li>
+        <li>You have a working brute force and need to reach the intended complexity</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You recognise the problem instantly and know the algorithm &rarr; still do phase 2 (constraints) and phase 5 (edge cases), skip the rest</li>
+        <li>It is a pure implementation problem with no algorithmic content &rarr; spend the time on careful specification instead</li>
+        <li>You are practising a specific technique &rarr; the framework matters less than repetition of the pattern</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cannot restate the problem in your own words</td>
+        <td>You do not yet understand it</td>
+        <td>Re-read; ask clarifying questions</td>
+      </tr>
+      <tr>
+        <td>Understand it but see no approach</td>
+        <td>Missing a pattern or a reformulation</td>
+        <td>Brute force first, then look for the wasted work</td>
+      </tr>
+      <tr>
+        <td>Have an idea but cannot prove it</td>
+        <td>Usually a greedy that needs an exchange argument</td>
+        <td>Test it against a brute force on random small inputs</td>
+      </tr>
+      <tr>
+        <td>Coding and the code keeps changing shape</td>
+        <td>The algorithm was never pinned down</td>
+        <td>Stop; write the invariant in one sentence</td>
+      </tr>
+      <tr>
+        <td>Passes samples, fails hidden tests</td>
+        <td>Edge cases or overflow</td>
+        <td>Run the edge-case checklist</td>
+      </tr>
+      <tr>
+        <td>Correct but too slow</td>
+        <td>Wrong complexity class, or a constant-factor problem</td>
+        <td>Recheck the constraint budget first</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> being stuck vs being slow</td>
+        <td>Different remedies entirely</td>
+        <td>Stuck &rarr; change representation. Slow &rarr; remove repeated work</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> a 45-minute interview budgets roughly: 5 min understand, 5 min constraints and examples, 10 min design, 15 min code, 5 min test, 5 min buffer. If you are still designing at minute 20, present the brute force and improve it aloud.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>The seven phases</h2>
+<p><strong>1. Restate (2&ndash;3 min).</strong> Say the problem back in your own words, including the exact input, the exact output, and any guarantee you were given. If you cannot do this without looking, you have not understood it. Ask about duplicates, negative values, empty input, and whether the input is sorted.</p>
+<p><strong>2. Read the constraints (1 min).</strong> This gives you the target complexity and often the technique &mdash; see <a href="constraints-to-complexity.html">Constraints to Complexity</a>. Write the target down. Everything after this point is measured against it.</p>
+<p><strong>3. Work a small example by hand (3&ndash;5 min).</strong> Take the smallest non-trivial input and compute the answer manually, watching <em>how</em> you do it. Your own procedure is usually the brute force, and the step you find tedious is usually the step the algorithm optimises. This is where most insights actually come from.</p>
+<p><strong>4. Brute force, out loud (2 min).</strong> State the obvious solution and its complexity even if it is far too slow. It establishes correctness, gives you a reference implementation for stress testing, and guarantees you have <em>something</em> if you run out of time.</p>
+<p><strong>5. Find the wasted work (5&ndash;10 min).</strong> Optimisation is always the same question: what is the brute force recomputing? The answers form a short list &mdash; recomputing a range sum (prefix sums), rescanning a window (two pointers), re-searching a sorted array (binary search), recomputing a subproblem (DP), re-finding a minimum (heap), re-checking membership (hashing). Match your waste to one of these.</p>
+<p><strong>6. Fix the invariant, then code (15 min).</strong> Write one sentence describing what is true at every step ("<code>best</code> holds the maximum subarray sum ending at <code>i</code>"). Only then type. The invariant is what makes the code write itself.</p>
+<p><strong>7. Test deliberately (5 min).</strong> Empty, single element, all equal, all negative, maximum size, and the boundary between your branches. Trace the code on one small case line by line rather than re-reading it.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The stuck protocol</span>
+    <p>When you have no idea, run these six in order &mdash; they are ordered by how often they work:</p><ol><li><strong>Solve a smaller version.</strong> <code>n = 1, 2, 3</code>. Look for the recurrence.</li><li><strong>Sort it.</strong> A surprising fraction of problems become obvious in sorted order.</li><li><strong>Change the representation.</strong> Array &rarr; graph, string &rarr; counts, pairs &rarr; intervals, values &rarr; bits.</li><li><strong>Go backwards.</strong> Process right to left, or reason from the answer to the input.</li><li><strong>Ask what you would precompute</strong> if you had unlimited preprocessing time.</li><li><strong>Relax a constraint</strong>, solve the easier problem, then reintroduce it.</li></ol>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Stress testing: the fastest debugger you own</span>
+    <p>When a solution fails on a hidden test, do not stare at it. Write a brute force that is obviously correct, write a generator that produces random tiny inputs (<code>n &le; 8</code>, values in <code>0 &hellip; 5</code>), and loop until the two disagree. You will usually have a minimal counterexample within seconds, and a minimal counterexample almost always makes the bug self-evident. The code for this is in the second tab below.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The most expensive interview mistake</span>
+    <p>Coding before the approach is settled. It feels productive and it is not: you end up debugging a design, which is much slower than debugging an implementation. The tell is that you keep changing the shape of the code &mdash; adding a variable, restructuring a loop &mdash; rather than fixing individual lines. When you notice that, stop and go back to phase 6.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">What to do at minute 30 with nothing working</span>
+    <p>Switch to damage control. Say: "I have an <code>O(n&sup2;)</code> approach that is definitely correct; let me implement that, and then discuss how to get to <code>O(n log n)</code>." A working suboptimal solution plus an accurate description of the better one scores far higher than an unfinished optimal attempt. Interviewers are evaluating whether you would ship something.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>The forty-five minute budget</h3>
+
+<p>Each row is a phase, with its time box, its exit condition, and the failure mode you get by skipping it. Step through once before your next mock interview.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="phases"></div>
+  <div class="viz-player" data-viz-target="phases">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "phase",
+      "rowHeads": [
+        "1 restate",
+        "2 constraints",
+        "3 example",
+        "4 brute force",
+        "5 optimise",
+        "6 code",
+        "7 test"
+      ],
+      "colHeads": [
+        "minutes",
+        "exit condition",
+        "cost of skipping"
+      ],
+      "vars": [
+        "phase",
+        "clock"
+      ],
+      "speed": 1400,
+      "frames": [
+        {
+          "note": "Restate the problem in your own words, with exact input and output. Ask about duplicates, negatives, empties and sortedness.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0-3"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "can restate blind",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "solve wrong problem"
+            }
+          ],
+          "values": {
+            "phase": "restate",
+            "clock": "3 min"
+          }
+        },
+        {
+          "note": "Read the constraints and write down the target complexity. One minute, and it eliminates most wrong directions.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "3-4"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "target written down",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "aim at the wrong class"
+            }
+          ],
+          "values": {
+            "phase": "constraints",
+            "clock": "4 min"
+          }
+        },
+        {
+          "note": "Work the smallest interesting example by hand and watch your own procedure. This is where most insights actually appear.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "4-9"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "answer computed by hand",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "no intuition to build on"
+            }
+          ],
+          "values": {
+            "phase": "example",
+            "clock": "9 min"
+          }
+        },
+        {
+          "note": "State the brute force and its complexity out loud, even if hopeless. It is your correctness reference and your fallback.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "9-11"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "stated with complexity",
+              "cls": "target"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "nothing to show at minute 40"
+            }
+          ],
+          "values": {
+            "phase": "brute force",
+            "clock": "11 min"
+          }
+        },
+        {
+          "note": "Ask what the brute force recomputes, and map that waste onto a known technique. This is the actual problem-solving step.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "11-20"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "approach in one sentence",
+              "cls": "target"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "code that keeps changing shape"
+            }
+          ],
+          "values": {
+            "phase": "optimise",
+            "clock": "20 min"
+          }
+        },
+        {
+          "note": "Write the invariant, then implement. If you cannot write the invariant, you are not ready to type.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 0,
+              "val": "20-35"
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "val": "compiles and runs samples",
+              "cls": "target"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "debugging a design, not a bug"
+            }
+          ],
+          "values": {
+            "phase": "code",
+            "clock": "35 min"
+          }
+        },
+        {
+          "note": "Empty, single, all equal, all negative, maximum size, and the boundary between branches. Trace one case line by line.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 0,
+              "val": "35-40"
+            },
+            {
+              "r": 6,
+              "c": 1,
+              "val": "edge list cleared",
+              "cls": "target"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "fails on the hidden test"
+            }
+          ],
+          "values": {
+            "phase": "test",
+            "clock": "40 min"
+          }
+        },
+        {
+          "note": "Five minutes of buffer left. If you are behind at minute 20, jump straight to implementing the brute force and describe the optimisation aloud.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 1,
+              "val": "approach in one sentence",
+              "cls": "answer"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "stated with complexity",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "phase": "buffer",
+            "clock": "45 min"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>The exit condition column is the useful one: it tells you objectively whether you are allowed to move to the next phase.</figcaption>
+</figure>
+
+<h3>From brute force to optimal: find the wasted work</h3>
+
+<p>Six recurring forms of waste and the technique that removes each one. Almost every optimisation you will ever make is one of these six, so learning to name the waste is learning to find the algorithm.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="waste"></div>
+  <div class="viz-player" data-viz-target="waste">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "wasted work → technique",
+      "array": [
+        "range sums",
+        "window rescans",
+        "sorted lookups",
+        "subproblems",
+        "min/max",
+        "membership"
+      ],
+      "indexLabels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "vars": [
+        "waste",
+        "technique",
+        "gain"
+      ],
+      "speed": 1300,
+      "frames": [
+        {
+          "note": "Recomputing the sum of a range you already summed. Precompute prefix sums once and every range becomes a subtraction.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "waste": "re-summing ranges",
+            "technique": "prefix sums",
+            "gain": "O(n²)→O(n)"
+          }
+        },
+        {
+          "note": "Rescanning a window after moving its edge by one. The window changes by one element, so update incrementally.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "waste": "rescanning windows",
+            "technique": "two pointers / sliding window",
+            "gain": "O(n²)→O(n)"
+          }
+        },
+        {
+          "note": "Linearly searching data that is already sorted, or could be sorted once.",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "waste": "linear search on sorted data",
+            "technique": "binary search",
+            "gain": "O(n)→O(log n)"
+          }
+        },
+        {
+          "note": "Recomputing the same subproblem down different branches of a recursion. Memoise, or build the table bottom up.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5
+          ],
+          "values": {
+            "waste": "repeated subproblems",
+            "technique": "dynamic programming",
+            "gain": "exponential→polynomial"
+          }
+        },
+        {
+          "note": "Re-finding the minimum or maximum of a changing set on every step.",
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5
+          ],
+          "values": {
+            "waste": "re-finding extremes",
+            "technique": "heap / monotonic deque",
+            "gain": "O(n)→O(log n) or O(1)"
+          }
+        },
+        {
+          "note": "Re-checking whether you have seen a value. Hash it once.",
+          "active": [
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "waste": "re-checking membership",
+            "technique": "hash set / map",
+            "gain": "O(n)→O(1)"
+          }
+        },
+        {
+          "note": "Run the list top to bottom against your brute force. In practice one of the six always matches, and the match is the algorithm.",
+          "best": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "waste": "all six",
+            "technique": "the optimisation checklist",
+            "gain": "use it every time"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>The optimisation question is never "what algorithm applies?" but "what is the brute force repeating?" &mdash; the second question has a short, learnable answer set.</figcaption>
+</figure>
+
+<h3>The decision flow, end to end</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  A(["read the statement"]) --&gt; B["restate it in your own words"]
+  B --&gt; C["read constraints, write the target complexity"]
+  C --&gt; D["work a tiny example by hand"]
+  D --&gt; E{"do you see an approach?"}
+  E -- no --&gt; S["stuck protocol: smaller, sort, re-represent, reverse, precompute, relax"]
+  S --&gt; D
+  E -- yes --&gt; F["state the brute force and its cost"]
+  F --&gt; G["what work does it repeat?"]
+  G --&gt; H["map the waste to a technique"]
+  H --&gt; I{"does it meet the target?"}
+  I -- no --&gt; G
+  I -- yes --&gt; J["write the invariant in one sentence"]
+  J --&gt; K["implement"]
+  K --&gt; L["run the edge case checklist"]
+  L --&gt; M{"all pass?"}
+  M -- no --&gt; N["stress test against the brute force"]
+  N --&gt; K
+  M -- yes --&gt; O(["done, state the complexity"])
+  </div>
+  <figcaption>The two loops matter as much as the path: the stuck loop on the left and the debugging loop at the bottom are where most of the real time goes.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Restate</strong> the problem, its input, its output and its guarantees without looking at the statement.</li>
+  <li><strong>Extract the target complexity</strong> from the constraints and write it down.</li>
+  <li><strong>Hand-solve</strong> the smallest interesting example and watch your own method.</li>
+  <li><strong>State the brute force</strong> and its complexity out loud.</li>
+  <li><strong>Name the wasted work</strong> and match it against the six-item checklist.</li>
+  <li><strong>Write the invariant</strong> in one sentence before typing anything.</li>
+  <li><strong>Implement</strong>, keeping the invariant true at every line.</li>
+  <li><strong>Run the edge-case checklist</strong>: empty, one element, all equal, all negative, maximum size, duplicates, and each branch boundary.</li>
+  <li><strong>State the final complexity</strong> unprompted, time and space, and mention one possible improvement.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>The framework applied to "maximum subarray sum" &mdash; the same problem covered in <a href="../01-arrays-and-windows/kadane.html">Kadane's Algorithm</a>. Notice that the algorithm appears at step 6, after five steps of not writing code.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>Phase</th><th>What you do</th><th>Output of the phase</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1 restate</td><td>"Given an integer array, find the contiguous non-empty subarray with the largest sum, and return that sum."</td><td>Confirmed: non-empty, may be all negative</td><td>The two clarifications you must ask for: can it be empty, can all values be negative.</td></tr>
+      <tr class="trace-table__row--change"><td>2 constraints</td><td><code>n &le; 10&#8309;</code>, <code>|a<sub>i</sub>| &le; 10&#8308;</code></td><td>Target <code>O(n)</code> or <code>O(n log n)</code>; sum fits in <code>long</code></td><td><code>10&#8309; &times; 10&#8308; = 10&#8313;</code> exceeds <code>int</code>. Use <code>long</code>.</td></tr>
+      <tr><td>3 example</td><td><code>[-2, 1, -3, 4, -1, 2, 1, -5, 4]</code> by hand</td><td>Answer 6, from <code>[4, -1, 2, 1]</code></td><td>Notice what you did: you extended a run and abandoned it when it went too negative.</td></tr>
+      <tr><td>4 brute force</td><td>All <code>O(n&sup2;)</code> subarrays, summing each in <code>O(n)</code></td><td><code>O(n&sup3;)</code>, far too slow</td><td>Say it anyway. It is the correctness reference.</td></tr>
+      <tr class="trace-table__row--change"><td>5 waste</td><td>The inner sum recomputes a prefix already computed</td><td>Matches waste #1 &rarr; running sums</td><td>Removes one factor of <code>n</code>, giving <code>O(n&sup2;)</code>. Still short of target.</td></tr>
+      <tr><td>5b waste again</td><td>Every start index rescans the same suffixes</td><td>Matches waste #4 &rarr; subproblem reuse</td><td>Define <code>best(i)</code> = best sum <em>ending at</em> <code>i</code>. That is the key reformulation.</td></tr>
+      <tr class="trace-table__row--change"><td>6 invariant</td><td>"<code>cur</code> is the maximum sum of a subarray ending exactly at <code>i</code>"</td><td><code>cur = max(a[i], cur + a[i])</code></td><td>The recurrence follows from the invariant in one line.</td></tr>
+      <tr><td>7 code</td><td>One loop, two variables, <code>long</code> accumulators</td><td><code>O(n)</code> time, <code>O(1)</code> space</td><td>Initialise <code>cur = best = a[0]</code>, never 0.</td></tr>
+      <tr><td>8 test</td><td><code>[-1]</code>, <code>[-5,-2,-3]</code>, <code>[1]</code>, all equal, <code>n = 10&#8309;</code></td><td>All-negative case catches the <code>0</code>-initialisation bug</td><td>This single edge case is the most common failure on this problem.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Problem-Solving Framework implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Worked example</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Stress testing</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Edge case checklist</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Worked example">
+    <p>The three stages from the dry run, in code, so you can see the progression the framework produces rather than jumping straight to the answer.</p>
+    <div class="code" data-highlight="34-40">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FrameworkWalkthrough.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FrameworkWalkthrough {
+    
+        /** Phase 4: brute force. O(n^3). Correct, and the reference for stress testing. */
+        static long cubic(int[] a) {
+            long best = Long.MIN_VALUE;
+            for (int i = 0; i &lt; a.length; i++) {
+                for (int j = i; j &lt; a.length; j++) {
+                    long sum = 0;
+                    for (int k = i; k &lt;= j; k++) {
+                        sum += a[k];
+                    }
+                    best = Math.max(best, sum);
+                }
+            }
+            return best;
+        }
+    
+        /** Phase 5: remove waste #1, the recomputed range sum. O(n^2). */
+        static long quadratic(int[] a) {
+            long best = Long.MIN_VALUE;
+            for (int i = 0; i &lt; a.length; i++) {
+                long sum = 0;
+                for (int j = i; j &lt; a.length; j++) {
+                    sum += a[j];                       // extend instead of re-summing
+                    best = Math.max(best, sum);
+                }
+            }
+            return best;
+        }
+    
+        /**
+         * Phase 6: remove waste #4, the repeated subproblem.
+         * Invariant: cur = maximum sum of a subarray ending exactly at index i.
+         * O(n) time, O(1) space.
+         */
+        static long linear(int[] a) {
+            long cur = a[0], best = a[0];              // never initialise to 0
+            for (int i = 1; i &lt; a.length; i++) {
+                cur = Math.max(a[i], cur + a[i]);      // start fresh, or extend
+                best = Math.max(best, cur);
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+            System.out.println(cubic(a) + " " + quadratic(a) + " " + linear(a));
+            int[] allNeg = {-5, -2, -3};
+            System.out.println(linear(allNeg));        // the edge case that catches bad init
+        }
+        // Input : [-2,1,-3,4,-1,2,1,-5,4] then [-5,-2,-3]
+        // Output: 6 6 6
+        //         -2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Stress test">
+    <p>Paste this whenever a solution fails on a test you cannot see. A brute force plus a random generator finds a minimal counterexample in seconds, and minimal counterexamples are usually self-explanatory.</p>
+    <div class="code" data-highlight="30-44">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">StressTest.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.Random;
+    
+    public class StressTest {
+    
+        /** Obviously correct, hopelessly slow. */
+        static long brute(int[] a) {
+            long best = Long.MIN_VALUE;
+            for (int i = 0; i &lt; a.length; i++) {
+                long sum = 0;
+                for (int j = i; j &lt; a.length; j++) {
+                    sum += a[j];
+                    best = Math.max(best, sum);
+                }
+            }
+            return best;
+        }
+    
+        /** Deliberately buggy: initialising to 0 breaks on all-negative input. */
+        static long fast(int[] a) {
+            long cur = 0, best = 0;
+            for (int v : a) {
+                cur = Math.max(v, cur + v);
+                best = Math.max(best, cur);
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            Random rnd = new Random(12345);            // fixed seed: reproducible failures
+            for (int iter = 1; iter &lt;= 100000; iter++) {
+                int n = 1 + rnd.nextInt(6);            // tiny inputs only
+                int[] a = new int[n];
+                for (int i = 0; i &lt; n; i++) {
+                    a[i] = rnd.nextInt(11) - 5;        // small range forces collisions
+                }
+                long expected = brute(a);
+                long actual = fast(a);
+                if (expected != actual) {
+                    System.out.println("mismatch on iteration " + iter);
+                    System.out.println("  input    " + Arrays.toString(a));
+                    System.out.println("  expected " + expected);
+                    System.out.println("  actual   " + actual);
+                    return;                            // stop at the FIRST, smallest failure
+                }
+            }
+            System.out.println("no mismatch in 100000 random tests");
+        }
+        // Output: mismatch on iteration 3
+        //           input    [-4]
+        //           expected -4
+        //           actual   0
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Edge cases">
+    <p>A runnable checklist. Adapt the array of cases to your problem and run it before you submit; it takes thirty seconds and catches the majority of hidden-test failures.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">EdgeCases.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.function.Function;
+    
+    public class EdgeCases {
+    
+        /** Replace this with the solution under test. */
+        static Function&lt;int[], Long&gt; solution = a -&gt; {
+            if (a.length == 0) {
+                return 0L;                             // decide and document this case
+            }
+            long cur = a[0], best = a[0];
+            for (int i = 1; i &lt; a.length; i++) {
+                cur = Math.max(a[i], cur + a[i]);
+                best = Math.max(best, cur);
+            }
+            return best;
+        };
+    
+        public static void main(String[] args) {
+            int[][] cases = {
+                {},                                    // empty
+                {7},                                   // single element
+                {-7},                                  // single negative
+                {3, 3, 3, 3},                          // all equal
+                {-5, -2, -3},                          // all negative
+                {1, 2, 3, 4},                          // already sorted / all positive
+                {4, 3, 2, 1},                          // reverse sorted
+                {0, 0, 0},                             // all zero
+                {1000000000, 1000000000},              // overflow probe: needs long
+                {-1000000000, 1000000000},             // sign boundary
+            };
+            for (int[] c : cases) {
+                System.out.printf("%-28s -&gt; %d%n", Arrays.toString(c), solution.apply(c));
+            }
+        }
+        // Output: []                           -&gt; 0
+        //         [7]                          -&gt; 7
+        //         [-7]                         -&gt; -7
+        //         [3, 3, 3, 3]                 -&gt; 12
+        //         [-5, -2, -3]                 -&gt; -2
+        //         [1, 2, 3, 4]                 -&gt; 10
+        //         [4, 3, 2, 1]                 -&gt; 10
+        //         [0, 0, 0]                    -&gt; 0
+        //         [1000000000, 1000000000]     -&gt; 2000000000
+        //         [-1000000000, 1000000000]    -&gt; 1000000000
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time process, not algorithm</span>
+    <span class="badge badge--space">Space &mdash;</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>There is no asymptotic analysis for a process, but the time budget is worth stating explicitly because it is what you are actually optimising in an interview:</p>
+    <p><span class="eq">45 min = 3 (restate) + 1 (constraints) + 5 (example) + 2 (brute force) + 9 (optimise) + 15 (code) + 5 (test) + 5 (buffer)</span></p>
+    <p>Two-thirds of that is spent not writing code, which is the point. Empirically the failure mode is never "spent too long thinking"; it is "started coding at minute four and was still debugging at minute forty".</p>
+    <p>For stress testing, the cost is worth knowing: with inputs of size <code>n &le; 6</code> over a value range of 11, there are only a few thousand distinct shapes, so a mismatch appears within a few hundred iterations for essentially any real bug. Running <code>10&#8309;</code> iterations takes a second and is far more thorough than any set of hand-written tests.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Restate the problem</td><td>2&ndash;3 min</td><td>&mdash;</td><td>Prevents solving the wrong problem</td></tr>
+      <tr><td>Check constraints</td><td>1 min</td><td>&mdash;</td><td>Highest value per minute of anything here</td></tr>
+      <tr><td>Hand-work an example</td><td>3&ndash;5 min</td><td>&mdash;</td><td>Where insight usually comes from</td></tr>
+      <tr><td>State the brute force</td><td>2 min</td><td>&mdash;</td><td>Fallback plus correctness reference</td></tr>
+      <tr><td>Find the waste</td><td>5&ndash;10 min</td><td>&mdash;</td><td>The actual algorithmic step</td></tr>
+      <tr><td>Write the invariant</td><td>1 min</td><td>&mdash;</td><td>Makes the code write itself</td></tr>
+      <tr><td>Stress test</td><td>5 min setup</td><td>&mdash;</td><td>Faster than reading code when a hidden test fails</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Coding before the approach is settled</span>
+    <div class="pitfalls__bug">Starting to type at minute four with a vague plan. The code keeps changing shape, and at minute thirty you are debugging a design rather than an implementation.</div>
+    <div class="pitfalls__fix">Enforce the exit condition: you may not type until you can state the algorithm in one or two sentences and have verified it by hand. If the code's structure keeps changing, that is the signal to stop and return to phase 6.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Solving in silence</span>
+    <div class="pitfalls__bug">Two minutes of quiet thinking reads to the interviewer as being stuck, and they cannot give you the hint they were about to give.</div>
+    <div class="pitfalls__fix">Narrate. "I am thinking about whether sorting helps here" is enough. Interviewers score communication explicitly, and thinking aloud is also how you get nudged back on track when you drift.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Ignoring the constraints</span>
+    <div class="pitfalls__bug">Designing an elegant <code>O(n log n)</code> solution when <code>n &le; 20</code> and the intended answer is a five-line bitmask, or the reverse.</div>
+    <div class="pitfalls__fix">Phase 2 exists precisely for this. One minute, always, before designing anything. See <a href="constraints-to-complexity.html">Constraints to Complexity</a>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Skipping the brute force</span>
+    <div class="pitfalls__bug">Going straight for the optimal solution, failing, and having nothing to show at minute forty. Also losing the reference implementation you would need to stress test.</div>
+    <div class="pitfalls__fix">Always state it, and implement it if you are behind schedule. A working <code>O(n&sup2;)</code> plus a clear description of the <code>O(n log n)</code> scores well above an unfinished optimal attempt.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Testing only the happy path</span>
+    <div class="pitfalls__bug">Running the provided sample, seeing it pass, and declaring victory. The hidden tests are all-negative, empty, single element, and maximum size.</div>
+    <div class="pitfalls__fix">Run the checklist from the third code tab every time: empty, one, all equal, all negative, all zero, duplicates, maximum values, and each branch boundary.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Debugging by staring</span>
+    <div class="pitfalls__bug">Re-reading the same twenty lines hoping the bug becomes visible. It rarely does, because you read what you meant rather than what you wrote.</div>
+    <div class="pitfalls__fix">Stress test against a brute force, or print the state at every step for a tiny input and compare against your hand trace. Both find the bug mechanically instead of by inspiration.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Not stating the complexity unprompted</span>
+    <div class="pitfalls__bug">Finishing the code and waiting. The interviewer now has to ask, and you have missed a free opportunity to demonstrate rigour.</div>
+    <div class="pitfalls__fix">Close with: "This is <code>O(n)</code> time and <code>O(1)</code> space. The <code>&Omega;(n)</code> lower bound is forced because we must read every element, so this is optimal." Then offer one improvement or trade-off.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Contest mode (no interviewer)</td>
+        <td>Skip the narration; add reading all problems first and sorting them by expected difficulty. Solve the easiest confidently rather than the most interesting.</td>
+        <td><code>read all -&gt; sort by (solves desc) -&gt; solve easy first -&gt; stress test on WA</code></td>
+        <td>Codeforces rounds</td>
+      </tr>
+      <tr>
+        <td>Take-home or system design</td>
+        <td>The framework stretches: restate becomes requirements gathering, constraints become scale estimates, and the brute force becomes a naive architecture you then refine.</td>
+        <td><code>requirements -&gt; scale estimate -&gt; naive design -&gt; identify bottleneck -&gt; refine</code></td>
+        <td>System design interviews</td>
+      </tr>
+      <tr>
+        <td>Pair programming interview</td>
+        <td>Phases 1&ndash;5 become an explicit dialogue. Ask "does that sound right to you?" after stating the approach, before coding.</td>
+        <td><code>restate -&gt; confirm -&gt; approach -&gt; confirm -&gt; code aloud</code></td>
+        <td>Common at product companies</td>
+      </tr>
+      <tr>
+        <td>Debugging an existing failure</td>
+        <td>Enter at phase 7. Reproduce with the smallest input, stress test against a reference, then bisect the code by printing intermediate state.</td>
+        <td><code>reproduce small -&gt; stress test -&gt; bisect with prints -&gt; fix -&gt; re-run checklist</code></td>
+        <td>Contest wrong-answer recovery</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>What do you do in the first two minutes of an interview problem?</summary>
+    <div class="followup__body">
+      <p>Read it twice, then restate it aloud including exact input and output types, then ask the four standard clarifying questions: how large is the input, can values be negative or zero, are duplicates possible, and is the input sorted or otherwise structured. Those questions take thirty seconds and frequently change the entire solution &mdash; "the array is sorted" turns a hashing problem into a two-pointer problem.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>You are twenty minutes in with no approach. What now?</summary>
+    <div class="followup__body">
+      <p>Say so, and switch strategies explicitly: "Let me implement the brute force first so we have something correct, then optimise." That converts a possible zero into a solid partial score, and implementing the brute force very often reveals the optimisation, because you see the repeated work in front of you. Do not keep silently searching for elegance past the halfway mark.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you find the bug when the code passes samples but fails hidden tests?</summary>
+    <div class="followup__body">
+      <p>Stress test. Write an obviously correct brute force, generate random inputs with <code>n &le; 8</code> and a tiny value range, and loop until the outputs differ. Small value ranges matter because they force duplicates and ties, which is where most bugs live. The first mismatch is usually two or three elements long and makes the bug obvious. This is faster and more reliable than reading the code again.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What are the standard edge cases for array problems?</summary>
+    <div class="followup__body">
+      <p>Empty, single element, two elements, all equal, all negative, all zero, already sorted, reverse sorted, maximum size, and maximum values (the overflow probe). For strings add: empty, length one, all identical characters, and a palindrome. For graphs add: no edges, self-loops, multi-edges, disconnected components, and a single node. Keeping these lists in your head is worth more than any individual algorithm.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you decide between two working approaches?</summary>
+    <div class="followup__body">
+      <p>Complexity first &mdash; if one is a better class and the constraints care, it wins. If they are the same class, prefer the one you can implement correctly faster, then the one with less space, then the one that is easier to explain. State the trade-off out loud: "both are <code>O(n log n)</code>; the heap version uses <code>O(k)</code> space instead of <code>O(n)</code>, so I will take that one." Interviewers are looking for the reasoning, not a specific choice.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How should I practise so this becomes automatic?</summary>
+    <div class="followup__body">
+      <p>Deliberately, with a timer. Set 25 minutes for a medium problem and force yourself through the phases even when you already see the answer &mdash; the point is to build the habit, not to solve the problem. Keep a log of every problem where you got stuck, recording <em>which phase</em> failed and what the missing pattern was. After thirty problems the log will show two or three recurring gaps, and those are worth more than another hundred random problems.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Practise the <em>process</em> on these, not the answers. Use a timer, write down the output of each phase, and only then code. The mock-drill page has unlabelled sets for when you want to remove the pattern hint entirely.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener">Maximum Subarray</a></td>
+        <td><span class="badge badge--lc">LC 53</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The worked example above. Do it again from phase 1 with a timer</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/product-of-array-except-self/" target="_blank" rel="noopener">Product of Array Except Self</a></td>
+        <td><span class="badge badge--lc">LC 238</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Phase 5 is the whole problem: what does the brute force recompute?</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/longest-consecutive-sequence/" target="_blank" rel="noopener">Longest Consecutive Sequence</a></td>
+        <td><span class="badge badge--lc">LC 128</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Stuck protocol step 2 (sort) gives O(n log n); step 3 (re-represent) gives O(n)</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/3sum/" target="_blank" rel="noopener">3Sum</a></td>
+        <td><span class="badge badge--lc">LC 15</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Brute force O(n&sup3;), sort, then two pointers. Edge cases are all about duplicates</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/container-with-most-water/" target="_blank" rel="noopener">Container With Most Water</a></td>
+        <td><span class="badge badge--lc">LC 11</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Hand-work a small example; the exchange argument appears from the trace</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/group-anagrams/" target="_blank" rel="noopener">Group Anagrams</a></td>
+        <td><span class="badge badge--lc">LC 49</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Stuck protocol step 3: change the representation to a canonical key</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/jump-game/" target="_blank" rel="noopener">Jump Game</a></td>
+        <td><span class="badge badge--lc">LC 55</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Write the invariant before coding; it is one sentence and the code follows</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/find-all-anagrams-in-a-string/" target="_blank" rel="noopener">Find All Anagrams in a String</a></td>
+        <td><span class="badge badge--lc">LC 438</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Waste #2: the brute force rescans the window on every shift</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/subarray-sum-equals-k/" target="_blank" rel="noopener">Subarray Sum Equals K</a></td>
+        <td><span class="badge badge--lc">LC 560</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Wastes #1 and #6 combined; a good stress-testing target because of negatives</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/task-scheduler/" target="_blank" rel="noopener">Task Scheduler</a></td>
+        <td><span class="badge badge--lc">LC 621</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Hand-work three examples before theorising; the formula emerges from the trace</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/4/A" target="_blank" rel="noopener">Watermelon</a></td>
+        <td><span class="badge badge--cf">CF 4A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Practise phase 1 and phase 8 on a trivial problem: restate, then list edge cases</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://codeforces.com/problemset/problem/279/B" target="_blank" rel="noopener">Books</a></td>
+        <td><span class="badge badge--cf">CF 279B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two pointers found via waste #2; classic phase-5 exercise</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 128 &mdash; the stuck protocol in action</summary>
+  <div class="spoiler__body">
+    <p>Sorting (protocol step 2) gives <code>O(n log n)</code> immediately and is a perfectly good answer. To reach <code>O(n)</code>, apply step 3, change the representation: put everything in a <code>HashSet</code>, then start a count only at values <code>v</code> where <code>v - 1</code> is absent &mdash; those are the sequence starts. Each element is visited at most twice overall, so the nested-looking loop is linear. Transferable lesson: <em>when the brute force is quadratic because of repeated scanning, look for a cheap test that makes each element the responsibility of exactly one iteration.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 560 &mdash; why negatives break the obvious approach</summary>
+  <div class="spoiler__body">
+    <p>Sliding window fails here because a negative number means growing the window can <em>decrease</em> the sum, so the monotonicity that two pointers rely on is gone. Use waste #1 plus waste #6 instead: prefix sums plus a <code>HashMap</code> from prefix value to count. At index <code>i</code> with prefix <code>p</code>, the number of subarrays ending at <code>i</code> with sum <code>k</code> is the number of earlier prefixes equal to <code>p - k</code>. Remember to seed the map with <code>{0: 1}</code>. General lesson: <em>check for negative values before reaching for a sliding window; the window technique requires the quantity to be monotone in the window size.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Seven phases with exit conditions:</strong> restate, constraints, hand example, brute force, find the waste, invariant, code, test. Do not advance until the exit condition is met.</li>
+    <li><strong>Optimisation is one question:</strong> what does the brute force recompute? Match the waste to prefix sums, two pointers, binary search, DP, a heap, or hashing.</li>
+    <li><strong>The stuck protocol:</strong> smaller version, sort it, change representation, go backwards, ask what you would precompute, relax a constraint.</li>
+    <li><strong>Stress test rather than stare.</strong> A brute force plus random tiny inputs finds a minimal counterexample in seconds.</li>
+    <li><strong>Narrate, and always state the complexity unprompted.</strong> A working <code>O(n&sup2;)</code> with a clear path to <code>O(n log n)</code> beats an unfinished optimal solution.</li>
+  </ul>
+  <div class="recap__oneliner">restate -&gt; constraints -&gt; hand example -&gt; brute force -&gt; name the waste -&gt; invariant -&gt; code -&gt; edge cases</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

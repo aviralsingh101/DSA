@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-th Element &amp; Selection &mdash; DSA Course</title>
+<meta name="description" content="Find the k-th smallest element in linear expected time, or the median of two sorted arrays in logarithmic time, by discarding half the remaining candidates each step.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="kth-and-selection">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>K-th Element & Selection</h1>
+  <p class="hero__tagline">Find the k-th smallest element in linear expected time, or the median of two sorted arrays in logarithmic time, by discarding half the remaining candidates each step.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-search-basics.html">Binary Search Basics</a>,
+      <a href="binary-search-on-answer.html">Binary Search on the Answer</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">quickselect</span>
+      <span class="chip">median</span>
+      <span class="chip">binary search</span>
+      <span class="chip">P1</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Sorting then indexing is always correct and almost always good enough: <code>O(n log n)</code> to read <code>a[k]</code>. Selection problems exist because some constraints are tighter, and because the <em>median of two sorted arrays</em> question is a Google classic that sorting would turn into a merge.</p>
+<p>Quickselect is quicksort that only recurses into the side that contains rank k. Average <code>O(n)</code>, worst-case <code>O(n&sup2;)</code> unless you add median-of-medians or a random pivot. The two-array median is a binary search on how many elements you take from the shorter array.</p>
+<p>Both are discard-half arguments. Once you see them that way, k-th in a sorted matrix and k-th pair distance become the same idea with a different feasible.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>You do not need full order to know rank k. You only need to know, for a candidate cut, how many items lie on each side — then throw one side away.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"k-th smallest / largest" in an unsorted array, and n is large enough that n log n is tight</li>
+        <li>Median (k = n/2) of one array, or of two already-sorted arrays</li>
+        <li>k-th smallest in a row-and-column-sorted matrix</li>
+        <li>k-th smallest pair distance / pair sum — count-how-many-leq + binary search</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>You need the full sorted order afterwards &rarr; just sort</li>
+        <li>k is tiny (1, 2, 3) &rarr; a heap or a few comparisons, not quickselect</li>
+        <li>The array is already sorted &rarr; return a[k]</li>
+        <li>You must do it in-place and worst-case linear &rarr; median-of-medians, rarely asked</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>k-th of one unsorted array</td>
+        <td>Partition around a pivot, recurse one side</td>
+        <td>Quickselect</td>
+      </tr>
+      <tr>
+        <td>Median of two sorted arrays</td>
+        <td>Binary search the cut in the shorter array</td>
+        <td>LC 4</td>
+      </tr>
+      <tr>
+        <td>k-th in a sorted matrix</td>
+        <td>Binary search the value, count how many ≤ mid</td>
+        <td>LC 378</td>
+      </tr>
+      <tr>
+        <td>k largest (not the k-th only)</td>
+        <td>Size-k heap, or quickselect then take the suffix</td>
+        <td>LC 215</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> heap of size k</td>
+        <td>O(n log k) is simpler and often fast enough; mention it first in an interview</td>
+        <td>Prefer heap unless they ask for linear expected</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> and "k-th only" &rarr; heap O(n log k) or quickselect. Two arrays of length 1e5 already sorted &rarr; O(log(m+n)) cut search, not merge.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Quickselect: pick a pivot, partition so everything smaller is on the left. If the pivot lands at index k you are done. If it lands to the right, recurse left; otherwise recurse right. Expected linear because each step throws away a constant fraction on average.</p>
+<p>Two-array median: imagine the merged array. A valid cut takes i elements from A and (half-i) from B such that every value on the left of the cut is ≤ every value on the right. Binary-search i. The conditions are <code>A[i-1] ≤ B[j]</code> and <code>B[j-1] ≤ A[i]</code> (with sentinels for empty sides).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><em>After a partition at p, ranks [lo..p] live in a[lo..p] and ranks (p+1..hi] live in a[p+1..hi]. Rank k is in exactly one of those two pieces, so I can discard the other.</em> For two arrays: <em>I am searching the number of elements I take from the shorter array; the cut is valid iff the two crossing inequalities hold.</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Quickselect for k = 3 (0-based) on [7, 2, 1, 6, 8, 5, 3]</h3>
+
+<p>Amber is the active range. The pivot is highlighted; after partition, the discarded half dims.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="qsel"></div>
+  <div class="viz-player" data-viz-target="qsel">
+    <script type="application/json" class="viz-frames">
+    {
+      "array": [
+        7,
+        2,
+        1,
+        6,
+        8,
+        5,
+        3
+      ],
+      "vars": [
+        "k",
+        "pivot",
+        "p",
+        "action"
+      ],
+      "frames": [
+        {
+          "note": "Want rank 3. Pivot = 3 (last element). Partition the whole array.",
+          "active": [
+            6
+          ],
+          "window": [
+            0,
+            6
+          ],
+          "values": {
+            "k": 3,
+            "pivot": 3,
+            "p": "?",
+            "action": "partition"
+          }
+        },
+        {
+          "note": "After partition: [2,1,3,6,8,5,7]. Pivot 3 sits at index 2. k=3 is to the right.",
+          "window": [
+            0,
+            6
+          ],
+          "best": [
+            2
+          ],
+          "dim": [
+            0,
+            1
+          ],
+          "values": {
+            "k": 3,
+            "pivot": 3,
+            "p": 2,
+            "action": "recurse right"
+          }
+        },
+        {
+          "note": "Active [3..6] = [6,8,5,7]. Pivot 7. After partition: [6,5,7,8], p = 5.",
+          "window": [
+            3,
+            6
+          ],
+          "best": [
+            5
+          ],
+          "active": [
+            5
+          ],
+          "values": {
+            "k": 3,
+            "pivot": 7,
+            "p": 5,
+            "action": "p > k, recurse left"
+          }
+        },
+        {
+          "note": "Active [3..4] = [6,5]. Pivot 5. Partition swaps to [5,6], p = 3. p == k. Done. a[3] = 5.",
+          "window": [
+            3,
+            4
+          ],
+          "best": [
+            3
+          ],
+          "values": {
+            "k": 3,
+            "pivot": 5,
+            "p": 3,
+            "action": "found"
+          }
+        },
+        {
+          "note": "The 4th-smallest (k=3) is 5. Sorted order would be [1,2,3,5,6,7,8]. We never sorted.",
+          "best": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "k": 3,
+            "pivot": 5,
+            "p": 3,
+            "action": "answer = 5"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Each partition places one element at its final rank and discards one side.</figcaption>
+</figure>
+
+<h3>A valid cut of two sorted arrays</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  Aleft["A left i elems"] --&gt; cut["cut"]
+  Bleft["B left j elems"] --&gt; cut
+  cut --&gt; Aright["A right"]
+  cut --&gt; Bright["B right"]
+  Aleft --&gt;|"A[i-1] &lt;= B[j]"| Bright
+  Bleft --&gt;|"B[j-1] &lt;= A[i]"| Aright
+  </div>
+  <figcaption>i elements from A, j = half - i from B. Crossing inequalities make the cut a true median cut.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Quickselect.</strong> Pick a pivot (random or last). Partition <code>[lo, hi]</code> so the pivot sits at <code>p</code>.</li>
+  <li><strong>If <code>p == k</code></strong> return <code>a[p]</code>. If <code>k &lt; p</code> set <code>hi = p-1</code>, else <code>lo = p+1</code>. Repeat.</li>
+  <li><strong>Two-array median.</strong> Ensure A is the shorter. Binary-search i = how many to take from A.</li>
+  <li><strong>j = half - i</strong> where half = (m+n+1)/2 (left side is the larger half when the total is odd).</li>
+  <li><strong>If Aleft &gt; Bright</strong> i is too big; if Bleft &gt; Aright, i is too small. Otherwise the cut is valid.</li>
+  <li><strong>Odd total:</strong> answer is max(Aleft, Bleft). <strong>Even:</strong> average of that and min(Aright, Bright).</li>
+  <li><strong>Use sentinels</strong> ±∞ when a side is empty so the comparisons stay uniform.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Quickselect for rank k = 3 on <code>[7, 2, 1, 6, 8, 5, 3]</code>, pivot = last element each time.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>lo</th><th>hi</th><th>pivot</th><th>p</th><th>a after partition</th><th>decision</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>0</td><td>6</td><td>3</td><td>2</td><td>[2,1,3,6,8,5,7]</td><td>p < k, lo = 3</td><td>Discard the left side.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>6</td><td>7</td><td>5</td><td>[2,1,3,6,5,7,8]</td><td>p > k, hi = 4</td><td>Discard 7 and 8.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>4</td><td>5</td><td>3</td><td>[2,1,3,5,6,7,8]</td><td>p == k</td><td>a[3] = 5 is the answer.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="K-th Element & Selection implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Sort (brute)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Quickselect O(n) expected</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Median of two sorted</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Always mention this first. For n ≤ 1e5 it is the right answer unless they ask for linear.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KthSort.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class KthSort {
+        static int kth(int[] a, int k) {
+            int[] b = a.clone();
+            Arrays.sort(b);
+            return b[k];
+        }
+        public static void main(String[] args) {
+            System.out.println(kth(new int[] {7, 2, 1, 6, 8, 5, 3}, 3));
+        }
+        // Input : [7,2,1,6,8,5,3], k = 3 (0-based)
+        // Output: 5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <div class="code" data-highlight="18-22">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Quickselect.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Random;
+    
+    public class Quickselect {
+        static final Random R = new Random();
+    
+        static int kth(int[] a, int k) {
+            int lo = 0, hi = a.length - 1;
+            while (lo &lt;= hi) {
+                int p = partition(a, lo, hi, lo + R.nextInt(hi - lo + 1));
+                if (p == k) return a[p];
+                if (k &lt; p) hi = p - 1;
+                else lo = p + 1;
+            }
+            throw new IllegalArgumentException();
+        }
+    
+        static int partition(int[] a, int lo, int hi, int pi) {
+            int pivot = a[pi];
+            swap(a, pi, hi);
+            int store = lo;
+            for (int i = lo; i &lt; hi; i++) if (a[i] &lt; pivot) swap(a, store++, i);
+            swap(a, store, hi);
+            return store;
+        }
+    
+        static void swap(int[] a, int i, int j) { int t = a[i]; a[i] = a[j]; a[j] = t; }
+    
+        public static void main(String[] args) {
+            System.out.println(kth(new int[] {7, 2, 1, 6, 8, 5, 3}, 3));
+        }
+        // Input : [7,2,1,6,8,5,3], k = 3
+        // Output: 5
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>The O(log(m+n)) cut search. Always binary-search the shorter array.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MedianTwo.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MedianTwo {
+        static double findMedianSortedArrays(int[] A, int[] B) {
+            if (A.length &gt; B.length) return findMedianSortedArrays(B, A);
+            int m = A.length, n = B.length;
+            int lo = 0, hi = m, half = (m + n + 1) / 2;
+            while (lo &lt;= hi) {
+                int i = lo + (hi - lo) / 2;
+                int j = half - i;
+                int Aleft  = (i == 0) ? Integer.MIN_VALUE : A[i - 1];
+                int Aright = (i == m) ? Integer.MAX_VALUE : A[i];
+                int Bleft  = (j == 0) ? Integer.MIN_VALUE : B[j - 1];
+                int Bright = (j == n) ? Integer.MAX_VALUE : B[j];
+                if (Aleft &gt; Bright) hi = i - 1;
+                else if (Bleft &gt; Aright) lo = i + 1;
+                else {
+                    int leftMax = Math.max(Aleft, Bleft);
+                    if (((m + n) &amp; 1) == 1) return leftMax;
+                    return (leftMax + Math.min(Aright, Bright)) / 2.0;
+                }
+            }
+            throw new IllegalArgumentException();
+        }
+        public static void main(String[] args) {
+            System.out.println(findMedianSortedArrays(new int[] {1, 3}, new int[] {2}));
+            System.out.println(findMedianSortedArrays(new int[] {1, 2}, new int[] {3, 4}));
+        }
+        // Input : [1,3]+[2] then [1,2]+[3,4]
+        // Output: 2.0
+        //         2.5
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time Quickselect O(n) expected / O(n²) worst; two-array median O(log min(m,n))</span>
+    <span class="badge badge--space">Space O(1) iterative</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Quickselect: a random pivot leaves expected half the work, so <code>T(n) = T(n/2) + O(n) = O(n)</code>. Adversarial pivots give the full quicksort recurrence <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>. Randomise the pivot.</p>
+    <p>Two-array median: the search space is the shorter length, halved each step, and each step is O(1) comparisons, so <code>O(log min(m,n))</code>.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Sort + index</td><td>O(n log n)</td><td>O(n)</td><td>Default; mention first</td></tr>
+      <tr><td>Size-k heap</td><td>O(n log k)</td><td>O(k)</td><td>k-largest, simpler than quickselect</td></tr>
+      <tr><td>Quickselect</td><td>O(n) expected</td><td>O(1)</td><td>When they want linear</td></tr>
+      <tr><td>Median of medians</td><td>O(n) worst-case</td><td>O(log n)</td><td>Almost never asked to implement</td></tr>
+      <tr><td>Two-array cut search</td><td>O(log min(m,n))</td><td>O(1)</td><td>LC 4</td></tr>
+      <tr><td>Value-binary-search + count</td><td>O(n log RANGE)</td><td>O(1)</td><td>k-th in a sorted matrix</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">k is 1-based in the problem and 0-based in your code</span>
+    <div class="pitfalls__bug">LC 215 asks for the k-th <em>largest</em>, which is rank <code>n-k</code> in 0-based ascending order.</div>
+    <div class="pitfalls__fix">Convert once at the top: <code>int rank = a.length - k;</code> for k-th largest, and never touch k again.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Worst-case quadratic on sorted input</span>
+    <div class="pitfalls__bug">Always pivoting on <code>a[hi]</code> of an already-sorted array degenerates.</div>
+    <div class="pitfalls__fix">Swap a random index into the pivot slot. In an interview, say this out loud.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one on empty sides of the two-array cut</span>
+    <div class="pitfalls__bug">Accessing <code>A[i-1]</code> when <code>i == 0</code>.</div>
+    <div class="pitfalls__fix">Sentinels: empty left is MIN_VALUE, empty right is MAX_VALUE.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Averaging two ints for the even case</span>
+    <div class="pitfalls__bug"><code>(leftMax + rightMin) / 2</code> truncates and can overflow.</div>
+    <div class="pitfalls__fix"><code>(leftMax + (double) rightMin) / 2.0</code> or <code>/ 2.0</code> with a long cast.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mutating the caller's array</span>
+    <div class="pitfalls__bug">In-place quickselect reorders <code>a</code>. Tests that reuse the array then fail.</div>
+    <div class="pitfalls__fix">Clone if the caller still needs the original, or document the mutation.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Duplicate-heavy arrays and <code>&lt;</code> vs <code>&le;</code> in partition</span>
+    <div class="pitfalls__bug">A partition that sends equals to one side unbalances on all-equal input.</div>
+    <div class="pitfalls__fix">3-way partition (Dutch flag) around the pivot, then check whether k falls in the equal block.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>k largest, not k-th</td>
+        <td>Quickselect to rank n-k, then the suffix; or a min-heap of size k</td>
+        <td><code>return Arrays.copyOfRange(a, n-k, n);</code></td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">LC 215</a></td>
+      </tr>
+      <tr>
+        <td>k-th in a sorted matrix</td>
+        <td>Binary search the value; count how many entries ≤ mid with a staircase walk</td>
+        <td><code>while (countLessEq(mid) &lt; k) lo = mid+1;</code></td>
+        <td><a href="https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/" target="_blank" rel="noopener">LC 378</a></td>
+      </tr>
+      <tr>
+        <td>Median of a data stream</td>
+        <td>Two heaps, not quickselect — see heaps page</td>
+        <td><code>lo.peek() / average of lo.peek() and hi.peek()</code></td>
+        <td><a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener">LC 295</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is the expected time linear?</summary>
+    <div class="followup__body">
+      <p>A random pivot's rank is uniform. The expected remaining size is the average of 0,1,…,n-1 which is n/2, and T(n) = T(n/2)+O(n) solves to O(n). More carefully the constant is 4n or so, not n.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you make it worst-case linear?</summary>
+    <div class="followup__body">
+      <p>Median-of-medians picks a pivot guaranteed to be in the 30th–70th percentile, so you discard at least 30% each time. The recurrence is T(n)=T(n/5)+T(7n/10)+O(n)=O(n). Nobody wants you to code it in an interview; naming it is enough.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Generalise LC 4 to the k-th of two sorted arrays.</summary>
+    <div class="followup__body">
+      <p>The same cut search with half = k (1-based) instead of (m+n+1)/2. Return max(Aleft, Bleft). This is how you also solve "k-th of n sorted arrays" with a heap or a binary search on value.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>The matrix is sorted by rows only, not columns.</summary>
+    <div class="followup__body">
+      <p>You lose the staircase count. Heap the heads of each row (O(k log n)) or binary-search the value and binary-search each row (O(n log RANGE log n)).</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Must not mutate the array and must be O(1) extra memory.</summary>
+    <div class="followup__body">
+      <p>You cannot quickselect. Heap of size k uses O(k). For k-th of one array under these constraints you are stuck with sorting if you cannot overwrite, unless you are allowed O(n) extra to copy.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Kth Largest Element in an Array</a></td>
+        <td><span class="badge badge--lc">LC 215</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>quickselect or size-k heap</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/median-of-two-sorted-arrays/" target="_blank" rel="noopener">Median of Two Sorted Arrays</a></td>
+        <td><span class="badge badge--lc">LC 4</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>cut search on the shorter array</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/" target="_blank" rel="noopener">Kth Smallest in a Sorted Matrix</a></td>
+        <td><span class="badge badge--lc">LC 378</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>value binary search + count</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/kth-smallest-element-in-a-bst/" target="_blank" rel="noopener">Kth Smallest in a BST</a></td>
+        <td><span class="badge badge--lc">LC 230</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>inorder, not array selection</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/find-k-th-smallest-pair-distance/" target="_blank" rel="noopener">Find K-th Smallest Pair Distance</a></td>
+        <td><span class="badge badge--lc">LC 719</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>sort + count pairs ≤ mid</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/k-th-smallest-prime-fraction/" target="_blank" rel="noopener">K-th Smallest Prime Fraction</a></td>
+        <td><span class="badge badge--lc">LC 786</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>binary search a real + count</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener">Find Median from Data Stream</a></td>
+        <td><span class="badge badge--lc">LC 295</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>two heaps</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/448/D" target="_blank" rel="noopener">Multiplication Table</a></td>
+        <td><span class="badge badge--cf">CF 448D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>k-th in n×n product table</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/812/C" target="_blank" rel="noopener">Sagheer and Nubian Market</a></td>
+        <td><span class="badge badge--cf">CF 812C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>binary search k, then select/sort costs</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/kth-element-in-matrix/1" target="_blank" rel="noopener">Kth element in Matrix</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>same as LC 378</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 4 — Median of two sorted arrays</summary>
+  <div class="spoiler__body">
+    <p>Always binary-search the shorter array. i elements from A, j = half-i from B. The cut is valid when A[i-1] ≤ B[j] and B[j-1] ≤ A[i]. Empty sides are ±∞. Odd → max(lefts); even → average of max(lefts) and min(rights).</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 378 — Kth in a sorted matrix</summary>
+  <div class="spoiler__body">
+    <p>Binary-search the <em>value</em>, not an index. Count how many entries are ≤ mid by walking from the bottom-left (or top-right) in O(n). firstTrue for count ≥ k.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Full sort is the default.</strong> Reach for selection only when they ask for linear or the two-array log.</li>
+    <li><strong>Quickselect = quicksort that discards one side.</strong> Randomise the pivot.</li>
+    <li><strong>k-th largest is rank n-k</strong> in 0-based ascending order. Convert once.</li>
+    <li><strong>Two-array median is a cut search</strong> on how many you take from the shorter array.</li>
+    <li><strong>k-th in a matrix is binary search on the value</strong> plus a linear count.</li>
+  </ul>
+  <div class="recap__oneliner">p=partition(a,lo,hi); if(p==k)return a[p]; else if(k&lt;p)hi=p-1; else lo=p+1;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

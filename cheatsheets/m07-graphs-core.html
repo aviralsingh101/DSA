@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>07 Graphs Core &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>07 Graphs Core</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Repr</h3>
+    <pre>List&lt;List&lt;Integer&gt;&gt; g
+int[] dr={-1,1,0,0}, dc={0,0,-1,1}</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>BFS</h3>
+    <pre>q.offer(s); dist[s]=0
+while(!q.isEmpty()){
+  u=q.poll();
+  for v: if(dist[v]&lt;0){dist[v]=dist[u]+1;q.offer(v);}
+}</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Topo Kahn</h3>
+    <pre>for edges indeg[v]++
+queue all indeg==0
+pop; for to: if(--indeg[to]==0) offer</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Dijkstra</h3>
+    <pre>pq (dist,u); skip if d!=dist[u]
+relax: if(dist[v]&gt;dist[u]+w) update + offer</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>0-1 BFS</h3>
+    <pre>ArrayDeque
+w==0 ? addFirst : addLast</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Bipartite</h3>
+    <pre>BFS colour 0/1
+edge to same colour → odd cycle</pre>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

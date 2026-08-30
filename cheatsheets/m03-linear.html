@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 Linear Structures &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>03 Linear Structures</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Mono stack NGE</h3>
+    <pre>for i=0..n:
+  while(!st.empty() &amp;&amp; a[st.peek()]&lt;a[i])
+    nge[st.pop()]=i;
+  st.push(i);</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Mono deque max</h3>
+    <pre>while(!dq.isEmpty() &amp;&amp; a[dq.peekLast()]&lt;=a[i]) dq.pollLast();
+dq.offerLast(i);
+if(dq.peekFirst()&lt;=i-k) dq.pollFirst();</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Floyd cycle</h3>
+    <pre>fast=fast.next.next
+when meet: slow=head
+advance both → entry</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Heap k-largest</h3>
+    <pre>PriorityQueue&lt;Integer&gt; pq; // min-heap
+for v: if(pq.size()==k &amp;&amp; v&gt;pq.peek()) pq.poll();
+pq.offer(v);</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>LRU</h3>
+    <ul><li>HashMap<key,Node> + dummy head/tail</li><li>get/put: detach, insert after head</li><li>evict tail.prev</li></ul>
+  </article>
+  <article class="cheat-card">
+    <h3>TreeMap</h3>
+    <pre>floorKey / ceilingKey
+higherKey / lowerKey
+subMap(lo,true,hi,false)</pre>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

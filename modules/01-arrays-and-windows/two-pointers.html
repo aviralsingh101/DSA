@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two Pointers &mdash; DSA Course</title>
+<meta name="description" content="Two indices moving under a monotonicity guarantee turn a quadratic double loop into a single linear pass &mdash; provided you can prove that neither pointer ever needs to go back.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="two-pointers">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>Two Pointers</h1>
+  <p class="hero__tagline">Two indices moving under a monotonicity guarantee turn a quadratic double loop into a single linear pass &mdash; provided you can prove that neither pointer ever needs to go back.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="prefix-sums.html">Prefix Sums</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">two pointers</span>
+      <span class="chip">sorted</span>
+      <span class="chip">linear</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>An enormous number of array problems have an obvious <code>O(n&sup2;)</code> solution built from two nested loops over indices <code>i &lt; j</code>. Two pointers is the observation that, when the data has the right monotonic structure, you never need to revisit a position: each pointer advances only forward, so the total work is <code>O(n)</code> rather than <code>O(n&sup2;)</code>.</p>
+<p>The technique comes in three distinct shapes that people often conflate. <strong>Opposite ends:</strong> <code>l</code> starts at 0, <code>r</code> at <code>n-1</code>, and they converge &mdash; used for pair sums on sorted arrays, container with most water, and palindromes. <strong>Same direction:</strong> both start at 0 and <code>r</code> outruns <code>l</code> &mdash; that is the <a href="sliding-window.html">sliding window</a>, plus in-place partitioning and merging. <strong>Fast and slow:</strong> one pointer moves twice as fast &mdash; cycle detection and finding the middle of a list.</p>
+<p>What makes it an interview favourite is that the correctness argument is short but not trivial. "Why is it safe to move <code>l</code> here?" has a real answer &mdash; usually an exchange argument showing that every pair you skip is dominated by one you keep &mdash; and being able to give that answer separates people who memorised the pattern from people who understand it.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>The pattern is valid only when moving a pointer <em>provably</em> discards no candidate answer. Before writing the loop, state which pointer moves and why every solution containing the discarded element is dominated by one that remains.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>The array is <strong>sorted</strong>, or sorting it does not destroy the question</li>
+        <li>"Find a pair / triplet with sum equal to (or closest to) a target"</li>
+        <li>"Longest or shortest contiguous segment satisfying &hellip;" with non-negative values &rarr; the same-direction form</li>
+        <li>In-place rearrangement: remove duplicates, move zeroes, partition by a predicate, reverse</li>
+        <li>Merging two sorted sequences, or intersecting two sorted sets</li>
+        <li>A linked list question about cycles, the middle node, or the <code>k</code>-th from the end</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The array is unsorted <em>and</em> order matters &rarr; hashing or prefix sums instead</li>
+        <li>You need arbitrary index pairs with no monotonic relationship &rarr; there is nothing to exploit; consider sorting by a different key first</li>
+        <li>Values can be negative in a "longest subarray with sum &ge; k" question &rarr; monotonicity is lost, so use a <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a> over prefix sums</li>
+        <li>You need to <em>count</em> subarrays with an exact sum including negatives &rarr; <a href="prefix-sums.html">prefix + HashMap</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"two numbers in a sorted array summing to target"</td>
+        <td>Sum is monotone in both pointers</td>
+        <td>Opposite ends, converge</td>
+      </tr>
+      <tr>
+        <td>"three numbers summing to zero"</td>
+        <td>Fix one, two-pointer the rest</td>
+        <td>Sort, then <code>O(n&sup2;)</code></td>
+      </tr>
+      <tr>
+        <td>"container with most water"</td>
+        <td>Moving the taller wall can never help</td>
+        <td>Opposite ends, move the shorter</td>
+      </tr>
+      <tr>
+        <td>"is this a palindrome"</td>
+        <td>Compare mirrored positions</td>
+        <td>Opposite ends, step inward</td>
+      </tr>
+      <tr>
+        <td>"remove duplicates in place"</td>
+        <td>A write pointer trailing a read pointer</td>
+        <td>Same direction</td>
+      </tr>
+      <tr>
+        <td>"merge two sorted arrays"</td>
+        <td>One pointer per input</td>
+        <td>Same direction, two arrays</td>
+      </tr>
+      <tr>
+        <td>"longest substring without repeats"</td>
+        <td>Window validity is monotone</td>
+        <td><a href="sliding-window.html">Sliding window</a></td>
+      </tr>
+      <tr>
+        <td>"detect a cycle in a linked list"</td>
+        <td>Fast laps slow inside a cycle</td>
+        <td>Floyd's fast/slow</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "subarray sum equals k" with negatives</td>
+        <td>Extending can decrease the sum, so shrinking logic is unsound</td>
+        <td>Prefix + HashMap, not two pointers</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a pair or triplet question is the signature: <code>O(n&sup2;)</code> is dead, sorting is affordable, so the intended solution is sort plus two pointers at <code>O(n log n)</code> (or <code>O(n&sup2;)</code> for triplets with <code>n &le; 3000</code>).</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the exchange argument</h2>
+<p>Take the canonical case: a sorted array and a target sum. Put <code>l</code> at 0 and <code>r</code> at <code>n - 1</code>. If <code>a[l] + a[r] &lt; target</code>, then <code>a[l]</code> paired with <em>anything</em> at or below <code>r</code> is also too small &mdash; because <code>a[r]</code> is the largest remaining partner. So no valid pair uses <code>a[l]</code> at all, and <code>l++</code> discards nothing. The symmetric argument justifies <code>r--</code>. Each step removes one index permanently, so the loop runs at most <code>n</code> times.</p>
+<p>That is the shape of every correctness proof in this family: <em>the pointer you move is the one whose current element cannot participate in any better answer</em>. For container with most water, the area is <code>min(h[l], h[r]) &times; (r - l)</code>; moving the taller wall inward keeps the same limiting height while strictly reducing the width, so it can never improve &mdash; therefore move the shorter wall. State that sentence out loud in an interview and the problem is finished.</p>
+<p>The same-direction form has a different justification. There, <code>r</code> extends the window and <code>l</code> repairs it. The invariant is "the window <code>[l, r]</code> is valid", and because <code>l</code> only ever increases, the total number of pointer movements across the whole run is at most <code>2n</code> even though the inner <code>while</code> loop looks nested. That is an amortised argument, not a per-iteration one, and being able to say so is the standard follow-up answer.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p><strong>Opposite ends:</strong> every pair <code>(i, j)</code> with <code>i &lt; l</code> or <code>j &gt; r</code> has already been considered or provably cannot be optimal. The answer, if it exists, lies within <code>[l, r]</code>.</p><p><strong>Same direction:</strong> the segment <code>[l, r]</code> satisfies the problem's validity predicate at the top of every iteration, and <code>l</code> is the smallest left endpoint for which that is true given the current <code>r</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The amortisation argument, stated properly</span>
+    <p>Same-direction two pointers have a <code>while</code> inside a <code>for</code>, which looks quadratic. It is not: <code>l</code> only increases and is bounded by <code>n</code>, so the inner loop executes at most <code>n</code> times <em>in total across the whole run</em>. Combined with <code>n</code> outer iterations that is at most <code>2n</code> pointer movements, hence <code>O(n)</code>. Say "amortised" when asked; it is exactly the same accounting as <a href="../00-foundations/complexity-analysis.html">dynamic array growth</a>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Sorting destroys indices</span>
+    <p>If the problem asks for the <em>positions</em> of the two numbers (LeetCode 1 Two Sum) rather than the values, sorting loses them. Either pair each value with its original index before sorting, or abandon two pointers and use a <code>HashMap</code>, which is <code>O(n)</code> and needs no sort. Check what the problem wants returned before you reach for the sort.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Three pointers and beyond</span>
+    <p><code>k</code>-sum generalises: sort once, fix <code>k - 2</code> indices with nested loops, and two-pointer the innermost pair. That gives <code>O(n<sup>k-1</sup>)</code> &mdash; <code>O(n&sup2;)</code> for 3-sum and <code>O(n&sup3;)</code> for 4-sum. Beyond <code>k = 4</code>, <a href="../04-recursion-and-dnc/meet-in-the-middle.html">meet in the middle</a> becomes better. The duplicate-skipping logic is the same at every level and is where almost all the bugs are.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Opposite ends: finding a pair with a target sum</h3>
+
+<p>Sorted array <code>[1, 3, 4, 6, 8, 11]</code>, target <code>14</code>. Each comparison eliminates one whole index, which is why the scan is linear rather than quadratic.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="tpPair"></div>
+  <div class="viz-player" data-viz-target="tpPair">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "sorted a, target = 14",
+      "array": [
+        1,
+        3,
+        4,
+        6,
+        8,
+        11
+      ],
+      "vars": [
+        "l",
+        "r",
+        "a[l]+a[r]",
+        "vs target"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "l = 0, r = 5. Sum is 1 + 11 = 12, which is below 14.",
+          "active": [
+            0,
+            5
+          ],
+          "window": [
+            0,
+            5
+          ],
+          "values": {
+            "l": 0,
+            "r": 5,
+            "a[l]+a[r]": 12,
+            "vs target": "too small"
+          }
+        },
+        {
+          "note": "Too small, so move l. Justification: 11 is the largest available partner, so if 1 + 11 < 14, then 1 pairs with nothing. Index 0 is eliminated for good.",
+          "x": [
+            0
+          ],
+          "active": [
+            5
+          ],
+          "window": [
+            1,
+            5
+          ],
+          "values": {
+            "l": 1,
+            "r": 5,
+            "a[l]+a[r]": "3+11=14",
+            "vs target": "check"
+          }
+        },
+        {
+          "note": "l = 1, r = 5. Sum is 3 + 11 = 14. Found it.",
+          "best": [
+            1,
+            5
+          ],
+          "window": [
+            1,
+            5
+          ],
+          "values": {
+            "l": 1,
+            "r": 5,
+            "a[l]+a[r]": 14,
+            "vs target": "match"
+          }
+        },
+        {
+          "note": "Now try target = 9 on the same array to see the other branch. Restart: 1 + 11 = 12, too large this time.",
+          "arr": [
+            1,
+            3,
+            4,
+            6,
+            8,
+            11
+          ],
+          "active": [
+            0,
+            5
+          ],
+          "window": [
+            0,
+            5
+          ],
+          "values": {
+            "l": 0,
+            "r": 5,
+            "a[l]+a[r]": 12,
+            "vs target": "too large (target 9)"
+          }
+        },
+        {
+          "note": "Too large, so move r. Justification: 1 is the smallest available partner, so if 1 + 11 > 9, then 11 pairs with nothing. Index 5 is eliminated.",
+          "x": [
+            5
+          ],
+          "active": [
+            0
+          ],
+          "window": [
+            0,
+            4
+          ],
+          "values": {
+            "l": 0,
+            "r": 4,
+            "a[l]+a[r]": "1+8=9",
+            "vs target": "check"
+          }
+        },
+        {
+          "note": "1 + 8 = 9. Found. Two comparisons instead of fifteen pair checks — and the saving grows quadratically with n.",
+          "best": [
+            0,
+            4
+          ],
+          "x": [
+            5
+          ],
+          "window": [
+            0,
+            4
+          ],
+          "values": {
+            "l": 0,
+            "r": 4,
+            "a[l]+a[r]": 9,
+            "vs target": "match"
+          }
+        },
+        {
+          "note": "If the pointers cross without a match, no pair exists: every index was eliminated by a valid argument, so the search was exhaustive.",
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "l": "l > r",
+            "r": "—",
+            "a[l]+a[r]": "—",
+            "vs target": "no pair"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Every step discards an index permanently. Six elements, at most six iterations, and the discarded pairs are provably non-solutions rather than merely unchecked.</figcaption>
+</figure>
+
+<h3>Container with most water: the exchange argument</h3>
+
+<p>Heights <code>[1, 8, 6, 2, 5, 4, 8, 3, 7]</code>. The area is <code>min(h[l], h[r]) &times; (r - l)</code>. The rule is always to move the shorter wall, and the reason is the whole problem.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="tpWater"></div>
+  <div class="viz-player" data-viz-target="tpWater">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "heights",
+      "array": [
+        1,
+        8,
+        6,
+        2,
+        5,
+        4,
+        8,
+        3,
+        7
+      ],
+      "vars": [
+        "l",
+        "r",
+        "area",
+        "best"
+      ],
+      "speed": 1050,
+      "frames": [
+        {
+          "note": "l = 0 (height 1), r = 8 (height 7). Area = min(1,7) * 8 = 8.",
+          "active": [
+            0,
+            8
+          ],
+          "window": [
+            0,
+            8
+          ],
+          "values": {
+            "l": 0,
+            "r": 8,
+            "area": 8,
+            "best": 8
+          }
+        },
+        {
+          "note": "The left wall is shorter, so move l. Any container using height 1 has area at most 1 * width, and the width only shrinks from here.",
+          "x": [
+            0
+          ],
+          "active": [
+            1,
+            8
+          ],
+          "window": [
+            1,
+            8
+          ],
+          "values": {
+            "l": 1,
+            "r": 8,
+            "area": "min(8,7)*7=49",
+            "best": 49
+          }
+        },
+        {
+          "note": "l = 1 (height 8), r = 8 (height 7). Area = 7 * 7 = 49. New best, and in fact the answer.",
+          "best": [
+            1,
+            8
+          ],
+          "window": [
+            1,
+            8
+          ],
+          "values": {
+            "l": 1,
+            "r": 8,
+            "area": 49,
+            "best": 49
+          }
+        },
+        {
+          "note": "Now the right wall is shorter, so move r. Index 8 is eliminated.",
+          "x": [
+            0,
+            8
+          ],
+          "active": [
+            1,
+            7
+          ],
+          "window": [
+            1,
+            7
+          ],
+          "values": {
+            "l": 1,
+            "r": 7,
+            "area": "min(8,3)*6=18",
+            "best": 49
+          }
+        },
+        {
+          "note": "Area 18, worse. Right is shorter again, so move r again.",
+          "x": [
+            0,
+            7,
+            8
+          ],
+          "active": [
+            1,
+            6
+          ],
+          "window": [
+            1,
+            6
+          ],
+          "values": {
+            "l": 1,
+            "r": 6,
+            "area": "min(8,8)*5=40",
+            "best": 49
+          }
+        },
+        {
+          "note": "Area 40. Heights are equal, so either move is safe — both walls are simultaneously limiting.",
+          "x": [
+            0,
+            7,
+            8
+          ],
+          "active": [
+            1,
+            6
+          ],
+          "window": [
+            1,
+            6
+          ],
+          "values": {
+            "l": 1,
+            "r": 6,
+            "area": 40,
+            "best": 49
+          }
+        },
+        {
+          "note": "The pointers continue inward, never beating 49. Total work is one pass, and the argument for each move is a one-line exchange argument.",
+          "best": [
+            1,
+            8
+          ],
+          "x": [
+            0,
+            7
+          ],
+          "done": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "l": "—",
+            "r": "—",
+            "area": "—",
+            "best": 49
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Moving the taller wall keeps the limiting height at best unchanged while strictly reducing the width, so it can never improve the area. Moving the shorter wall is the only move that can.</figcaption>
+</figure>
+
+<h3>Which of the three forms do you need?</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  start(["array or list problem"]) --&gt; kind{"what is being asked?"}
+  kind -- "pair or triplet with a target" --&gt; sorted{"is it sorted, or can you sort?"}
+  sorted -- yes --&gt; opp["opposite ends: converge from both sides"]
+  sorted -- "no, need original indices" --&gt; hashm["HashMap in one pass instead"]
+  kind -- "longest or shortest segment" --&gt; neg{"any negative values?"}
+  neg -- no --&gt; win["same direction: sliding window"]
+  neg -- yes --&gt; pfx["prefix sums plus a monotonic deque"]
+  kind -- "rearrange in place" --&gt; rw["same direction: read pointer and write pointer"]
+  kind -- "merge or intersect sorted inputs" --&gt; mrg["same direction, one pointer per input"]
+  kind -- "linked list cycle, middle, or kth from end" --&gt; fs["fast and slow pointers"]
+  opp --&gt; proof["state the exchange argument before coding"]
+  win --&gt; proof
+  rw --&gt; proof
+  </div>
+  <figcaption>The three shapes solve different problems and have different correctness arguments. Identifying the shape first prevents most of the bugs in this family.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Identify the shape</strong>: opposite ends, same direction, or fast/slow.</li>
+  <li><strong>Sort if needed</strong>, and first check whether the problem wants original indices &mdash; if it does, sorting is wrong.</li>
+  <li><strong>Initialise</strong>: <code>l = 0, r = n - 1</code> for opposite ends; <code>l = r = 0</code> for same direction.</li>
+  <li><strong>Write down the exchange argument</strong> for which pointer moves. If you cannot, the technique may not apply.</li>
+  <li><strong>Loop while <code>l &lt; r</code></strong> (opposite ends) or while <code>r &lt; n</code> (same direction).</li>
+  <li><strong>Update the answer</strong> before moving pointers, so no candidate is skipped.</li>
+  <li><strong>Handle duplicates explicitly</strong> in <code>k</code>-sum problems: after recording a hit, advance past all equal values on both sides.</li>
+  <li><strong>Verify the termination condition:</strong> every iteration must move at least one pointer, or the loop hangs.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>3Sum on <code>[-4, -1, -1, 0, 1, 2]</code> (already sorted), looking for triplets summing to zero. The outer loop fixes <code>i</code>; the inner pointers scan the suffix.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>a[i]</th><th>l</th><th>r</th><th>sum</th><th>action</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>-4</td><td>1</td><td>5</td><td>-4 + -1 + 2 = -3</td><td>sum &lt; 0, so <code>l++</code></td><td>Too small: need a larger left element.</td></tr>
+      <tr><td>0</td><td>-4</td><td>2</td><td>5</td><td>-4 + -1 + 2 = -3</td><td>sum &lt; 0, so <code>l++</code></td><td>Duplicate <code>-1</code>; still too small.</td></tr>
+      <tr><td>0</td><td>-4</td><td>3</td><td>5</td><td>-4 + 0 + 2 = -2</td><td>sum &lt; 0, so <code>l++</code></td><td>Still short.</td></tr>
+      <tr><td>0</td><td>-4</td><td>4</td><td>5</td><td>-4 + 1 + 2 = -1</td><td>sum &lt; 0, so <code>l++</code></td><td>Pointers meet; no triplet uses <code>-4</code>.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>-1</td><td>2</td><td>5</td><td>-1 + -1 + 2 = 0</td><td><strong>record</strong> [-1,-1,2]</td><td>Hit. Now skip duplicates on both sides before continuing.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>-1</td><td>3</td><td>4</td><td>-1 + 0 + 1 = 0</td><td><strong>record</strong> [-1,0,1]</td><td>Second hit from the same <code>i</code>.</td></tr>
+      <tr><td>1</td><td>-1</td><td>4</td><td>3</td><td>&mdash;</td><td><code>l &ge; r</code>, stop inner loop</td><td>Suffix exhausted.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>-1</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>skip: <code>a[2] == a[1]</code></td><td>Outer duplicate skip. Without this you emit [-1,0,1] twice.</td></tr>
+      <tr><td>3</td><td>0</td><td>4</td><td>5</td><td>0 + 1 + 2 = 3</td><td>sum &gt; 0, so <code>r--</code></td><td>Too large; and then <code>l &ge; r</code>, so we are done.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Result: <code>[[-1,-1,2], [-1,0,1]]</code>. Note the three separate duplicate guards &mdash; one on <code>i</code>, one after advancing <code>l</code>, one after retreating <code>r</code>. Missing any of them produces duplicate triplets, which is the most common failure on this problem.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Two Pointers implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Opposite ends</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">3Sum with dedup</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Same direction</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Fast and slow</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Opposite ends">
+    <p>Three classics that share one skeleton. In each case the comment above the pointer move is the exchange argument &mdash; that sentence is what an interviewer is listening for.</p>
+    <div class="code" data-highlight="12-18,34-40">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OppositeEnds.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class OppositeEnds {
+    
+        /** Pair summing to target in a SORTED array. Returns indices, or null. O(n). */
+        static int[] pairSum(int[] a, int target) {
+            int l = 0, r = a.length - 1;
+            while (l &lt; r) {
+                int sum = a[l] + a[r];
+                if (sum == target) {
+                    return new int[] {l, r};
+                }
+                if (sum &lt; target) {
+                    l++;      // a[r] is the largest partner left; if a[l]+a[r] is still
+                              // too small, a[l] can pair with nothing. Discard it.
+                } else {
+                    r--;      // symmetric: a[l] is the smallest partner left.
+                }
+            }
+            return null;
+        }
+    
+        /** Maximum water container. O(n). */
+        static int maxArea(int[] h) {
+            int l = 0, r = h.length - 1, best = 0;
+            while (l &lt; r) {
+                best = Math.max(best, Math.min(h[l], h[r]) * (r - l));
+                if (h[l] &lt; h[r]) {
+                    l++;      // moving the TALLER wall keeps min() the same at best and
+                              // strictly shrinks the width, so it can never improve.
+                } else {
+                    r--;
+                }
+            }
+            return best;
+        }
+    
+        /** Palindrome check ignoring non-alphanumerics. O(n). */
+        static boolean isPalindrome(String s) {
+            int l = 0, r = s.length() - 1;
+            while (l &lt; r) {
+                while (l &lt; r &amp;&amp; !Character.isLetterOrDigit(s.charAt(l))) {
+                    l++;
+                }
+                while (l &lt; r &amp;&amp; !Character.isLetterOrDigit(s.charAt(r))) {
+                    r--;
+                }
+                if (Character.toLowerCase(s.charAt(l)) != Character.toLowerCase(s.charAt(r))) {
+                    return false;
+                }
+                l++;
+                r--;
+            }
+            return true;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(Arrays.toString(pairSum(new int[] {1, 3, 4, 6, 8, 11}, 14)));
+            System.out.println(maxArea(new int[] {1, 8, 6, 2, 5, 4, 8, 3, 7}));
+            System.out.println(isPalindrome("A man, a plan, a canal: Panama"));
+            System.out.println(isPalindrome("race a car"));
+        }
+        // Output: [1, 5]
+        //         49
+        //         true
+        //         false
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="3Sum">
+    <p>The duplicate handling is the entire difficulty. There are three separate guards and each one is needed; removing any of them produces repeated triplets.</p>
+    <div class="code" data-highlight="14-16,25-30">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ThreeSum.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.List;
+    
+    public class ThreeSum {
+    
+        /** All unique triplets summing to zero. O(n^2) after an O(n log n) sort. */
+        static List&lt;List&lt;Integer&gt;&gt; threeSum(int[] a) {
+            Arrays.sort(a);
+            List&lt;List&lt;Integer&gt;&gt; out = new ArrayList&lt;&gt;();
+            int n = a.length;
+            for (int i = 0; i &lt; n - 2; i++) {
+                if (a[i] &gt; 0) {
+                    break;                          // sorted: no way to reach 0 from here
+                }
+                if (i &gt; 0 &amp;&amp; a[i] == a[i - 1]) {
+                    continue;                       // guard 1: skip duplicate anchors
+                }
+                int l = i + 1, r = n - 1;
+                while (l &lt; r) {
+                    int sum = a[i] + a[l] + a[r];
+                    if (sum == 0) {
+                        out.add(Arrays.asList(a[i], a[l], a[r]));
+                        int vl = a[l], vr = a[r];
+                        while (l &lt; r &amp;&amp; a[l] == vl) {
+                            l++;                    // guard 2: skip duplicate left values
+                        }
+                        while (l &lt; r &amp;&amp; a[r] == vr) {
+                            r--;                    // guard 3: skip duplicate right values
+                        }
+                    } else if (sum &lt; 0) {
+                        l++;
+                    } else {
+                        r--;
+                    }
+                }
+            }
+            return out;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(threeSum(new int[] {-1, 0, 1, 2, -1, -4}));
+            System.out.println(threeSum(new int[] {0, 0, 0, 0}));
+            System.out.println(threeSum(new int[] {1, 2, 3}));
+        }
+        // Output: [[-1, -1, 2], [-1, 0, 1]]
+        //         [[0, 0, 0]]
+        //         []
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Same direction">
+    <p>A read pointer scans and a write pointer compacts. This shape is the answer to every "do it in place with <code>O(1)</code> extra space" instruction.</p>
+    <div class="code" data-highlight="10-16,29-35">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SameDirection.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class SameDirection {
+    
+        /** Remove duplicates from a sorted array in place. Returns the new length. O(n). */
+        static int dedupeSorted(int[] a) {
+            if (a.length == 0) {
+                return 0;
+            }
+            int write = 1;                          // a[0..write-1] is the deduped prefix
+            for (int read = 1; read &lt; a.length; read++) {
+                if (a[read] != a[write - 1]) {
+                    a[write++] = a[read];
+                }
+            }
+            return write;
+        }
+    
+        /** Move all zeroes to the end, preserving the order of non-zeroes. O(n). */
+        static void moveZeroes(int[] a) {
+            int write = 0;
+            for (int read = 0; read &lt; a.length; read++) {
+                if (a[read] != 0) {
+                    int t = a[write];
+                    a[write++] = a[read];
+                    a[read] = t;
+                }
+            }
+        }
+    
+        /** Merge two sorted arrays into a new one. O(n + m). */
+        static int[] merge(int[] a, int[] b) {
+            int[] out = new int[a.length + b.length];
+            int i = 0, j = 0, k = 0;
+            while (i &lt; a.length &amp;&amp; j &lt; b.length) {
+                out[k++] = (a[i] &lt;= b[j]) ? a[i++] : b[j++];
+            }
+            while (i &lt; a.length) {
+                out[k++] = a[i++];
+            }
+            while (j &lt; b.length) {
+                out[k++] = b[j++];
+            }
+            return out;
+        }
+    
+        /** Dutch national flag: partition into &lt;p, ==p, &gt;p in one pass. O(n). */
+        static void threeWayPartition(int[] a, int pivot) {
+            int lt = 0, i = 0, gt = a.length - 1;
+            while (i &lt;= gt) {
+                if (a[i] &lt; pivot) {
+                    swap(a, lt++, i++);
+                } else if (a[i] &gt; pivot) {
+                    swap(a, i, gt--);               // do NOT advance i: the swapped-in
+                                                    // value has not been examined yet
+                } else {
+                    i++;
+                }
+            }
+        }
+    
+        private static void swap(int[] a, int i, int j) {
+            int t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+    
+        public static void main(String[] args) {
+            int[] d = {1, 1, 2, 2, 2, 3, 4, 4};
+            System.out.println(dedupeSorted(d) + " " + Arrays.toString(Arrays.copyOf(d, 4)));
+    
+            int[] z = {0, 1, 0, 3, 12};
+            moveZeroes(z);
+            System.out.println(Arrays.toString(z));
+    
+            System.out.println(Arrays.toString(merge(new int[] {1, 4, 7}, new int[] {2, 3, 9})));
+    
+            int[] p = {3, 1, 4, 1, 5, 9, 2, 6, 5};
+            threeWayPartition(p, 4);
+            System.out.println(Arrays.toString(p));
+        }
+        // Output: 4 [1, 2, 3, 4]
+        //         [1, 3, 12, 0, 0]
+        //         [1, 2, 3, 4, 7, 9]
+        //         [3, 1, 1, 2, 4, 9, 5, 6, 5]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Fast slow">
+    <p>Floyd's cycle detection plus the two list utilities it shares a skeleton with. The second phase of Floyd's algorithm is the part worth being able to justify.</p>
+    <div class="code" data-highlight="23-33">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FastSlow.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class FastSlow {
+    
+        static class Node {
+            int val;
+            Node next;
+            Node(int v) { val = v; }
+        }
+    
+        /** Middle node (the second one when the length is even). O(n), O(1) space. */
+        static Node middle(Node head) {
+            Node slow = head, fast = head;
+            while (fast != null &amp;&amp; fast.next != null) {
+                slow = slow.next;
+                fast = fast.next.next;
+            }
+            return slow;
+        }
+    
+        /**
+         * Floyd's cycle detection. Returns the node where the cycle starts, or null.
+         * Phase 2 works because if the tail before the cycle has length m and the
+         * meeting point is k steps into a cycle of length L, then m == (L - k) mod L,
+         * so walking m steps from the head and m steps from the meeting point collide
+         * exactly at the cycle entry.
+         */
+        static Node cycleStart(Node head) {
+            Node slow = head, fast = head;
+            while (fast != null &amp;&amp; fast.next != null) {
+                slow = slow.next;
+                fast = fast.next.next;
+                if (slow == fast) {                 // phase 1: they meet inside the cycle
+                    Node p = head;
+                    while (p != slow) {             // phase 2: walk both at the same speed
+                        p = p.next;
+                        slow = slow.next;
+                    }
+                    return p;
+                }
+            }
+            return null;
+        }
+    
+        /** k-th node from the end. One pass, O(1) space. */
+        static Node kthFromEnd(Node head, int k) {
+            Node lead = head;
+            for (int i = 0; i &lt; k; i++) {
+                if (lead == null) {
+                    return null;
+                }
+                lead = lead.next;
+            }
+            Node trail = head;
+            while (lead != null) {
+                lead = lead.next;
+                trail = trail.next;
+            }
+            return trail;
+        }
+    
+        public static void main(String[] args) {
+            Node a = new Node(1), b = new Node(2), c = new Node(3), d = new Node(4), e = new Node(5);
+            a.next = b; b.next = c; c.next = d; d.next = e;
+            System.out.println("middle = " + middle(a).val);
+            System.out.println("2nd from end = " + kthFromEnd(a, 2).val);
+            System.out.println("cycle = " + cycleStart(a));
+            e.next = c;                              // create a cycle back to node 3
+            System.out.println("cycle starts at " + cycleStart(a).val);
+        }
+        // Output: middle = 3
+        //         2nd from end = 4
+        //         cycle = null
+        //         cycle starts at 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) after sorting; O(n log n) total</span>
+    <span class="badge badge--space">Space O(1) auxiliary</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>For opposite ends, each iteration strictly decreases <code>r - l</code> by at least one, and the loop stops when <code>l &ge; r</code>, so there are at most <code>n</code> iterations of <code>O(1)</code> work:</p>
+    <p><span class="eq">T(n) = &Theta;(n) after sorting, so &Theta;(n log n) overall when a sort is needed</span></p>
+    <p>For same direction the argument is amortised. The outer pointer <code>r</code> advances <code>n</code> times. The inner pointer <code>l</code> also advances at most <code>n</code> times <em>in total</em>, because it never decreases and is bounded by <code>n</code>. Hence the total number of pointer movements is at most <code>2n</code>, giving <code>&Theta;(n)</code> despite the nested loops:</p>
+    <p><span class="eq">&Sigma;<sub>r</sub> (movements of l during step r) &le; n &nbsp;&rArr;&nbsp; T(n) = &Theta;(n)</span></p>
+    <p>For <code>k</code>-sum, fixing <code>k - 2</code> indices with nested loops and two-pointering the last pair gives <code>&Theta;(n<sup>k-1</sup>)</code>. Space is <code>&Theta;(1)</code> auxiliary in every case, except that sorting an <code>Integer[]</code> costs <code>&Theta;(n)</code> and recursion in a quicksort costs <code>&Theta;(log n)</code> stack.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Brute force pairs</td><td><code>O(n&sup2;)</code></td><td><code>O(1)</code></td><td>Only when n &le; 5000</td></tr>
+      <tr><td>Sort + two pointers</td><td><code>O(n log n)</code></td><td><code>O(1)</code></td><td>Sorted input, or values-only output</td></tr>
+      <tr><td>HashMap one pass</td><td><code>O(n)</code></td><td><code>O(n)</code></td><td>When original indices are required</td></tr>
+      <tr><td>3Sum brute force</td><td><code>O(n&sup3;)</code></td><td><code>O(1)</code></td><td>Never, beyond n = 300</td></tr>
+      <tr><td>3Sum sorted + two pointers</td><td><code>O(n&sup2;)</code></td><td><code>O(1)</code></td><td>The standard answer, n &le; 3000</td></tr>
+      <tr><td>Floyd's cycle detection</td><td><code>O(n)</code></td><td><code>O(1)</code></td><td>Beats a HashSet, which is O(n) space</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using two pointers on an unsorted array</span>
+    <div class="pitfalls__bug">Applying the converge-from-both-ends pair search without sorting. The monotonicity argument is simply false, so the algorithm silently returns wrong answers on some inputs and correct ones on others.</div>
+    <div class="pitfalls__fix">Sort first, or use a <code>HashMap</code>. Before writing the loop, say the exchange argument out loud &mdash; if it does not hold, you have caught the bug before writing it.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Sorting when the problem wants original indices</span>
+    <div class="pitfalls__bug">LeetCode 1 asks for the indices of the two numbers. Sorting destroys them, so the returned indices refer to the sorted array.</div>
+    <div class="pitfalls__fix">Either use a <code>HashMap&lt;value, index&gt;</code> in one pass (<code>O(n)</code>, and simpler), or sort an array of <code>{value, originalIndex}</code> pairs.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Incomplete duplicate handling in <code>k</code>-sum</span>
+    <div class="pitfalls__bug">Skipping duplicates for the anchor <code>i</code> but not after a successful hit. <code>[0,0,0,0]</code> then produces <code>[[0,0,0],[0,0,0]]</code>.</div>
+    <div class="pitfalls__fix">Three guards: skip <code>i</code> when <code>a[i] == a[i-1]</code>, and after recording a triplet advance <code>l</code> past all equal values and retreat <code>r</code> past all equal values.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Advancing the index after a swap in Dutch-flag partitioning</span>
+    <div class="pitfalls__bug">In three-way partitioning, doing <code>swap(a, i, gt--); i++;</code>. The value just swapped in from the right has never been examined, so it can be misplaced.</div>
+    <div class="pitfalls__fix">Advance <code>i</code> only in the <code>&lt;</code> and <code>==</code> branches. When swapping with <code>gt</code>, leave <code>i</code> where it is.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">An iteration that moves neither pointer</span>
+    <div class="pitfalls__bug">A branch structure where some condition leads to <code>continue</code> without changing <code>l</code> or <code>r</code>. The loop hangs, and on a judge that shows as a timeout rather than an obvious infinite loop.</div>
+    <div class="pitfalls__fix">Audit every path through the loop body and confirm at least one pointer changes. Making the pointer updates the last statements of each branch makes this easy to verify.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Reading past the end in fast/slow traversal</span>
+    <div class="pitfalls__bug"><code>while (fast.next != null && fast.next.next != null)</code> versus <code>while (fast != null && fast.next != null)</code>. The wrong one throws <code>NullPointerException</code> on an empty or single-node list, or returns the wrong middle for even lengths.</div>
+    <div class="pitfalls__fix">Use <code>while (fast != null && fast.next != null)</code>, which is safe for all lengths and returns the second middle for even lists. Test on lists of length 0, 1 and 2.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Applying a sliding window when values can be negative</span>
+    <div class="pitfalls__bug">"Shortest subarray with sum at least <code>k</code>" with negative values. Shrinking from the left can <em>increase</em> the sum, so the window logic is unsound.</div>
+    <div class="pitfalls__fix">Use prefix sums plus a <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a>, which is <code>O(n)</code> and makes no monotonicity assumption about the values.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>k-sum by recursion</td>
+        <td>Sort once, then recursively fix an index and reduce <code>k</code> until <code>k = 2</code>, where two pointers finish the job. One implementation covers 2Sum through 6Sum.</td>
+        <td><code>kSum(a, target, k): if k == 2 -&gt; twoPointer; else for each i: kSum(a[i+1..], target-a[i], k-1)</code></td>
+        <td>LC 18 4Sum</td>
+      </tr>
+      <tr>
+        <td>Two pointers on two different arrays</td>
+        <td>One pointer per input, advancing whichever is behind. Handles merging, intersection, and "smallest difference between elements of two sorted arrays".</td>
+        <td><code>while (i &lt; n &amp;&amp; j &lt; m) { if (a[i] &lt; b[j]) i++; else if (a[i] &gt; b[j]) j++; else { hit(); i++; j++; } }</code></td>
+        <td>LC 349, LC 350</td>
+      </tr>
+      <tr>
+        <td>Backward two pointers (merge in place)</td>
+        <td>When merging into an array with spare capacity at the end, write from the back so nothing is overwritten before it is read.</td>
+        <td><code>int k = n + m - 1; while (j &gt;= 0) a[k--] = (i &gt;= 0 &amp;&amp; a[i] &gt; b[j]) ? a[i--] : b[j--];</code></td>
+        <td>LC 88</td>
+      </tr>
+      <tr>
+        <td>Fast/slow for numeric cycles</td>
+        <td>Floyd's algorithm applies to any functional graph, not just linked lists &mdash; including "find the duplicate number" where <code>i &rarr; a[i]</code> defines the edges.</td>
+        <td><code>slow = a[slow]; fast = a[a[fast]];  // treat the array as a successor function</code></td>
+        <td>LC 287</td>
+      </tr>
+      <tr>
+        <td>Three pointers for partitioning</td>
+        <td>The Dutch national flag: <code>lt</code>, <code>i</code> and <code>gt</code> maintain four regions in one pass. Also the core of a robust quicksort with many equal keys.</td>
+        <td><code>regions: [0,lt) &lt; p, [lt,i) == p, [i,gt] unknown, (gt,n) &gt; p</code></td>
+        <td><a href="kth-and-selection.html">Quickselect</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Prove that two pointers on a sorted array finds the pair if one exists.</summary>
+    <div class="followup__body">
+      <p>Suppose a valid pair <code>(i*, j*)</code> with <code>i* &lt; j*</code> exists. The pointers start outside it (<code>l &le; i*</code> and <code>r &ge; j*</code>) and each step moves exactly one inward. Consider the first moment a pointer would move <em>past</em> one of them &mdash; say <code>l = i*</code> and we are about to do <code>l++</code>. That only happens when <code>a[i*] + a[r] &lt; target</code> with <code>r &ge; j*</code>, so <code>a[r] &ge; a[j*]</code>, so <code>a[i*] + a[j*] &le; a[i*] + a[r] &lt; target</code> &mdash; contradicting that <code>(i*, j*)</code> is valid. The symmetric argument covers <code>r--</code>. Hence the pointers must meet at the pair.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is the same-direction form <code>O(n)</code> when it has nested loops?</summary>
+    <div class="followup__body">
+      <p>Because the inner pointer never moves backwards. Across the entire execution, <code>l</code> advances at most <code>n</code> times in total, no matter how the advancement is distributed among outer iterations. So the total work is bounded by <code>n</code> outer steps plus <code>n</code> inner steps, giving <code>O(n)</code> amortised. This is the same accounting used for dynamic array growth: the worst single iteration is <code>O(n)</code>, but the sum over all iterations is <code>O(n)</code>.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When should you use a HashMap instead of two pointers?</summary>
+    <div class="followup__body">
+      <p>Three situations. When the problem needs <strong>original indices</strong>, since sorting destroys them. When the array is unsorted and <strong>sorting would be too slow</strong> or would break a required ordering. And when the condition involves <strong>exact equality on an unsorted quantity</strong>, such as counting subarrays with a given sum in the presence of negatives &mdash; there is no monotonicity to exploit. Roughly: two pointers buy <code>O(1)</code> space at the cost of needing order; hashing buys order-independence at the cost of <code>O(n)</code> space.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does Floyd's cycle detection find the <em>start</em> of the cycle?</summary>
+    <div class="followup__body">
+      <p>Let the tail before the cycle have length <code>m</code> and the cycle have length <code>L</code>. When slow has taken <code>m + k</code> steps, fast has taken <code>2(m + k)</code>, and they meet, so the difference <code>m + k</code> is a multiple of <code>L</code>. That means walking a further <code>m</code> steps from the meeting point lands exactly on the cycle entry, because <code>m + k + m &equiv; m (mod L)</code> positions into the cycle. So reset one pointer to the head, advance both one step at a time, and they collide at the entry. Total <code>O(n)</code> time and <code>O(1)</code> space, against <code>O(n)</code> space for the HashSet approach.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How would you extend this to 4Sum without <code>O(n&#8308;)</code>?</summary>
+    <div class="followup__body">
+      <p>Sort, then two nested loops fix <code>i</code> and <code>j</code>, and two pointers handle the remaining pair &mdash; <code>O(n&sup3;)</code>. An alternative is to enumerate all <code>O(n&sup2;)</code> pairs, group them by sum in a hash map, and look for two complementary pairs; that is <code>O(n&sup2;)</code> time and <code>O(n&sup2;)</code> space, but deduplicating overlapping index sets is fiddly. For large <code>k</code> with small <code>n</code>, <a href="../04-recursion-and-dnc/meet-in-the-middle.html">meet in the middle</a> is the right generalisation.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if the array is sorted but rotated?</summary>
+    <div class="followup__body">
+      <p>Two pointers from the ends no longer works, because <code>a[l] + a[r]</code> is not monotone across the rotation point. Either find the pivot with <a href="binary-search-basics.html">binary search</a> in <code>O(log n)</code> and then run two pointers with modular index arithmetic, or fall back to a <code>HashSet</code>. The general principle: two pointers need a <em>total order along the traversal direction</em>, and a rotation breaks exactly that.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Grouped by shape. Do LC 167, LC 11 and LC 15 first &mdash; those three cover the whole opposite-ends family, and everything else is a variation on them.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/" target="_blank" rel="noopener">Two Sum II - Input Array Is Sorted</a></td>
+        <td><span class="badge badge--lc">LC 167</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The pure opposite-ends template</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/container-with-most-water/" target="_blank" rel="noopener">Container With Most Water</a></td>
+        <td><span class="badge badge--lc">LC 11</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The exchange argument is the whole problem</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/3sum/" target="_blank" rel="noopener">3Sum</a></td>
+        <td><span class="badge badge--lc">LC 15</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Sort, fix one, two-pointer the rest; three dedup guards</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/3sum-closest/" target="_blank" rel="noopener">3Sum Closest</a></td>
+        <td><span class="badge badge--lc">LC 16</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same skeleton, track the minimum absolute difference</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/4sum/" target="_blank" rel="noopener">4Sum</a></td>
+        <td><span class="badge badge--lc">LC 18</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two nested anchors; watch for long overflow in sums</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/valid-palindrome/" target="_blank" rel="noopener">Valid Palindrome</a></td>
+        <td><span class="badge badge--lc">LC 125</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Opposite ends with character filtering</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/trapping-rain-water/" target="_blank" rel="noopener">Trapping Rain Water</a></td>
+        <td><span class="badge badge--lc">LC 42</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Two pointers with running left/right maxima; O(1) space</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/remove-duplicates-from-sorted-array/" target="_blank" rel="noopener">Remove Duplicates from Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 26</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Read pointer plus write pointer</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/move-zeroes/" target="_blank" rel="noopener">Move Zeroes</a></td>
+        <td><span class="badge badge--lc">LC 283</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Stable in-place partition</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/sort-colors/" target="_blank" rel="noopener">Sort Colors</a></td>
+        <td><span class="badge badge--lc">LC 75</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Dutch national flag; do not advance i on the gt swap</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/merge-sorted-array/" target="_blank" rel="noopener">Merge Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 88</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Merge backwards to avoid overwriting</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/linked-list-cycle-ii/" target="_blank" rel="noopener">Linked List Cycle II</a></td>
+        <td><span class="badge badge--lc">LC 142</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Floyd's two phases; be able to prove phase 2</td></tr>
+      <tr><td>13</td>
+        <td><a href="https://leetcode.com/problems/find-the-duplicate-number/" target="_blank" rel="noopener">Find the Duplicate Number</a></td>
+        <td><span class="badge badge--lc">LC 287</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Floyd's on a functional graph defined by the array</td></tr>
+      <tr><td>14</td>
+        <td><a href="https://leetcode.com/problems/squares-of-a-sorted-array/" target="_blank" rel="noopener">Squares of a Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 977</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Opposite ends writing backwards; O(n) beats sorting</td></tr>
+      <tr><td>15</td>
+        <td><a href="https://leetcode.com/problems/boats-to-save-people/" target="_blank" rel="noopener">Boats to Save People</a></td>
+        <td><span class="badge badge--lc">LC 881</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Greedy pairing lightest with heaviest</td></tr>
+      <tr><td>16</td>
+        <td><a href="https://codeforces.com/problemset/problem/279/B" target="_blank" rel="noopener">Books</a></td>
+        <td><span class="badge badge--cf">CF 279B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Longest window with sum at most t; all positive</td></tr>
+      <tr><td>17</td>
+        <td><a href="https://cses.fi/problemset/task/1640" target="_blank" rel="noopener">Sum of Two Values</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Two sum with indices; pair values with positions before sorting</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 42 &mdash; why two pointers beats the prefix-max arrays</summary>
+  <div class="spoiler__body">
+    <p>Water above index <code>i</code> is <code>min(maxLeft[i], maxRight[i]) - h[i]</code>, which suggests two <code>O(n)</code> arrays. The <code>O(1)</code>-space version keeps only <code>leftMax</code> and <code>rightMax</code> as scalars and always advances the side with the <em>smaller</em> maximum. The reason that is safe: if <code>leftMax &lt; rightMax</code>, then for the left pointer the true limiting height is <code>leftMax</code> regardless of what lies between, because some wall of at least <code>rightMax &gt; leftMax</code> is guaranteed to exist on the right. Transferable lesson: <em>when a formula takes a min of two running extremes, you can often process whichever side is currently smaller and never need the other side's exact value.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 287 &mdash; turning an array into a linked list</summary>
+  <div class="spoiler__body">
+    <p>With <code>n + 1</code> values all in <code>[1, n]</code>, define the successor function <code>i &rarr; a[i]</code>. Starting from index 0, this walk must eventually repeat a node, and since two different indices map to the same value, the repeated node is the duplicate &mdash; it is the entry point of the cycle. So run Floyd's algorithm with <code>slow = a[slow]</code> and <code>fast = a[a[fast]]</code>, then the phase-2 walk from index 0. That gives <code>O(n)</code> time, <code>O(1)</code> space, and no modification of the input, which is exactly what the constraints demand. General lesson: <em>an array of indices is a functional graph, and every cycle technique applies to it.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Three shapes:</strong> opposite ends (converge on sorted data), same direction (window or read/write compaction), and fast/slow (cycles and midpoints).</li>
+    <li><strong>State the exchange argument before coding.</strong> "Moving this pointer discards only pairs that are dominated by ones we keep" is the correctness proof and the interview answer.</li>
+    <li><strong>Same-direction is <code>O(n)</code> amortised</strong>, not quadratic, because the inner pointer never moves backwards.</li>
+    <li><strong>Duplicates need explicit guards</strong> in <code>k</code>-sum: one on the anchor and one on each pointer after a hit.</li>
+    <li><strong>Two pointers need order.</strong> Unsorted with required indices, or subarray sums with negatives, both call for hashing or prefix sums instead.</li>
+  </ul>
+  <div class="recap__oneliner">sorted+pair -&gt; converge from ends | window/in-place -&gt; same direction | cycle/middle -&gt; fast&amp;slow | prove the move first</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

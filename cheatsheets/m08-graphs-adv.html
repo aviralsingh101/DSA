@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>08 Graphs Advanced &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>08 Graphs Advanced</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Bellman-Ford</h3>
+    <ul><li>relax all edges n−1 times</li><li>one more success → neg cycle</li></ul>
+  </article>
+  <article class="cheat-card">
+    <h3>Floyd</h3>
+    <pre>for k for i for j
+  d[i][j]=min(d[i][j], d[i][k]+d[k][j])</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Kruskal</h3>
+    <pre>sort edges by w
+if(dsu.union(u,v)) take</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Tarjan low</h3>
+    <pre>low[v]=min(low[v],low[to])
+low[to]&gt;tin[v] → bridge
+low[to]&gt;=tin[v] → articulation (not root)</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Dinic idea</h3>
+    <ul><li>BFS level graph</li><li>DFS blocking flow along levels</li><li>O(V²E) typical</li></ul>
+  </article>
+  <article class="cheat-card">
+    <h3>2-SAT</h3>
+    <ul><li>implication graph x∨y ⇒ ¬x→y and ¬y→x</li><li>unsat iff x and ¬x in same SCC</li><li>assign x true if scc[x]>scc[¬x]</li></ul>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

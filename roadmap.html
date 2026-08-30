@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap &mdash; DSA / CP Course</title>
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Start here</span>
+        <h1>Roadmap</h1>
+        <p class="hero__tagline">
+          The order to study the 15 modules in, the dependencies between them, and why this
+          particular order rebuilds pattern recognition fastest.
+        </p>
+        <div class="hero__meta">
+          <span class="hero__time">Read once, then revisit monthly</span>
+          <span class="hero__tags">
+            <span class="chip">planning</span>
+            <span class="chip">dependencies</span>
+          </span>
+        </div>
+      </section>
+
+      <h2>The order</h2>
+      <p>
+        Study modules in this sequence. It is not the same as the module numbering, because the
+        numbering groups by subject while the study order optimises for how quickly you regain the
+        ability to <em>see</em> a problem's shape.
+      </p>
+
+      <div class="code" data-lang="Order">
+        <div class="code__bar"><span class="code__lang">Order</span><span class="code__file">study-sequence</span></div>
+        <pre><code>00 Foundations
+  -> 01 Arrays, Prefix Sums &amp; Windows
+  -> 02 Sorting, Hashing, Bits &amp; Matrix
+  -> 03 Linear Data Structures
+  -> 04 Recursion, Backtracking &amp; D&amp;C
+  -> 10 Dynamic Programming        (foundations .. string DP, i.e. the P0 half)
+  -> 05 Trees
+  -> 07 Graphs: Core
+  -> 06 Range Query Structures
+  -> 13 Greedy &amp; Offline Techniques
+  -> 11 Math &amp; Number Theory
+  -> 08 Graphs: Advanced
+  -> 12 Strings, Advanced
+  -> 09 Decompositions
+  -> 10 Dynamic Programming        (the remaining P1/P2 half)
+  -> 14 Interview Execution        (used continuously, not only at the end)</code></pre>
+      </div>
+
+      <div class="callout callout--key">
+        <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+        <div class="callout__body">
+          <span class="callout__title">Why this order</span>
+          <p>
+            Foundations and array patterns rebuild pattern recognition fastest, because they have
+            the highest density of "signal in the statement &rarr; technique" mappings per hour
+            spent. Dynamic programming is pulled forward ahead of advanced trees and graphs because
+            it is by far the most common place experienced engineers fail an interview: the
+            algorithms are memorable but <em>state design</em> is a skill that decays. Decompositions
+            and flows come last: they are genuinely Google-hard, but they are low frequency, and
+            they are much easier once segment trees and DSU are automatic.
+          </p>
+        </div>
+      </div>
+
+      <h2>Dependency graph</h2>
+      <p>
+        An arrow means "you will be confused without this first". Anything not connected can be
+        studied independently.
+      </p>
+
+      <figure class="viz bleed-wide">
+        <div class="mermaid">
+graph LR
+  M00["00 Foundations"] --> M01["01 Arrays and Windows"]
+  M00 --> M02["02 Sorting, Hashing, Bits"]
+  M01 --> M02
+  M01 --> M03["03 Linear Structures"]
+  M02 --> M03
+  M00 --> M04["04 Recursion and D and C"]
+  M04 --> M10a["10 DP core"]
+  M01 --> M10a
+  M04 --> M05["05 Trees"]
+  M05 --> M07["07 Graphs core"]
+  M03 --> M07
+  M10a --> M07
+  M05 --> M06["06 Range Queries"]
+  M01 --> M06
+  M02 --> M13["13 Greedy and Offline"]
+  M06 --> M13
+  M00 --> M11["11 Math and Number Theory"]
+  M02 --> M11
+  M07 --> M08["08 Graphs advanced"]
+  M06 --> M08
+  M11 --> M12["12 Strings advanced"]
+  M02 --> M12
+  M06 --> M09["09 Decompositions"]
+  M05 --> M09
+  M10a --> M10b["10 DP advanced"]
+  M02 --> M10b
+  M11 --> M10b
+        </div>
+        <figcaption>
+          Module prerequisites. Note that module 06 (range queries) feeds three different later
+          modules, which is why it is worth over-learning rather than skimming.
+        </figcaption>
+      </figure>
+
+      <h2>Three ways to run this course</h2>
+
+      <h3>Interview in under 4 weeks &mdash; P0 only</h3>
+      <p>
+        Study only the <span class="navlink__tier" data-tier="P0">P0</span> pages, in the order
+        above. That is roughly 40 pages. Read
+        <a href="modules/00-foundations/constraints-to-complexity.html">Constraints &rarr; Complexity</a>
+        and <a href="pattern-index.html">Pattern Index</a> on day one and again every weekend.
+        Skip modules 09 and 12 entirely, and take only <code>dp-foundations</code> through
+        <code>string-dp</code> from module 10.
+      </p>
+
+      <h3>Interview in 2&ndash;3 months &mdash; P0 then P1</h3>
+      <p>
+        Complete the P0 sweep first so you always have a working baseline, then do a second pass
+        over the same module order picking up <span class="navlink__tier" data-tier="P1">P1</span>
+        pages. This is the right plan for a Google-style loop, where one round is usually a
+        hard graph or DP problem rather than a pattern you can name in ten seconds.
+      </p>
+
+      <h3>Rebuilding CP rating &mdash; everything</h3>
+      <p>
+        Do all three tiers in module order. Module 11 (math) and module 06 (range queries) matter
+        far more on Codeforces than in interviews, and modules 09 and 12 are where Div 1 problems
+        live. Pair each module with a virtual contest rather than with more reading.
+      </p>
+
+      <h2>Weekly habits that actually fix pattern recognition</h2>
+      <ol class="stepper">
+        <li><strong>Re-read the constraint table.</strong> Open
+          <a href="modules/00-foundations/constraints-to-complexity.html">Constraints &rarr; Complexity</a>
+          and cover the right-hand column. Given only <code>n &le; 20</code>, say the intended
+          complexity out loud before looking.</li>
+        <li><strong>Skim the pattern index, not the algorithms.</strong> Ten minutes on
+          <a href="pattern-index.html">Pattern Index</a> is worth an hour of re-reading
+          implementations you already know.</li>
+        <li><strong>Do one unlabelled drill set.</strong> <a href="mock-drills.html">Mock Drills</a>
+          gives you three problems in 45 minutes with no topic hint. The failure mode you are
+          training against only shows up when the label is missing.</li>
+        <li><strong>Write one template from memory.</strong> Pick a template from
+          <a href="java-toolkit.html">Java Toolkit</a>, close the page, and type it out. Binary
+          search, DSU, Dijkstra and the sliding-window skeleton should be muscle memory.</li>
+        <li><strong>Log every miss as a signal, not as a topic.</strong> When you fail a problem,
+          write down the phrase in the statement you should have reacted to. That phrase is the
+          reusable artefact; "I should revise DP" is not.</li>
+      </ol>
+
+      <div class="callout callout--warn">
+        <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+        <div class="callout__body">
+          <span class="callout__title">The trap for returning engineers</span>
+          <p>
+            The tempting plan is to grind problems immediately, because reading feels slow. It does
+            not work here: grinding trains recall of problems you have seen, and interviews test
+            recognition of problems you have not. Front-load the recognition cards, then grind.
+          </p>
+        </div>
+      </div>
+
+      <h2>Complete topic list in study order</h2>
+      <div class="table-scroll">
+        <table class="problems" id="order-table">
+          <thead>
+            <tr><th>#</th><th>Topic</th><th>Module</th><th>Tier</th><th>Path</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="assets/vendor/mermaid.min.js"></script>
+  <script src="assets/js/nav-data.js"></script>
+  <script src="assets/js/viz.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script>
+  (function () {
+    var order = ["m00","m01","m02","m03","m04","m10","m05","m07","m06","m13","m11","m08","m12","m09","m14"];
+    var byId = {};
+    (window.NAV_DATA || []).forEach(function (m) { byId[m.id] = m; });
+    var body = document.querySelector("#order-table tbody");
+    var n = 0;
+    order.forEach(function (id) {
+      var mod = byId[id];
+      if (!mod) return;
+      (mod.topics || []).forEach(function (t) {
+        n++;
+        var tr = document.createElement("tr");
+        var href = mod.dir ? mod.dir + "/" + t.file : t.file;
+        tr.innerHTML =
+          "<td>" + n + "</td>" +
+          '<td><a href="' + href + '">' + t.title + "</a></td>" +
+          "<td>" + mod.num + " " + mod.title + "</td>" +
+          '<td><span class="navlink__tier" data-tier="' + t.tier + '">' + t.tier + "</span></td>" +
+          "<td><code>" + href + "</code></td>";
+        body.appendChild(tr);
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

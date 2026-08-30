@@ -1,0 +1,1318 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prefix Sums &amp; Difference Arrays &mdash; DSA Course</title>
+<meta name="description" content="Trade one linear precomputation for constant-time range queries &mdash; the cheapest and most widely applicable optimisation in the whole toolkit.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="prefix-sums">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>Prefix Sums & Difference Arrays</h1>
+  <p class="hero__tagline">Trade one linear precomputation for constant-time range queries &mdash; the cheapest and most widely applicable optimisation in the whole toolkit.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">prefix sums</span>
+      <span class="chip">difference array</span>
+      <span class="chip">2D</span>
+      <span class="chip">hashing</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"What is the sum of <code>a[l..r]</code>?" answered naively costs <code>O(r - l)</code>, so <code>q</code> queries cost <code>O(nq)</code>, which dies at <code>n = q = 10&#8309;</code>. One preprocessing pass that stores every prefix total makes each query a single subtraction. That is the entire idea, and it recurs everywhere: two dimensions, XOR instead of addition, counts instead of values, and reversed as a difference array for range <em>updates</em>.</p>
+<p>It matters more than its simplicity suggests because it is a component rather than a solution. Prefix sums plus a hash map solves "count subarrays with sum <code>k</code>". Prefix sums plus binary search solves "shortest subarray with sum at least <code>k</code>" on positive arrays. Prefix XOR plus a trie solves maximum-XOR-subarray. Prefix parity solves "longest subarray with equal zeros and ones". Each of those is a top-50 interview question, and each is a two-line transform on top of this page.</p>
+<p>The reformulation to internalise is that a subarray is a <em>difference of two prefixes</em>. Once you see <code>sum(l, r) = P[r+1] - P[l]</code>, every question about subarrays becomes a question about <em>pairs of prefix values</em>, and questions about pairs are the natural home of sorting, hashing and binary search.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A subarray is the difference of two prefixes. Rewrite every subarray condition as a condition on two prefix values, then attack the pair problem with a hash map, a sort, or a binary search.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Many range-sum, range-count or range-XOR queries on a <strong>static</strong> array</li>
+        <li>The phrase "subarray sum equals <code>k</code>", "divisible by <code>k</code>", or "equal number of X and Y"</li>
+        <li>Many <strong>range updates</strong> followed by one final read &rarr; difference array, the mirror image of this technique</li>
+        <li>A 2D grid with repeated rectangle-sum queries &rarr; 2D prefix sums with inclusion-exclusion</li>
+        <li>Sums appear inside a binary search predicate &rarr; precompute prefixes so the predicate is <code>O(1)</code></li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The array changes between queries &rarr; use a <a href="../06-range-queries/fenwick-tree.html">Fenwick tree</a> or <a href="../06-range-queries/segment-tree.html">segment tree</a></li>
+        <li>You need range minimum rather than range sum &rarr; min has no inverse, so use a <a href="../06-range-queries/sparse-table-and-rmq.html">sparse table</a></li>
+        <li>There is exactly one query &rarr; just loop; the precomputation is wasted</li>
+        <li>The operation has no inverse (max, gcd, bitwise AND/OR) &rarr; prefix arrays cannot subtract; use a sparse table or a segment tree instead</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"sum of elements from index l to r"</td>
+        <td>Repeated range aggregate</td>
+        <td>1D prefix sum</td>
+      </tr>
+      <tr>
+        <td>"sum of the submatrix (r1,c1)&hellip;(r2,c2)"</td>
+        <td>Two-dimensional aggregate</td>
+        <td>2D prefix with inclusion-exclusion</td>
+      </tr>
+      <tr>
+        <td>"add v to every element in [l, r]", many times</td>
+        <td>Range update, point read at the end</td>
+        <td>Difference array</td>
+      </tr>
+      <tr>
+        <td>"count subarrays with sum exactly k"</td>
+        <td>Pair of prefixes differing by k</td>
+        <td>Prefix + HashMap</td>
+      </tr>
+      <tr>
+        <td>"count subarrays whose sum is divisible by k"</td>
+        <td>Pair of prefixes with equal remainder</td>
+        <td>Prefix mod k + counts</td>
+      </tr>
+      <tr>
+        <td>"longest subarray with equal 0s and 1s"</td>
+        <td>Map 0 to -1, then equal prefixes</td>
+        <td>Prefix + first-occurrence map</td>
+      </tr>
+      <tr>
+        <td>"maximum XOR of a subarray"</td>
+        <td>XOR is its own inverse</td>
+        <td>Prefix XOR + <a href="../05-trees/xor-trie.html">binary trie</a></td>
+      </tr>
+      <tr>
+        <td>"shortest subarray with sum &ge; k", all positive</td>
+        <td>Prefix is increasing, so binary search works</td>
+        <td>Prefix + binary search</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "shortest subarray with sum &ge; k" <em>with negatives</em></td>
+        <td>Prefix is no longer monotonic, so binary search is invalid</td>
+        <td>Prefix + <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with range-sum queries is the standard signature. Sums of <code>10&#8309;</code> values up to <code>10&#8313;</code> reach <code>10&sup1;&#8308;</code>, so the prefix array is <code>long[]</code>, always.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Define <code>P[0] = 0</code> and <code>P[i] = a[0] + a[1] + &hellip; + a[i-1]</code>. The leading zero is not decoration: it removes every special case, because with it <code>sum(l, r) = P[r+1] - P[l]</code> holds for all valid <code>l &le; r</code> including <code>l = 0</code>. Implementations that start at <code>P[0] = a[0]</code> need a branch for <code>l = 0</code>, and that branch is where the bugs live.</p>
+<p>The difference array is the same identity read backwards. To add <code>v</code> to <code>a[l..r]</code>, write <code>d[l] += v</code> and <code>d[r+1] -= v</code>; after all updates, the prefix sum of <code>d</code> is the array of totals added to each position. So prefix sums turn <em>point updates and range queries</em> into <em>range updates and point queries</em>, at <code>O(1)</code> per update and one <code>O(n)</code> pass at the end.</p>
+<p>In two dimensions the same identity needs inclusion-exclusion, because the rectangle above and the rectangle to the left overlap in the corner. With <code>P[i][j]</code> the sum of the submatrix from <code>(0,0)</code> to <code>(i-1, j-1)</code>, the build step is <code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] &minus; P[i-1][j-1]</code>, and the query reverses the signs.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p><code>P[i]</code> holds the sum of the first <code>i</code> elements, so that for every <code>0 &le; l &le; r &lt; n</code>:</p><span class="eq">sum(l, r) = P[r+1] &minus; P[l]</span><p>Every technique on this page is a restatement of that line. "Subarray with property X" becomes "pair <code>(l, r+1)</code> of prefix indices whose values satisfy X", and counting pairs is what hash maps, sorting and binary search are for.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">2D inclusion-exclusion, derived</span>
+    <p>Let <code>P[i][j]</code> be the sum of all cells strictly above row <code>i</code> and strictly left of column <code>j</code>. The rectangle <code>[r1..r2] &times; [c1..c2]</code> is the big rectangle minus the strip above minus the strip to the left, but the top-left corner has now been subtracted twice, so add it back:</p><span class="eq">P[r2+1][c2+1] &minus; P[r1][c2+1] &minus; P[r2+1][c1] + P[r1][c1]</span><p>The same alternating-sign pattern generalises to <code>d</code> dimensions with <code>2<sup>d</sup></code> terms, which is why 3D prefix sums have eight.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Seed the map with <code>{0: 1}</code></span>
+    <p>When counting subarrays with sum <code>k</code> using a hash map of prefix values, you must insert <code>(0, 1)</code> before the loop. It represents the empty prefix and is what allows a subarray starting at index 0 to be counted. Forgetting it is the single most common bug in this pattern, and it only shows up when the answer includes a prefix of the array &mdash; which many sample tests avoid.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Only invertible operations work</span>
+    <p>Prefix arrays rely on being able to <em>undo</em> the left part. Addition has subtraction and XOR is its own inverse, so both work. Minimum, maximum, gcd, bitwise AND and bitwise OR have no inverse: knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>. Those need a <a href="../06-range-queries/sparse-table-and-rmq.html">sparse table</a> or a <a href="../06-range-queries/segment-tree.html">segment tree</a>.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Building the prefix array and answering a query</h3>
+
+<p>The array is <code>[3, 1, 4, 1, 5, 9]</code>. Watch the prefix array grow, then see the query <code>sum(2, 4)</code> resolve to a single subtraction.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="pfxBuild"></div>
+  <div class="viz-player" data-viz-target="pfxBuild">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "P (prefix sums, P[0] = 0)",
+      "array": [
+        0,
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "indexLabels": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "vars": [
+        "i",
+        "a[i-1]",
+        "P[i]"
+      ],
+      "speed": 900,
+      "frames": [
+        {
+          "note": "P[0] = 0, the empty prefix. This sentinel is what removes the l = 0 special case later.",
+          "arr": [
+            0,
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "i": 0,
+            "a[i-1]": "—",
+            "P[i]": 0
+          }
+        },
+        {
+          "note": "P[1] = P[0] + a[0] = 0 + 3 = 3.",
+          "arr": [
+            0,
+            3,
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "i": 1,
+            "a[i-1]": 3,
+            "P[i]": 3
+          }
+        },
+        {
+          "note": "P[2] = 3 + 1 = 4.",
+          "arr": [
+            0,
+            3,
+            4,
+            "",
+            "",
+            "",
+            ""
+          ],
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "i": 2,
+            "a[i-1]": 1,
+            "P[i]": 4
+          }
+        },
+        {
+          "note": "P[3] = 4 + 4 = 8.",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            "",
+            "",
+            ""
+          ],
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "i": 3,
+            "a[i-1]": 4,
+            "P[i]": 8
+          }
+        },
+        {
+          "note": "P[4] = 8 + 1 = 9.",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            9,
+            "",
+            ""
+          ],
+          "active": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5,
+            6
+          ],
+          "values": {
+            "i": 4,
+            "a[i-1]": 1,
+            "P[i]": 9
+          }
+        },
+        {
+          "note": "P[5] = 9 + 5 = 14.",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            9,
+            14,
+            ""
+          ],
+          "active": [
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "dim": [
+            6
+          ],
+          "values": {
+            "i": 5,
+            "a[i-1]": 5,
+            "P[i]": 14
+          }
+        },
+        {
+          "note": "P[6] = 14 + 9 = 23. Build complete in one O(n) pass.",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            9,
+            14,
+            23
+          ],
+          "active": [
+            6
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "i": 6,
+            "a[i-1]": 9,
+            "P[i]": 23
+          }
+        },
+        {
+          "note": "Query sum(2, 4), i.e. a[2] + a[3] + a[4] = 4 + 1 + 5 = 10. Read P[5] and P[2].",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            9,
+            14,
+            23
+          ],
+          "active": [
+            2,
+            5
+          ],
+          "window": [
+            2,
+            5
+          ],
+          "values": {
+            "i": "query",
+            "a[i-1]": "l=2, r=4",
+            "P[i]": "P[5] - P[2]"
+          }
+        },
+        {
+          "note": "P[5] - P[2] = 14 - 4 = 10. Correct, and it took one subtraction instead of three additions — and it would still take one subtraction for a range of a million elements.",
+          "arr": [
+            0,
+            3,
+            4,
+            8,
+            9,
+            14,
+            23
+          ],
+          "best": [
+            2,
+            5
+          ],
+          "done": [
+            0,
+            1,
+            3,
+            4,
+            6
+          ],
+          "values": {
+            "i": "answer",
+            "a[i-1]": "—",
+            "P[i]": 10
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Building <code>P</code> costs one pass; every query afterwards is <code>P[r+1] &minus; P[l]</code>, one subtraction regardless of the range length.</figcaption>
+</figure>
+
+<h3>2D prefix sums and inclusion-exclusion</h3>
+
+<p>The grid holds <code>P[i][j]</code>, the sum of everything above and to the left. The last frames show a rectangle query resolving into four lookups with alternating signs.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="pfx2d"></div>
+  <div class="viz-player" data-viz-target="pfx2d">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "P",
+      "rowHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "colHeads": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "vars": [
+        "step",
+        "formula",
+        "value"
+      ],
+      "speed": 1200,
+      "frames": [
+        {
+          "note": "The source matrix is [[1,2,3],[4,5,6],[7,8,9]]. We build P with a zero border so no index check is ever needed.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "0"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0"
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "val": "0"
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "val": "0"
+            }
+          ],
+          "values": {
+            "step": "zero border",
+            "formula": "P[0][*] = P[*][0] = 0",
+            "value": "—"
+          }
+        },
+        {
+          "note": "Row 1: P[1][j] = a[0][j-1] + P[1][j-1]. With a zero row above, the general formula degenerates correctly.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "3"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "6"
+            }
+          ],
+          "values": {
+            "step": "row 1",
+            "formula": "a + up + left - diag",
+            "value": "1, 3, 6"
+          }
+        },
+        {
+          "note": "Row 2: P[2][1] = 4 + 1 + 0 - 0 = 5; P[2][2] = 5 + 3 + 5 - 1 = 12; P[2][3] = 6 + 6 + 12 - 3 = 21.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 1,
+              "val": "5"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "12"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "21"
+            }
+          ],
+          "values": {
+            "step": "row 2",
+            "formula": "a + up + left - diag",
+            "value": "5, 12, 21"
+          }
+        },
+        {
+          "note": "Row 3 completes the table. P[3][3] = 45 is the sum of the whole matrix.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 1,
+              "val": "12"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "27"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "45"
+            }
+          ],
+          "values": {
+            "step": "row 3",
+            "formula": "a + up + left - diag",
+            "value": "12, 27, 45"
+          }
+        },
+        {
+          "note": "Query: the sum of rows 1-2, columns 1-2 of the original matrix, i.e. 5 + 6 + 8 + 9 = 28. Start from the big rectangle P[3][3] = 45.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 3,
+              "val": "45",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "step": "big rect",
+            "formula": "P[r2+1][c2+1]",
+            "value": "45"
+          }
+        },
+        {
+          "note": "Subtract the strip above: P[1][3] = 6.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 3,
+              "val": "45",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "6",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "step": "minus top",
+            "formula": "- P[r1][c2+1]",
+            "value": "45 - 6 = 39"
+          }
+        },
+        {
+          "note": "Subtract the strip to the left: P[3][1] = 12.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 3,
+              "val": "45",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "6",
+              "cls": "block"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "12",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "step": "minus left",
+            "formula": "- P[r2+1][c1]",
+            "value": "39 - 12 = 27"
+          }
+        },
+        {
+          "note": "The top-left corner P[1][1] = 1 was removed twice, so add it back: 27 + 1 = 28. Correct.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 3,
+              "val": "45",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "6",
+              "cls": "block"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "12",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "1",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "step": "plus corner",
+            "formula": "+ P[r1][c1]",
+            "value": "28"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>A rectangle sum costs four array reads in any grid size. The <code>+</code> corner is the double-subtracted overlap being added back.</figcaption>
+</figure>
+
+<h3>Which prefix variant do you need?</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  q(["what does the problem ask?"]) --&gt; upd{"does the array change between queries?"}
+  upd -- "yes, point updates" --&gt; bit["Fenwick tree or segment tree"]
+  upd -- "yes, range updates then one read" --&gt; diff["difference array, prefix it once at the end"]
+  upd -- no --&gt; op{"which operation?"}
+  op -- "sum or count" --&gt; dims{"one dimension or two?"}
+  dims -- one --&gt; p1["1D prefix sums"]
+  dims -- two --&gt; p2["2D prefix with inclusion-exclusion"]
+  op -- xor --&gt; px["prefix XOR, since XOR is its own inverse"]
+  op -- "min, max, gcd, and, or" --&gt; nonInv["no inverse: sparse table or segment tree"]
+  p1 --&gt; shape{"is it a subarray-property question?"}
+  shape -- "sum equals k" --&gt; hash["HashMap of prefix value to count, seeded with 0:1"]
+  shape -- "divisible by k" --&gt; mod["HashMap of prefix mod k"]
+  shape -- "sum at least k, all positive" --&gt; bs["prefix is increasing: binary search"]
+  shape -- "sum at least k, with negatives" --&gt; deq["monotonic deque over prefixes"]
+  </div>
+  <figcaption>Start from what the query asks for. The left branch covers static aggregates; the right branch is the difference-array mirror image.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Allocate <code>long[] P</code> of length <code>n + 1</code></strong> and leave <code>P[0] = 0</code>.</li>
+  <li><strong>Fill it in one pass:</strong> <code>P[i] = P[i-1] + a[i-1]</code> for <code>i = 1 &hellip; n</code>.</li>
+  <li><strong>Answer each query</strong> as <code>P[r+1] - P[l]</code> using inclusive <code>l</code> and <code>r</code>.</li>
+  <li><strong>For 2D,</strong> build with a zero border and <code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] - P[i-1][j-1]</code>.</li>
+  <li><strong>For range updates,</strong> use a difference array: <code>d[l] += v</code>, <code>d[r+1] -= v</code>, then prefix-sum <code>d</code> once at the end.</li>
+  <li><strong>For subarray-property counting,</strong> restate the condition as a relation between two prefix values, then use a <code>HashMap</code> from prefix value to count, seeded with <code>{0: 1}</code>.</li>
+  <li><strong>Choose the accumulator type deliberately.</strong> <code>long</code> whenever <code>n &times; max|a<sub>i</sub>|</code> can exceed <code>2.1&times;10&#8313;</code>.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Counting subarrays with sum <code>k = 3</code> in <code>[1, 2, 1, 2, 1]</code> using prefix sums and a hash map. <code>need = P - k</code> is the prefix value that would complete a valid subarray ending here.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>i</th><th>a[i]</th><th>P</th><th>need = P &minus; 3</th><th>count of need seen</th><th>total</th><th>map after</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>&mdash;</td><td>&mdash;</td><td>0</td><td>&mdash;</td><td>&mdash;</td><td>0</td><td>{0:1}</td><td>Seed the map with the empty prefix. Without this, subarrays starting at index 0 are missed.</td></tr>
+      <tr><td>0</td><td>1</td><td>1</td><td>-2</td><td>0</td><td>0</td><td>{0:1, 1:1}</td><td>No prefix equal to -2 has been seen.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>2</td><td>3</td><td>0</td><td>1</td><td>1</td><td>{0:1, 1:1, 3:1}</td><td>One earlier prefix equals 0, giving the subarray <code>[1,2]</code>.</td></tr>
+      <tr><td>2</td><td>1</td><td>4</td><td>1</td><td>1</td><td>2</td><td>{0:1, 1:1, 3:1, 4:1}</td><td>Prefix 1 was seen once, giving <code>[2,1]</code>.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>2</td><td>6</td><td>3</td><td>1</td><td>3</td><td>{&hellip;, 6:1}</td><td>Prefix 3 was seen once, giving <code>[1,2]</code> at indices 2&ndash;3.</td></tr>
+      <tr><td>4</td><td>1</td><td>7</td><td>4</td><td>1</td><td>4</td><td>{&hellip;, 7:1}</td><td>Prefix 4 was seen once, giving <code>[2,1]</code> at indices 3&ndash;4.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Answer: <strong>4</strong> subarrays sum to 3, namely <code>[1,2]</code>, <code>[2,1]</code>, <code>[1,2]</code> and <code>[2,1]</code>. Note that this works with negative numbers too, which is exactly why it is preferred over a sliding window for this question.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Prefix Sums & Difference Arrays implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">1D + queries</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">2D prefix</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Difference array</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t3">Prefix + HashMap</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="1D">
+    <p>The base template. Note the <code>long[]</code> and the <code>n + 1</code> length with a zero sentinel &mdash; both are deliberate and both prevent common failures.</p>
+    <div class="code" data-highlight="10-13,20">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PrefixSum1D.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class PrefixSum1D {
+    
+        private final long[] p;
+    
+        /** O(n) build. P[0] = 0 so that no query needs a special case. */
+        PrefixSum1D(int[] a) {
+            p = new long[a.length + 1];
+            for (int i = 0; i &lt; a.length; i++) {
+                p[i + 1] = p[i] + a[i];        // long: n * maxA can exceed int
+            }
+        }
+    
+        /** O(1). Inclusive on both ends. */
+        long rangeSum(int l, int r) {
+            return p[r + 1] - p[l];
+        }
+    
+        /** O(1). Average of a range, as a double. */
+        double rangeAvg(int l, int r) {
+            return (double) rangeSum(l, r) / (r - l + 1);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9};
+            PrefixSum1D ps = new PrefixSum1D(a);
+            System.out.println(Arrays.toString(a));
+            System.out.println("sum(2,4) = " + ps.rangeSum(2, 4));
+            System.out.println("sum(0,5) = " + ps.rangeSum(0, 5));
+            System.out.println("sum(3,3) = " + ps.rangeSum(3, 3));
+            System.out.println("avg(0,5) = " + ps.rangeAvg(0, 5));
+        }
+        // Input : [3, 1, 4, 1, 5, 9]
+        // Output: [3, 1, 4, 1, 5, 9]
+        //         sum(2,4) = 10
+        //         sum(0,5) = 23
+        //         sum(3,3) = 1
+        //         avg(0,5) = 3.8333333333333335
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="2D">
+    <p>Inclusion-exclusion in both the build and the query. The zero border removes every boundary check, which is why the code has no <code>if</code> statements at all.</p>
+    <div class="code" data-highlight="13-16,24-27">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PrefixSum2D.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class PrefixSum2D {
+    
+        private final long[][] p;
+    
+        /** O(rows * cols) build with a zero border row and column. */
+        PrefixSum2D(int[][] a) {
+            int n = a.length, m = a[0].length;
+            p = new long[n + 1][m + 1];
+            for (int i = 1; i &lt;= n; i++) {
+                for (int j = 1; j &lt;= m; j++) {
+                    p[i][j] = a[i - 1][j - 1]
+                            + p[i - 1][j]          // everything above
+                            + p[i][j - 1]          // everything to the left
+                            - p[i - 1][j - 1];     // the overlap, counted twice
+                }
+            }
+        }
+    
+        /** O(1). All bounds inclusive. */
+        long rectSum(int r1, int c1, int r2, int c2) {
+            return p[r2 + 1][c2 + 1]
+                 - p[r1][c2 + 1]
+                 - p[r2 + 1][c1]
+                 + p[r1][c1];
+        }
+    
+        public static void main(String[] args) {
+            int[][] a = {
+                {1, 2, 3},
+                {4, 5, 6},
+                {7, 8, 9},
+            };
+            PrefixSum2D ps = new PrefixSum2D(a);
+            System.out.println("whole matrix   = " + ps.rectSum(0, 0, 2, 2));
+            System.out.println("bottom-right 2x2 = " + ps.rectSum(1, 1, 2, 2));
+            System.out.println("middle row     = " + ps.rectSum(1, 0, 1, 2));
+            System.out.println("single cell    = " + ps.rectSum(2, 2, 2, 2));
+        }
+        // Output: whole matrix   = 45
+        //         bottom-right 2x2 = 28
+        //         middle row     = 15
+        //         single cell    = 9
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Difference">
+    <p>The mirror image: <code>O(1)</code> range updates and one <code>O(n)</code> pass to materialise the result. This is the right tool whenever all updates come before all reads.</p>
+    <div class="code" data-highlight="12-15,21-24">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DifferenceArray.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class DifferenceArray {
+    
+        private final long[] d;
+    
+        DifferenceArray(int n) {
+            d = new long[n + 1];               // one extra slot so r+1 is always valid
+        }
+    
+        /** O(1). Add v to every index in [l, r], inclusive. */
+        void add(int l, int r, long v) {
+            d[l] += v;
+            d[r + 1] -= v;
+        }
+    
+        /** O(n). Materialise the final array. */
+        long[] build() {
+            long[] res = new long[d.length - 1];
+            long running = 0;
+            for (int i = 0; i &lt; res.length; i++) {
+                running += d[i];
+                res[i] = running;
+            }
+            return res;
+        }
+    
+        public static void main(String[] args) {
+            DifferenceArray da = new DifferenceArray(8);
+            da.add(1, 3, 5);                   // +5 on indices 1..3
+            da.add(2, 6, 2);                   // +2 on indices 2..6
+            da.add(0, 7, 1);                   // +1 everywhere
+            System.out.println(Arrays.toString(da.build()));
+        }
+        // Three range updates in O(1) each, then one O(n) pass.
+        // Output: [1, 6, 8, 8, 3, 3, 3, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Hashing">
+    <p>The three highest-value applications of "a subarray is a difference of prefixes". All three handle negative numbers, which is what distinguishes them from sliding windows.</p>
+    <div class="code" data-highlight="13-17,33-36,52-55">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PrefixHashing.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class PrefixHashing {
+    
+        /** Count subarrays with sum exactly k. Works with negatives. O(n). */
+        static int countSumEqualsK(int[] a, int k) {
+            Map&lt;Long, Integer&gt; seen = new HashMap&lt;&gt;();
+            seen.put(0L, 1);                            // the empty prefix: essential
+            long prefix = 0;
+            int count = 0;
+            for (int v : a) {
+                prefix += v;
+                count += seen.getOrDefault(prefix - k, 0);
+                seen.merge(prefix, 1, Integer::sum);
+            }
+            return count;
+        }
+    
+        /**
+         * Count subarrays whose sum is divisible by k.
+         * Two prefixes with the same remainder bound a divisible subarray.
+         * O(n) with an int[] of size k instead of a map.
+         */
+        static long countDivisibleByK(int[] a, int k) {
+            int[] cnt = new int[k];
+            cnt[0] = 1;
+            int rem = 0;
+            long total = 0;
+            for (int v : a) {
+                rem = ((rem + v) % k + k) % k;          // floorMod: Java's % can be negative
+                total += cnt[rem];
+                cnt[rem]++;
+            }
+            return total;
+        }
+    
+        /**
+         * Longest subarray with equal numbers of 0 and 1.
+         * Map 0 to -1: now "equal counts" means "prefix sum returns to a value it had".
+         * O(n).
+         */
+        static int longestEqualZerosOnes(int[] bits) {
+            Map&lt;Integer, Integer&gt; firstIndex = new HashMap&lt;&gt;();
+            firstIndex.put(0, -1);                      // prefix 0 occurs before index 0
+            int prefix = 0, best = 0;
+            for (int i = 0; i &lt; bits.length; i++) {
+                prefix += (bits[i] == 1) ? 1 : -1;
+                Integer first = firstIndex.get(prefix);
+                if (first == null) {
+                    firstIndex.put(prefix, i);          // keep only the EARLIEST occurrence
+                } else {
+                    best = Math.max(best, i - first);
+                }
+            }
+            return best;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(countSumEqualsK(new int[] {1, 2, 1, 2, 1}, 3));
+            System.out.println(countSumEqualsK(new int[] {1, -1, 0}, 0));
+            System.out.println(countDivisibleByK(new int[] {4, 5, 0, -2, -3, 1}, 5));
+            System.out.println(longestEqualZerosOnes(new int[] {0, 1, 0, 0, 1, 1, 0}));
+        }
+        // Output: 4
+        //         3
+        //         7
+        //         6
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) build, O(1) per query</span>
+    <span class="badge badge--space">Space O(n) extra, or O(nm) in 2D</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The build is a single pass performing one addition per element, so it is exactly <code>n</code> additions:</p>
+    <p><span class="eq">T<sub>build</sub>(n) = &Theta;(n),&nbsp;&nbsp; T<sub>query</sub> = &Theta;(1),&nbsp;&nbsp; T<sub>total</sub>(n, q) = &Theta;(n + q)</span></p>
+    <p>Compare with the naive approach, which is <code>&Theta;(nq)</code>. At <code>n = q = 10&#8309;</code> that is <code>10&sup1;&#8304;</code> against <code>2&times;10&#8309;</code> &mdash; five thousand times fewer operations, and the difference between a timeout and a 30&nbsp;ms run.</p>
+    <p>The break-even point is worth knowing: precomputation pays off as soon as <code>q &gt; 1</code> in the amortised sense, since building costs <code>n</code> and a single naive query costs at most <code>n</code>. In 2D the build is <code>&Theta;(nm)</code> and each rectangle query is four reads, so <code>q</code> queries cost <code>&Theta;(nm + q)</code> against a naive <code>&Theta;(q &middot; nm)</code>.</p>
+    <p>For the hash-map variants, each element does <code>O(1)</code> expected map work, giving <code>&Theta;(n)</code> expected overall. Using an <code>int[]</code> indexed by remainder (as in <code>countDivisibleByK</code>) makes it worst-case <code>&Theta;(n + k)</code> with no hashing at all, which is both faster and immune to hash attacks.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Naive per query</td><td><code>O(nq)</code></td><td><code>O(1)</code></td><td>Only when q is 1 or 2</td></tr>
+      <tr><td>Prefix sums</td><td><code>O(n + q)</code></td><td><code>O(n)</code></td><td>Static array, invertible op</td></tr>
+      <tr><td>Difference array</td><td><code>O(n + q)</code></td><td><code>O(n)</code></td><td>Range updates, read once at the end</td></tr>
+      <tr><td><a href="../06-range-queries/fenwick-tree.html">Fenwick tree</a></td><td><code>O((n + q) log n)</code></td><td><code>O(n)</code></td><td>Point updates interleaved with queries</td></tr>
+      <tr><td><a href="../06-range-queries/segment-tree.html">Segment tree</a></td><td><code>O((n + q) log n)</code></td><td><code>O(n)</code></td><td>Range updates interleaved with range queries</td></tr>
+      <tr><td><a href="../06-range-queries/sparse-table-and-rmq.html">Sparse table</a></td><td><code>O(n log n + q)</code></td><td><code>O(n log n)</code></td><td>Non-invertible idempotent ops: min, max, gcd</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Off-by-one in the query formula</span>
+    <div class="pitfalls__bug">Writing <code>P[r] - P[l]</code> instead of <code>P[r+1] - P[l]</code>, which silently drops <code>a[r]</code> from every answer. With <code>P[0] = a[0]</code> instead of <code>0</code>, you also need a branch for <code>l == 0</code>.</div>
+    <div class="pitfalls__fix">Always use the <code>n + 1</code> array with <code>P[0] = 0</code> and the formula <code>P[r+1] - P[l]</code>. Verify once on a single-element range: <code>sum(3,3)</code> must equal <code>a[3]</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>int</code> overflow in the accumulator</span>
+    <div class="pitfalls__bug"><code>int[] p</code> with <code>n = 10&#8309;</code> and values up to <code>10&#8313;</code>. The true prefix reaches <code>10&sup1;&#8308;</code>, wraps, and the <em>differences</em> can still look plausible, which makes it hard to spot.</div>
+    <div class="pitfalls__fix">Use <code>long[]</code> for the prefix array unconditionally. The memory cost at <code>n = 10&#8310;</code> is 8&nbsp;MB, which is almost always acceptable.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to seed the map with <code>{0: 1}</code></span>
+    <div class="pitfalls__bug"><code>countSumEqualsK([3], 3)</code> returns 0 instead of 1, because the subarray starting at index 0 needs a prefix value of 0 to already be in the map.</div>
+    <div class="pitfalls__fix">Insert <code>(0, 1)</code> before the loop for counting problems, or <code>(0, -1)</code> for longest-subarray problems where you store first indices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Storing the latest index instead of the earliest</span>
+    <div class="pitfalls__bug">In "longest subarray with sum <code>k</code>", overwriting the map entry each time a prefix recurs. That yields the <em>shortest</em> such subarray, not the longest.</div>
+    <div class="pitfalls__fix">Only insert when the key is absent: <code>if (!map.containsKey(p)) map.put(p, i);</code>. For <em>counting</em> problems you do want to accumulate every occurrence &mdash; the two problems need opposite handling, which is a frequent source of confusion.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Applying prefix sums to a non-invertible operation</span>
+    <div class="pitfalls__bug">Building a "prefix minimum" array and trying <code>min(l, r) = something(P[r+1], P[l])</code>. There is no such function: minimum cannot be undone.</div>
+    <div class="pitfalls__fix">Use a <a href="../06-range-queries/sparse-table-and-rmq.html">sparse table</a> for idempotent operations (min, max, gcd, AND, OR) or a segment tree for the general case. Only sum, XOR, and products in a field support the prefix trick.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Difference array without the extra slot</span>
+    <div class="pitfalls__bug"><code>d[r + 1] -= v</code> throws <code>ArrayIndexOutOfBoundsException</code> when <code>r == n - 1</code>, so people add a guard &mdash; and then forget it in the second call site.</div>
+    <div class="pitfalls__fix">Allocate <code>new long[n + 1]</code> and ignore the last slot when reading. The branch disappears entirely.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Java's <code>%</code> returning a negative remainder</span>
+    <div class="pitfalls__bug">In <code>countDivisibleByK</code>, <code>prefix % k</code> can be negative for negative sums, so <code>cnt[rem]</code> throws or indexes the wrong bucket.</div>
+    <div class="pitfalls__fix"><code>((x % k) + k) % k</code> or <code>Math.floorMod(x, k)</code>. This applies anywhere you index an array by a remainder.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Prefix XOR</td>
+        <td>XOR is its own inverse, so <code>xor(l, r) = X[r+1] ^ X[l]</code>. Combine with a binary trie to maximise a subarray XOR in <code>O(n log maxA)</code>.</td>
+        <td><code>X[i+1] = X[i] ^ a[i];   xor(l,r) = X[r+1] ^ X[l]</code></td>
+        <td><a href="../05-trees/xor-trie.html">XOR Trie</a></td>
+      </tr>
+      <tr>
+        <td>Prefix count of a predicate</td>
+        <td>Store how many elements so far satisfy some property; the count in a range is again a difference. Handles "how many vowels / primes / values &gt; x in [l, r]".</td>
+        <td><code>C[i+1] = C[i] + (pred(a[i]) ? 1 : 0)</code></td>
+        <td><a href="../13-greedy-and-offline/coordinate-compression.html">Offline queries</a></td>
+      </tr>
+      <tr>
+        <td>Prefix sums modulo k</td>
+        <td>Two prefixes with the same remainder bound a subarray divisible by <code>k</code>. Use an <code>int[k]</code> of counts rather than a hash map.</td>
+        <td><code>rem = floorMod(rem + a[i], k); total += cnt[rem]++;</code></td>
+        <td>LC 974, LC 523</td>
+      </tr>
+      <tr>
+        <td>2D difference array</td>
+        <td>Range updates on a submatrix in <code>O(1)</code> using four corner deltas, then two prefix passes to materialise.</td>
+        <td><code>d[r1][c1] += v; d[r1][c2+1] -= v; d[r2+1][c1] -= v; d[r2+1][c2+1] += v;</code></td>
+        <td>LC 2536</td>
+      </tr>
+      <tr>
+        <td>Prefix sums over sorted values</td>
+        <td>Sort first, then prefix. Answers "sum of the k smallest" and "cost to make all elements equal to <code>x</code>" in <code>O(log n)</code> per query.</td>
+        <td><code>sort(a); P[i+1] = P[i] + a[i];  cost(x) = x*i - P[i] + (P[n]-P[i]) - x*(n-i)</code></td>
+        <td><a href="binary-search-on-answer.html">Binary Search on Answer</a></td>
+      </tr>
+      <tr>
+        <td>Prefix products with modular inverse</td>
+        <td>Works only when every element is invertible modulo a prime, since you need division. Handles "product of a range mod p".</td>
+        <td><code>prod(l,r) = P[r+1] * modInverse(P[l], MOD) % MOD</code></td>
+        <td><a href="../11-math-and-number-theory/modular-arithmetic.html">Modular Arithmetic</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>What changes if the array can be updated between queries?</summary>
+    <div class="followup__body">
+      <p>Prefix sums break, because a single point update invalidates <code>O(n)</code> prefix entries. Switch to a <a href="../06-range-queries/fenwick-tree.html">Fenwick tree</a> for point update plus prefix query at <code>O(log n)</code> each, or a <a href="../06-range-queries/segment-tree.html">segment tree</a> if you also need range updates. The trade is precise: prefix sums are <code>O(1)</code> query and <code>O(n)</code> update; a BIT is <code>O(log n)</code> for both. If updates are rare, rebuilding the prefix array is sometimes still the right call.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why does the sliding-window approach fail for "subarray sum equals k" with negatives?</summary>
+    <div class="followup__body">
+      <p>A sliding window relies on monotonicity: extending the window must move the sum in a predictable direction so that you know whether to grow or shrink. With negative values, extending can decrease the sum, so "sum too large, shrink from the left" is no longer valid reasoning. The prefix-plus-hash-map approach makes no monotonicity assumption at all &mdash; it just counts pairs &mdash; which is why it is the general answer. Reserve sliding windows for non-negative arrays.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you find the longest subarray with sum exactly <code>k</code>?</summary>
+    <div class="followup__body">
+      <p>Same prefix map, but store the <em>first</em> index at which each prefix value occurred and never overwrite it. At index <code>i</code> with prefix <code>p</code>, look up <code>p - k</code>; if present at index <code>j</code>, the candidate length is <code>i - j</code>. Because <code>j</code> is the earliest occurrence, that candidate is the longest one ending at <code>i</code>. Counting problems, by contrast, need every occurrence, so they accumulate counts instead. Getting these two backwards is a classic interview slip.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you do range minimum with prefix arrays?</summary>
+    <div class="followup__body">
+      <p>No &mdash; minimum has no inverse, so there is no way to remove the contribution of the left part. Use a <a href="../06-range-queries/sparse-table-and-rmq.html">sparse table</a>, which exploits the fact that min is <em>idempotent</em>: overlapping ranges may be combined freely, so two lookups of the largest power-of-two blocks suffice. That gives <code>O(n log n)</code> build and <code>O(1)</code> query on a static array. The general rule: invertible &rarr; prefix sums; idempotent &rarr; sparse table; neither &rarr; segment tree.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How would you handle 10&#8309; range-add updates and 10&#8309; range-sum queries interleaved?</summary>
+    <div class="followup__body">
+      <p>Neither prefix sums nor a plain difference array works, because the two operation types are interleaved. Use a <a href="../06-range-queries/segment-tree-lazy.html">lazy segment tree</a>, or the two-BIT trick: maintain Fenwick trees <code>B1</code> and <code>B2</code> so that the prefix sum up to <code>i</code> equals <code>sum(B1, i) &times; i - sum(B2, i)</code>. Both are <code>O(log n)</code> per operation; the two-BIT version has a much smaller constant and is about twenty lines.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the 3D version?</summary>
+    <div class="followup__body">
+      <p>The same alternating-sign inclusion-exclusion with <code>2&sup3; = 8</code> terms: add the corners with an even number of "low" coordinates and subtract those with an odd number. Build is <code>O(nmk)</code> and each box query is 8 reads. In general <code>d</code> dimensions need <code>2<sup>d</sup></code> terms, which is why nobody goes beyond three &mdash; and it is a good illustration of why <a href="../11-math-and-number-theory/inclusion-exclusion.html">inclusion-exclusion</a> is worth knowing as a general principle.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>The first four are the pure pattern; the rest are the transforms that make this technique worth its weight. Do LC 560 and LC 525 before anything else &mdash; they are the two shapes everything else is built from.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/running-sum-of-1d-array/" target="_blank" rel="noopener">Running Sum of 1d Array</a></td>
+        <td><span class="badge badge--lc">LC 1480</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The build step, nothing more</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-immutable/" target="_blank" rel="noopener">Range Sum Query - Immutable</a></td>
+        <td><span class="badge badge--lc">LC 303</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The canonical static range-sum structure</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/range-sum-query-2d-immutable/" target="_blank" rel="noopener">Range Sum Query 2D - Immutable</a></td>
+        <td><span class="badge badge--lc">LC 304</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2D build and query with inclusion-exclusion</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/find-pivot-index/" target="_blank" rel="noopener">Find Pivot Index</a></td>
+        <td><span class="badge badge--lc">LC 724</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Left sum vs total minus left minus current</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/subarray-sum-equals-k/" target="_blank" rel="noopener">Subarray Sum Equals K</a></td>
+        <td><span class="badge badge--lc">LC 560</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The prefix + HashMap template. Handles negatives</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/contiguous-array/" target="_blank" rel="noopener">Contiguous Array</a></td>
+        <td><span class="badge badge--lc">LC 525</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Map 0 to -1, then longest subarray with sum 0</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/subarray-sums-divisible-by-k/" target="_blank" rel="noopener">Subarray Sums Divisible by K</a></td>
+        <td><span class="badge badge--lc">LC 974</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix mod k with floorMod; int[k] beats a HashMap</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/continuous-subarray-sum/" target="_blank" rel="noopener">Continuous Subarray Sum</a></td>
+        <td><span class="badge badge--lc">LC 523</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same remainder, plus a minimum-length constraint</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/product-of-array-except-self/" target="_blank" rel="noopener">Product of Array Except Self</a></td>
+        <td><span class="badge badge--lc">LC 238</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Prefix and suffix products; no division allowed</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/corporate-flight-bookings/" target="_blank" rel="noopener">Corporate Flight Bookings</a></td>
+        <td><span class="badge badge--lc">LC 1109</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>The difference array, in its purest form</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/car-pooling/" target="_blank" rel="noopener">Car Pooling</a></td>
+        <td><span class="badge badge--lc">LC 1094</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Difference array over a small coordinate range</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/increment-submatrices-by-one/" target="_blank" rel="noopener">Range Addition II / Increment Submatrices</a></td>
+        <td><span class="badge badge--lc">LC 2536</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>2D difference array with four corner deltas</td></tr>
+      <tr><td>13</td>
+        <td><a href="https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/" target="_blank" rel="noopener">Maximum Size Subarray Sum Equals k</a></td>
+        <td><span class="badge badge--lc">LC 325</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>First-occurrence map, not a count map</td></tr>
+      <tr><td>14</td>
+        <td><a href="https://cses.fi/problemset/task/1646" target="_blank" rel="noopener">Static Range Sum Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Clean implementation practice with fast IO</td></tr>
+      <tr><td>15</td>
+        <td><a href="https://cses.fi/problemset/task/1652" target="_blank" rel="noopener">Forest Queries</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>2D prefix sums on a character grid</td></tr>
+      <tr><td>16</td>
+        <td><a href="https://codeforces.com/problemset/problem/313/B" target="_blank" rel="noopener">Ilya and Queries</a></td>
+        <td><span class="badge badge--cf">CF 313B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Prefix count of a predicate over adjacent pairs</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 525 &mdash; the reformulation that makes it a prefix problem</summary>
+  <div class="spoiler__body">
+    <p>"Equal numbers of 0 and 1" is not obviously a sum condition. Replace every <code>0</code> with <code>-1</code>: now a balanced subarray is exactly one whose sum is <code>0</code>, which means the prefix sum at both ends is <em>the same value</em>. So store the first index at which each prefix value appears and take the largest <code>i - firstIndex[p]</code>. Seed with <code>{0: -1}</code> so a balanced prefix starting at index 0 is measured correctly. Transferable lesson: <em>when a condition compares two counts, subtract them into a single running quantity &mdash; "equal counts" becomes "difference is zero", which prefix sums handle directly.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 974 &mdash; why counting pairs works and how to avoid the HashMap</summary>
+  <div class="spoiler__body">
+    <p><code>sum(l, r) &equiv; 0 (mod k)</code> is equivalent to <code>P[r+1] &equiv; P[l] (mod k)</code>, so you need the number of <em>pairs</em> of prefix indices sharing a remainder. If remainder <code>x</code> occurs <code>c<sub>x</sub></code> times, it contributes <code>C(c<sub>x</sub>, 2)</code> pairs, or equivalently you can accumulate <code>cnt[rem]++</code> as you go. Use <code>int[k]</code> rather than a <code>HashMap</code>: remainders are bounded by <code>k</code>, so array indexing is both faster and hash-attack-proof. Watch <code>Math.floorMod</code> for negative values. General lesson: <em>whenever the key space is a small bounded integer range, replace the hash map with a plain array.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong><code>P[0] = 0</code> and <code>sum(l, r) = P[r+1] - P[l]</code>.</strong> The sentinel removes every boundary case; use <code>long[]</code> always.</li>
+    <li><strong>A subarray is a difference of two prefixes.</strong> Rewrite subarray conditions as conditions on pairs of prefix values, then hash, sort, or binary search the pairs.</li>
+    <li><strong>Difference arrays are the mirror image:</strong> <code>O(1)</code> range updates, one <code>O(n)</code> pass at the end. Allocate <code>n + 1</code> slots.</li>
+    <li><strong>2D needs inclusion-exclusion</strong> in both build and query, with a zero border to remove all boundary checks.</li>
+    <li><strong>Only invertible operations qualify.</strong> Sum and XOR yes; min, max, gcd, AND and OR need a sparse table or segment tree.</li>
+  </ul>
+  <div class="recap__oneliner">P[0]=0; P[i]=P[i-1]+a[i-1]; sum(l,r)=P[r+1]-P[l] | diff: d[l]+=v, d[r+1]-=v | count k: map{0:1}, need=P-k</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

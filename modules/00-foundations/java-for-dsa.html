@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java for DSA &amp; CP &mdash; DSA Course</title>
+<meta name="description" content="The Java subset that actually matters under a time limit: fast IO, primitive collections, the overflow rules, and the library calls whose hidden costs decide whether your correct a">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="java-for-dsa">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 00 &middot; Foundations</span>
+  <h1>Java for DSA & CP</h1>
+  <p class="hero__tagline">The Java subset that actually matters under a time limit: fast IO, primitive collections, the overflow rules, and the library calls whose hidden costs decide whether your correct algorithm passes.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">java</span>
+      <span class="chip">io</span>
+      <span class="chip">collections</span>
+      <span class="chip">overflow</span>
+      <span class="chip">toolkit</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Java is a perfectly good competitive language, but it punishes idioms that are normal in production code. <code>Scanner</code>, <code>ArrayList&lt;Integer&gt;</code>, <code>String</code> concatenation and <code>Arrays.sort</code> on primitives are all reasonable choices at work and all liabilities at <code>n = 10&#8310;</code>. The gap between a naive Java solution and a tuned one is routinely 10&ndash;30&times; wall clock, with no change in complexity class.</p>
+<p>This page is the fix list. It is short on language philosophy and long on the specific constructs you should reach for by reflex: a <code>DataInputStream</code>-based reader, a single <code>StringBuilder</code> for output, <code>int[]</code> instead of <code>List&lt;Integer&gt;</code>, and the handful of overflow and comparator rules that produce silent wrong answers rather than honest crashes.</p>
+<p>In interviews the emphasis shifts &mdash; nobody cares about your reader &mdash; but the same knowledge shows up as fluency: knowing that <code>ArrayDeque</code> is the right stack, that <code>TreeMap.floorKey</code> exists, that <code>Arrays.binarySearch</code> returns <code>-(insertionPoint) - 1</code>, and that <code>(lo + hi) / 2</code> overflows. That fluency is what lets you spend your thinking on the algorithm.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Two rules cover most of it. <strong>Never box in a hot loop</strong> &mdash; prefer <code>int[]</code>, <code>long[]</code> and index-based structures over <code>Integer</code>-parameterised generics. <strong>Never do IO one token at a time</strong> &mdash; read through a buffer and write through a single <code>StringBuilder</code>.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Your solution has the right complexity and still exceeds the time limit &rarr; suspect IO, boxing, or a hidden library cost, in that order</li>
+        <li>You are reading more than about 10&#8309; numbers &rarr; <code>Scanner</code> is no longer acceptable</li>
+        <li>You are printing more than about 10&#8308; lines &rarr; buffer into a <code>StringBuilder</code> and write once</li>
+        <li>Values or intermediate sums can exceed <code>2.1&times;10&#8313;</code> &rarr; <code>long</code>, and check every multiplication</li>
+        <li>You need ordered queries such as "largest key below <code>x</code>" &rarr; <code>TreeMap</code> / <code>TreeSet</code> navigation methods</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li><code>n</code> is under a few thousand &rarr; write the clearest code; the constant factor is irrelevant</li>
+        <li>You are in an interview on a whiteboard or shared doc &rarr; use readable idioms; mentioning the fast alternative is enough</li>
+        <li>The bottleneck is genuinely algorithmic (<code>O(n&sup2;)</code> at <code>n = 10&#8309;</code>) &rarr; no amount of tuning saves you; change the algorithm</li>
+        <li>You need arbitrary precision &rarr; <code>BigInteger</code> is correct but roughly 50&ndash;100&times; slower; check whether modular arithmetic would do instead</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Reading 10&#8310;+ integers</td>
+        <td><code>Scanner</code> is ~10&times; slower than a buffered reader</td>
+        <td><code>DataInputStream</code> byte reader</td>
+      </tr>
+      <tr>
+        <td>Printing many lines</td>
+        <td><code>System.out.println</code> flushes per call</td>
+        <td><code>StringBuilder</code> then one <code>print</code></td>
+      </tr>
+      <tr>
+        <td>Frequent membership tests on ints</td>
+        <td>Boxing plus hashing per lookup</td>
+        <td><code>boolean[]</code> or <code>int[]</code> if the range is small</td>
+      </tr>
+      <tr>
+        <td>Stack or queue needed</td>
+        <td><code>Stack</code> is synchronised and legacy; <code>LinkedList</code> allocates a node per element</td>
+        <td><code>ArrayDeque</code>, or a raw <code>int[]</code> with a top index</td>
+      </tr>
+      <tr>
+        <td>Sorting <code>int[]</code> with adversarial input</td>
+        <td>Dual-pivot quicksort can be forced to <code>O(n&sup2;)</code></td>
+        <td>Shuffle first, or box to <code>Integer[]</code> (Timsort)</td>
+      </tr>
+      <tr>
+        <td>Sorting by a key with subtraction</td>
+        <td><code>a - b</code> overflows for large or negative values</td>
+        <td><code>Integer.compare(a, b)</code></td>
+      </tr>
+      <tr>
+        <td>Midpoint of two indices</td>
+        <td><code>(lo + hi)</code> can exceed <code>Integer.MAX_VALUE</code></td>
+        <td><code>lo + (hi - lo) / 2</code></td>
+      </tr>
+      <tr>
+        <td>Modular arithmetic on products</td>
+        <td><code>int &times; int</code> silently wraps before the <code>%</code></td>
+        <td>Cast one side to <code>long</code> first</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> <code>char</code> arithmetic</td>
+        <td><code>c - 'a'</code> is an <code>int</code>, but <code>c + 1</code> is too</td>
+        <td>Cast back with <code>(char)</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> budget about <code>10&#8312;</code> primitive operations per second. Boxed collections cost 5&ndash;20&times; more per element; <code>Scanner</code> reads roughly 10&#8310; tokens per second, a buffered byte reader roughly 10&#8311;&ndash;10&#8312;.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: avoid boxing and avoid per-token IO</h2>
+<p>Every <code>Integer</code> in Java is a heap object with a header, so an <code>ArrayList&lt;Integer&gt;</code> of a million values is a million pointers to a million scattered objects. Traversing it thrashes the cache and creates garbage-collection pressure. The same data as <code>int[]</code> is one contiguous 4&nbsp;MB block that the hardware prefetcher loves. This one difference explains most "my algorithm is right but it is slow" reports.</p>
+<p>IO is the other half. <code>Scanner</code> uses regular expressions internally and synchronises; <code>System.out.println</code> can flush on every call. Replacing them with a byte-level reader and a single buffered write is mechanical, costs thirty lines you paste once, and often turns a timeout into a comfortable pass.</p>
+<p>Everything else on this page is a specific trap: <code>int</code> overflow in midpoints and products, comparators written with subtraction, <code>remove(Object)</code> versus <code>remove(int)</code> on a <code>List&lt;Integer&gt;</code>, and <code>Arrays.sort</code> having two completely different implementations depending on whether the array is primitive or boxed.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The competitive Java checklist</span>
+    <p>Before submitting, verify all five:</p><ol><li>Input is read through a buffered byte reader, not <code>Scanner</code>.</li><li>Output is accumulated in one <code>StringBuilder</code> and printed once.</li><li>Hot data lives in primitive arrays; no <code>Integer</code> in an inner loop.</li><li>Every sum or product that could exceed <code>2.1&times;10&#8313;</code> uses <code>long</code>, with the cast applied <em>before</em> the multiplication.</li><li>Every comparator uses <code>Integer.compare</code> / <code>Long.compare</code>, never subtraction.</li></ol>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The two <code>Arrays.sort</code> implementations</span>
+    <p><code>Arrays.sort(int[])</code> is a dual-pivot quicksort: fast, in place, and <code>O(n&sup2;)</code> against a crafted input &mdash; anti-quicksort tests exist on Codeforces specifically to break Java solutions. <code>Arrays.sort(Integer[])</code> is Timsort: stable, <code>O(n log n)</code> guaranteed, and slower by a constant. The safe pattern for primitives is to shuffle the array with a random permutation first, then sort.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title"><code>ArrayDeque</code> is the one collection to remember</span>
+    <p>It is the fastest stack (<code>push</code>/<code>pop</code>/<code>peek</code>), the fastest queue (<code>offer</code>/<code>poll</code>), and the deque you need for <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic windows</a>. Prefer it over <code>Stack</code> (synchronised, legacy) and <code>LinkedList</code> (a node allocation per element). It does not allow <code>null</code>, which is a feature: it turns a silent bug into an exception.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Overflow arithmetic, precisely</span>
+    <p><code>int</code> holds up to <code>2&sup3;&sup1; &minus; 1 = 2147483647</code>, <code>long</code> up to <code>2&#8310;&sup3; &minus; 1 &asymp; 9.2&times;10&sup1;&#8312;</code>. So summing <code>10&#8309;</code> values each up to <code>10&#8313;</code> reaches <code>10&sup1;&#8308;</code> &mdash; needs <code>long</code>. And the classic silent failure: <code>int a = 100000, b = 100000; long c = a * b;</code> gives 1410065408, because the multiplication happens in <code>int</code> before the widening. Write <code>long c = (long) a * b;</code>.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>What each choice actually costs</h3>
+
+<p>Relative cost of the common decisions, measured at <code>n = 10&#8310;</code>. The numbers move between machines, but the ratios are stable and the ranking never changes.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="javaCost"></div>
+  <div class="viz-player" data-viz-target="javaCost">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "choice",
+      "rowHeads": [
+        "input read",
+        "output write",
+        "int storage",
+        "stack",
+        "sort",
+        "map"
+      ],
+      "colHeads": [
+        "slow way",
+        "cost",
+        "fast way",
+        "cost"
+      ],
+      "vars": [
+        "area",
+        "speedup"
+      ],
+      "speed": 1250,
+      "frames": [
+        {
+          "note": "Reading 1e6 ints: Scanner uses regex and synchronises. A DataInputStream byte reader is roughly ten times faster and is the single highest-value paste in competitive Java.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "Scanner"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1000ms",
+              "cls": "block"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "byte reader"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "90ms",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "input",
+            "speedup": "~10x"
+          }
+        },
+        {
+          "note": "Printing 1e6 lines: println can flush each call. Accumulate in one StringBuilder and print once.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "println"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2500ms",
+              "cls": "block"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "StringBuilder"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "70ms",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "output",
+            "speedup": "~30x"
+          }
+        },
+        {
+          "note": "Storing a million ints: ArrayList<Integer> is a million heap objects and about 20 MB; int[] is one contiguous 4 MB block.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "List<Integer>"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "20MB",
+              "cls": "block"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "int[]"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "4MB",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "storage",
+            "speedup": "~5x"
+          }
+        },
+        {
+          "note": "Stack operations: java.util.Stack is synchronised and extends Vector. ArrayDeque is the drop-in replacement; a raw int[] with a top index is faster still.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "Stack"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "120ms",
+              "cls": "block"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "int[] + top"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "8ms",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "stack",
+            "speedup": "~15x"
+          }
+        },
+        {
+          "note": "Sorting: Arrays.sort(int[]) is fast but quadratic against anti-quicksort tests. Shuffling first costs O(n) and removes the risk entirely.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "sort(int[])"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "O(n²) risk",
+              "cls": "block"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "shuffle+sort"
+            },
+            {
+              "r": 4,
+              "c": 3,
+              "val": "safe",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "sort",
+            "speedup": "safety"
+          }
+        },
+        {
+          "note": "Counting occurrences of small ints: HashMap<Integer,Integer> boxes twice per operation. A plain int[] indexed by value is a single memory write.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 0,
+              "val": "HashMap"
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "val": "350ms",
+              "cls": "block"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "int[] cnt"
+            },
+            {
+              "r": 5,
+              "c": 3,
+              "val": "6ms",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "area": "counting",
+            "speedup": "~50x"
+          }
+        },
+        {
+          "note": "Together these are commonly a 10-30x wall-clock difference on an unchanged algorithm. Fix IO first, then boxing.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "90ms",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "70ms",
+              "cls": "target"
+            },
+            {
+              "r": 5,
+              "c": 3,
+              "val": "6ms",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "area": "total",
+            "speedup": "10-30x"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Approximate relative costs in Java. Nothing here changes the complexity class; all of it changes whether you pass.</figcaption>
+</figure>
+
+<h3>Where <code>int</code> overflow bites</h3>
+
+<p>Each cell is a computed value; the row walks through a binary search midpoint and a modular product. Red marks the moment the true value leaves <code>int</code> range and wraps to something plausible but wrong.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="ovf"></div>
+  <div class="viz-player" data-viz-target="ovf">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "computed value",
+      "array": [
+        "2e9",
+        "2.1e9",
+        "-2.1e9",
+        "1e9",
+        "1e18",
+        "1410065408"
+      ],
+      "indexLabels": [
+        "lo",
+        "hi",
+        "lo+hi",
+        "a",
+        "a*a (long)",
+        "a*a (int)"
+      ],
+      "vars": [
+        "expression",
+        "true value",
+        "int result"
+      ],
+      "speed": 1100,
+      "frames": [
+        {
+          "note": "lo = 2e9, comfortably inside int (max is 2147483647).",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "expression": "lo",
+            "true value": "2000000000",
+            "int result": "2000000000"
+          }
+        },
+        {
+          "note": "hi = 2.1e9, still just inside int.",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "expression": "hi",
+            "true value": "2100000000",
+            "int result": "2100000000"
+          }
+        },
+        {
+          "note": "lo + hi = 4.1e9 overflows and wraps negative. (lo+hi)/2 is then a negative index — the classic binary search bug that sat in the JDK for nine years.",
+          "active": [
+            2
+          ],
+          "x": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "expression": "lo + hi",
+            "true value": "4100000000",
+            "int result": "-194967296"
+          }
+        },
+        {
+          "note": "Fix: lo + (hi - lo) / 2. The difference always fits, so no intermediate leaves range.",
+          "best": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "expression": "lo + (hi-lo)/2",
+            "true value": "2050000000",
+            "int result": "2050000000"
+          }
+        },
+        {
+          "note": "Second case: a = 1e9, an int.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5
+          ],
+          "values": {
+            "expression": "a",
+            "true value": "1000000000",
+            "int result": "1000000000"
+          }
+        },
+        {
+          "note": "(long) a * a = 1e18, correct, because the cast happens before the multiplication.",
+          "active": [
+            4
+          ],
+          "best": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5
+          ],
+          "values": {
+            "expression": "(long)a * a",
+            "true value": "1e18",
+            "int result": "1e18"
+          }
+        },
+        {
+          "note": "a * a assigned to a long is still computed in int first: it wraps to 1410065408 and then widens. The cast must be on an operand, not on the result.",
+          "active": [
+            5
+          ],
+          "x": [
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "expression": "long x = a * a",
+            "true value": "1e18",
+            "int result": "-1486618624"
+          }
+        },
+        {
+          "note": "Rule: multiply the two largest bounds in the statement. If the product exceeds 2.1e9, cast one operand to long before the operation.",
+          "best": [
+            4
+          ],
+          "x": [
+            2,
+            5
+          ],
+          "done": [
+            0,
+            1,
+            3
+          ],
+          "values": {
+            "expression": "rule",
+            "true value": "cast the operand",
+            "int result": "not the result"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Overflow does not throw. It produces a wrong answer that looks reasonable, which is why it costs so much debugging time.</figcaption>
+</figure>
+
+<h3>Picking the right container</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  start(["what do you need?"]) --&gt; ordered{"do you need sorted order or neighbour queries?"}
+  ordered -- yes --&gt; dup{"duplicates allowed?"}
+  dup -- yes --&gt; tmap["TreeMap of value to count"]
+  dup -- no --&gt; tset["TreeSet with floor, ceiling, higher, lower"]
+  ordered -- no --&gt; minmax{"only need the extreme element?"}
+  minmax -- yes --&gt; pq["PriorityQueue, or a long[] heap for speed"]
+  minmax -- no --&gt; keyed{"is the key a small integer?"}
+  keyed -- yes --&gt; arr["plain int[] or boolean[] indexed by key"]
+  keyed -- no --&gt; assoc{"key-value or membership?"}
+  assoc -- "key-value" --&gt; hmap["HashMap, salted keys in contests"]
+  assoc -- membership --&gt; hset["HashSet"]
+  minmax --&gt; ends{"insert or remove at both ends?"}
+  ends -- yes --&gt; adq["ArrayDeque"]
+  </div>
+  <figcaption>Follow the branches. Almost every competitive data-structure decision in Java lands on one of these seven leaves.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Paste the reader.</strong> Start every contest file from a template containing the <code>FastReader</code> and a <code>StringBuilder</code> for output.</li>
+  <li><strong>Choose primitive storage.</strong> Decide up front whether each array is <code>int[]</code>, <code>long[]</code>, or genuinely needs objects.</li>
+  <li><strong>Pick containers from the flowchart:</strong> ordered &rarr; <code>TreeMap</code>/<code>TreeSet</code>, extremes &rarr; heap, small integer keys &rarr; plain array, both ends &rarr; <code>ArrayDeque</code>.</li>
+  <li><strong>Audit arithmetic.</strong> Every <code>+</code> and <code>*</code> whose operands can be large gets a <code>long</code> cast on an operand.</li>
+  <li><strong>Write comparators with <code>Integer.compare</code></strong> and chain with <code>Comparator.comparingInt(...).thenComparing(...)</code>.</li>
+  <li><strong>Shuffle before <code>Arrays.sort(int[])</code></strong> when the input is adversarial (any Codeforces problem).</li>
+  <li><strong>Buffer all output</strong> and print exactly once at the end.</li>
+  <li><strong>Guard recursion depth.</strong> If it can exceed about <code>10&#8308;</code>, either convert to an explicit stack or launch the solver on a thread with a larger stack.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>The eight substitutions that matter most, in the order you should apply them when a solution is too slow.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>#</th><th>Instead of</th><th>Use</th><th>Why</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td><code>new Scanner(System.in)</code></td><td><code>FastReader</code> over <code>DataInputStream</code></td><td>~10&times; on 10&#8310; tokens</td><td>Always the first thing to check on an unexplained TLE.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td><code>System.out.println(x)</code> in a loop</td><td><code>sb.append(x).append('\n')</code></td><td>~30&times; on 10&#8310; lines</td><td>Print the builder once at the end.</td></tr>
+      <tr><td>3</td><td><code>List&lt;Integer&gt;</code></td><td><code>int[]</code> with a size counter</td><td>5&times; memory, better cache locality</td><td>Applies to any hot array.</td></tr>
+      <tr><td>4</td><td><code>HashMap&lt;Integer,Integer&gt;</code></td><td><code>int[] cnt</code> when the key range is small</td><td>~50&times;</td><td>Only when the range fits in memory; otherwise salt the hash.</td></tr>
+      <tr><td>5</td><td><code>new Stack&lt;&gt;()</code></td><td><code>ArrayDeque</code> or <code>int[] st; int top</code></td><td>Unsynchronised, no boxing</td><td><code>Stack</code> extends <code>Vector</code> and is synchronised.</td></tr>
+      <tr class="trace-table__row--change"><td>6</td><td><code>(a, b) -&gt; a - b</code></td><td><code>Integer::compare</code></td><td>Subtraction overflows</td><td>Silent wrong answer on large or negative keys.</td></tr>
+      <tr><td>7</td><td><code>(lo + hi) / 2</code></td><td><code>lo + (hi - lo) / 2</code></td><td>Overflow near 2&sup3;&sup1;</td><td>Also applies to <code>l + r &gt;&gt; 1</code> on large values.</td></tr>
+      <tr class="trace-table__row--change"><td>8</td><td><code>s += c</code> in a loop</td><td><code>StringBuilder.append</code></td><td><code>O(n&sup2;)</code> to <code>O(n)</code></td><td>This one changes the complexity class, not just the constant.</td></tr>
+      <tr><td>9</td><td><code>Arrays.sort(int[])</code> on hostile data</td><td>shuffle, then sort</td><td>Avoids <code>O(n&sup2;)</code> quicksort attacks</td><td>Or sort a boxed <code>Integer[]</code>, which uses Timsort.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Java for DSA & CP implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Contest template</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Collections cheat sheet</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Traps and fixes</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Template">
+    <p>The file to start every contest from. The reader handles negatives and <code>long</code>, output is buffered, and the solver runs on a thread with a 64&nbsp;MB stack so deep recursion cannot overflow.</p>
+    <div class="code" data-highlight="10-13,52-58">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Template.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.io.DataInputStream;
+    import java.io.IOException;
+    
+    public class Template {
+    
+        static FastReader in;
+        static StringBuilder out = new StringBuilder();
+    
+        static void solve() throws IOException {
+            int n = in.nextInt();
+            long[] a = new long[n];
+            long sum = 0;
+            for (int i = 0; i &lt; n; i++) {
+                a[i] = in.nextLong();
+                sum += a[i];                    // long: n * maxA can exceed int
+            }
+            out.append(sum).append('\n');
+        }
+    
+        /** Byte-level reader: no regex, no synchronisation, no autoboxing. */
+        static class FastReader {
+            private static final int BUF = 1 &lt;&lt; 16;
+            private final DataInputStream din = new DataInputStream(System.in);
+            private final byte[] buffer = new byte[BUF];
+            private int ptr = 0, len = 0;
+    
+            private int read() throws IOException {
+                if (ptr == len) {
+                    len = din.read(buffer, 0, BUF);
+                    ptr = 0;
+                    if (len &lt;= 0) {
+                        return -1;
+                    }
+                }
+                return buffer[ptr++];
+            }
+    
+            int nextInt() throws IOException {
+                return (int) nextLong();
+            }
+    
+            long nextLong() throws IOException {
+                int b = read();
+                while (b != '-' &amp;&amp; (b &lt; '0' || b &gt; '9')) {
+                    b = read();
+                }
+                boolean neg = (b == '-');
+                if (neg) {
+                    b = read();
+                }
+                long ret = 0;
+                while (b &gt;= '0' &amp;&amp; b &lt;= '9') {
+                    ret = ret * 10 + (b - '0');
+                    b = read();
+                }
+                return neg ? -ret : ret;
+            }
+    
+            String next() throws IOException {
+                int b = read();
+                while (b &lt;= ' ') {
+                    b = read();
+                }
+                StringBuilder sb = new StringBuilder();
+                while (b &gt; ' ') {
+                    sb.append((char) b);
+                    b = read();
+                }
+                return sb.toString();
+            }
+        }
+    
+        public static void main(String[] args) {
+            // 64 MB stack: deep DFS on 1e6 nodes will not StackOverflowError.
+            new Thread(null, () -&gt; {
+                try {
+                    in = new FastReader();
+                    int t = 1;                  // set to in.nextInt() for multi-test problems
+                    while (t-- &gt; 0) {
+                        solve();
+                    }
+                    System.out.print(out);      // exactly one write
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }, "main", 1 &lt;&lt; 26).start();
+        }
+        // Input : 3 / 1000000000 1000000000 1000000000
+        // Output: 3000000000
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Collections">
+    <p>Every container operation you are likely to need, with its cost. Read this once and come back to it whenever you are unsure which structure answers a query.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CollectionsTour.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.Arrays;
+    import java.util.Comparator;
+    import java.util.HashMap;
+    import java.util.PriorityQueue;
+    import java.util.TreeMap;
+    import java.util.TreeSet;
+    
+    public class CollectionsTour {
+    
+        public static void main(String[] args) {
+            // ---- ArrayDeque: stack and queue and deque, all O(1) amortised ----
+            ArrayDeque&lt;Integer&gt; dq = new ArrayDeque&lt;&gt;();
+            dq.push(1); dq.push(2);            // stack: push / pop / peek
+            dq.addLast(3);                     // queue: addLast / pollFirst
+            System.out.println("deque " + dq + " pop=" + dq.pop() + " last=" + dq.pollLast());
+    
+            // ---- PriorityQueue: O(log n) offer/poll, O(1) peek. Min-heap by default ----
+            PriorityQueue&lt;int[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingInt(x -&gt; x[1]));
+            pq.offer(new int[] {0, 5});
+            pq.offer(new int[] {1, 3});
+            System.out.println("min by second field = " + Arrays.toString(pq.peek()));
+    
+            // ---- TreeMap / TreeSet: O(log n) navigation. The reason to prefer them ----
+            TreeMap&lt;Integer, String&gt; tm = new TreeMap&lt;&gt;();
+            tm.put(10, "a"); tm.put(20, "b"); tm.put(30, "c");
+            System.out.println("floor(25)=" + tm.floorKey(25)      // 20  &lt;= 25
+                    + " ceiling(25)=" + tm.ceilingKey(25)          // 30  &gt;= 25
+                    + " higher(20)=" + tm.higherKey(20)            // 30  &gt;  20
+                    + " first=" + tm.firstKey() + " last=" + tm.lastKey());
+    
+            TreeSet&lt;Integer&gt; ts = new TreeSet&lt;&gt;(Arrays.asList(1, 4, 9, 16));
+            System.out.println("subSet[4,16) = " + ts.subSet(4, 16)
+                    + " headSet(9) = " + ts.headSet(9));
+    
+            // ---- HashMap: O(1) expected. merge and getOrDefault avoid null checks ----
+            HashMap&lt;String, Integer&gt; freq = new HashMap&lt;&gt;();
+            for (String w : "a b a c a b".split(" ")) {
+                freq.merge(w, 1, Integer::sum);
+            }
+            System.out.println("freq " + freq + " missing=" + freq.getOrDefault("z", 0));
+    
+            // ---- Arrays.binarySearch: returns -(insertionPoint) - 1 when absent ----
+            int[] sorted = {2, 4, 6, 8};
+            int found = Arrays.binarySearch(sorted, 6);
+            int absent = Arrays.binarySearch(sorted, 5);
+            System.out.println("found=" + found + " absent=" + absent
+                    + " insertionPoint=" + (-absent - 1));
+    
+            // ---- The List&lt;Integer&gt;.remove trap ----
+            java.util.List&lt;Integer&gt; list = new java.util.ArrayList&lt;&gt;(Arrays.asList(10, 20, 30));
+            list.remove(1);                                  // removes INDEX 1 -&gt; [10, 30]
+            list.remove(Integer.valueOf(30));                // removes VALUE 30 -&gt; [10]
+            System.out.println("after removes " + list);
+        }
+        // Output: deque [2, 1, 3] pop=2 last=3
+        //         min by second field = [1, 3]
+        //         floor(25)=20 ceiling(25)=30 higher(20)=30 first=10 last=30
+        //         subSet[4,16) = [4, 9] headSet(9) = [1, 4]
+        //         freq {a=3, b=2, c=1} missing=0
+        //         found=2 absent=-3 insertionPoint=2
+        //         after removes [10]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Traps">
+    <p>Each pair shows a wrong line and its correction. Every one of these produces a <em>wrong answer</em> rather than an exception, which is what makes them expensive.</p>
+    <div class="code" data-highlight="10,17,24,31,40">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">JavaTraps.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.Random;
+    
+    public class JavaTraps {
+    
+        public static void main(String[] args) {
+            // 1. Multiplication overflow: the cast must be on an operand.
+            int a = 100000, b = 100000;
+            long wrong = a * b;                       // computed in int, then widened
+            long right = (long) a * b;
+            System.out.println("1) wrong=" + wrong + " right=" + right);
+    
+            // 2. Midpoint overflow.
+            int lo = 2_000_000_000, hi = 2_100_000_000;
+            int badMid = (lo + hi) / 2;               // negative
+            int goodMid = lo + (hi - lo) / 2;
+            System.out.println("2) bad=" + badMid + " good=" + goodMid);
+    
+            // 3. Comparator by subtraction.
+            Integer[] keys = {Integer.MIN_VALUE, 1, Integer.MAX_VALUE};
+            Integer[] c1 = keys.clone();
+            Arrays.sort(c1, (x, y) -&gt; x - y);         // overflow -&gt; wrong order
+            Integer[] c2 = keys.clone();
+            Arrays.sort(c2, Integer::compare);
+            System.out.println("3) sub=" + Arrays.toString(c1) + " cmp=" + Arrays.toString(c2));
+    
+            // 4. Integer cache: == compares references above 127.
+            Integer p = 1000, q = 1000;
+            System.out.println("4) == gives " + (p == q) + ", equals gives " + p.equals(q));
+    
+            // 5. Negative modulo: Java's % keeps the sign of the dividend.
+            int m = 7;
+            int naive = (-3) % m;                     // -3, not 4
+            int fixed = ((-3) % m + m) % m;
+            System.out.println("5) naive=" + naive + " fixed=" + fixed);
+    
+            // 6. Integer division truncates toward zero, so ceilings need care.
+            int n = 7, k = 2;
+            int ceilWrong = n / k;                    // 3
+            int ceilRight = (n + k - 1) / k;          // 4
+            System.out.println("6) " + ceilWrong + " vs " + ceilRight);
+    
+            // 7. Anti-quicksort defence for primitive sort.
+            int[] hostile = new int[10];
+            for (int i = 0; i &lt; hostile.length; i++) {
+                hostile[i] = i;
+            }
+            shuffle(hostile);
+            Arrays.sort(hostile);
+            System.out.println("7) shuffled then sorted = " + Arrays.toString(hostile));
+        }
+    
+        /** Fisher-Yates. O(n), and it removes the quadratic worst case entirely. */
+        static void shuffle(int[] arr) {
+            Random rnd = new Random();
+            for (int i = arr.length - 1; i &gt; 0; i--) {
+                int j = rnd.nextInt(i + 1);
+                int t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+            }
+        }
+        // Output: 1) wrong=1410065408 right=10000000000
+        //         2) bad=-97483648 good=2050000000
+        //         3) sub=[1, 2147483647, -2147483648] cmp=[-2147483648, 1, 2147483647]
+        //         4) == gives false, equals gives true
+        //         5) naive=-3 fixed=4
+        //         6) 3 vs 4
+        //         7) shuffled then sorted = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time language overhead, not asymptotics</span>
+    <span class="badge badge--space">Space int[] is 4n bytes; Integer[] is ~20n</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>An <code>int[]</code> of length <code>n</code> occupies <code>4n</code> bytes plus a 16-byte header. An <code>Integer[]</code> of the same length occupies <code>4n</code> or <code>8n</code> bytes of <em>references</em>, plus a separate 16-byte object per distinct value:</p>
+    <p><span class="eq">int[10&#8310;] &asymp; 4&nbsp;MB&nbsp;&nbsp;&nbsp;&nbsp; Integer[10&#8310;] &asymp; 4&nbsp;MB + 10&#8310; &times; 16&nbsp;B &asymp; 20&nbsp;MB</span></p>
+    <p>The five-fold memory difference matters less than the locality difference. Scanning an <code>int[]</code> is a sequential read the prefetcher handles perfectly; scanning an <code>Integer[]</code> dereferences a pointer per element into scattered heap addresses, and a cache miss costs on the order of 100 cycles against 1 for a hit. That is the mechanism behind the 5&ndash;20&times; slowdowns quoted throughout this page.</p>
+    <p>For IO, <code>Scanner</code> compiles and applies a regular expression per token, so reading <code>n</code> integers is <code>&Theta;(n)</code> with a constant near 1&nbsp;&micro;s. A byte reader amortises one <code>read</code> syscall over a 64&nbsp;KB buffer, giving a constant near 0.1&nbsp;&micro;s. Same class, ten times the throughput.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>Scanner</code></td><td>~1e6 tokens/s</td><td>low</td><td>Fine below 1e5 tokens</td></tr>
+      <tr><td><code>BufferedReader</code> + <code>StringTokenizer</code></td><td>~5e6 tokens/s</td><td>low</td><td>Good default, easy to remember</td></tr>
+      <tr><td><code>DataInputStream</code> byte reader</td><td>~2e7 tokens/s</td><td>64 KB</td><td>The contest choice</td></tr>
+      <tr><td><code>int[]</code></td><td>1 ns/access</td><td>4n bytes</td><td>Always prefer in hot paths</td></tr>
+      <tr><td><code>ArrayList&lt;Integer&gt;</code></td><td>5&ndash;20 ns/access</td><td>~20n bytes</td><td>Convenience only</td></tr>
+      <tr><td><code>HashMap&lt;Integer,Integer&gt;</code></td><td>~50 ns/op</td><td>~50n bytes</td><td>Salt keys in contests</td></tr>
+      <tr><td><code>TreeMap</code></td><td>~150 ns/op</td><td>~50n bytes</td><td>Only when you need ordering</td></tr>
+      <tr><td><code>ArrayDeque</code></td><td>~3 ns/op</td><td>~4n&ndash;8n bytes</td><td>Best stack and queue</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Casting after the multiplication</span>
+    <div class="pitfalls__bug"><code>long area = width * height;</code> where both are <code>int</code>. The product is computed in <code>int</code>, wraps, and <em>then</em> widens to <code>long</code>. No warning, no exception.</div>
+    <div class="pitfalls__fix">Put the cast on an operand: <code>long area = (long) width * height;</code>. Scan every multiplication in your solution whose operands can exceed about <code>4.6&times;10&#8308;</code>, since that squared is already <code>2.1&times;10&#8313;</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparators written as <code>a - b</code></span>
+    <div class="pitfalls__bug"><code>Arrays.sort(arr, (x, y) -&gt; x[0] - y[0]);</code> with values near <code>&plusmn;2&times;10&#8313;</code>. The subtraction overflows, the comparator becomes inconsistent, and you get either a wrong order or <code>IllegalArgumentException: Comparison method violates its general contract</code>.</div>
+    <div class="pitfalls__fix"><code>Comparator.comparingInt(x -&gt; x[0])</code> or <code>(x, y) -&gt; Integer.compare(x[0], y[0])</code>. For multiple keys chain with <code>.thenComparingInt(...)</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>List&lt;Integer&gt;.remove</code> ambiguity</span>
+    <div class="pitfalls__bug"><code>list.remove(5)</code> on a <code>List&lt;Integer&gt;</code> removes the element at <em>index</em> 5, not the value 5, because <code>remove(int)</code> is a better match than <code>remove(Object)</code>.</div>
+    <div class="pitfalls__fix"><code>list.remove(Integer.valueOf(5))</code> to remove by value. Better: do not keep hot integer data in a <code>List</code> at all.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparing boxed integers with <code>==</code></span>
+    <div class="pitfalls__bug"><code>Integer a = 1000, b = 1000; a == b</code> is <code>false</code>, while the same code with 100 is <code>true</code> because Java caches <code>-128 &hellip; 127</code>. This is a bug that passes every small test.</div>
+    <div class="pitfalls__fix">Use <code>.equals</code> or <code>intValue()</code> for boxed types, and avoid boxing. The same trap applies to <code>Long</code> and to map keys.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Java's <code>%</code> can return a negative value</span>
+    <div class="pitfalls__bug"><code>(-3) % 7</code> is <code>-3</code>, not <code>4</code>. Indexing <code>arr[(i - k) % n]</code> then throws <code>ArrayIndexOutOfBoundsException</code>, or worse, silently reads the wrong cell after you "fix" it with <code>Math.abs</code>.</div>
+    <div class="pitfalls__fix">Normalise with <code>((x % m) + m) % m</code>, or use <code>Math.floorMod(x, m)</code>, which does exactly that.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Trusting <code>Arrays.sort(int[])</code> on adversarial input</span>
+    <div class="pitfalls__bug">Dual-pivot quicksort has a known <code>O(n&sup2;)</code> worst case, and Codeforces problems routinely include an anti-quicksort test that targets Java specifically. Your <code>O(n log n)</code> solution times out on test 47 only.</div>
+    <div class="pitfalls__fix">Shuffle with Fisher-Yates before sorting (<code>O(n)</code>), or sort a boxed <code>Integer[]</code>, which uses Timsort and is worst-case <code>O(n log n)</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Deep recursion on the main thread</span>
+    <div class="pitfalls__bug">A DFS over a path-shaped graph with <code>10&#8310;</code> nodes throws <code>StackOverflowError</code> at roughly the 10&#8308;th frame, which on most judges is reported as a runtime error with no useful message.</div>
+    <div class="pitfalls__fix">Run the solver inside <code>new Thread(null, task, "main", 1 &lt;&lt; 26)</code> as in the template, or convert the recursion to an explicit stack.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>BufferedReader</code> + <code>StringTokenizer</code></td>
+        <td>Slower than a byte reader but far easier to remember and to write from scratch. A good default when you do not have your template.</td>
+        <td><code>BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+StringTokenizer st = new StringTokenizer(br.readLine());</code></td>
+        <td>Standard fallback</td>
+      </tr>
+      <tr>
+        <td><code>PrintWriter</code> with <code>autoFlush = false</code></td>
+        <td>An alternative to accumulating a <code>StringBuilder</code>: buffered writes, and you must remember to <code>flush()</code> or <code>close()</code>.</td>
+        <td><code>PrintWriter pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));
+// ... pw.println(x) ... then pw.flush();</code></td>
+        <td>Standard fallback</td>
+      </tr>
+      <tr>
+        <td>Primitive heap on a <code>long[]</code></td>
+        <td>Pack a key and a payload into one <code>long</code> (<code>key &lt;&lt; 20 | id</code>) and heapify a <code>long[]</code>. Removes all boxing from Dijkstra's inner loop.</td>
+        <td><code>long packed = ((long) dist &lt;&lt; 20) | node;   // dist in the high bits sorts correctly</code></td>
+        <td><a href="../07-graphs-core/dijkstra.html">Dijkstra</a></td>
+      </tr>
+      <tr>
+        <td>Salted <code>HashMap</code> keys</td>
+        <td>Defends against hash-collision attacks by mixing each key with a random constant before insertion.</td>
+        <td><code>static final long SALT = new Random().nextLong();
+long key = Long.hashCode(x * 0x9E3779B97F4A7C15L ^ SALT);</code></td>
+        <td><a href="../02-sorting-hashing-bits/hashing-patterns.html">Hashing Patterns</a></td>
+      </tr>
+      <tr>
+        <td><code>BitSet</code> for dense boolean data</td>
+        <td>64 values per <code>long</code>, with hardware-speed <code>and</code>, <code>or</code> and <code>cardinality</code>. Turns some <code>O(n&sup2;)</code> DP into <code>O(n&sup2;/64)</code>.</td>
+        <td><code>BitSet bs = new BitSet(n); bs.set(i); bs.or(other); int c = bs.cardinality();</code></td>
+        <td><a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why is <code>ArrayList&lt;Integer&gt;</code> so much slower than <code>int[]</code>?</summary>
+    <div class="followup__body">
+      <p>Three compounding reasons. <strong>Indirection:</strong> the list holds references, so each access is a pointer dereference into scattered heap memory, and a cache miss costs about 100 cycles against 1 for a hit. <strong>Allocation:</strong> every value outside <code>-128 &hellip; 127</code> is a fresh 16-byte object, so a million inserts create a million objects for the garbage collector. <strong>Unboxing:</strong> every arithmetic use calls <code>intValue()</code>. Together these give the 5&ndash;20&times; factor. The complexity class is identical, which is precisely why the problem is hard to spot.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is <code>HashMap</code> the wrong choice even though the keys are unbounded?</summary>
+    <div class="followup__body">
+      <p>When the operation is really "count occurrences" and the values can be compressed. Sort the distinct values once, replace each value by its rank, and use an <code>int[]</code> indexed by rank &mdash; <code>O(n log n)</code> once, then <code>O(1)</code> per access with no boxing. That is <a href="../13-greedy-and-offline/coordinate-compression.html">coordinate compression</a>, and it is usually 10&ndash;50&times; faster than a <code>HashMap</code> while also being immune to hash attacks.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you get <code>O(log n)</code> "largest element below x" in Java?</summary>
+    <div class="followup__body">
+      <p><code>TreeSet.floor(x)</code> for <code>&le; x</code>, <code>lower(x)</code> for <code>&lt; x</code>, <code>ceiling(x)</code> for <code>&ge; x</code>, <code>higher(x)</code> for <code>&gt; x</code>, plus <code>first</code>, <code>last</code>, <code>pollFirst</code>, <code>pollLast</code>, <code>headSet</code>, <code>tailSet</code> and <code>subSet</code>. Knowing these four navigation methods by name removes the need to hand-roll a binary search in most interview problems. Note that <code>TreeSet</code> deduplicates &mdash; when duplicates matter, use a <code>TreeMap&lt;Integer,Integer&gt;</code> of value to count.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the fastest way to sort in Java, and when does it matter?</summary>
+    <div class="followup__body">
+      <p><code>Arrays.sort(int[])</code> is fastest in the average case but has an <code>O(n&sup2;)</code> worst case that contest setters actively target. <code>Arrays.sort(Integer[])</code> is Timsort, worst-case <code>O(n log n)</code> and stable, but boxes everything. The best of both is to shuffle the <code>int[]</code> first: <code>O(n)</code> extra work makes the quadratic case vanishingly unlikely. When you need to sort by a key, sorting an <code>int[]</code> of packed <code>long</code> values (<code>key &lt;&lt; 32 | index</code>) beats sorting an array of objects by a wide margin.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Is Java fast enough for competitive programming?</summary>
+    <div class="followup__body">
+      <p>Yes, with the habits on this page. Java runs roughly 1.5&ndash;2&times; slower than C++ on tight numeric loops, and most judges grant Java extra time. The problems that actually sink Java solutions are almost never the language: they are <code>Scanner</code>, boxing, and per-line printing. Fix those three and the remaining gap is small enough that any problem solvable in C++ within the limit is solvable in Java.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What should I say about Java specifics in an interview?</summary>
+    <div class="followup__body">
+      <p>Mention them once, briefly, and move on. "I will use an <code>ArrayDeque</code> as the stack since <code>java.util.Stack</code> is synchronised" or "I will use <code>lo + (hi - lo) / 2</code> to avoid overflow" takes three seconds and signals genuine familiarity. Do not spend interview time writing a fast reader &mdash; that is a contest concern, and doing it unprompted reads as missing the point.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>These reward Java-specific care. Solve each one and then check whether your solution has any of the traps from the third code tab.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/two-sum/" target="_blank" rel="noopener">Two Sum</a></td>
+        <td><span class="badge badge--lc">LC 1</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>HashMap idioms: getOrDefault, merge, and why == fails on boxed Integers</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/valid-parentheses/" target="_blank" rel="noopener">Valid Parentheses</a></td>
+        <td><span class="badge badge--lc">LC 20</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>ArrayDeque as a stack; never java.util.Stack</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/merge-intervals/" target="_blank" rel="noopener">Merge Intervals</a></td>
+        <td><span class="badge badge--lc">LC 56</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Comparator.comparingInt over subtraction; sorting int[][]</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/top-k-frequent-elements/" target="_blank" rel="noopener">Top K Frequent Elements</a></td>
+        <td><span class="badge badge--lc">LC 347</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>PriorityQueue with a custom comparator, plus bucket sort as the O(n) alternative</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/my-calendar-i/" target="_blank" rel="noopener">My Calendar I</a></td>
+        <td><span class="badge badge--lc">LC 729</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>TreeMap floorKey / ceilingKey; the canonical navigation-method problem</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Sliding Window Maximum</a></td>
+        <td><span class="badge badge--lc">LC 239</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>ArrayDeque of indices; boxing here is a measurable slowdown</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/reverse-integer/" target="_blank" rel="noopener">Reverse Integer</a></td>
+        <td><span class="badge badge--lc">LC 7</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Overflow detection without long; the problem is entirely about int limits</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/divide-two-integers/" target="_blank" rel="noopener">Divide Two Integers</a></td>
+        <td><span class="badge badge--lc">LC 29</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Integer.MIN_VALUE has no positive counterpart; negation overflows</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/string-to-integer-atoi/" target="_blank" rel="noopener">String to Integer (atoi)</a></td>
+        <td><span class="badge badge--lc">LC 8</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Clamping to int range while parsing; the same logic your FastReader needs</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/sort-an-array/" target="_blank" rel="noopener">Sort an Array</a></td>
+        <td><span class="badge badge--lc">LC 912</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Why Arrays.sort(int[]) is risky and shuffling first fixes it</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/1/A" target="_blank" rel="noopener">Theatre Square</a></td>
+        <td><span class="badge badge--cf">CF 1A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>long plus ceiling division: (n + a - 1) / a</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://codeforces.com/problemset/problem/112/A" target="_blank" rel="noopener">Petya and Strings</a></td>
+        <td><span class="badge badge--cf">CF 112A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Fast IO habits on a trivial problem; get the template working end to end</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 29 &mdash; the <code>Integer.MIN_VALUE</code> asymmetry</summary>
+  <div class="spoiler__body">
+    <p>Two's complement is asymmetric: <code>Integer.MIN_VALUE</code> is <code>-2147483648</code> but the maximum is <code>2147483647</code>, so <code>-Integer.MIN_VALUE</code> overflows back to itself. The standard fix is to work with <em>negative</em> numbers throughout, since every positive value has a negative counterpart but not the reverse, and to special-case <code>MIN_VALUE / -1</code> which is the only division that overflows. Transferable lesson: <em>whenever a problem forbids 64-bit types, the difficulty is almost always this asymmetry rather than the algorithm.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 239 &mdash; why the deque must hold indices, not values</summary>
+  <div class="spoiler__body">
+    <p>You need to evict elements that have left the window, and that test is <code>index &le; i - k</code>. If the deque stores values you cannot tell whether the front is still in range. Store indices, keep them in decreasing order of <code>a[index]</code>, pop from the back while the incoming value is larger, and pop from the front while the index is stale. Use <code>ArrayDeque&lt;Integer&gt;</code> or, faster, an <code>int[]</code> ring with head and tail pointers. General lesson: <em>monotonic structures should hold positions, because positions carry both the value and the expiry information.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Fast IO first.</strong> A <code>DataInputStream</code> byte reader plus a single <code>StringBuilder</code> for output is a 10&ndash;30&times; win and costs you nothing once it is in your template.</li>
+    <li><strong>No boxing in hot loops.</strong> <code>int[]</code> over <code>List&lt;Integer&gt;</code>, <code>int[] cnt</code> over <code>HashMap&lt;Integer,Integer&gt;</code>, <code>ArrayDeque</code> over <code>Stack</code>.</li>
+    <li><strong>Cast before you multiply</strong> and use <code>lo + (hi - lo) / 2</code>. Overflow produces a plausible wrong answer, never an exception.</li>
+    <li><strong>Comparators use <code>Integer.compare</code></strong>, never subtraction, and <code>Math.floorMod</code> handles negative moduli.</li>
+    <li><strong>Shuffle before <code>Arrays.sort(int[])</code></strong> on hostile input, and run deep recursion on a thread with a 64&nbsp;MB stack.</li>
+  </ul>
+  <div class="recap__oneliner">FastReader + one StringBuilder | int[] not List&lt;Integer&gt; | (long)a*b | lo+(hi-lo)/2 | Integer.compare | floorMod</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Drills &mdash; DSA Course</title>
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="mock-drills">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<section class="hero">
+  <span class="hero__chip">Module 14 &middot; Interview Execution</span>
+  <h1>Mock Drills</h1>
+  <p class="hero__tagline">
+    Ten unlabelled sets of three problems. 45 minutes each. The pattern is hidden until you
+    open the spoiler — that is the only honest test of recognition.
+  </p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">45 min × 10</span>
+    <span class="chip">P1</span>
+  </div>
+</section>
+
+<p>Rules: start a timer, open the three links, do not look at tags or related problems. After
+45 minutes, open the spoiler and log every miss as a <em>signal phrase</em>, not as a topic name.
+Sets escalate from LC-Medium mix to Google-onsite / CF Div1-B.</p>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 01</span><span>Warm Medium mix</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/3sum/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body">
+      <p>A sliding window (variable). B sort + two pointers. C grid DFS/BFS flood. Signal you should have heard: “longest substring without …”, “find all unique triplets”, “number of islands”.</p>
+    </div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 02</span><span>Arrays + hash</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/subarray-sum-equals-k/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/product-of-array-except-self/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A prefix + HashMap (counting, not Kadane). B Kadane. C prefix/suffix products. The trap is treating A as Kadane because it says “subarray”.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 03</span><span>Binary search family</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/search-in-rotated-sorted-array/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/koko-eating-bananas/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A rotated array (one half always sorted). B binary search on the answer. C lower + upper bound. Same four lines, three predicates.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 04</span><span>Stack / heap / design</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/daily-temperatures/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/lru-cache/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A monotonic stack (next greater). B heap or quickselect. C HashMap + DLL.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 05</span><span>Trees</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/binary-tree-maximum-path-sum/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/serialize-and-deserialize-binary-tree/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A tree DP (gain vs through-node). B recursive LCA. C preorder with nulls / BFS serialise.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 06</span><span>Graphs core</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/word-ladder/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/course-schedule-ii/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/network-delay-time/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A BFS on implicit states (optionally bidirectional). B topo / cycle. C Dijkstra.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 07</span><span>DP core</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/coin-change/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/longest-increasing-subsequence/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/edit-distance/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A unbounded knapsack. B LIS (try O(n log n)). C string DP. State first, then the loop order.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 08</span><span>Hard onsite mix</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/minimum-window-substring/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/trapping-rain-water/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/median-of-two-sorted-arrays/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A min window (need-count + have). B two pointers or mono stack. C cut search on the shorter array.</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 09</span><span>Google-hard / CF-adjacent</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/alien-dictionary/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://leetcode.com/problems/critical-connections-in-a-network/" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://codeforces.com/problemset/problem/1155/D" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A graph from consecutive pairs + topo (cycle = invalid). B Tarjan bridges. C Kadane with three states (before / multiplied / after).</p></div>
+  </details>
+</div>
+
+<div class="drill">
+  <div class="drill__head"><span class="drill__num">Set 10</span><span>Div1-B / last-round</span><span class="drill__timer">45:00</span></div>
+  <ol>
+    <li><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Problem A</a></li>
+    <li><a href="https://codeforces.com/problemset/problem/1117/C" target="_blank" rel="noopener">Problem B</a></li>
+    <li><a href="https://leetcode.com/problems/burst-balloons/" target="_blank" rel="noopener">Problem C</a></li>
+  </ol>
+  <details class="spoiler"><summary>Reveal patterns</summary>
+    <div class="spoiler__body"><p>A monotonic deque. B binary search on days + prefix wind vector. C interval DP, last balloon burst.</p></div>
+  </details>
+</div>
+
+<div class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">After every set</span>
+    <p>Write the phrase you should have reacted to. Add it to your own copy of
+    <a href="pattern-index.html">Pattern Index</a> if it is missing. Then type the template from
+    <a href="java-toolkit.html">Java Toolkit</a> once without looking.</p>
+  </div>
+</div>
+
+<div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="assets/vendor/mermaid.min.js"></script>
+  <script src="assets/js/nav-data.js"></script>
+  <script src="assets/js/viz.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

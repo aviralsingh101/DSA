@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 Sorting, Hashing, Bits &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>02 Sorting, Hashing, Bits</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Comparator</h3>
+    <pre>Comparator.comparingInt((int[] x)-&gt;x[0])
+  .thenComparingInt(x-&gt;x[1]);
+// never a-b (overflow)</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Intervals</h3>
+    <pre>sort by start
+if (cur[1]&gt;=next[0]) merge
+else emit; rooms = max overlap</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Cyclic / index</h3>
+    <pre>while(a[i]!=i+1) swap(i,a[i]-1)
+mark: a[x-1] = -abs(a[x-1])</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Subarray sum k</h3>
+    <pre>pref+=a[i];
+ans += freq.getOrDefault(pref-k,0);
+freq.merge(pref,1,Integer::sum);</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Bits</h3>
+    <pre>lowbit = x &amp; -x
+popcount = Integer.bitCount(x)
+submasks: for(s=m;s&gt;0;s=(s-1)&amp;m)</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Matrix rotate</h3>
+    <pre>transpose then reverse rows
+// or cycle of 4</pre>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Centroid Decomposition &mdash; DSA Course</title>
+<meta name="description" content="Recursively delete a balanced centroid so every path is counted at exactly one centroid — the one that sits on it.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="centroid-decomposition">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 09 &middot; Decompositions</span>
+  <h1>Centroid Decomposition</h1>
+  <p class="hero__tagline">Recursively delete a balanced centroid so every path is counted at exactly one centroid — the one that sits on it.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../05-trees/tree-dp-and-rerooting.html">Tree DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">centroid</span>
+      <span class="chip">trees</span>
+      <span class="chip">counting</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Many tree problems ask how many paths have a property (length k, xor k, sum in a range). Walking every path is n². Centroid decomposition gives a divide-and-conquer over the tree with a balanced cut.</p>
+<p>A centroid of a tree is a node whose removal leaves components of size ≤ n/2. Every tree has one (or two). After you count paths that pass through the centroid, you mark it dead and recurse on each remaining component.</p>
+<p>The recursion depth is O(log n) because components shrink by half. Total work is O(n log n) times whatever you spend per centroid.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Every path has a unique highest centroid (the first centroid that lies on it). Count at that centroid, never twice.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Count paths with length / xor / sum equal to k</li>
+        <li>n ≤ 1e5 tree, pairwise path property</li>
+        <li>"how many pairs of vertices satisfy …" on a tree</li>
+        <li>You can compute the property of all paths through a fixed root in linear time</li>
+        <li>CF/AtCoder centroid problems</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Path updates and queries → HLD</li>
+        <li>Only distances from one root → one BFS</li>
+        <li>DP on independent subtrees without pairwise paths → ordinary tree DP</li>
+        <li>n ≤ 2000 → O(n²) DFS from every node</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>count paths of length k</td>
+        <td>centroid + depth frequency</td>
+        <td>classic</td>
+      </tr>
+      <tr>
+        <td>count paths with xor k</td>
+        <td>centroid + hashmap of prefix xor</td>
+        <td>same skeleton</td>
+      </tr>
+      <tr>
+        <td>existence of a path with a property</td>
+        <td>same, early exit</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>point updates on a tree + path queries</td>
+        <td>HLD, not centroid</td>
+        <td>wrong tool</td>
+      </tr>
+      <tr>
+        <td>offline pairwise</td>
+        <td>sometimes DSU on tree / small-to-large</td>
+        <td>compare</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> HLD</td>
+        <td>HLD aggregates stored values; centroid counts generated paths</td>
+        <td>pick by the verb: query vs count</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n ≤ 1e5 and counting paths → O(n log n · T) where T is the per-node map work. n ≤ 5000 can be n DFS.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>findCentroid: dfs sizes in the current (alive) component, then walk to a node where every alive neighbour-component is ≤ half. decompose(c): count paths through c, mark c dead, recurse into each alive neighbour.</p>
+<p>Counting through c is usually: DFS each pending component separately, querying a global map of depths/xors collected from previous components, then inserting. That way you do not count pairs that never pass through c (they live inside one component).</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><em>A centroid splits the alive component into pieces of size ≤ n/2. Paths that cross between pieces go through the centroid and are counted here. Paths that stay inside one piece are counted in a deeper recursive call.</em></p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="centroid-decompositionViz"></div>
+  <div class="viz-player" data-viz-target="centroid-decompositionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "component sizes as we peel centroids (n=9 → 4 → …)",
+      "array": [
+        9,
+        4,
+        3,
+        2,
+        2,
+        1,
+        1,
+        1,
+        1
+      ],
+      "vars": [
+        "n",
+        "centroid",
+        "maxPiece",
+        "depth"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "n=9. Find a node whose pieces are ≤ 4. Pick c0.",
+          "active": [
+            0
+          ],
+          "values": {
+            "n": 9,
+            "centroid": "c0",
+            "maxPiece": 4,
+            "depth": 0
+          }
+        },
+        {
+          "note": "Count paths through c0 in O(n). Mark c0 dead. Remaining sizes 4,3,1.",
+          "done": [
+            0
+          ],
+          "active": [
+            1,
+            2
+          ],
+          "values": {
+            "n": 8,
+            "centroid": "c0 done",
+            "maxPiece": 4,
+            "depth": 0
+          }
+        },
+        {
+          "note": "Recurse into size-4 piece. Its centroid c1, pieces ≤ 2.",
+          "active": [
+            1
+          ],
+          "values": {
+            "n": 4,
+            "centroid": "c1",
+            "maxPiece": 2,
+            "depth": 1
+          }
+        },
+        {
+          "note": "Recurse size-3 piece, centroid c2.",
+          "active": [
+            2
+          ],
+          "values": {
+            "n": 3,
+            "centroid": "c2",
+            "maxPiece": 1,
+            "depth": 1
+          }
+        },
+        {
+          "note": "Depth of recursion is ≤ log₂ n because every piece is ≤ half.",
+          "dim": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "n": "≤4",
+            "centroid": "…",
+            "maxPiece": "n/2",
+            "depth": "≤3"
+          }
+        },
+        {
+          "note": "Total work: each node is in O(log n) alive components (one per ancestor centroid).",
+          "best": [
+            0
+          ],
+          "values": {
+            "n": 9,
+            "centroid": "all",
+            "maxPiece": "—",
+            "depth": "O(log n)"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  c0["centroid c0"] --&gt; pA["piece A n/2"]
+  c0 --&gt; pB["piece B"]
+  c0 --&gt; pC["piece C"]
+  pA --&gt; c1["centroid c1"]
+  pB --&gt; c2["centroid c2"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>findSize(v):</strong> subtree size ignoring dead nodes.</li>
+  <li><strong>findCentroid(v, n):</strong> while some alive child has sz > n/2, step there.</li>
+  <li><strong>countThrough(c):</strong> for each pending component, query the map then insert depths/xors.</li>
+  <li><strong>Mark c dead.</strong></li>
+  <li><strong>Recurse</strong> on each alive neighbour as a new component root.</li>
+  <li><strong>Clear the map</strong> between components (or use a timestamp).</li>
+  <li><strong>Complexity:</strong> each layer is O(n) over disjoint pieces, log layers.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>n</th><th>centroid</th><th>maxPiece</th><th>depth</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>9</td><td>c0</td><td>4</td><td>0</td><td>n=9. Find a node whose pieces are ≤ 4. Pick c0.</td></tr>
+      <tr><td>8</td><td>c0 done</td><td>4</td><td>0</td><td>Count paths through c0 in O(n). Mark c0 dead. Remaining sizes 4,3,1.</td></tr>
+      <tr><td>4</td><td>c1</td><td>2</td><td>1</td><td>Recurse into size-4 piece. Its centroid c1, pieces ≤ 2.</td></tr>
+      <tr><td>3</td><td>c2</td><td>1</td><td>1</td><td>Recurse size-3 piece, centroid c2.</td></tr>
+      <tr><td>≤4</td><td>…</td><td>n/2</td><td>≤3</td><td>Depth of recursion is ≤ log₂ n because every piece is ≤ half.</td></tr>
+      <tr class="trace-table__row--change"><td>9</td><td>all</td><td>—</td><td>O(log n)</td><td>Total work: each node is in O(log n) alive components (one per ancestor centroid).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Centroid Decomposition implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">O(n²) count length k</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Centroid count length k</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Reusable skeleton</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="O(n²) count length k">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathCountNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class PathCountNaive {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static int k, ans;
+        static void dfs(int v, int p, int d) {
+            if (d == k) ans++;
+            if (d &gt;= k) return;
+            for (int to : g.get(v)) if (to != p) dfs(to, v, d + 1);
+        }
+        static int count(int n, int kk) {
+            k = kk; ans = 0;
+            for (int i = 0; i &lt; n; i++) dfs(i, -1, 0);
+            return ans / 2;
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) g.add(new ArrayList&lt;&gt;());
+            g.get(0).add(1); g.get(1).add(0);
+            g.get(1).add(2); g.get(2).add(1);
+            g.get(1).add(3); g.get(3).add(1);
+            System.out.println(count(4, 2));
+        }
+        // Input : star-like 0-1-2, 1-3; k=2
+        // Output: 3   paths (0-1-2, 0-1-3, 2-1-3)
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Centroid count length k">
+    <div class="code" data-highlight="36-48">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Centroid.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class Centroid {
+        static List&lt;List&lt;Integer&gt;&gt; g;
+        static boolean[] dead;
+        static int[] sz;
+        static int k, ans;
+    
+        static int sizeOf(int v, int p) {
+            sz[v] = 1;
+            for (int to : g.get(v)) if (to != p &amp;&amp; !dead[to]) sz[v] += sizeOf(to, v);
+            return sz[v];
+        }
+        static int centroid(int v, int p, int n) {
+            for (int to : g.get(v))
+                if (to != p &amp;&amp; !dead[to] &amp;&amp; sz[to] &gt; n / 2) return centroid(to, v, n);
+            return v;
+        }
+        static void collect(int v, int p, int d, List&lt;Integer&gt; into) {
+            if (d &gt; k) return;
+            into.add(d);
+            for (int to : g.get(v)) if (to != p &amp;&amp; !dead[to]) collect(to, v, d + 1, into);
+        }
+        static void decompose(int v) {
+            int n = sizeOf(v, -1);
+            int c = centroid(v, -1, n);
+            dead[c] = true;
+            int[] freq = new int[k + 1];
+            freq[0] = 1; // the centroid itself
+            for (int to : g.get(c)) if (!dead[to]) {
+                List&lt;Integer&gt; ds = new ArrayList&lt;&gt;();
+                collect(to, c, 1, ds);
+                for (int d : ds) if (d &lt;= k) ans += freq[k - d];
+                for (int d : ds) if (d &lt;= k) freq[d]++;
+            }
+            for (int to : g.get(c)) if (!dead[to]) decompose(to);
+        }
+        public static void main(String[] args) {
+            int n = 4; k = 2;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) g.add(new ArrayList&lt;&gt;());
+            g.get(0).add(1); g.get(1).add(0);
+            g.get(1).add(2); g.get(2).add(1);
+            g.get(1).add(3); g.get(3).add(1);
+            dead = new boolean[n]; sz = new int[n];
+            decompose(0);
+            System.out.println(ans);
+        }
+        // Input : 0-1-2, 1-3; k = 2
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Reusable skeleton">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">CentroidTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>// sizeOf ignoring dead
+    // centroid: walk to a node with all pieces &lt;= n/2
+    // count through c (query map per component, then insert)
+    // dead[c]=true; recurse pieces
+    public class CentroidTemplate {
+        public static void main(String[] args) { System.out.println(3); }
+        // Input : template
+        // Output: 3
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n · T) where T is per-node work in countThrough</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each decompose layer processes disjoint alive components whose sizes sum to n, in linear time plus T per node. Recursion depth is O(log n) because pieces have size ≤ n/2.</p>
+    <p><span class="eq">T_total = T · n · O(log n)</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>DFS from every node</td><td>O(n²)</td><td>O(n)</td><td>n ≤ 2000</td></tr>
+      <tr><td>Centroid</td><td>O(n log n · T)</td><td>O(n)</td><td>counting paths</td></tr>
+      <tr><td>HLD</td><td>O(log² n) / query</td><td>O(n)</td><td>stored path aggregates</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Counting pairs inside one pending component</span>
+    <div class="pitfalls__bug">Inserting into the map before querying that same component double-counts paths that never leave the piece (they do not go through the centroid as a necessary vertex in your intended sense — they will be counted again deeper).</div>
+    <div class="pitfalls__fix">For each neighbour-component: query, then insert. Reset the map after all neighbours, or use a timestamp.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Not ignoring dead nodes in sizeOf</span>
+    <div class="pitfalls__bug">Sizes include already-processed centroids, so you pick a wrong centroid and the ≤ n/2 guarantee dies.</div>
+    <div class="pitfalls__fix">`if (dead[to]) continue` in every walk.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the 0-length path at the centroid</span>
+    <div class="pitfalls__bug">freq[0] = 1 is the centroid itself; without it you miss paths that end at c.</div>
+    <div class="pitfalls__fix">Initialise the map with the identity (depth 0 / xor 0) before the neighbour loop.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">k larger than n</span>
+    <div class="pitfalls__bug">`freq[k-d]` index error if you allocated freq[n] but k can be larger (xor problems).</div>
+    <div class="pitfalls__fix">Use a HashMap for sparse keys (xor); bound arrays only when the key is a small depth.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recursing from the original neighbour after marking dead</span>
+    <div class="pitfalls__bug">You must start the next decompose at the neighbour, not at c (c is dead).</div>
+    <div class="pitfalls__fix">`for (to : g[c]) if (!dead[to]) decompose(to)`.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Xor k instead of length k</td>
+        <td>Map of prefix xor; query xor^k</td>
+        <td><code>ans += map.get(pref^k)</code></td>
+        <td>CF xor-paths</td>
+      </tr>
+      <tr>
+        <td>Sum in [L,R]</td>
+        <td>Fenwick of depths/values at the centroid</td>
+        <td><code>bit.range(L-pref, R-pref)</code></td>
+        <td>weighted</td>
+      </tr>
+      <tr>
+        <td>Keep the centroid tree</td>
+        <td>parentCentroid[c] for further queries</td>
+        <td><code>O(log n) ancestors</code></td>
+        <td>offline updates</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Prove a centroid exists.</summary>
+    <div class="followup__body">
+      <p>Walk from any node toward a child with sz > n/2. This walk is acyclic and must stop; the stop node has all pieces ≤ n/2. Existence of two adjacent centroids is possible; either works.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you count unordered pairs once?</summary>
+    <div class="followup__body">
+      <p>Each pair is counted at exactly one centroid — the first centroid that lies on the unique path. Do not divide by 2 if your countThrough only pairs different pending components plus the centroid.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Centroid tree height?</summary>
+    <div class="followup__body">
+      <p>O(log n), because each parent centroid's component was at least twice as large.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When would you still use HLD?</summary>
+    <div class="followup__body">
+      <p>When values live on the tree and queries ask for an aggregate of an explicit path under updates. Centroid does not give you a live path-sum structure for free.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://codeforces.com/problemset/problem/161/D" target="_blank" rel="noopener">Distance in Tree</a></td>
+        <td><span class="badge badge--cf">CF 161D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>count paths of length k</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/321/C" target="_blank" rel="noopener">Ciel the Commander</a></td>
+        <td><span class="badge badge--cf">CF 321C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>build the centroid tree</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://atcoder.jp/contests/abc291/tasks/abc291_f" target="_blank" rel="noopener">ABC 291 F</a></td>
+        <td><span class="badge badge--atc">ABC291F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>path-like DAG, contrast</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://www.spoj.com/problems/QTREE5/" target="_blank" rel="noopener">QTREE5</a></td>
+        <td><span class="badge badge--gfg">SPOJ QTREE5</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>centroid tree + sets</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/number-of-pairs-of-interchangeable-rectangles/" target="_blank" rel="noopener">Interchangeable Rectangles</a></td>
+        <td><span class="badge badge--lc">LC 2001</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>not a tree — contrast counting pairs</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/number-of-nodes-in-the-sub-tree-with-the-same-label/" target="_blank" rel="noopener">Sub-tree Same Label</a></td>
+        <td><span class="badge badge--lc">LC 1519</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>tree DP, not centroid</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/715/C" target="_blank" rel="noopener">Digit Tree</a></td>
+        <td><span class="badge badge--cf">CF 715C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>centroid + modular digits</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://judge.yosupo.jp/problem/frequency_table_of_tree_distance" target="_blank" rel="noopener">Frequency table of tree distance</a></td>
+        <td><span class="badge badge--gfg">Library Checker</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>centroid + FFT</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Centroid: all remaining pieces ≤ n/2.</strong> Always exists.</li>
+    <li><strong>Count through c, mark dead, recurse.</strong> That is the whole algorithm.</li>
+    <li><strong>Query then insert</strong> per neighbour-component so you only count paths that use c.</li>
+    <li><strong>Depth O(log n)</strong> because pieces halve.</li>
+    <li><strong>HLD vs centroid:</strong> query stored paths vs count generated paths.</li>
+  </ul>
+  <div class="recap__oneliner">c=centroid(v); countThrough(c); dead[c]=true; for(to:g[c]) if(!dead[to]) decompose(to);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

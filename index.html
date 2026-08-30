@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSA / CP Relearning Course</title>
+<meta name="description" content="A complete offline course that rebuilds competitive programming and interview DSA from complexity analysis to max flow, with Java 17 code, diagrams and pattern-recognition drills.">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="home-hero">
+        <h1>Relearn DSA the way interviews actually test it</h1>
+        <p class="home-hero__lead">
+          You already knew this once. This course is built for the specific failure mode of a
+          working engineer who has been away from competitive programming: the algorithms are
+          still somewhere in memory, but <strong>pattern recognition is gone</strong>. Every page
+          therefore starts from the signal in the problem statement and works towards the code,
+          not the other way round.
+        </p>
+        <div class="home-hero__stats">
+          <div class="home-stat"><span class="home-stat__num" id="stat-modules">15</span><span class="home-stat__lbl">Modules</span></div>
+          <div class="home-stat"><span class="home-stat__num" id="stat-topics">88</span><span class="home-stat__lbl">Topic pages</span></div>
+          <div class="home-stat"><span class="home-stat__num">Java 17</span><span class="home-stat__lbl">All code</span></div>
+          <div class="home-stat"><span class="home-stat__num">Offline</span><span class="home-stat__lbl">No network needed</span></div>
+        </div>
+      </section>
+
+      <h2>Start here</h2>
+      <div class="grid-3">
+        <a class="card" href="roadmap.html" style="display:block">
+          <h3 style="margin-top:0">1. The roadmap</h3>
+          <p class="text-dim" style="font-size:var(--fs-sm);margin:0">
+            The order to study modules in, and why that order. Read this before anything else.
+          </p>
+        </a>
+        <a class="card" href="modules/00-foundations/constraints-to-complexity.html" style="display:block">
+          <h3 style="margin-top:0">2. Constraints &rarr; complexity</h3>
+          <p class="text-dim" style="font-size:var(--fs-sm);margin:0">
+            The single highest-leverage table in competitive programming. Re-read it weekly until
+            <code>n &le; 20</code> instantly means "bitmask".
+          </p>
+        </a>
+        <a class="card" href="pattern-index.html" style="display:block">
+          <h3 style="margin-top:0">3. The pattern index</h3>
+          <p class="text-dim" style="font-size:var(--fs-sm);margin:0">
+            One long lookup table from a phrase in the problem statement to the technique that
+            solves it. This is the cure for "I could not see the pattern".
+          </p>
+        </a>
+      </div>
+
+      <h2>How to use this course</h2>
+      <ol>
+        <li><strong>Read the recognition card before the algorithm.</strong> Every topic page opens
+          with "Recognise this pattern" — the trigger phrases, the constraint tells, and what this
+          pattern is commonly confused with. That section is the part you actually lost.</li>
+        <li><strong>Run the visual walkthrough.</strong> Press Play on the trace player and watch
+          the indices move. Do not skip it because you "know" the algorithm; recognising the
+          <em>shape</em> of the state is what makes it recallable under pressure.</li>
+        <li><strong>Cover the code and re-derive it from the stepper.</strong> The numbered
+          algorithm steps use exactly the same variable names as the Java, so you can write the
+          implementation yourself and then diff.</li>
+        <li><strong>Do the practice table top to bottom.</strong> It is ordered easy to hard on
+          purpose. Stop when you can do the medium tier without hints.</li>
+        <li><strong>Then do <a href="mock-drills.html">Mock Drills</a>.</strong> Those problems are
+          deliberately unlabelled, which is the only honest test of pattern recognition.</li>
+      </ol>
+
+      <div class="callout callout--tip">
+        <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+        <div class="callout__body">
+          <span class="callout__title">Keyboard</span>
+          <p><span class="kbd">/</span> focus search &middot; <span class="kbd">[</span> previous
+          topic &middot; <span class="kbd">]</span> next topic &middot; <span class="kbd">t</span>
+          toggle light/dark. Everything is keyboard reachable.</p>
+        </div>
+      </div>
+
+      <h2>Priority tiers</h2>
+      <p>Every topic carries a tier so you can triage when an interview is close.</p>
+      <div class="tierlegend">
+        <span class="tierlegend__item"><span class="navlink__tier" data-tier="P0">P0</span> Interview-critical. If you are interviewing in under a month, this is your entire scope.</span>
+        <span class="tierlegend__item"><span class="navlink__tier" data-tier="P1">P1</span> Google-hard / CP-grade. Shows up in hard onsites and Codeforces Div 2 C&ndash;E.</span>
+        <span class="tierlegend__item"><span class="navlink__tier" data-tier="P2">P2</span> Advanced. Rare in interviews, but completes the picture and makes the P1 material feel easy.</span>
+      </div>
+
+      <h2>The 15 modules</h2>
+      <div class="modcards" id="modcards"></div>
+
+      <h2>What every topic page contains</h2>
+      <p>The structure never changes, so you always know where to look:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0">Recognition and intuition</h3>
+          <ul style="font-size:var(--fs-sm);margin-bottom:0">
+            <li>Why the technique exists, and what the naive approach costs</li>
+            <li>Trigger phrases, constraint tells, and lookalike patterns</li>
+            <li>The precise loop invariant or recurrence, stated the way you would say it out loud</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Mechanics</h3>
+          <ul style="font-size:var(--fs-sm);margin-bottom:0">
+            <li>An animated trace over a concrete small input, plus a structural diagram</li>
+            <li>Numbered algorithm steps that mirror the code's variable names</li>
+            <li>A full dry-run table showing every iteration</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Code and cost</h3>
+          <ul style="font-size:var(--fs-sm);margin-bottom:0">
+            <li>Brute force, optimal, and a reusable template &mdash; all compilable Java 17</li>
+            <li>A real complexity derivation, not just the final Big-O</li>
+            <li>Edge cases and the specific bugs people ship</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Interview transfer</h3>
+          <ul style="font-size:var(--fs-sm);margin-bottom:0">
+            <li>Variants and exactly which lines change for each</li>
+            <li>The follow-up questions an interviewer asks next</li>
+            <li>8&ndash;12 curated problems, easy to hard, with links</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="assets/vendor/mermaid.min.js"></script>
+  <script src="assets/js/nav-data.js"></script>
+  <script src="assets/js/viz.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script>
+  (function () {
+    var nav = window.NAV_DATA || [];
+    var host = document.getElementById("modcards");
+    var total = 0;
+    nav.forEach(function (mod) {
+      total += (mod.topics || []).length;
+
+      var card = document.createElement("div");
+      card.className = "modcard";
+
+      var head = document.createElement("div");
+      head.className = "modcard__head";
+      var num = document.createElement("span");
+      num.className = "modcard__num";
+      num.textContent = mod.num;
+      var title = document.createElement("span");
+      title.className = "modcard__title";
+      title.textContent = mod.title;
+      var count = document.createElement("span");
+      count.className = "modcard__count";
+      count.textContent = (mod.topics || []).length + " topics";
+      head.appendChild(num);
+      head.appendChild(title);
+      head.appendChild(count);
+      card.appendChild(head);
+
+      var desc = document.createElement("p");
+      desc.className = "modcard__desc";
+      desc.textContent = mod.desc || "";
+      card.appendChild(desc);
+
+      var ul = document.createElement("ul");
+      ul.className = "modcard__topics";
+      (mod.topics || []).forEach(function (t) {
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        a.href = mod.dir ? mod.dir + "/" + t.file : t.file;
+        var span = document.createElement("span");
+        span.textContent = t.title;
+        var tier = document.createElement("span");
+        tier.className = "navlink__tier";
+        tier.setAttribute("data-tier", t.tier);
+        tier.textContent = t.tier;
+        a.appendChild(span);
+        a.appendChild(tier);
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      host.appendChild(card);
+    });
+    document.getElementById("stat-modules").textContent = nav.length;
+    document.getElementById("stat-topics").textContent = total;
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recurrences &amp; Master Theorem &mdash; DSA Course</title>
+<meta name="description" content="Turn a recursive algorithm into a closed-form complexity by drawing its recursion tree and adding up the levels &mdash; then shortcut the whole process with the master theorem.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="recurrences-and-master-theorem">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 00 &middot; Foundations</span>
+  <h1>Recurrences & Master Theorem</h1>
+  <p class="hero__tagline">Turn a recursive algorithm into a closed-form complexity by drawing its recursion tree and adding up the levels &mdash; then shortcut the whole process with the master theorem.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">recursion</span>
+      <span class="chip">recursion tree</span>
+      <span class="chip">master theorem</span>
+      <span class="chip">meta</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Loop-counting stops working the moment the algorithm calls itself. There is no innermost loop to count, because the work is spread across a tree of calls whose shape depends on how the input is split. Merge sort, quicksort, binary search, divide-and-conquer on the answer, and every tree algorithm you will meet in <a href="../05-trees/tree-dp-and-rerooting.html">module 05</a> need a different tool.</p>
+<p>The tool is the <strong>recursion tree</strong>: draw the calls, compute the total work at each depth, and sum over depths. Almost every recurrence you meet in practice falls into one of three shapes &mdash; the root dominates, the leaves dominate, or every level costs the same &mdash; and knowing which shape you are in gives the answer immediately.</p>
+<p>The master theorem is a lookup table for exactly that classification. It is worth memorising because interviewers ask "why <code>n log n</code>?" and the strong answer is "there are <code>log n</code> levels and each costs <code>&Theta;(n)</code>", not "because merge sort is <code>n log n</code>".</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Do not try to unroll the recursion algebraically. Draw the tree, compute the cost of one level, count the levels, and decide which end of the tree dominates. Three questions, and you are done.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>The algorithm calls itself on strictly smaller inputs &mdash; sorting, searching, divide and conquer, tree traversal</li>
+        <li>You can describe the work as "split into <code>a</code> pieces of size <code>n/b</code>, plus <code>f(n)</code> to combine" &rarr; the master theorem applies directly</li>
+        <li>An interviewer asks "why is that <code>n log n</code>?" or "what is the depth of the recursion?"</li>
+        <li>You need the <em>space</em> complexity of a recursive routine &rarr; that is the maximum depth of the tree, not the number of nodes</li>
+        <li>The recursion halves the input and does constant work &rarr; <code>&Theta;(log n)</code>, the shape behind every binary search</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The subproblem sizes are <em>unequal and data-dependent</em> (quicksort with a bad pivot) &rarr; the master theorem does not apply; analyse expected cost instead</li>
+        <li>The recursion has <strong>overlapping</strong> subproblems &rarr; you are looking at <a href="../10-dynamic-programming/dp-foundations.html">dynamic programming</a>, and the complexity is <em>states &times; transition cost</em>, not a recurrence</li>
+        <li>The subproblem shrinks by a constant <em>subtraction</em> rather than division (<code>T(n) = T(n-1) + n</code>) &rarr; just sum the series; it is <code>&Theta;(n&sup2;)</code></li>
+        <li>Branching is exponential with no size reduction (<code>T(n) = 2T(n-1) + 1</code>) &rarr; <code>&Theta;(2&#8319;)</code>; that is subset enumeration, not divide and conquer</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"divide the array in half and recurse on both"</td>
+        <td><code>a = 2, b = 2</code></td>
+        <td><code>T(n) = 2T(n/2) + f(n)</code></td>
+      </tr>
+      <tr>
+        <td>"discard half and recurse on one side"</td>
+        <td><code>a = 1, b = 2</code></td>
+        <td><code>T(n) = T(n/2) + O(1) = &Theta;(log n)</code></td>
+      </tr>
+      <tr>
+        <td>"merge the two sorted halves"</td>
+        <td>Linear combine work</td>
+        <td><code>2T(n/2) + &Theta;(n) = &Theta;(n log n)</code></td>
+      </tr>
+      <tr>
+        <td>"combine in constant time" with two calls</td>
+        <td>Leaves dominate</td>
+        <td><code>2T(n/2) + &Theta;(1) = &Theta;(n)</code></td>
+      </tr>
+      <tr>
+        <td>"combine in quadratic time" with two calls</td>
+        <td>Root dominates</td>
+        <td><code>2T(n/2) + &Theta;(n&sup2;) = &Theta;(n&sup2;)</code></td>
+      </tr>
+      <tr>
+        <td>"peel off one element and recurse"</td>
+        <td>Depth <code>n</code>, not <code>log n</code></td>
+        <td><code>T(n-1) + f(n)</code>; sum the series</td>
+      </tr>
+      <tr>
+        <td>"try both include and exclude for each item"</td>
+        <td>Binary tree of depth <code>n</code></td>
+        <td><code>&Theta;(2&#8319;)</code></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "recursive so it must be <code>log n</code>"</td>
+        <td>Depth is <code>log n</code> only when the size is <em>divided</em></td>
+        <td>Check divide vs subtract first</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> recursion depth is auxiliary space. <code>T(n) = T(n-1) + &hellip;</code> at <code>n = 10&#8309;</code> means 10&#8309; stack frames and a <code>StackOverflowError</code> in Java at roughly 10&#8308;&ndash;10&#8309; frames. Divide-style recursion is safe because <code>log&#8322;(10&#8313;) &lt; 30</code>.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: add up the levels</h2>
+<p>Write the recurrence as <code>T(n) = a &middot; T(n/b) + f(n)</code>. Here <code>a</code> is the branching factor, <code>b</code> is how much smaller each subproblem is, and <code>f(n)</code> is the non-recursive work done at this call &mdash; the split plus the combine. Merge sort is <code>a = 2, b = 2, f(n) = n</code>.</p>
+<p>Now account for the tree. At depth <code>k</code> there are <code>a<sup>k</sup></code> nodes, each of size <code>n / b<sup>k</sup></code>, so the total work at that depth is <code>a<sup>k</sup> &middot; f(n / b<sup>k</sup>)</code>. The tree bottoms out when <code>n / b<sup>k</sup> = 1</code>, that is at depth <code>k = log<sub>b</sub> n</code>, where there are <code>a<sup>log<sub>b</sub> n</sup> = n<sup>log<sub>b</sub> a</sup></code> leaves.</p>
+<p>That last expression, <code>n<sup>log<sub>b</sub> a</sup></code>, is the total cost of the leaves, and the whole master theorem is just a comparison between it and <code>f(n)</code>. If the leaves grow faster, the leaves pay for everything. If <code>f(n)</code> grows faster, the single root call pays for everything. If they tie, every level costs the same and you multiply by the number of levels.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The master theorem in one comparison</span>
+    <p>For <code>T(n) = a T(n/b) + f(n)</code> with <code>a &ge; 1</code>, <code>b &gt; 1</code>, let <code>c = log<sub>b</sub> a</code>. Compare <code>f(n)</code> against <code>n<sup>c</sup></code>:</p><ul><li><strong>Case 1 &mdash; leaves win.</strong> <code>f(n) = O(n<sup>c-&epsilon;</sup>)</code> &rArr; <code>T(n) = &Theta;(n<sup>c</sup>)</code>.</li><li><strong>Case 2 &mdash; tie.</strong> <code>f(n) = &Theta;(n<sup>c</sup> log<sup>k</sup> n)</code> &rArr; <code>T(n) = &Theta;(n<sup>c</sup> log<sup>k+1</sup> n)</code>.</li><li><strong>Case 3 &mdash; root wins.</strong> <code>f(n) = &Omega;(n<sup>c+&epsilon;</sup>)</code> and <code>a f(n/b) &le; d f(n)</code> for some <code>d &lt; 1</code> &rArr; <code>T(n) = &Theta;(f(n))</code>.</li></ul><p>Merge sort: <code>c = log&#8322; 2 = 1</code>, <code>f(n) = n = n&sup1;</code>, so case 2 with <code>k = 0</code> gives <code>&Theta;(n log n)</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The three shapes, visually</span>
+    <p>You can skip the algebra by asking where the mass of the tree is. <strong>Top-heavy</strong> (costs shrink geometrically going down): the root dominates, answer <code>&Theta;(f(n))</code>. <strong>Bottom-heavy</strong> (costs grow going down): the leaves dominate, answer <code>&Theta;(n<sup>c</sup>)</code>. <strong>Flat</strong> (every level the same): answer is one level times the number of levels. A geometric series is dominated by its largest term, which is why only the extreme level matters in the first two cases.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Divide is not the same as subtract</span>
+    <p><code>T(n) = T(n/2) + 1</code> has depth <code>log&#8322; n</code> and is <code>&Theta;(log n)</code>. <code>T(n) = T(n-1) + 1</code> has depth <code>n</code> and is <code>&Theta;(n)</code>. These look almost identical on the page and differ by an exponential amount. The master theorem covers only the division form; for subtraction, sum the series directly.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Recurrences the master theorem cannot solve</span>
+    <p><code>T(n) = 2T(n/2) + n/log n</code> falls in the gap between cases 1 and 2 (no valid <code>&epsilon;</code> exists). <code>T(n) = T(n/2) + T(n/3) + n</code> has unequal splits. <code>T(n) = 2T(&radic;n) + 1</code> is not of the form at all &mdash; substitute <code>m = log n</code> to get <code>S(m) = 2S(m/2) + 1</code>, giving <code>&Theta;(m) = &Theta;(log n)</code>. When the theorem fails, draw the tree; it never fails.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Accounting a recursion tree, level by level</h3>
+
+<p>Merge sort on <code>n = 8</code>: <code>T(n) = 2T(n/2) + n</code>. Each row is one depth of the tree. The node count doubles, the size halves, so the product &mdash; the cost of the level &mdash; stays at <code>n</code>. That is the "flat" shape, and the total is <code>n</code> times the number of levels.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="recTree"></div>
+  <div class="viz-player" data-viz-target="recTree">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "depth",
+      "rowHeads": [
+        "k=0",
+        "k=1",
+        "k=2",
+        "k=3",
+        "total"
+      ],
+      "colHeads": [
+        "size",
+        "nodes",
+        "cost/node",
+        "level cost"
+      ],
+      "vars": [
+        "depth",
+        "running total"
+      ],
+      "speed": 1150,
+      "frames": [
+        {
+          "note": "Depth 0: the single root call sorts all 8 elements, and its merge costs 8.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "8"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "8"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "8",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "depth": 0,
+            "running total": 8
+          }
+        },
+        {
+          "note": "Depth 1: two calls of size 4. Twice as many nodes, each half as expensive, so the level still costs 8.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "4"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "2"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "4"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "8",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "depth": 1,
+            "running total": 16
+          }
+        },
+        {
+          "note": "Depth 2: four calls of size 2. Still 8. This exact cancellation is what case 2 of the master theorem detects.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "2"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "4"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "2"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "8",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "depth": 2,
+            "running total": 24
+          }
+        },
+        {
+          "note": "Depth 3: eight leaves of size 1. Still 8. The tree stops here because n / 2^3 = 1.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "8"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "1"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "8",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "depth": 3,
+            "running total": 32
+          }
+        },
+        {
+          "note": "4 levels x 8 per level = 32 = n(log2 n + 1) = Theta(n log n). Change f(n) to a constant and the level costs become 1,2,4,8 — bottom-heavy, total Theta(n).",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "—"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "15"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "—"
+            },
+            {
+              "r": 4,
+              "c": 3,
+              "val": "32",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "depth": "log n",
+            "running total": "n log n"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Level accounting for <code>T(n) = 2T(n/2) + n</code> at <code>n = 8</code>. Every level costs 8; there are <code>log&#8322;8 + 1 = 4</code> levels; total 32 = <code>n(log&#8322;n + 1)</code>.</figcaption>
+</figure>
+
+<h3>The tree for T(n) = 2T(n/2) + n</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+graph TD
+  R["n = 8, merge cost 8"] --&gt; A1["n = 4, cost 4"]
+  R --&gt; A2["n = 4, cost 4"]
+  A1 --&gt; B1["n = 2, cost 2"]
+  A1 --&gt; B2["n = 2, cost 2"]
+  A2 --&gt; B3["n = 2, cost 2"]
+  A2 --&gt; B4["n = 2, cost 2"]
+  B1 --&gt; C1["1"]
+  B1 --&gt; C2["1"]
+  B2 --&gt; C3["1"]
+  B2 --&gt; C4["1"]
+  B3 --&gt; C5["1"]
+  B3 --&gt; C6["1"]
+  B4 --&gt; C7["1"]
+  B4 --&gt; C8["1"]
+  </div>
+  <figcaption>Each node is labelled with its own combine cost. Sum any horizontal slice and you get 8. Sum all slices and you get <code>n log n</code>.</figcaption>
+</figure>
+
+<h3>Choosing the right tool for a recurrence</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  start(["you have a recursive routine"]) --&gt; overlap{"do subproblems repeat?"}
+  overlap -- yes --&gt; dp["it is DP: cost = states x transition"]
+  overlap -- no --&gt; shrink{"how does the size shrink?"}
+  shrink -- "divided by b" --&gt; mt{"equal-sized pieces?"}
+  shrink -- "minus a constant" --&gt; sumIt["sum the series directly"]
+  mt -- yes --&gt; apply["apply the master theorem: compare f(n) with n^log_b a"]
+  mt -- no --&gt; tree["draw the recursion tree and add the levels"]
+  apply --&gt; gap{"does a case actually match?"}
+  gap -- yes --&gt; answerOk["read off the answer"]
+  gap -- no --&gt; tree
+  </div>
+  <figcaption>Work top to bottom. The two most common mistakes are skipping the divide-versus-subtract check, and reaching for a recurrence when the subproblems actually overlap.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Write the recurrence.</strong> Identify <code>a</code> (number of recursive calls), <code>b</code> (size divisor) and <code>f(n)</code> (work outside the calls).</li>
+  <li><strong>Check divide versus subtract.</strong> If the size shrinks by subtraction, skip the master theorem and sum the series.</li>
+  <li><strong>Compute the leaf exponent</strong> <code>c = log<sub>b</sub> a</code>.</li>
+  <li><strong>Compare <code>f(n)</code> with <code>n<sup>c</sup></code></strong> to pick the case.</li>
+  <li><strong>Case 1 (<code>f</code> smaller):</strong> answer <code>&Theta;(n<sup>c</sup>)</code> &mdash; the leaves pay.</li>
+  <li><strong>Case 2 (equal up to log factors):</strong> answer <code>&Theta;(n<sup>c</sup> log<sup>k+1</sup> n)</code> &mdash; every level pays equally.</li>
+  <li><strong>Case 3 (<code>f</code> larger, and regular):</strong> answer <code>&Theta;(f(n))</code> &mdash; the root pays.</li>
+  <li><strong>Report space separately</strong> as <code>&Theta;(max depth)</code>, plus any auxiliary buffers the combine step allocates.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Nine recurrences worked through the same procedure. Highlighted rows are the ones whose answers surprise people.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>Recurrence</th><th>a, b</th><th>n<sup>c</sup></th><th>f(n)</th><th>Case</th><th>T(n)</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>T(n) = T(n/2) + 1</code></td><td>1, 2</td><td>n&#8304; = 1</td><td>1</td><td>2 (k=0)</td><td><code>&Theta;(log n)</code></td><td>Binary search. Tie at constant, times <code>log n</code> levels.</td></tr>
+      <tr class="trace-table__row--change"><td><code>T(n) = 2T(n/2) + 1</code></td><td>2, 2</td><td>n&sup1;</td><td>1</td><td>1</td><td><code>&Theta;(n)</code></td><td>Leaves dominate: <code>n</code> leaves, constant each. Tree traversal.</td></tr>
+      <tr><td><code>T(n) = 2T(n/2) + n</code></td><td>2, 2</td><td>n&sup1;</td><td>n</td><td>2 (k=0)</td><td><code>&Theta;(n log n)</code></td><td>Merge sort. Flat tree.</td></tr>
+      <tr class="trace-table__row--change"><td><code>T(n) = 2T(n/2) + n&sup2;</code></td><td>2, 2</td><td>n&sup1;</td><td>n&sup2;</td><td>3</td><td><code>&Theta;(n&sup2;)</code></td><td>Root dominates; the recursion is almost free by comparison.</td></tr>
+      <tr><td><code>T(n) = 4T(n/2) + n</code></td><td>4, 2</td><td>n&sup2;</td><td>n</td><td>1</td><td><code>&Theta;(n&sup2;)</code></td><td>Naive matrix multiply blocking. Leaves dominate.</td></tr>
+      <tr class="trace-table__row--change"><td><code>T(n) = 7T(n/2) + n&sup2;</code></td><td>7, 2</td><td>n<sup>2.807</sup></td><td>n&sup2;</td><td>1</td><td><code>&Theta;(n<sup>2.807</sup>)</code></td><td>Strassen. <code>log&#8322;7 &asymp; 2.807</code> beats 3.</td></tr>
+      <tr><td><code>T(n) = 3T(n/2) + n</code></td><td>3, 2</td><td>n<sup>1.585</sup></td><td>n</td><td>1</td><td><code>&Theta;(n<sup>1.585</sup>)</code></td><td>Karatsuba. <code>log&#8322;3 &asymp; 1.585</code>.</td></tr>
+      <tr class="trace-table__row--change"><td><code>T(n) = T(n-1) + n</code></td><td>&mdash;</td><td>&mdash;</td><td>n</td><td>series</td><td><code>&Theta;(n&sup2;)</code></td><td>Subtraction, not division. Selection sort, naive quicksort worst case.</td></tr>
+      <tr><td><code>T(n) = 2T(n-1) + 1</code></td><td>&mdash;</td><td>&mdash;</td><td>1</td><td>series</td><td><code>&Theta;(2&#8319;)</code></td><td>Subset enumeration and Towers of Hanoi. Branching with no shrinkage.</td></tr>
+      <tr><td><code>T(n) = 2T(&radic;n) + 1</code></td><td>&mdash;</td><td>&mdash;</td><td>1</td><td>substitute</td><td><code>&Theta;(log n)</code></td><td>Set <code>m = log n</code> to reach <code>S(m) = 2S(m/2) + 1 = &Theta;(m)</code>.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Recurrences & Master Theorem implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Merge sort</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Measuring the tree</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Master theorem solver</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Merge sort">
+    <p>The canonical <code>2T(n/2) + &Theta;(n)</code>. Note the single shared buffer: allocating a new array inside <code>merge</code> would still be <code>&Theta;(n log n)</code> time but would churn <code>O(n log n)</code> allocations.</p>
+    <div class="code" data-highlight="12-14">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MergeSort.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    
+    public class MergeSort {
+    
+        /** T(n) = 2T(n/2) + Theta(n)  =&gt;  Theta(n log n), Theta(n) auxiliary space. */
+        static void sort(int[] a) {
+            sort(a, new int[a.length], 0, a.length - 1);
+        }
+    
+        private static void sort(int[] a, int[] buf, int lo, int hi) {
+            if (lo &gt;= hi) {
+                return;
+            }
+            int mid = lo + (hi - lo) / 2;
+            sort(a, buf, lo, mid);
+            sort(a, buf, mid + 1, hi);
+            merge(a, buf, lo, mid, hi);
+        }
+    
+        private static void merge(int[] a, int[] buf, int lo, int mid, int hi) {
+            int i = lo, j = mid + 1, k = lo;
+            while (i &lt;= mid &amp;&amp; j &lt;= hi) {
+                buf[k++] = (a[i] &lt;= a[j]) ? a[i++] : a[j++];   // &lt;= keeps the sort stable
+            }
+            while (i &lt;= mid) {
+                buf[k++] = a[i++];
+            }
+            while (j &lt;= hi) {
+                buf[k++] = a[j++];
+            }
+            System.arraycopy(buf, lo, a, lo, hi - lo + 1);
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {5, 2, 9, 1, 5, 6, 3, 8};
+            sort(a);
+            System.out.println(Arrays.toString(a));
+        }
+        // Input : [5,2,9,1,5,6,3,8]
+        // Output: [1, 2, 3, 5, 5, 6, 8, 9]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Measuring the tree">
+    <p>Instrument a recurrence and print the cost of each level. This is the fastest way to settle an argument about which case you are in: look at whether the level costs are flat, growing, or shrinking.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RecurrenceProbe.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class RecurrenceProbe {
+    
+        /** Records, per depth, the total value of f(size) across all calls at that depth. */
+        static void probe(int n, int a, int b, int fExponent, int depth, Map&lt;Integer, Long&gt; levels) {
+            if (n &lt;= 1) {
+                levels.merge(depth, 1L, Long::sum);
+                return;
+            }
+            long work = 1;
+            for (int e = 0; e &lt; fExponent; e++) {
+                work *= n;                       // f(n) = n^fExponent
+            }
+            levels.merge(depth, work, Long::sum);
+            for (int i = 0; i &lt; a; i++) {
+                probe(n / b, a, b, fExponent, depth + 1, levels);
+            }
+        }
+    
+        static void report(String label, int n, int a, int b, int fExponent) {
+            Map&lt;Integer, Long&gt; levels = new HashMap&lt;&gt;();
+            probe(n, a, b, fExponent, 0, levels);
+            StringBuilder sb = new StringBuilder(label + " -&gt; ");
+            long total = 0;
+            for (int d = 0; levels.containsKey(d); d++) {
+                sb.append(levels.get(d)).append(d + 1 &lt; levels.size() ? ", " : "");
+                total += levels.get(d);
+            }
+            System.out.println(sb + "   total=" + total);
+        }
+    
+        public static void main(String[] args) {
+            report("2T(n/2)+n   n=64", 64, 2, 2, 1);   // flat  -&gt; case 2
+            report("2T(n/2)+1   n=64", 64, 2, 2, 0);   // grows -&gt; case 1
+            report("2T(n/2)+n^2 n=64", 64, 2, 2, 2);   // decays-&gt; case 3
+        }
+        // Output: 2T(n/2)+n   n=64 -&gt; 64, 64, 64, 64, 64, 64, 64   total=448
+        //         2T(n/2)+1   n=64 -&gt; 1, 2, 4, 8, 16, 32, 64   total=127
+        //         2T(n/2)+n^2 n=64 -&gt; 4096, 2048, 1024, 512, 256, 128, 64   total=8128
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Master theorem">
+    <p>A reference implementation of the classification. Reading it is a good way to check that you can state each case precisely, which is what an interviewer is probing.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MasterTheorem.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class MasterTheorem {
+    
+        /**
+         * Classifies T(n) = a T(n/b) + Theta(n^d * log^k n).
+         * Returns a human-readable Theta bound.
+         */
+        static String solve(int a, int b, double d, int k) {
+            double c = Math.log(a) / Math.log(b);          // c = log_b(a)
+            double eps = 1e-9;
+            if (d &lt; c - eps) {
+                return "Theta(n^" + trim(c) + ")            [case 1: leaves dominate]";
+            }
+            if (Math.abs(d - c) &lt;= eps) {
+                return "Theta(n^" + trim(c) + " * log^" + (k + 1) + " n)  [case 2: every level ties]";
+            }
+            return "Theta(n^" + trim(d) + (k &gt; 0 ? " * log^" + k + " n" : "")
+                    + ")            [case 3: root dominates]";
+        }
+    
+        private static String trim(double x) {
+            return (Math.abs(x - Math.rint(x)) &lt; 1e-9)
+                    ? String.valueOf((long) Math.rint(x))
+                    : String.format("%.3f", x);
+        }
+    
+        public static void main(String[] args) {
+            System.out.println("T=T(n/2)+1      " + solve(1, 2, 0, 0));
+            System.out.println("T=2T(n/2)+1     " + solve(2, 2, 0, 0));
+            System.out.println("T=2T(n/2)+n     " + solve(2, 2, 1, 0));
+            System.out.println("T=2T(n/2)+n^2   " + solve(2, 2, 2, 0));
+            System.out.println("T=7T(n/2)+n^2   " + solve(7, 2, 2, 0));
+            System.out.println("T=3T(n/2)+n     " + solve(3, 2, 1, 0));
+        }
+        // Output: T=T(n/2)+1      Theta(n^0 * log^1 n)  [case 2: every level ties]
+        //         T=2T(n/2)+1     Theta(n^1)            [case 1: leaves dominate]
+        //         T=2T(n/2)+n     Theta(n^1 * log^1 n)  [case 2: every level ties]
+        //         T=2T(n/2)+n^2   Theta(n^2)            [case 3: root dominates]
+        //         T=7T(n/2)+n^2   Theta(n^2.807)            [case 1: leaves dominate]
+        //         T=3T(n/2)+n     Theta(n^1.585)            [case 1: leaves dominate]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time &Theta;(n log n) for merge sort</span>
+    <span class="badge badge--space">Space &Theta;(n) buffer + &Theta;(log n) stack</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Summing the recursion tree for <code>T(n) = a T(n/b) + f(n)</code> gives</p>
+    <p><span class="eq">T(n) = &Sigma;<sub>k=0</sub><sup>log<sub>b</sub>n</sup> a<sup>k</sup> f(n / b<sup>k</sup>)</span></p>
+    <p>With <code>f(n) = n</code>, each term is <code>a<sup>k</sup> &middot; n / b<sup>k</sup> = n (a/b)<sup>k</sup></code>, a geometric series with ratio <code>a/b</code>. Three regimes follow immediately:</p>
+    <ul><li><code>a &lt; b</code>: ratio below 1, the series is dominated by its first term, total <code>&Theta;(f(n))</code> &mdash; case 3.</li><li><code>a = b</code>: every term equals <code>n</code>, and there are <code>log<sub>b</sub> n + 1</code> of them, total <code>&Theta;(n log n)</code> &mdash; case 2.</li><li><code>a &gt; b</code>: ratio above 1, the series is dominated by its last term, <code>n(a/b)<sup>log<sub>b</sub>n</sup> = n<sup>log<sub>b</sub>a</sup></code> &mdash; case 1.</li></ul>
+    <p>That is the entire master theorem: a geometric series is controlled by whichever end is larger. For merge sort specifically, <code>a = b = 2</code> puts us in the flat case, and <code>&Theta;(n log n)</code> is also a lower bound because comparison sorting is <code>&Omega;(n log n)</code>.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>T(n) = T(n/2) + O(1)</code></td><td><code>&Theta;(log n)</code></td><td><code>&Theta;(log n)</code></td><td>Binary search; make it iterative for O(1) space</td></tr>
+      <tr><td><code>T(n) = 2T(n/2) + O(1)</code></td><td><code>&Theta;(n)</code></td><td><code>&Theta;(log n)</code></td><td>Tree traversal, tree DP</td></tr>
+      <tr><td><code>T(n) = 2T(n/2) + O(n)</code></td><td><code>&Theta;(n log n)</code></td><td><code>&Theta;(n)</code></td><td>Merge sort, inversion counting, CDQ</td></tr>
+      <tr><td><code>T(n) = T(n/2) + O(n)</code></td><td><code>&Theta;(n)</code></td><td><code>&Theta;(1)</code></td><td>Quickselect (expected), binary search on a shrinking array</td></tr>
+      <tr><td><code>T(n) = T(n-1) + O(n)</code></td><td><code>&Theta;(n&sup2;)</code></td><td><code>&Theta;(n)</code></td><td>Only for small n; the stack is the real risk</td></tr>
+      <tr><td><code>T(n) = 2T(n-1) + O(1)</code></td><td><code>&Theta;(2&#8319;)</code></td><td><code>&Theta;(n)</code></td><td>Subset enumeration, n &le; 25</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Assuming recursion implies a logarithm</span>
+    <div class="pitfalls__bug">"It is recursive, so the depth is <code>log n</code>." For <code>T(n) = T(n-1) + 1</code> the depth is <code>n</code>, and at <code>n = 10&#8309;</code> that is a <code>StackOverflowError</code>.</div>
+    <div class="pitfalls__fix">Ask whether the size is <em>divided</em> or <em>decremented</em>. Division gives depth <code>log<sub>b</sub> n</code>; decrement gives depth <code>n</code>. Only the first is safe at large <code>n</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Applying the master theorem to overlapping subproblems</span>
+    <div class="pitfalls__bug">Analysing the naive Fibonacci recursion as <code>T(n) = 2T(n/2) + 1</code>. It is actually <code>T(n) = T(n-1) + T(n-2) + 1</code>, which is <code>&Theta;(&phi;&#8319;)</code>, exponential.</div>
+    <div class="pitfalls__fix">The master theorem needs subproblems of size <code>n/b</code>. If subproblems repeat, the right framing is <a href="../10-dynamic-programming/dp-foundations.html">DP</a>: cost = number of distinct states &times; cost per transition.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting that case 3 has a regularity condition</span>
+    <div class="pitfalls__bug">Concluding <code>T(n) = &Theta;(f(n))</code> whenever <code>f</code> grows faster than <code>n<sup>c</sup></code>, without checking <code>a f(n/b) &le; d f(n)</code> for some <code>d &lt; 1</code>.</div>
+    <div class="pitfalls__fix">For every polynomial <code>f</code> the condition holds automatically, so in practice you are safe &mdash; but say "and <code>f</code> is polynomial so regularity holds" so the interviewer knows you did not forget it.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Counting the buffer allocation as free</span>
+    <div class="pitfalls__bug">A <code>merge</code> that does <code>int[] tmp = new int[hi-lo+1]</code> on every call. The time class is unchanged, but you have made <code>&Theta;(n)</code> allocations and the constant factor can be 3&ndash;5&times;.</div>
+    <div class="pitfalls__fix">Allocate one buffer of length <code>n</code> up front and pass it down, as in the Merge sort tab. Also quote space as <code>&Theta;(n)</code> for the buffer plus <code>&Theta;(log n)</code> for the stack.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Ignoring the gap between cases</span>
+    <div class="pitfalls__bug">Forcing <code>T(n) = 2T(n/2) + n/log n</code> into case 1 or case 2. Neither applies: there is no <code>&epsilon; &gt; 0</code> with <code>n/log n = O(n<sup>1-&epsilon;</sup>)</code>.</div>
+    <div class="pitfalls__fix">Sum the tree: each level costs about <code>n / log(n/2<sup>k</sup>)</code>, and the total is <code>&Theta;(n log log n)</code>. When the theorem is silent, the tree still answers.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Quoting quicksort as <code>&Theta;(n log n)</code> worst case</span>
+    <div class="pitfalls__bug">Quicksort's recurrence with an adversarial pivot is <code>T(n) = T(n-1) + &Theta;(n) = &Theta;(n&sup2;)</code>. On sorted input with a first-element pivot this is not hypothetical.</div>
+    <div class="pitfalls__fix">Say "<code>&Theta;(n log n)</code> <em>expected</em> with a random pivot, <code>&Theta;(n&sup2;)</code> worst case". This is also why Java's <code>Arrays.sort(int[])</code> can be attacked, and why <code>Arrays.sort(Integer[])</code> (merge sort) cannot.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Unequal splits</td>
+        <td>The master theorem needs one size <code>n/b</code>. With two different fractions, draw the tree; if the fractions sum to 1 the tree is still <code>&Theta;(log n)</code> deep and the answer is usually <code>&Theta;(n log n)</code>.</td>
+        <td><code>T(n) = T(n/3) + T(2n/3) + n  =&gt;  Theta(n log n)</code></td>
+        <td><a href="../04-recursion-and-dnc/divide-and-conquer.html">Divide &amp; Conquer</a></td>
+      </tr>
+      <tr>
+        <td>Akra-Bazzi (many unequal terms)</td>
+        <td>Generalises the master theorem to <code>&Sigma; a<sub>i</sub> T(b<sub>i</sub> n) + f(n)</code>. You almost never need it, but knowing the name is a good signal.</td>
+        <td><code>find p with sum(a_i * b_i^p) = 1, then T = Theta(n^p (1 + integral))</code></td>
+        <td>Reference only</td>
+      </tr>
+      <tr>
+        <td>Substitution for non-standard shapes</td>
+        <td>Change variables until the recurrence becomes standard. <code>m = log n</code> turns <code>&radic;n</code> recursions into halving recursions.</td>
+        <td><code>T(n) = 2T(sqrt n) + 1, m = log n  =&gt;  S(m) = 2S(m/2) + 1 = Theta(m)</code></td>
+        <td><a href="../06-range-queries/sparse-table-and-rmq.html">Sparse Table</a></td>
+      </tr>
+      <tr>
+        <td>Recurrence on the answer, not the input</td>
+        <td>Divide and conquer over the value range instead of the array. Depth is <code>log(maxValue)</code>, which is a constant like 30 or 60.</td>
+        <td><code>T(range) = T(range/2) + O(n)  =&gt;  O(n log maxValue)</code></td>
+        <td><a href="../01-arrays-and-windows/binary-search-on-answer.html">Binary Search on Answer</a></td>
+      </tr>
+      <tr>
+        <td>Amortised recurrences</td>
+        <td>When the split is guaranteed balanced only on average, state the expected bound and the worst case separately.</td>
+        <td><code>quickselect: E[T(n)] = T(n/2) + O(n) = O(n); worst O(n^2)</code></td>
+        <td><a href="../01-arrays-and-windows/kth-and-selection.html">Selection</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Derive merge sort's complexity from first principles.</summary>
+    <div class="followup__body">
+      <p>Sorting <code>n</code> elements splits into two halves, each sorted recursively, then merged in one linear pass, so <code>T(n) = 2T(n/2) + &Theta;(n)</code> with <code>T(1) = &Theta;(1)</code>. At depth <code>k</code> there are <code>2<sup>k</sup></code> calls on inputs of size <code>n/2<sup>k</sup></code>, so the level costs <code>2<sup>k</sup> &middot; n/2<sup>k</sup> = n</code> &mdash; independent of <code>k</code>. The recursion stops at depth <code>log&#8322; n</code>, giving <code>n(log&#8322; n + 1) = &Theta;(n log n)</code>.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is the master theorem's answer <code>n<sup>log<sub>b</sub>a</sup></code> in case 1?</summary>
+    <div class="followup__body">
+      <p>That expression <em>is</em> the number of leaves. The tree has depth <code>log<sub>b</sub> n</code> and branching factor <code>a</code>, so it has <code>a<sup>log<sub>b</sub>n</sup></code> leaves, and by the identity <code>a<sup>log<sub>b</sub>n</sup> = n<sup>log<sub>b</sub>a</sup></code> that equals <code>n<sup>c</sup></code>. Case 1 says the combine work is so small that the total is just the cost of touching every leaf.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the space complexity of a recursive algorithm?</summary>
+    <div class="followup__body">
+      <p><code>&Theta;(maximum depth)</code> for the call stack, plus whatever the combine step allocates. Merge sort is <code>&Theta;(n)</code> total because of the buffer; quicksort is <code>&Theta;(log n)</code> expected if you always recurse into the smaller side and loop on the larger one. Note that the <em>number of nodes</em> in the recursion tree is irrelevant to space &mdash; only the deepest path is live at any moment.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>A recursion is 10&#8309; deep. How do you avoid a stack overflow in Java?</summary>
+    <div class="followup__body">
+      <p>Three options, in order of preference. <strong>Rewrite iteratively</strong> with an explicit <code>ArrayDeque</code> or <code>int[]</code> stack &mdash; always correct and usually faster. <strong>Run on a thread with a bigger stack:</strong> <code>new Thread(null, task, "main", 1 &lt;&lt; 26).start()</code>, which is a standard competitive-programming trick. <strong>Reduce the depth</strong> by recursing into the smaller subproblem first. The default JVM stack is around 512&nbsp;KB, roughly 10&#8308;&ndash;10&#8309; frames.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why does Strassen's algorithm beat the naive matrix multiply?</summary>
+    <div class="followup__body">
+      <p>Block multiplication gives <code>T(n) = 8T(n/2) + &Theta;(n&sup2;)</code>, and <code>log&#8322;8 = 3</code>, so case 1 yields <code>&Theta;(n&sup3;)</code> &mdash; no better than the triple loop. Strassen replaces 8 multiplications with 7 (at the cost of more additions, which are still <code>&Theta;(n&sup2;)</code>), giving <code>T(n) = 7T(n/2) + &Theta;(n&sup2;)</code> and <code>&Theta;(n<sup>log&#8322;7</sup>) = &Theta;(n<sup>2.807</sup>)</code>. The general lesson: in case 1, reducing <code>a</code> is the only thing that helps.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When should I not bother with a recurrence at all?</summary>
+    <div class="followup__body">
+      <p>When subproblems overlap. Then the count of <em>distinct</em> subproblems is what matters, and the cost is <code>states &times; transition</code>. Recursive Fibonacci is <code>&Theta;(&phi;&#8319;)</code>; memoised, it is <code>&Theta;(n)</code>, and no recurrence solving is involved &mdash; you simply count states. Recognising which of the two situations you are in is more valuable than being fast at the master theorem.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>For each of these, write the recurrence and solve it before you code, then confirm your bound against the constraints.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/sort-an-array/" target="_blank" rel="noopener">Sort an Array</a></td>
+        <td><span class="badge badge--lc">LC 912</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Implement merge sort; state T(n) = 2T(n/2) + n and why Arrays.sort(int[]) is risky here</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/merge-sorted-array/" target="_blank" rel="noopener">Merge Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 88</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The merge step alone; the f(n) in the recurrence</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener">Maximum Subarray</a></td>
+        <td><span class="badge badge--lc">LC 53</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Do the divide-and-conquer version: T(n) = 2T(n/2) + O(n)</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/search-a-2d-matrix-ii/" target="_blank" rel="noopener">Search a 2D Matrix II</a></td>
+        <td><span class="badge badge--lc">LC 240</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Quadrant recursion T(n) = 3T(n/2) + O(1); compare with the O(m+n) staircase walk</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Kth Largest Element in an Array</a></td>
+        <td><span class="badge badge--lc">LC 215</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Quickselect: E[T(n)] = T(n/2) + O(n) = O(n) expected, O(n&sup2;) worst</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener">Count of Smaller Numbers After Self</a></td>
+        <td><span class="badge badge--lc">LC 315</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Counting inversions inside merge sort; the recurrence is unchanged</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/reverse-pairs/" target="_blank" rel="noopener">Reverse Pairs</a></td>
+        <td><span class="badge badge--lc">LC 493</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Same recurrence, different merge predicate</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/beautiful-array/" target="_blank" rel="noopener">Beautiful Array</a></td>
+        <td><span class="badge badge--lc">LC 932</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Odd/even split recursion; depth log n and O(n log n) total</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/different-ways-to-add-parentheses/" target="_blank" rel="noopener">Different Ways to Add Parentheses</a></td>
+        <td><span class="badge badge--lc">LC 241</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Catalan-many results; the recurrence is not master-theorem shaped</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/313/B" target="_blank" rel="noopener">Ilya and Queries</a></td>
+        <td><span class="badge badge--cf">CF 313B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Contrast: no recursion at all, just precomputation</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://cses.fi/problemset/task/1755" target="_blank" rel="noopener">Karatsuba multiplication</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Recognise 3T(n/2) + O(n) = O(n^1.585) versus the schoolbook O(n&sup2;)</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/number-of-ways-to-reorder-array-to-get-same-bst/" target="_blank" rel="noopener">Number of Ways to Reorder Array to Get Same BST</a></td>
+        <td><span class="badge badge--lc">LC 1569</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Recursion over subtree sizes with a binomial combine; write the recurrence first</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 240 &mdash; when a worse recurrence beats a better-looking one</summary>
+  <div class="spoiler__body">
+    <p>The quadrant recursion discards one of four quadrants, giving <code>T(n) = 3T(n/2) + O(1)</code>, i.e. <code>&Theta;(n<sup>log&#8322;3</sup>) = &Theta;(n<sup>1.585</sup>)</code> where <code>n</code> is the side length &mdash; about <code>&Theta;(m<sup>0.79</sup>)</code> in terms of the <code>m = n&sup2;</code> cells. That is better than scanning everything, but the staircase walk from the top-right corner is <code>O(m + n)</code> and four lines long. The transferable lesson: <em>a clever recurrence is not automatically the best answer; always compare it against the simplest monotonicity argument.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 1569 &mdash; setting up the recurrence</summary>
+  <div class="spoiler__body">
+    <p>The first element is forced to be the root, which partitions the rest into the elements smaller than it (left subtree, size <code>L</code>) and larger (right subtree, size <code>R</code>). Any interleaving of the two subsequences preserves the BST, so the count is <code>C(L+R, L) &times; f(left) &times; f(right)</code>. That gives <code>T(n) = T(L) + T(R) + O(n)</code>, which is <code>O(n&sup2;)</code> worst case and <code>O(n log n)</code> when balanced. You will need <a href="../11-math-and-number-theory/combinatorics.html">nCr under a modulus</a>. General lesson: <em>when a recursive structure is forced by the data, the recurrence writes itself &mdash; find the forced choice first.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Draw the tree, not the algebra.</strong> Total work is <code>&Sigma;<sub>k</sub> a<sup>k</sup> f(n/b<sup>k</sup>)</code>, a geometric series, and a geometric series is owned by its larger end.</li>
+    <li><strong>Compare <code>f(n)</code> with <code>n<sup>log<sub>b</sub>a</sup></code></strong> &mdash; the cost of the leaves. Smaller means leaves win, equal means multiply by <code>log n</code>, larger means the root wins.</li>
+    <li><strong>Divide versus subtract is the first check.</strong> <code>T(n/2)</code> means depth <code>log n</code>; <code>T(n-1)</code> means depth <code>n</code> and a real stack-overflow risk.</li>
+    <li><strong>Overlapping subproblems are not a recurrence problem.</strong> Switch to counting states &times; transitions, which is dynamic programming.</li>
+    <li><strong>Space is the depth of the tree</strong>, plus any buffers &mdash; never the number of nodes.</li>
+  </ul>
+  <div class="recap__oneliner">T(n)=aT(n/b)+f(n), c=log_b(a):  f&lt;n^c -&gt; n^c  |  f=n^c*log^k -&gt; n^c*log^(k+1)  |  f&gt;n^c -&gt; f(n)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

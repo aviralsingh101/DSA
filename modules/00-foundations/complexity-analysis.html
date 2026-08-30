@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Complexity Analysis &mdash; DSA Course</title>
+<meta name="description" content="Learn to price an algorithm before you write it, so that the constraints in the problem statement tell you which idea to reach for instead of which idea to abandon.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="complexity-analysis">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 00 &middot; Foundations</span>
+  <h1>Complexity Analysis</h1>
+  <p class="hero__tagline">Learn to price an algorithm before you write it, so that the constraints in the problem statement tell you which idea to reach for instead of which idea to abandon.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">22 min read</span>
+    <span class="hero__tags">
+      <span class="chip">big-o</span>
+      <span class="chip">amortised</span>
+      <span class="chip">counting</span>
+      <span class="chip">meta</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Complexity analysis is not academic bookkeeping in competitive programming, it is the targeting system. The problem setter chose <code>n &le; 2 &times; 10&#8309;</code> deliberately, and that number rules out entire families of solutions before you write a line. If you can price a candidate approach in ten seconds you avoid the single most expensive interview mistake: implementing something correct that is too slow, then having no time left to fix it.</p>
+<p>The reason this skill decays is that day-to-day engineering rarely punishes a hidden quadratic. A service handling 50 records per request never notices. A judge with <code>n = 10&#8309;</code> notices immediately, and so does an interviewer who asks "what is the complexity?" and watches whether you answer instantly or start counting loops with a finger.</p>
+<p>The whole discipline reduces to three habits: count the number of times the innermost statement runs, keep only the fastest-growing term, and compare that against about <code>10&#8312;</code> simple operations per second.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Big-O is a statement about <em>growth</em>, not about time. It answers "if the input doubles, what happens to the work?" That is exactly the question the constraint line in a problem statement is asking you.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>You are choosing between two working approaches and need to know which one survives the constraints</li>
+        <li>The problem gives an explicit bound such as <code>n &le; 10&#8309;</code>, <code>sum of n over all test cases &le; 2 &times; 10&#8309;</code>, or a time limit of 1 second</li>
+        <li>An interviewer asks "can you do better?" &mdash; they are telling you a lower complexity class exists</li>
+        <li>Your solution passes small tests and times out on large ones</li>
+        <li>A data structure operation is cheap <em>on average</em> but occasionally expensive (<code>ArrayList.add</code>, <code>HashMap</code> resize, DSU <code>find</code>) &rarr; you need amortised analysis, not worst-case-per-operation</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The bottleneck is I/O rather than computation &rarr; fix the reader (<a href="java-for-dsa.html">fast IO</a>) before optimising the algorithm</li>
+        <li>Two candidates share the same complexity class &rarr; the decision is about constants, cache behaviour and code length, which Big-O deliberately hides</li>
+        <li><code>n</code> is tiny and fixed (say <code>n &le; 12</code>) &rarr; even <code>O(n!)</code> is fine, so pick whatever is easiest to write correctly</li>
+        <li>You need the exact operation count for a proof &rarr; that is a recurrence, see <a href="recurrences-and-master-theorem.html">Recurrences</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>A single loop over <code>n</code></td>
+        <td>Each element visited a constant number of times</td>
+        <td><code>O(n)</code></td>
+      </tr>
+      <tr>
+        <td>Nested loops where the inner bound depends on the outer</td>
+        <td>Sum of an arithmetic series, <code>n(n+1)/2</code></td>
+        <td><code>O(n&sup2;)</code>, not <code>O(n)</code></td>
+      </tr>
+      <tr>
+        <td>The search space halves each step</td>
+        <td>A logarithmic number of steps</td>
+        <td><code>O(log n)</code></td>
+      </tr>
+      <tr>
+        <td>A loop over <code>n</code> containing a <code>TreeMap</code> or heap operation</td>
+        <td><code>n</code> times a logarithmic factor</td>
+        <td><code>O(n log n)</code></td>
+      </tr>
+      <tr>
+        <td>Sorting anywhere in the solution</td>
+        <td>You have already paid <code>n log n</code>, so extra <code>log</code> factors are free-ish</td>
+        <td><code>O(n log n)</code> baseline</td>
+      </tr>
+      <tr>
+        <td>Enumerating all subsets</td>
+        <td>One iteration per subset</td>
+        <td><code>O(2&#8319;)</code> or <code>O(2&#8319; &middot; n)</code></td>
+      </tr>
+      <tr>
+        <td><code>String</code> concatenation inside a loop</td>
+        <td>Each <code>+=</code> copies the whole string &mdash; a hidden inner loop</td>
+        <td><code>O(n&sup2;)</code>; use <code>StringBuilder</code></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> <code>O(n)</code> space means <code>O(n)</code> time</td>
+        <td>Independent axes; a hash join is <code>O(n)</code> time and <code>O(n)</code> space, binary search is <code>O(log n)</code> time and <code>O(1)</code> space</td>
+        <td>Always state both</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> roughly <code>10&#8312;</code> simple operations per second in Java. Divide the budget by 2&ndash;5 if the inner loop chases pointers, boxes <code>Integer</code>s, or touches a <code>HashMap</code>.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the counting rules</h2>
+<p>Pick the statement that executes most often &mdash; usually the innermost line of the deepest loop &mdash; and count how many times it runs as a function of <code>n</code>. That count, stripped of constants and lower-order terms, is the complexity. Everything else is a shortcut for doing that count quickly.</p>
+<p>Four rules cover almost every case you will meet. <strong>Sequence:</strong> code run one after the other costs the maximum, not the sum, because <code>O(n) + O(n&sup2;) = O(n&sup2;)</code>. <strong>Nesting:</strong> independent nested loops multiply. <strong>Dependent nesting:</strong> when the inner bound depends on the outer index, sum the series instead of multiplying &mdash; but note that <code>n(n+1)/2</code> is still <code>&Theta;(n&sup2;)</code>, so the shortcut of multiplying gives the right class anyway. <strong>Amortisation:</strong> when a rare operation is expensive, charge its cost to the cheap operations that made it necessary.</p>
+<p>Big-O is an upper bound, &Omega; a lower bound, and &Theta; both. In practice everyone says "O" and means "&Theta;", and that is fine in an interview &mdash; but knowing the difference matters when you claim optimality. Saying "any correct algorithm must read every element, so &Omega;(n) is a lower bound and my &Theta;(n) solution is optimal" is a much stronger answer than "mine is O(n)".</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The one-sentence method</span>
+    <p><strong>How many times does the innermost statement run, as a function of <code>n</code>?</strong> Answer that, drop constants and lower-order terms, and you have the complexity. If the innermost statement is itself a library call, substitute that call's cost first &mdash; <code>list.contains</code> is <code>O(n)</code>, <code>set.contains</code> is <code>O(1)</code>, and that one substitution is the difference between passing and timing out.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Amortised analysis, concretely</span>
+    <p>Growing an <code>ArrayList</code> doubles its capacity, which copies every element. Copying looks <code>O(n)</code>, so <code>n</code> appends look <code>O(n&sup2;)</code>. But doubling from 1 to <code>n</code> copies <code>1 + 2 + 4 + &hellip; + n &lt; 2n</code> elements in total, so <code>n</code> appends cost <code>O(n)</code> together, i.e. <code>O(1)</code> <em>amortised</em> each. The geometric series is the whole trick: doubling is amortised <code>O(1)</code>, growing by a constant <code>+c</code> is amortised <code>O(n)</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Constants are hidden, not absent</span>
+    <p><code>O(n log n)</code> with a <code>PriorityQueue&lt;int[]&gt;</code> can lose to <code>O(n&sup2;)</code> on <code>n = 2000</code>, because every element is a heap allocation and every comparison is a virtual call. Java's boxing and pointer chasing cost roughly 5&ndash;20&times; a primitive array access. When two solutions are in the same class, prefer flat <code>int[]</code> arrays.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The log factor is nearly free</span>
+    <p><code>log&#8322;(10&#8310;) &asymp; 20</code>. Going from <code>O(n)</code> to <code>O(n log n)</code> costs about 20&times;, while going from <code>O(n log n)</code> to <code>O(n&sup2;)</code> at <code>n = 10&#8310;</code> costs 50000&times;. So never contort a solution to shave a <code>log</code>; do contort it to shave a factor of <code>n</code>.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>What each complexity class can actually handle</h3>
+
+<p>Operation counts for each growth rate at five input sizes. Green means it fits in a one-second budget of about <code>10&#8312;</code> operations; red means it does not. Step through it once and the shape of the boundary is easy to remember: it runs diagonally from top-right to bottom-left.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="cxTable"></div>
+  <div class="viz-player" data-viz-target="cxTable">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "ops",
+      "rowHeads": [
+        "log n",
+        "n",
+        "n log n",
+        "n²",
+        "n³",
+        "2ⁿ",
+        "n!"
+      ],
+      "colHeads": [
+        "n=10",
+        "n=100",
+        "n=1e3",
+        "n=1e5",
+        "n=1e6"
+      ],
+      "vars": [
+        "class",
+        "verdict"
+      ],
+      "speed": 1200,
+      "frames": [
+        {
+          "note": "O(log n): 20 steps at a million elements. Effectively free. This is binary search and balanced-tree lookups.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "3",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "7",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "10",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "17",
+              "cls": "answer"
+            },
+            {
+              "r": 0,
+              "c": 4,
+              "val": "20",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "class": "log n",
+            "verdict": "always fine"
+          }
+        },
+        {
+          "note": "O(n): a single pass. Fine everywhere, and the floor for any problem that must read all input.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "10",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "100",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "1e3",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "1e5",
+              "cls": "answer"
+            },
+            {
+              "r": 1,
+              "c": 4,
+              "val": "1e6",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "class": "n",
+            "verdict": "always fine"
+          }
+        },
+        {
+          "note": "O(n log n): sorting. 2e7 operations at n = 1e6, comfortably inside a second. This is the default target for array problems.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "33",
+              "cls": "answer"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "664",
+              "cls": "answer"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "1e4",
+              "cls": "answer"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "1.7e6",
+              "cls": "answer"
+            },
+            {
+              "r": 2,
+              "c": 4,
+              "val": "2e7",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "class": "n log n",
+            "verdict": "always fine"
+          }
+        },
+        {
+          "note": "O(n²): the wall appears at n = 1e5, where 1e10 operations is about 100 seconds. But it is perfectly fine up to a few thousand.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "100",
+              "cls": "answer"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "1e4",
+              "cls": "answer"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "1e6",
+              "cls": "answer"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "1e10",
+              "cls": "block"
+            },
+            {
+              "r": 3,
+              "c": 4,
+              "val": "1e12",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "class": "n²",
+            "verdict": "n ≤ ~5000"
+          }
+        },
+        {
+          "note": "O(n³): dies at n = 1e3 already (1e9). Floyd-Warshall is O(n³), which is exactly why its constraints are always n ≤ 500.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "1e3",
+              "cls": "answer"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "1e6",
+              "cls": "answer"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "1e9",
+              "cls": "block"
+            },
+            {
+              "r": 4,
+              "c": 3,
+              "val": "1e15",
+              "cls": "block"
+            },
+            {
+              "r": 4,
+              "c": 4,
+              "val": "1e18",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "class": "n³",
+            "verdict": "n ≤ ~500"
+          }
+        },
+        {
+          "note": "O(2ⁿ): only n ≤ ~25 survives. Seeing n ≤ 20 in a statement is therefore almost a signature for bitmask enumeration or bitmask DP.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 0,
+              "val": "1e3",
+              "cls": "answer"
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "val": "1e30",
+              "cls": "block"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "huge",
+              "cls": "block"
+            },
+            {
+              "r": 5,
+              "c": 3,
+              "val": "huge",
+              "cls": "block"
+            },
+            {
+              "r": 5,
+              "c": 4,
+              "val": "huge",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "class": "2ⁿ",
+            "verdict": "n ≤ ~25"
+          }
+        },
+        {
+          "note": "O(n!): only n ≤ ~11. If a problem allows n ≤ 8, the setter is telling you brute-force permutations are acceptable.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 0,
+              "val": "4e6",
+              "cls": "answer"
+            },
+            {
+              "r": 6,
+              "c": 1,
+              "val": "huge",
+              "cls": "block"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "huge",
+              "cls": "block"
+            },
+            {
+              "r": 6,
+              "c": 3,
+              "val": "huge",
+              "cls": "block"
+            },
+            {
+              "r": 6,
+              "c": 4,
+              "val": "huge",
+              "cls": "block"
+            }
+          ],
+          "values": {
+            "class": "n!",
+            "verdict": "n ≤ ~11"
+          }
+        },
+        {
+          "note": "Read a column, not a row. At n = 1e5 only the top three rows are green, so the intended solution is O(n) or O(n log n). That is the deduction you want to be automatic.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 3,
+              "val": "17",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "1e5",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "1.7e6",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "class": "n = 1e5",
+            "verdict": "O(n) or O(n log n)"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Growth rates against input size. The useful reading direction is backwards: given a value of <code>n</code>, which rows are still green? Those are your candidate complexities.</figcaption>
+</figure>
+
+<h3>Amortised O(1): why doubling works</h3>
+
+<p>Each cell is one <code>add</code> call on an <code>ArrayList</code>, labelled with the number of element copies it performs. Most cost 1. The red cells are reallocations that copy the whole array. Watch the total: it stays below <code>2n</code>, which is what "amortised <code>O(1)</code>" means.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="amort"></div>
+  <div class="viz-player" data-viz-target="amort">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "cost of add #k (element copies)",
+      "array": [
+        1,
+        2,
+        3,
+        1,
+        5,
+        1,
+        1,
+        1,
+        9
+      ],
+      "indexLabels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "vars": [
+        "capacity",
+        "total copies",
+        "average"
+      ],
+      "speed": 950,
+      "frames": [
+        {
+          "note": "add #1 into capacity 1. One write, no copy. Total 1.",
+          "active": [
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "capacity": 1,
+            "total copies": 1,
+            "average": "1.00"
+          }
+        },
+        {
+          "note": "add #2 overflows capacity 1, so reallocate to 2 and copy 1 old element. Cost 2.",
+          "active": [
+            1
+          ],
+          "x": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "capacity": 2,
+            "total copies": 3,
+            "average": "1.50"
+          }
+        },
+        {
+          "note": "add #3 overflows capacity 2, reallocate to 4 and copy 2 elements. Cost 3.",
+          "active": [
+            2
+          ],
+          "x": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "capacity": 4,
+            "total copies": 6,
+            "average": "2.00"
+          }
+        },
+        {
+          "note": "add #4 fits in capacity 4. Cost 1. The expensive steps are already thinning out.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "capacity": 4,
+            "total copies": 7,
+            "average": "1.75"
+          }
+        },
+        {
+          "note": "add #5 overflows capacity 4, reallocate to 8 and copy 4. Cost 5 — the worst single step so far.",
+          "active": [
+            4
+          ],
+          "x": [
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "values": {
+            "capacity": 8,
+            "total copies": 12,
+            "average": "2.40"
+          }
+        },
+        {
+          "note": "adds #6, #7, #8 all fit. Cost 1 each, and the average falls back.",
+          "active": [
+            5,
+            6,
+            7
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "dim": [
+            8
+          ],
+          "values": {
+            "capacity": 8,
+            "total copies": 15,
+            "average": "1.88"
+          }
+        },
+        {
+          "note": "add #9 overflows capacity 8, reallocate to 16 and copy 8. Cost 9.",
+          "active": [
+            8
+          ],
+          "x": [
+            8
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "capacity": 16,
+            "total copies": 24,
+            "average": "2.67"
+          }
+        },
+        {
+          "note": "Total copies 1+2+4+8 = 15 for reallocation plus 9 writes = 24 < 2 × 9 + 6. In general the copies form a geometric series bounded by 2n, so each add is O(1) amortised.",
+          "best": [
+            1,
+            2,
+            4,
+            8
+          ],
+          "done": [
+            0,
+            3,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "capacity": 16,
+            "total copies": "< 2n",
+            "average": "O(1)"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Cost per <code>add</code> for the first nine appends with capacity doubling from 1. Expensive steps get rarer at exactly the rate their cost grows, so the average stays constant.</figcaption>
+</figure>
+
+<h3>The growth-rate ladder</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  A["O(1)"] --&gt; B["O(log n)"]
+  B --&gt; C["O(sqrt n)"]
+  C --&gt; D["O(n)"]
+  D --&gt; E["O(n log n)"]
+  E --&gt; F["O(n sqrt n)"]
+  F --&gt; G["O(n squared)"]
+  G --&gt; H["O(n cubed)"]
+  H --&gt; I["O(2 to the n)"]
+  I --&gt; J["O(n factorial)"]
+  </div>
+  <figcaption>Memorise the order. When you produce a candidate complexity, locate it on this ladder and check it against the constraint before you start typing.</figcaption>
+</figure>
+
+<h3>How to price a loop nest</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  findInner["find the statement that runs most often"] --&gt; isLib{"is it a library call?"}
+  isLib -- yes --&gt; subst["substitute that call's own cost first"]
+  subst --&gt; countIt
+  isLib -- no --&gt; countIt["count executions as a function of n"]
+  countIt --&gt; depends{"does an inner bound depend on an outer index?"}
+  depends -- yes --&gt; series["sum the series, not the product"]
+  depends -- no --&gt; product["multiply the loop bounds"]
+  series --&gt; drop["drop constants and lower-order terms"]
+  product --&gt; drop
+  drop --&gt; budget{"is the count under 1e8?"}
+  budget -- yes --&gt; writeIt["implement it"]
+  budget -- no --&gt; better["find a better idea, do not micro-optimise"]
+  </div>
+  <figcaption>Apply this to the deepest statement in your code. The most commonly missed branch is the last one: a library call inside a loop whose own cost you forgot to substitute.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Identify the hot statement.</strong> The innermost line of the deepest loop, or the body of the most frequent recursive call.</li>
+  <li><strong>Substitute library costs.</strong> Replace every call in that line with its own complexity: <code>List.contains</code> &rarr; <code>O(n)</code>, <code>Set.contains</code> &rarr; <code>O(1)</code>, <code>TreeMap.get</code> &rarr; <code>O(log n)</code>, <code>String.substring</code> &rarr; <code>O(len)</code>.</li>
+  <li><strong>Count executions.</strong> Multiply independent loop bounds; sum the series when an inner bound depends on an outer index.</li>
+  <li><strong>Add sequential blocks with max, not plus.</strong> <code>O(n log n)</code> then <code>O(n)</code> is <code>O(n log n)</code>.</li>
+  <li><strong>Amortise the spiky operations.</strong> Charge a resize or a path compression to the cheap operations that caused it, then quote the average.</li>
+  <li><strong>Drop constants and lower-order terms</strong> to get the class.</li>
+  <li><strong>Evaluate against the constraint</strong> using <code>10&#8312;</code> operations per second, then divide by 2&ndash;5 for boxing and pointer chasing.</li>
+  <li><strong>State time and space separately</strong>, and say whether your bound is tight (&Theta;) or only an upper bound (O).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Pricing seven snippets, in the order the rules apply. Highlighted rows are the ones that most often get answered wrong.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>#</th><th>Snippet</th><th>Hot statement runs</th><th>Class</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td><code>for i in 0..n: x++</code></td><td>n</td><td>O(n)</td><td>One loop, constant body.</td></tr>
+      <tr><td>2</td><td><code>for i in 0..n: for j in 0..n: x++</code></td><td>n &times; n</td><td>O(n&sup2;)</td><td>Independent nesting multiplies.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td><code>for i in 0..n: for j in i..n: x++</code></td><td>n(n+1)/2</td><td>O(n&sup2;)</td><td>Dependent nesting sums a series &mdash; but the class is unchanged.</td></tr>
+      <tr><td>4</td><td><code>for (i = n; i &gt; 0; i /= 2) x++</code></td><td>log&#8322; n</td><td>O(log n)</td><td>Multiplicative shrinking gives a logarithm.</td></tr>
+      <tr><td>5</td><td><code>for i in 0..n: for (j = n; j &gt; 0; j /= 2)</code></td><td>n log n</td><td>O(n log n)</td><td>Linear outer, logarithmic inner.</td></tr>
+      <tr class="trace-table__row--change"><td>6</td><td><code>for i in 0..n: if (list.contains(i))</code></td><td>n &times; n</td><td>O(n&sup2;)</td><td>The trap. <code>contains</code> on a <code>List</code> is a hidden inner loop; swap in a <code>HashSet</code> for O(n).</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td><code>for i in 0..n: s += c;</code> (<code>String s</code>)</td><td>1+2+&hellip;+n</td><td>O(n&sup2;)</td><td>The other trap. Immutable strings copy on every concatenation; use <code>StringBuilder</code>.</td></tr>
+      <tr><td>8</td><td><code>for (i = 0; i*i &lt;= n; i++)</code></td><td>&radic;n</td><td>O(&radic;n)</td><td>Trial division and divisor enumeration both live here.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Complexity Analysis implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">The hidden quadratics</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Counting exactly</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Amortised O(1)</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Hidden quadratics">
+    <p>Both methods look linear. Both are quadratic. These two shapes account for a large share of unexplained timeouts in Java.</p>
+    <div class="code" data-highlight="8,19">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HiddenCost.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayList;
+    import java.util.HashSet;
+    import java.util.List;
+    import java.util.Set;
+    
+    public class HiddenCost {
+    
+        /** Looks O(n). Actually O(n^2): List.contains scans the whole list. */
+        static int countDistinctSlow(int[] a) {
+            List&lt;Integer&gt; seen = new ArrayList&lt;&gt;();
+            for (int v : a) {
+                if (!seen.contains(v)) {
+                    seen.add(v);
+                }
+            }
+            return seen.size();
+        }
+    
+        /** Looks O(n). Actually O(n^2): every += copies the whole string. */
+        static String joinSlow(int[] a) {
+            String s = "";
+            for (int v : a) {
+                s += v + ",";
+            }
+            return s;
+        }
+    
+        /** O(n): hashing makes the membership test O(1) expected. */
+        static int countDistinctFast(int[] a) {
+            Set&lt;Integer&gt; seen = new HashSet&lt;&gt;();
+            for (int v : a) {
+                seen.add(v);
+            }
+            return seen.size();
+        }
+    
+        /** O(n): StringBuilder appends into a doubling buffer, O(1) amortised each. */
+        static String joinFast(int[] a) {
+            StringBuilder sb = new StringBuilder();
+            for (int v : a) {
+                sb.append(v).append(',');
+            }
+            return sb.toString();
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {3, 1, 4, 1, 5, 9, 2, 6, 5, 3};
+            System.out.println(countDistinctSlow(a) + " " + countDistinctFast(a));
+            System.out.println(joinFast(a));
+        }
+        // Input : [3,1,4,1,5,9,2,6,5,3]
+        // Output: 7 7
+        //         3,1,4,1,5,9,2,6,5,3,
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Counting exactly">
+    <p>When you distrust an analysis, count. This prints the exact number of inner-loop executions so you can check it against your closed form.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">OperationCounter.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class OperationCounter {
+    
+        /** Dependent nesting: the inner bound depends on i. */
+        static long countTriangular(int n) {
+            long ops = 0;
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = i; j &lt; n; j++) {
+                    ops++;
+                }
+            }
+            return ops;
+        }
+    
+        /** Multiplicative shrinking: j is halved each step. */
+        static long countLinearithmic(int n) {
+            long ops = 0;
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = n; j &gt; 0; j /= 2) {
+                    ops++;
+                }
+            }
+            return ops;
+        }
+    
+        public static void main(String[] args) {
+            for (int n : new int[] {8, 16, 32}) {
+                long tri = countTriangular(n);
+                long lin = countLinearithmic(n);
+                System.out.println(n + ": triangular=" + tri + " (n(n+1)/2=" + (1L * n * (n + 1) / 2)
+                        + "), linearithmic=" + lin + " (n*(log2(n)+1)="
+                        + (1L * n * (Integer.numberOfTrailingZeros(n) + 1)) + ")");
+            }
+        }
+        // Output: 8: triangular=36 (n(n+1)/2=36), linearithmic=32 (n*(log2(n)+1)=32)
+        //         16: triangular=136 (n(n+1)/2=136), linearithmic=80 (n*(log2(n)+1)=80)
+        //         32: triangular=528 (n(n+1)/2=528), linearithmic=192 (n*(log2(n)+1)=192)
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Amortised">
+    <p>A minimal dynamic array that reports total copies, so the <code>&lt; 2n</code> bound is something you have measured rather than something you were told.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AmortisedGrowth.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class AmortisedGrowth {
+    
+        private int[] data = new int[1];
+        private int size = 0;
+        long copies = 0;
+    
+        void add(int v) {
+            if (size == data.length) {
+                int[] bigger = new int[data.length * 2];
+                System.arraycopy(data, 0, bigger, 0, size);
+                copies += size;                  // the only expensive part
+                data = bigger;
+            }
+            data[size++] = v;
+        }
+    
+        public static void main(String[] args) {
+            for (int n : new int[] {1000, 100000, 1000000}) {
+                AmortisedGrowth g = new AmortisedGrowth();
+                for (int i = 0; i &lt; n; i++) {
+                    g.add(i);
+                }
+                System.out.println("n=" + n + " copies=" + g.copies
+                        + " copies/n=" + String.format("%.2f", (double) g.copies / n));
+            }
+        }
+        // Output: n=1000 copies=1023 copies/n=1.02
+        //         n=100000 copies=131071 copies/n=1.31
+        //         n=1000000 copies=1048575 copies/n=1.05
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time meta-topic</span>
+    <span class="badge badge--space">Space meta-topic</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The two series you need by heart. <strong>Arithmetic</strong>, from dependent nested loops:</p>
+    <p><span class="eq">1 + 2 + &hellip; + n = n(n+1)/2 = &Theta;(n&sup2;)</span></p>
+    <p><strong>Geometric</strong>, from doubling and from halving:</p>
+    <p><span class="eq">1 + 2 + 4 + &hellip; + 2<sup>k</sup> = 2<sup>k+1</sup> &minus; 1 &lt; 2 &middot; 2<sup>k</sup> = &Theta;(2<sup>k</sup>)</span></p>
+    <p>The geometric bound is why capacity doubling is amortised <code>O(1)</code>: total copies to reach size <code>n</code> are under <code>2n</code>, so the average per operation is constant. It is also why halving a search space takes <code>&Theta;(log n)</code> steps: solving <code>n / 2<sup>k</sup> = 1</code> gives <code>k = log&#8322; n</code>.</p>
+    <p>One more worth knowing, the harmonic series, which is where sieve-style loops come from:</p>
+    <p><span class="eq">n/1 + n/2 + n/3 + &hellip; + n/n = n &middot; H<sub>n</sub> &asymp; n ln n = &Theta;(n log n)</span></p>
+    <p>That is exactly the cost of the Sieve of Eratosthenes' inner loops, and it explains why the sieve is <code>O(n log log n)</code> rather than <code>O(n log n)</code> once you restrict the outer loop to primes.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>O(1)</code></td><td>constant</td><td>&mdash;</td><td>Array index, arithmetic, <code>HashMap</code> hit</td></tr>
+      <tr><td><code>O(log n)</code></td><td>~20 at n = 1e6</td><td>&mdash;</td><td>Binary search, heap push, <code>TreeMap</code></td></tr>
+      <tr><td><code>O(&radic;n)</code></td><td>~1000 at n = 1e6</td><td>&mdash;</td><td>Trial division, Mo's algorithm blocks</td></tr>
+      <tr><td><code>O(n)</code></td><td>1e6</td><td>&mdash;</td><td>Single pass, counting sort, BFS on a sparse graph</td></tr>
+      <tr><td><code>O(n log n)</code></td><td>2e7</td><td>&mdash;</td><td>Sorting; the default target for array problems</td></tr>
+      <tr><td><code>O(n&sup2;)</code></td><td>1e10 at n = 1e5</td><td>&mdash;</td><td>Only when n &le; ~5000</td></tr>
+      <tr><td><code>O(2&#8319;)</code></td><td>1e6 at n = 20</td><td>&mdash;</td><td>Only when n &le; ~25; a bitmask signature</td></tr>
+      <tr><td><code>O(n!)</code></td><td>3.6e6 at n = 10</td><td>&mdash;</td><td>Only when n &le; ~11</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Treating a library call as free</span>
+    <div class="pitfalls__bug"><code>for (int v : a) if (list.contains(v)) &hellip;</code> &mdash; reported as <code>O(n)</code> because there is one visible loop, but <code>contains</code> on a <code>List</code> is itself <code>O(n)</code>, making it <code>O(n&sup2;)</code>.</div>
+    <div class="pitfalls__fix">Substitute every call's own cost before counting. Learn the table: <code>ArrayList.contains</code> / <code>indexOf</code> / <code>remove(Object)</code> are <code>O(n)</code>; <code>HashSet</code> and <code>HashMap</code> are <code>O(1)</code> expected; <code>TreeMap</code> is <code>O(log n)</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Adding sequential blocks instead of taking the maximum</span>
+    <div class="pitfalls__bug">"I sort, then do a linear pass, so it is <code>O(n log n + n)</code>" &mdash; then treating that as meaningfully different from <code>O(n log n)</code> and optimising the linear pass.</div>
+    <div class="pitfalls__fix"><code>O(n log n + n) = O(n log n)</code>. Optimise the dominant term only. The corollary is powerful: once you have paid for a sort, extra <code>O(log n)</code> work per element is free.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Ignoring the input-dependent factor</span>
+    <div class="pitfalls__bug">Quoting graph algorithms as <code>O(n&sup2;)</code> or <code>O(n log n)</code> when the real parameter is the edge count. Dijkstra is <code>O((V + E) log V)</code>, and on a dense graph <code>E = V&sup2;</code>, so it is <code>O(V&sup2; log V)</code>.</div>
+    <div class="pitfalls__fix">Name every parameter: <code>n</code> and <code>m</code>, or <code>V</code> and <code>E</code>, or <code>n</code> and <code>maxValue</code>. A complexity with an unnamed parameter is not an answer.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Confusing pseudo-polynomial with polynomial</span>
+    <div class="pitfalls__bug">Calling 0/1 knapsack "polynomial" because it is <code>O(nW)</code>. If <code>W = 10&#8313;</code> that is <code>10&sup1;&#8308;</code> operations &mdash; <code>W</code> is a <em>value</em>, not an input <em>length</em>.</div>
+    <div class="pitfalls__fix">Check whether a factor is a count of items or the magnitude of a number. <code>O(nW)</code>, <code>O(n &middot; maxA)</code> and <code>O(&radic;x)</code> are pseudo-polynomial: usable only when the value bound is small, and always worth stating.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting recursion's space cost</span>
+    <div class="pitfalls__bug">"DFS is <code>O(V + E)</code> time and <code>O(1)</code> space" &mdash; the call stack holds up to <code>V</code> frames, and on a path graph with <code>V = 10&#8309;</code> that is a <code>StackOverflowError</code>, not a slow program.</div>
+    <div class="pitfalls__fix">Recursion depth is space. Quote <code>O(depth)</code> auxiliary space, and switch to an explicit <code>ArrayDeque</code> stack when depth can reach <code>10&#8309;</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Assuming <code>HashMap</code> is always <code>O(1)</code></span>
+    <div class="pitfalls__bug">Relying on <code>O(1)</code> in a Codeforces solution keyed by <code>Integer</code>. Java's <code>Integer.hashCode()</code> is the value itself, so an adversary can feed keys that collide into one bucket and turn your pass into <code>O(n log n)</code> or worse per operation.</div>
+    <div class="pitfalls__fix">In competitive settings either sort and use two pointers, or salt your keys: mix each key with a random 64-bit constant, or wrap it with <code>Long.hashCode(x * 0x9E3779B97F4A7C15L)</code> before inserting.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Optimising a constant instead of a class</span>
+    <div class="pitfalls__bug">Spending twenty minutes replacing a <code>%</code> with a bit mask inside an <code>O(n&sup2;)</code> loop at <code>n = 10&#8309;</code>. A 2&times; win on <code>10&sup1;&#8304;</code> operations is still a timeout.</div>
+    <div class="pitfalls__fix">First check whether the class fits the constraint. Only micro-optimise when the class is correct and you are within about 5&times; of the limit.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Amortised vs worst case</td>
+        <td>Report the average over a sequence of operations rather than the worst single one. Valid only when the problem cares about total time, which is almost always.</td>
+        <td><code>ArrayList.add: O(n) worst, O(1) amortised
+DSU find: O(log n) worst, O(alpha(n)) amortised</code></td>
+        <td><a href="../06-range-queries/dsu.html">DSU</a></td>
+      </tr>
+      <tr>
+        <td>Expected vs worst case</td>
+        <td>Average over the algorithm's own randomness, not over inputs. Quicksort is <code>O(n&sup2;)</code> worst case but <code>O(n log n)</code> expected with a random pivot.</td>
+        <td><code>randomised quickselect: O(n) expected, O(n^2) worst</code></td>
+        <td><a href="../04-recursion-and-dnc/divide-and-conquer.html">Divide &amp; Conquer</a></td>
+      </tr>
+      <tr>
+        <td>Output-sensitive complexity</td>
+        <td>Include the size of the answer as a parameter. Enumerating all <code>k</code> subsets that sum to a target is <code>O(k &middot; n)</code>, which is fine when <code>k</code> is small and catastrophic when it is exponential.</td>
+        <td><code>O(n + k) where k = number of results reported</code></td>
+        <td><a href="../04-recursion-and-dnc/backtracking-with-pruning.html">Backtracking</a></td>
+      </tr>
+      <tr>
+        <td>Complexity in terms of value, not length</td>
+        <td>Pseudo-polynomial bounds such as <code>O(nW)</code> or <code>O(n &middot; maxA)</code>. Always state the value bound alongside them.</td>
+        <td><code>knapsack: O(n * W) time, O(W) space after rolling</code></td>
+        <td><a href="../10-dynamic-programming/knapsack-family.html">Knapsack</a></td>
+      </tr>
+      <tr>
+        <td>Amortised over all queries (offline)</td>
+        <td>Total work across <code>q</code> queries can be far below <code>q</code> times the per-query cost if you reorder them. This is the whole idea behind Mo's algorithm.</td>
+        <td><code>Mo: O((n + q) * sqrt(n)) total, not O(q * n)</code></td>
+        <td><a href="../13-greedy-and-offline/mos-algorithm.html">Mo's Algorithm</a></td>
+      </tr>
+      <tr>
+        <td>Space-time trade-off</td>
+        <td>Precomputing a table converts time into memory. Sparse tables buy <code>O(1)</code> queries with <code>O(n log n)</code> memory.</td>
+        <td><code>sparse table: O(n log n) space, O(1) query</code></td>
+        <td><a href="../06-range-queries/sparse-table-and-rmq.html">Sparse Table</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>What is the difference between O, &Theta; and &Omega;, and why should I care?</summary>
+    <div class="followup__body">
+      <p><code>O(f)</code> is an upper bound, <code>&Omega;(f)</code> a lower bound, <code>&Theta;(f)</code> both. Every <code>O(n)</code> algorithm is also <code>O(n&sup2;)</code>, which is why <code>O</code> alone is a weak claim. The reason to care is that <code>&Omega;</code> lets you argue <em>optimality</em>: "any algorithm must read all <code>n</code> elements, because changing an unread one changes the answer, so <code>&Omega;(n)</code> is a lower bound and my <code>&Theta;(n)</code> solution cannot be improved." That sentence ends the "can you do better?" line of questioning.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is comparison sorting <code>&Omega;(n log n)</code>?</summary>
+    <div class="followup__body">
+      <p>A comparison sort's execution is a path down a binary decision tree, one branch per comparison. There are <code>n!</code> possible orderings, so the tree needs at least <code>n!</code> leaves, so its height is at least <code>log&#8322;(n!) = &Theta;(n log n)</code> by Stirling. Hence no comparison sort beats <code>n log n</code>. The escape hatch is to stop comparing: counting and radix sort read the values themselves and achieve <code>O(n + k)</code>.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Your solution is <code>O(n log n)</code> and still times out. What now?</summary>
+    <div class="followup__body">
+      <p>Check, in this order. <strong>I/O:</strong> <code>Scanner</code> is roughly 10&times; slower than <code>BufferedReader</code>, and <code>System.out.println</code> in a loop is worse &mdash; buffer output in a <code>StringBuilder</code>. <strong>Boxing:</strong> <code>Integer[]</code>, <code>ArrayList&lt;Integer&gt;</code> and <code>PriorityQueue&lt;int[]&gt;</code> allocate per element; switch to <code>int[]</code>. <strong>Hash attacks:</strong> salt your keys. <strong>Hidden factors:</strong> a <code>String.substring</code> or <code>Math.pow</code> inside the loop. None of these change the class, and all of them can be a 10&times; wall-clock difference.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I derive the complexity of a recursive function?</summary>
+    <div class="followup__body">
+      <p>Write the recurrence, then solve it. Merge sort splits into two halves and merges linearly, so <code>T(n) = 2T(n/2) + &Theta;(n)</code>, which the master theorem resolves to <code>&Theta;(n log n)</code>. Binary search recurses once on half, so <code>T(n) = T(n/2) + &Theta;(1) = &Theta;(log n)</code>. The full toolkit is in <a href="recurrences-and-master-theorem.html">Recurrences &amp; Master Theorem</a>.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What does the inverse Ackermann function in DSU actually mean?</summary>
+    <div class="followup__body">
+      <p><code>&alpha;(n)</code> is the inverse of the Ackermann function, and it is below 5 for every <code>n</code> that fits in the universe. So amortised <code>O(&alpha;(n))</code> is "constant for all practical purposes", and you may safely quote DSU with path compression plus union by size as effectively <code>O(1)</code> per operation &mdash; while noting it is not literally constant.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is <code>O(n&sup2;)</code> the <em>right</em> answer?</summary>
+    <div class="followup__body">
+      <p>Whenever the constraints allow it. If <code>n &le; 2000</code>, an <code>O(n&sup2;)</code> solution you can write correctly in five minutes beats an <code>O(n log n)</code> one you debug for twenty. Interviewers care that you <em>knew</em> it was quadratic and <em>chose</em> it; the failure is not noticing.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>These are calibration exercises rather than implementation practice. For each one, state the intended complexity from the constraints <em>before</em> reading the editorial, then check yourself.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/running-sum-of-1d-array/" target="_blank" rel="noopener">Running Sum of 1d Array</a></td>
+        <td><span class="badge badge--lc">LC 1480</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Recognise O(n) is forced; state the &Omega;(n) lower bound out loud</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/contains-duplicate/" target="_blank" rel="noopener">Contains Duplicate</a></td>
+        <td><span class="badge badge--lc">LC 217</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Compare O(n&sup2;) list scan, O(n log n) sort, O(n) hashing; name the space cost of each</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/two-sum/" target="_blank" rel="noopener">Two Sum</a></td>
+        <td><span class="badge badge--lc">LC 1</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The canonical time-for-space trade: O(n&sup2;) to O(n) by adding a HashMap</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/search-insert-position/" target="_blank" rel="noopener">Search Insert Position</a></td>
+        <td><span class="badge badge--lc">LC 33</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Why halving gives log n; count the iterations for n = 1e6</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener">Kth Largest Element in an Array</a></td>
+        <td><span class="badge badge--lc">LC 215</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>O(n log n) sort vs O(n log k) heap vs O(n) expected quickselect &mdash; worst vs expected</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener">Count of Smaller Numbers After Self</a></td>
+        <td><span class="badge badge--lc">LC 315</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n = 1e5 rules out O(n&sup2;); deduce that a log factor structure is intended</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/4/A" target="_blank" rel="noopener">Watermelon</a></td>
+        <td><span class="badge badge--cf">CF 4A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>O(1). Practise noticing when no loop is needed at all</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/455/A" target="_blank" rel="noopener">Boredom</a></td>
+        <td><span class="badge badge--cf">CF 455A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>a_i &le; 1e5 not n &le; 1e5 &mdash; the complexity is in terms of the value range</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/313/B" target="_blank" rel="noopener">Ilya and Queries</a></td>
+        <td><span class="badge badge--cf">CF 313B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>m = 1e5 queries &times; O(n) each is 1e10; the constraint forces precomputation</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/1/A" target="_blank" rel="noopener">Theatre Square</a></td>
+        <td><span class="badge badge--cf">CF 1A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>O(1), but the answer overflows int &mdash; complexity is fine, the type is not</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener">Maximum Subarray</a></td>
+        <td><span class="badge badge--lc">LC 53</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Price the O(n&sup3;), O(n&sup2;) and O(n) versions before coding any of them</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener">Longest Substring Without Repeating Characters</a></td>
+        <td><span class="badge badge--lc">LC 3</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Why a two-pointer scan is O(n) and not O(n&sup2;): amortised pointer movement</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 315 &mdash; deducing the intended complexity from constraints alone</summary>
+  <div class="spoiler__body">
+    <p><code>n &le; 10&#8309;</code> kills <code>O(n&sup2;)</code> (<code>10&sup1;&#8304;</code>). The answer requires a count per index, so you cannot beat <code>&Omega;(n)</code>. That leaves <code>O(n log n)</code>, and the phrase "count of smaller elements to the right" is a counting-over-a-prefix problem &rarr; merge sort with an inversion count, or a <a href="../06-range-queries/fenwick-tree.html">Fenwick tree</a> over compressed values. The transferable move: <em>narrow the complexity from the constraints first, then ask which structure delivers that complexity.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 455A &mdash; when the complexity is not in terms of n</summary>
+  <div class="spoiler__body">
+    <p>The sequence length is up to <code>10&#8309;</code> but the values are also up to <code>10&#8309;</code>, and the operation deletes all copies of a value. So the state is the <em>value</em>, not the index: build <code>cnt[v]</code> and run a <a href="../10-dynamic-programming/dp-1d.html">house-robber DP</a> over <code>v = 1 &hellip; 10&#8309;</code>, giving <code>O(maxA)</code>. The lesson: <em>when a problem's operations are keyed by value, your complexity parameter is the value range, and <code>long</code> is required for the answer.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Count how many times the innermost statement runs</strong>, substituting the cost of every library call first. That single habit fixes most mis-analyses.</li>
+    <li><strong>Sequential blocks take the max; independent nesting multiplies; dependent nesting sums a series</strong> (and still lands in the same class).</li>
+    <li><strong>Budget <code>10&#8312;</code> operations per second</strong>, then divide by 2&ndash;5 for boxing and pointer chasing. Read the constraint <em>backwards</em> to get the intended complexity.</li>
+    <li><strong>Amortised is not average-case.</strong> Doubling gives <code>O(1)</code> amortised because the geometric series of copies is bounded by <code>2n</code>.</li>
+    <li><strong>State time and space separately, and name every parameter</strong> (<code>n</code>, <code>m</code>, <code>W</code>, <code>maxA</code>). An unnamed parameter means the analysis is incomplete.</li>
+  </ul>
+  <div class="recap__oneliner">budget ~1e8 ops/sec  |  n&lt;=10:O(n!)  n&lt;=25:O(2^n)  n&lt;=500:O(n^3)  n&lt;=5e3:O(n^2)  n&lt;=1e6:O(n log n)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

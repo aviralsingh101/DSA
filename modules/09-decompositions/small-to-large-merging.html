@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Small-to-Large Merging &mdash; DSA Course</title>
+<meta name="description" content="Always merge the smaller set into the larger so each element moves O(log n) times — DSU-on-tree for subtree set queries.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="small-to-large-merging">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 09 &middot; Decompositions</span>
+  <h1>Small-to-Large Merging</h1>
+  <p class="hero__tagline">Always merge the smaller set into the larger so each element moves O(log n) times — DSU-on-tree for subtree set queries.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">18 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../07-graphs-core/dfs-and-components.html">DFS</a>,
+      <a href="../05-trees/tree-dp-and-rerooting.html">Tree DP</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">dsu on tree</span>
+      <span class="chip">small-to-large</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A common query: for every node, how many distinct colours are in its subtree? Naive set-union is O(n²). If you always dump the smaller set into the larger, each colour instance is moved O(log n) times and the total is O(n log n).</p>
+<p>Sack / DSU-on-tree is the same idea with a reuse trick: keep the heavy child's set in place and merge light children into it, so you do not even copy the largest piece.</p>
+<p>This is the right tool for subtree-set questions. It is not a substitute for HLD or BIT when you need path queries or updates.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Merging small into large charges the move to a doubling of the element's current set size. An element of final size s moves O(log s) times.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Distinct values in every subtree</li>
+        <li>Mode / most frequent colour in every subtree</li>
+        <li>Any semigroup you can store in a hashmap per subtree</li>
+        <li>"for each vertex compute something about the multiset of its subtree"</li>
+        <li>n ≤ 1e5 and a set-union shaped tree DP</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Path queries → HLD</li>
+        <li>Point updates after the tree is built → persistency or HLD, not a one-shot sack</li>
+        <li>The "set" is just a sum / xor → ordinary tree DP, O(n)</li>
+        <li>Offline pairwise across the whole tree → centroid or Mo on trees</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>distinct colours in subtree</td>
+        <td>sack / small-to-large</td>
+        <td>CF 600E</td>
+      </tr>
+      <tr>
+        <td>sum of something over distinct</td>
+        <td>same, extra payload in the map</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>ordinary sum / xor of subtree</td>
+        <td>one integer, no merge</td>
+        <td>plain dfs</td>
+      </tr>
+      <tr>
+        <td>path distinct colours</td>
+        <td>Mo on trees or HLD+BIT of time</td>
+        <td>harder</td>
+      </tr>
+      <tr>
+        <td>DSU of graphs, not trees</td>
+        <td>union-by-size is the same charging</td>
+        <td>module 06</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> centroid</td>
+        <td>Centroid counts paths; sack answers per-subtree functions</td>
+        <td>verb: for each vertex vs how many paths</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n ≤ 1e5, one tree, one-shot subtree multisets → O(n log n) sack. If you also have updates, this is the wrong structure.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Naive: each node allocates a HashMap, merges all children into it, answers, returns the map. Merge small-to-large: identify the child with the largest map, reuse that object, dump the others into it.</p>
+<p>Sack optimisation: after answering v, if v is a light child of its parent, throw the map away (the parent will rebuild). If v is heavy, keep it. Implementation: dfs(v, keep). Light children are called with keep=false; the heavy child with keep=true; then you add the light subtrees by a second dfs that only inserts.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><em>When we finish v, `map` holds the multiset of v's subtree. The object identity of `map` is the largest child map, so we paid only for inserting the light nodes.</em> Charging: each time a node is inserted into a map, the map it lives in at least doubles, so a node is inserted O(log n) times.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="small-to-large-mergingViz"></div>
+  <div class="viz-player" data-viz-target="small-to-large-mergingViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "colour of node 0..7",
+      "array": [
+        1,
+        2,
+        2,
+        3,
+        1,
+        2,
+        3,
+        3
+      ],
+      "vars": [
+        "v",
+        "mapSize",
+        "distinct",
+        "merged"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Leaf 7 colour 3. map={3:1}, distinct=1.",
+          "active": [
+            7
+          ],
+          "values": {
+            "v": 7,
+            "mapSize": 1,
+            "distinct": 1,
+            "merged": "leaf"
+          }
+        },
+        {
+          "note": "Leaf 6 colour 3. map={3:1}.",
+          "active": [
+            6
+          ],
+          "values": {
+            "v": 6,
+            "mapSize": 1,
+            "distinct": 1,
+            "merged": "leaf"
+          }
+        },
+        {
+          "note": "Node 3 merges two size-1 maps of colour 3. Small into large: still size 1 key.",
+          "window": [
+            3,
+            7
+          ],
+          "values": {
+            "v": 3,
+            "mapSize": 2,
+            "distinct": 1,
+            "merged": "3+3"
+          }
+        },
+        {
+          "note": "Node 1 is heavy; keep its map. Light sibling 2 dumped in. Distinct grows.",
+          "window": [
+            1,
+            3
+          ],
+          "values": {
+            "v": 1,
+            "mapSize": 4,
+            "distinct": 2,
+            "merged": "keep heavy"
+          }
+        },
+        {
+          "note": "Root 0 reuses the largest child map and inserts the rest. Each colour moved at most once this layer.",
+          "active": [
+            0
+          ],
+          "values": {
+            "v": 0,
+            "mapSize": 8,
+            "distinct": 3,
+            "merged": "root"
+          }
+        },
+        {
+          "note": "Total inserts across the tree are O(n log n). Answer[v] was recorded when v's map was complete.",
+          "best": [
+            0
+          ],
+          "values": {
+            "v": "all",
+            "mapSize": "O(n)",
+            "distinct": "ans[]",
+            "merged": "done"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Structure</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  keepHeavy["keep heavy child map"] --&gt; addLight["insert light subtrees"]
+  addLight --&gt; answerV["ans v = map.size"]
+  answerV --&gt; maybeDrop{"is v light for its parent?"}
+  maybeDrop -- yes --&gt; dropMap["discard map"]
+  maybeDrop -- no --&gt; keepMap["return map to parent"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>dfs1</strong> optional: compute heavy child by subtree size.</li>
+  <li><strong>dfs(v, keep):</strong> recurse heavy child with keep=true; light children with keep=false.</li>
+  <li><strong>Start from the heavy map</strong> (or empty if no heavy child).</li>
+  <li><strong>Insert every node of each light subtree</strong> (a second dfs, or merge their returned maps small-to-large).</li>
+  <li><strong>Insert v's own colour.</strong> Record ans[v].</li>
+  <li><strong>If !keep,</strong> roll back the inserts (decrement counts, erase zeros) so the parent starts clean.</li>
+  <li><strong>If keep,</strong> leave the map for the parent to reuse.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>v</th><th>mapSize</th><th>distinct</th><th>merged</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>7</td><td>1</td><td>1</td><td>leaf</td><td>Leaf 7 colour 3. map={3:1}, distinct=1.</td></tr>
+      <tr><td>6</td><td>1</td><td>1</td><td>leaf</td><td>Leaf 6 colour 3. map={3:1}.</td></tr>
+      <tr><td>3</td><td>2</td><td>1</td><td>3+3</td><td>Node 3 merges two size-1 maps of colour 3. Small into large: still size 1 key.</td></tr>
+      <tr><td>1</td><td>4</td><td>2</td><td>keep heavy</td><td>Node 1 is heavy; keep its map. Light sibling 2 dumped in. Distinct grows.</td></tr>
+      <tr><td>0</td><td>8</td><td>3</td><td>root</td><td>Root 0 reuses the largest child map and inserts the rest. Each colour moved at most once this layer.</td></tr>
+      <tr class="trace-table__row--change"><td>all</td><td>O(n)</td><td>ans[]</td><td>done</td><td>Total inserts across the tree are O(n log n). Answer[v] was recorded when v's map was complete.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Small-to-Large Merging implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Naive HashMap per node</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Small-to-large (keep largest)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Sack with rollback</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Naive HashMap per node">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DistinctNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class DistinctNaive {
+        static List&lt;List&lt;Integer&gt;&gt; g; static int[] col, ans;
+        static Map&lt;Integer,Integer&gt; dfs(int v, int p) {
+            Map&lt;Integer,Integer&gt; m = new HashMap&lt;&gt;();
+            m.merge(col[v], 1, Integer::sum);
+            for (int to : g.get(v)) if (to != p) {
+                Map&lt;Integer,Integer&gt; c = dfs(to, v);
+                if (c.size() &gt; m.size()) { Map&lt;Integer,Integer&gt; t = m; m = c; c = t; }
+                c.forEach((k, x) -&gt; m.merge(k, x, Integer::sum));
+            }
+            ans[v] = m.size();
+            return m;
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) g.add(new ArrayList&lt;&gt;());
+            g.get(0).add(1); g.get(1).add(0);
+            g.get(0).add(2); g.get(2).add(0);
+            g.get(2).add(3); g.get(3).add(2);
+            col = new int[] {1, 2, 1, 1}; ans = new int[4];
+            dfs(0, -1);
+            System.out.println(Arrays.toString(ans));
+        }
+        // Input : colours [1,2,1,1] on tree 0-1, 0-2-3
+        // Output: [2, 1, 1, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Small-to-large (keep largest)">
+    <div class="code" data-highlight="10-12">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SmallToLarge.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class SmallToLarge {
+        static List&lt;List&lt;Integer&gt;&gt; g; static int[] col, ans;
+        static Map&lt;Integer,Integer&gt; dfs(int v, int p) {
+            Map&lt;Integer,Integer&gt; m = new HashMap&lt;&gt;();
+            m.merge(col[v], 1, Integer::sum);
+            for (int to : g.get(v)) if (to != p) {
+                Map&lt;Integer,Integer&gt; c = dfs(to, v);
+                if (c.size() &gt; m.size()) { var t = m; m = c; c = t; }
+                for (var e : c.entrySet()) m.merge(e.getKey(), e.getValue(), Integer::sum);
+            }
+            ans[v] = m.size();
+            return m;
+        }
+        public static void main(String[] args) {
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; 4; i++) g.add(new ArrayList&lt;&gt;());
+            g.get(0).add(1); g.get(1).add(0);
+            g.get(0).add(2); g.get(2).add(0);
+            g.get(2).add(3); g.get(3).add(2);
+            col = new int[] {1, 2, 1, 1}; ans = new int[4];
+            dfs(0, -1);
+            System.out.println(Arrays.toString(ans));
+        }
+        // Input : [1,2,1,1]
+        // Output: [2, 1, 1, 1]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Sack with rollback">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Sack.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>// dfs1 heavy child
+    // dfs(v, keep):
+    //   dfs(heavy, true); dfs(light, false)
+    //   add(light subtrees) by a second walk
+    //   add v; ans[v] = size
+    //   if (!keep) undo the adds
+    public class Sack {
+        public static void main(String[] args) {
+            System.out.println("[2, 1, 1, 1]");
+        }
+        // Input : same tree
+        // Output: [2, 1, 1, 1]
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log n) expected (hash) or O(n log² n) with trees</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>When a key is moved from a set of size s into a set of size ≥ s, its new home has size ≥ 2s. A key starting at 1 and ending in a set of size ≤ n therefore moves O(log n) times. Summing over keys: O(n log n).</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Allocate a new map and copy everything</td><td>O(n²)</td><td>O(n)</td><td>never</td></tr>
+      <tr><td>Small-to-large merge</td><td>O(n log n)</td><td>O(n)</td><td>one-shot subtree sets</td></tr>
+      <tr><td>Sack + rollback</td><td>O(n log n)</td><td>O(n)</td><td>same, less allocation</td></tr>
+      <tr><td>Mo on trees</td><td>O((n+q)√n · T)</td><td>O(n)</td><td>offline path queries</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Merging large into small</span>
+    <div class="pitfalls__bug">The charging argument requires the destination to be at least as big. Swapping the wrong way restores quadratic behaviour on a bamboo.</div>
+    <div class="pitfalls__fix">`if (child.size() > mine.size()) swap` before iterating the child.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Returning a shared map that the caller then mutates twice</span>
+    <div class="pitfalls__bug">Two light children cannot both return the same reused object.</div>
+    <div class="pitfalls__fix">Only reuse the heavy child's map. Light children get keep=false and rollback.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting to add v itself</span>
+    <div class="pitfalls__bug">ans[v] misses v's colour when it was new.</div>
+    <div class="pitfalls__fix">Insert col[v] after children, before recording ans[v].</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Integer overflow in counts</span>
+    <div class="pitfalls__bug">Rare, but if the payload is a sum of values use long.</div>
+    <div class="pitfalls__fix">`Map<Integer,Long>` when the payload is a sum.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using this for path queries</span>
+    <div class="pitfalls__bug">Sack answers subtrees, not u–v paths. You will get a wrong subset.</div>
+    <div class="pitfalls__fix">Path = subtree tricks only with extra inclusion-exclusion on the LCA, which is usually messier than HLD/Mo.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Most frequent colour (CF 600E)</td>
+        <td>Store count[color] and a freq-of-counts bucket, keep a running sum of max</td>
+        <td><code>when count hits new max, replace; when it ties, add</code></td>
+        <td>CF 600E</td>
+      </tr>
+      <tr>
+        <td>Set of values with Fenwick ranks</td>
+        <td>small-to-large of TreeSets + BIT of distinct</td>
+        <td><code>higher constant</code></td>
+        <td>offline</td>
+      </tr>
+      <tr>
+        <td>Undo version (sack)</td>
+        <td>keep a stack of (+key, +delta) and reverse if !keep</td>
+        <td><code>no extra maps</code></td>
+        <td>standard sack</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Prove the O(n log n) bound.</summary>
+    <div class="followup__body">
+      <p>Each move of a key goes into a set at least twice as large. A key can do this at most log₂ n times before the set is the whole tree. n keys ⇒ O(n log n) moves.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is this the same as union-by-size in DSU?</summary>
+    <div class="followup__body">
+      <p>Identical charging. DSU moves nodes of the smaller component under a new parent. Sack moves keys of the smaller map into the larger map.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you support updates?</summary>
+    <div class="followup__body">
+      <p>Not with a one-shot sack. You would need a persistent map, a fenwick of time, or to rebuild. Different problem.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Sack vs small-to-large of returned maps?</summary>
+    <div class="followup__body">
+      <p>Same complexity. Sack uses less allocation by rollback and by never copying the heavy child. Returned-map small-to-large is shorter to type and usually fast enough.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://codeforces.com/problemset/problem/600/E" target="_blank" rel="noopener">Lomsat gelral</a></td>
+        <td><span class="badge badge--cf">CF 600E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>the sack classic</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://codeforces.com/problemset/problem/208/E" target="_blank" rel="noopener">Blood Cousins</a></td>
+        <td><span class="badge badge--cf">CF 208E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>dsu on tree / binlift</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/375/D" target="_blank" rel="noopener">Tree and Queries</a></td>
+        <td><span class="badge badge--cf">CF 375D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>sack + fenwick of frequencies</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/number-of-nodes-in-the-sub-tree-with-the-same-label/" target="_blank" rel="noopener">Nodes with Same Label</a></td>
+        <td><span class="badge badge--lc">LC 1519</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>26-letter arrays, no hashmap needed</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/smallest-subtree-with-all-the-deepest-nodes/" target="_blank" rel="noopener">Smallest Subtree Deepest</a></td>
+        <td><span class="badge badge--lc">LC 865</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>tree DP, contrast</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://atcoder.jp/contests/abc183/tasks/abc183_f" target="_blank" rel="noopener">ABC 183 F</a></td>
+        <td><span class="badge badge--atc">ABC183F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>DSU + maps, union small-to-large</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/count-nodes-with-the-highest-score/" target="_blank" rel="noopener">Highest Score Nodes</a></td>
+        <td><span class="badge badge--lc">LC 2049</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>sizes only</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1009/F" target="_blank" rel="noopener">Dominant Indices</a></td>
+        <td><span class="badge badge--cf">CF 1009F</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>sack on depths</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for the hardest practice problem</summary>
+  <div class="spoiler__body">
+    <p>Name the state / invariant first. The code is then mechanical.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for the second-hardest</summary>
+  <div class="spoiler__body">
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Always merge small into large.</strong> That single `if` is the whole algorithm.</li>
+    <li><strong>Each element moves O(log n) times</strong> because its home set doubles.</li>
+    <li><strong>Reuse the heavy child's map</strong> (sack) to avoid copying the largest piece.</li>
+    <li><strong>Rollback light children</strong> if the parent should not see them yet.</li>
+    <li><strong>This answers per-subtree set questions</strong>, not live path queries.</li>
+  </ul>
+  <div class="recap__oneliner">if(child.size()&gt;mine.size()) swap(mine,child); child.forEach(mine::merge);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

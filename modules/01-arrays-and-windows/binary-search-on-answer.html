@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Search on the Answer &mdash; DSA Course</title>
+<meta name="description" content="When the answer is a number and the predicate &quot;can I do it with this budget?&quot; is monotone, search the answer itself instead of constructing it.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="binary-search-on-answer">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>Binary Search on the Answer</h1>
+  <p class="hero__tagline">When the answer is a number and the predicate "can I do it with this budget?" is monotone, search the answer itself instead of constructing it.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="binary-search-basics.html">Binary Search Basics</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">binary search</span>
+      <span class="chip">predicate</span>
+      <span class="chip">monotonicity</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>A large family of interview problems ask for the <em>minimum maximum</em> or <em>maximum minimum</em>: smallest capacity that can ship all packages in <code>D</code> days, fewest bananas-per-hour so Koko finishes before the guards return, smallest largest sum after splitting an array into <code>k</code> parts. The construction is messy. The check is easy: given a candidate capacity, a single greedy pass tells you whether it works.</p>
+<p>If that check is monotone &mdash; once a budget is enough, every larger budget is also enough &mdash; then the first true budget is the answer, and you already have a <a href="binary-search-basics.html">firstTrue</a> template for it. The search space is no longer an index range; it is the range of feasible answers, often <code>[1, sum(a)]</code> or <code>[max(a), sum(a)]</code>.</p>
+<p>This is the single highest-leverage binary-search skill after the basic template. Google and Meta ask it constantly because it looks like DP or greedy until you name the predicate.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Do not search for the construction. Search for the <em>smallest number</em> <code>x</code> such that a greedy/check function <code>feasible(x)</code> returns true. The hard part is proving the check is monotone and writing it correctly; the search is five lines you already know.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Minimum possible maximum" / "maximum possible minimum" / "smallest capacity / speed / days"</li>
+        <li>You can check a candidate answer in linear (or <code>n log n</code>) time, but you cannot construct the optimum directly</li>
+        <li>The check is monotone: if <code>x</code> works then <code>x+1</code> works (or the reverse)</li>
+        <li>Split / allocate / ship / eat / cut with a budget, minimise the budget</li>
+        <li>A real-valued answer with an &epsilon; tolerance (square root, min-max distance)</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The check is not monotone &rarr; you cannot binary-search the answer; try ternary search, DP, or a heap</li>
+        <li>You need the actual partition, not just the min-max value &rarr; still binary-search the value, then reconstruct with the same greedy</li>
+        <li>The search space is an unsorted array of values &rarr; that is ordinary binary search or hashing, not this pattern</li>
+        <li>You are counting constructions &rarr; DP or combinatorics</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"smallest / minimum <em>X</em> such that … is possible"</td>
+        <td>Classic firstTrue over X</td>
+        <td>Binary search on the answer</td>
+      </tr>
+      <tr>
+        <td>"largest <em>X</em> such that … is still possible"</td>
+        <td>lastTrue: invert the predicate or search the complement</td>
+        <td>Same template, return lo-1</td>
+      </tr>
+      <tr>
+        <td>Split array into k parts, minimise the largest sum</td>
+        <td>feasible(cap) = "can I split with no part exceeding cap?"</td>
+        <td>LC 410</td>
+      </tr>
+      <tr>
+        <td>Koko / eating / shipping with a rate</td>
+        <td>feasible(rate) = "finishes by the deadline?"</td>
+        <td>LC 875 / 1011</td>
+      </tr>
+      <tr>
+        <td>Minimise the max distance / wait / load</td>
+        <td>Monotone in the distance</td>
+        <td>Aggressive cows / LC 1552</td>
+      </tr>
+      <tr>
+        <td>A real answer, |err| < 1e-6</td>
+        <td>Same idea over doubles; loop ~80 times or while hi-lo > eps</td>
+        <td>sqrt, min-max distance</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> ternary search</td>
+        <td>Ternary search needs a <em>unimodal</em> function, not a boolean predicate</td>
+        <td><a href="../13-greedy-and-offline/ternary-search-and-convexity.html">Ternary search</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a check that is <code>O(n)</code> and an answer range of size <code>10&#8312;</code> &rarr; <code>O(n log MAX)</code> is intended. If <code>n &le; 100</code> and the answer looks like DP, it probably is DP.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>Pick the type of the answer (usually a positive integer). Find a lower bound <code>lo</code> that is always feasible-or-too-small (often <code>max(a)</code> or 0) and an exclusive upper bound <code>hi</code> that is always feasible (often <code>sum(a)+1</code>). Write <code>feasible(x)</code> so that it is false for every <code>x</code> below the optimum and true for every <code>x</code> at or above it.</p>
+<p>Then run the half-open firstTrue template. When the loop ends, <code>lo</code> is the smallest feasible answer. The loop invariant is identical to ordinary binary search: everything below <code>lo</code> is known infeasible, everything at or above <code>hi</code> is known feasible.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Say this out loud</span>
+    <p><em>"I am binary-searching the answer <code>x</code>. <code>feasible(x)</code> asks whether a budget of <code>x</code> is enough. That predicate is monotone, so the first true <code>x</code> is the optimum. I keep the half-open invariant: <code>[0, lo)</code> infeasible, <code>[hi, ∞)</code> feasible."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The only new work is the check</span>
+    <p>If you cannot write <code>feasible</code> in ten lines, you have not found the right predicate yet. It is almost always a greedy scan: walk left to right, start a new group / day / pile whenever adding the next item would exceed <code>x</code>, and count how many groups you needed.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Bounds must sandwich the answer</span>
+    <p>If <code>lo</code> starts above the true answer you will never find it. If <code>hi</code> starts below every feasible value the loop returns garbage. Always argue: "the answer is at least <code>max(a)</code> because one item alone needs that much, and at most <code>sum(a)</code> because one group containing everything works."</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Searching the capacity, not the array</h3>
+
+<p>Split <code>[7, 2, 5, 10, 8]</code> into <code>k = 2</code> parts and minimise the largest part sum. The cells are candidate capacities; amber is the current search interval. <code>feasible(x)</code> is true iff we can split into at most 2 parts each summing to at most <code>x</code>.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bsaScan"></div>
+  <div class="viz-player" data-viz-target="bsaScan">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "candidate capacity x",
+      "array": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "indexLabels": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "vars": [
+        "lo",
+        "hi",
+        "mid",
+        "feasible"
+      ],
+      "speed": 1100,
+      "frames": [
+        {
+          "note": "Bounds: lo = max(a) = 10 (one item needs at least that), hi = sum+1 = 33, shown cropped to 10..18. mid = 14.",
+          "active": [
+            4
+          ],
+          "window": [
+            0,
+            8
+          ],
+          "pointers": {
+            "lo": 0,
+            "mid": 4,
+            "hi": 8
+          },
+          "values": {
+            "lo": 10,
+            "hi": 19,
+            "mid": 14,
+            "feasible": "?"
+          }
+        },
+        {
+          "note": "feasible(14): [7,2,5] = 14, then [10] overflows, [10,8] = 18 > 14, needs 3 parts. False. Discard 10..14.",
+          "active": [
+            4
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "window": [
+            5,
+            8
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "pointers": {
+            "lo": 5,
+            "hi": 8
+          },
+          "values": {
+            "lo": 15,
+            "hi": 19,
+            "mid": 14,
+            "feasible": "false"
+          }
+        },
+        {
+          "note": "mid = 17. feasible(17): [7,2,5]=14, [10] = 10, [10,8]=18>17 so [10] then [8] — 3 parts. Still false.",
+          "active": [
+            7
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "window": [
+            5,
+            8
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "pointers": {
+            "lo": 5,
+            "mid": 7,
+            "hi": 8
+          },
+          "values": {
+            "lo": 15,
+            "hi": 19,
+            "mid": 17,
+            "feasible": "false"
+          }
+        },
+        {
+          "note": "Wait — 17 is still false? [7,2,5]=14 OK, next 10 OK as a new part (2 parts so far), 8 needs a third. Yes. Discard up to 17.",
+          "active": [
+            7
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "window": [
+            8,
+            8
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "pointers": {
+            "lo": 8,
+            "hi": 8
+          },
+          "values": {
+            "lo": 18,
+            "hi": 19,
+            "mid": 17,
+            "feasible": "false"
+          }
+        },
+        {
+          "note": "Interval is [18, 19). Check 18: [7,2,5]=14, [10,8]=18. Exactly 2 parts. True. hi = 18.",
+          "active": [
+            8
+          ],
+          "done": [
+            8
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "pointers": {
+            "lo": 8,
+            "hi": 8
+          },
+          "values": {
+            "lo": 18,
+            "hi": 18,
+            "mid": 18,
+            "feasible": "true"
+          }
+        },
+        {
+          "note": "lo == hi == 18. Smallest capacity that works is 18, witnessed by [7,2,5] | [10,8].",
+          "best": [
+            8
+          ],
+          "dim": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "pointers": {
+            "lo": 8
+          },
+          "values": {
+            "lo": 18,
+            "hi": 18,
+            "mid": "—",
+            "feasible": "answer"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>firstTrue over capacities. The array being searched is the integer line, not the input.</figcaption>
+</figure>
+
+<h3>The decision flowchart</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  readQ["read the question as minimise x"] --&gt; canCheck{"can I check a candidate x in almost linear time?"}
+  canCheck -- no --&gt; other["try DP, heap, or two pointers"]
+  canCheck -- yes --&gt; mono{"if x works, does x+1 also work?"}
+  mono -- no --&gt; other2["not this pattern"]
+  mono -- yes --&gt; bounds["set lo = tight lower bound, hi = exclusive proven-feasible bound"]
+  bounds --&gt; loop["firstTrue on feasible"]
+  loop --&gt; doneNode["lo is the answer"]
+  </div>
+  <figcaption>If you cannot name a monotone boolean predicate, this is not binary search on the answer.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Name the answer type <code>x</code></strong> &mdash; a capacity, a rate, a distance, a day count.</li>
+  <li><strong>Write <code>feasible(x)</code></strong> as a boolean: true iff a budget of <code>x</code> is enough. Prove it is monotone.</li>
+  <li><strong>Bound the search.</strong> <code>lo</code> = smallest conceivable answer (often <code>max(a)</code> or 0). <code>hi</code> = one past a proven-feasible value (often <code>sum(a)+1</code>).</li>
+  <li><strong>Run firstTrue:</strong> <code>while (lo &lt; hi) { mid = lo + (hi-lo)/2; if (feasible(mid)) hi = mid; else lo = mid + 1; }</code></li>
+  <li><strong>Return <code>lo</code>.</strong> It is the smallest feasible <code>x</code>.</li>
+  <li><strong>If the problem wants the largest feasible <code>x</code></strong>, search the first infeasible and return <code>lo - 1</code>, or invert the predicate.</li>
+  <li><strong>Reconstruct if asked:</strong> walk the same greedy with <code>x = lo</code> and record the cuts.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Minimise the largest part after splitting <code>[7, 2, 5, 10, 8]</code> into 2 parts. Highlighted rows change <code>lo</code> or <code>hi</code>.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>lo</th><th>hi</th><th>mid</th><th>parts needed @ mid</th><th>feasible</th><th>new interval</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>10</td><td>33</td><td>21</td><td>2 ([7,2,5,10]=24>21 → 3? wait [7,2,5]=14, [10,8]=18)</td><td>true</td><td>[10, 21]</td><td>21 works (parts [7,2,5] and [10,8]). hi = 21.</td></tr>
+      <tr class="trace-table__row--change"><td>10</td><td>21</td><td>15</td><td>3</td><td>false</td><td>[16, 21]</td><td>15: [7,2,5]=14, [10], [8] — 3 parts. lo = 16.</td></tr>
+      <tr class="trace-table__row--change"><td>16</td><td>21</td><td>18</td><td>2</td><td>true</td><td>[16, 18]</td><td>18 works. hi = 18.</td></tr>
+      <tr class="trace-table__row--change"><td>16</td><td>18</td><td>17</td><td>3</td><td>false</td><td>[18, 18]</td><td>17 needs 3 parts. lo = 18.</td></tr>
+      <tr><td>18</td><td>18</td><td>—</td><td>—</td><td>—</td><td>done</td><td>Answer 18. Witness [7,2,5] | [10,8].</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Binary Search on the Answer implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute force</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal O(n log SUM)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Reusable template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute">
+    <p>Try every capacity from max(a) to sum(a). Correct, and immediately shows the monotone structure.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SplitArrayBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SplitArrayBrute {
+    
+        static boolean feasible(int[] a, int k, int cap) {
+            int parts = 1, sum = 0;
+            for (int v : a) {
+                if (v &gt; cap) return false;
+                if (sum + v &gt; cap) { parts++; sum = v; }
+                else sum += v;
+            }
+            return parts &lt;= k;
+        }
+    
+        static int splitArray(int[] a, int k) {
+            int lo = 0, hi = 1;
+            for (int v : a) { lo = Math.max(lo, v); hi += v; }
+            for (int cap = lo; cap &lt; hi; cap++) {
+                if (feasible(a, k, cap)) return cap;
+            }
+            return lo;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(splitArray(new int[] {7, 2, 5, 10, 8}, 2));
+        }
+        // Input : a = [7,2,5,10,8], k = 2
+        // Output: 18
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>Same check, firstTrue over the capacity. The highlighted four lines are the entire search.</p>
+    <div class="code" data-highlight="16-19">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SplitArray.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class SplitArray {
+    
+        static boolean feasible(int[] a, int k, int cap) {
+            int parts = 1, sum = 0;
+            for (int v : a) {
+                if (sum + v &gt; cap) { parts++; sum = v; }
+                else sum += v;
+            }
+            return parts &lt;= k;
+        }
+    
+        static int splitArray(int[] a, int k) {
+            int lo = 0, hi = 1;                 // hi exclusive
+            for (int v : a) { lo = Math.max(lo, v); hi += v; }
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (feasible(a, k, mid)) hi = mid;
+                else lo = mid + 1;
+            }
+            return lo;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(splitArray(new int[] {7, 2, 5, 10, 8}, 2));
+        }
+        // Input : a = [7,2,5,10,8], k = 2
+        // Output: 18
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Template">
+    <p>Parameterise only the predicate and the bounds. Koko, shipping, and split-array are three call sites of this.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BinarySearchAnswer.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.function.IntPredicate;
+    
+    public class BinarySearchAnswer {
+    
+        /** Smallest x in [lo, hi) such that pred.test(x) is true. pred must be monotone. */
+        static int firstTrue(int lo, int hi, IntPredicate pred) {
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (pred.test(mid)) hi = mid;
+                else lo = mid + 1;
+            }
+            return lo;
+        }
+    
+        static int koko(int[] piles, int h) {
+            int max = 0;
+            for (int p : piles) max = Math.max(max, p);
+            return firstTrue(1, max + 1, speed -&gt; {
+                long hours = 0;
+                for (int p : piles) hours += (p + (long) speed - 1) / speed;
+                return hours &lt;= h;
+            });
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(koko(new int[] {3, 6, 7, 11}, 8));
+        }
+        // Input : piles = [3,6,7,11], h = 8
+        // Output: 4
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n log RANGE)</span>
+    <span class="badge badge--space">Space O(1)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each of the <code>O(log RANGE)</code> probes runs an <code>O(n)</code> scan, so</p>
+    <p><span class="eq">T = O(n) &middot; log&#8322;(hi &minus; lo) = O(n log RANGE)</span></p>
+    <p>RANGE is typically <code>sum(a)</code> &le; <code>n &middot; max|a[i]|</code>. At <code>n = 10&#8309;</code> and <code>max = 10&#8313;</code> that is 30 probes, about 3 &times; 10&#8310; additions &mdash; fine. The brute linear scan of the answer space is <code>O(n &middot; RANGE)</code> and dies immediately.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Linear scan of capacities</td><td>O(n &middot; RANGE)</td><td>O(1)</td><td>RANGE tiny only</td></tr>
+      <tr><td>Binary search on the answer</td><td>O(n log RANGE)</td><td>O(1)</td><td>The default</td></tr>
+      <tr><td>DP over splits</td><td>O(n&sup2; k) or better</td><td>O(nk)</td><td>When you also need counts / reconstructions that greedy cannot give</td></tr>
+      <tr><td>Heap / greedy construction</td><td>O(n log n)</td><td>O(n)</td><td>When a direct greedy is provable (not always)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Off-by-one in the ceiling division</span>
+    <div class="pitfalls__bug"><code>hours += piles[i] / speed;</code> truncates. Koko needs <code>ceil(p / speed)</code> hours for a pile.</div>
+    <div class="pitfalls__fix"><code>hours += (p + (long) speed - 1) / speed;</code>. Cast to <code>long</code> first or <code>p + speed</code> overflows.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Starting <code>lo</code> at 0 when 0 is not a legal answer</span>
+    <div class="pitfalls__bug">Koko with <code>speed = 0</code> divides by zero. Split-array with <code>cap = 0</code> is meaningless if items are positive.</div>
+    <div class="pitfalls__fix">Lower bound is the tightest necessary value: <code>1</code> for a rate, <code>max(a)</code> for a capacity.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using <code>int</code> for the accumulator inside <code>feasible</code></span>
+    <div class="pitfalls__bug"><code>int hours</code> on Koko with <code>piles[i] = 1e9</code> and <code>speed = 1</code> overflows and the predicate flips.</div>
+    <div class="pitfalls__fix"><code>long</code> for every running sum / count inside the check.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Assuming feasibility is monotone without proving it</span>
+    <div class="pitfalls__bug">"Minimise the number of groups whose XOR is 0" is not monotone in a useful way. Binary search returns a plausible lie.</div>
+    <div class="pitfalls__fix">Prove: if <code>x</code> works, <code>x+1</code> works, in one sentence, before you code. If you cannot, stop.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>hi</code> not exclusive / not proven feasible</span>
+    <div class="pitfalls__bug">Initialising <code>hi = sum(a)</code> and using a closed interval, then returning <code>lo</code> after <code>while (lo &lt; hi)</code>, can miss the case where <code>sum(a)</code> itself is the answer.</div>
+    <div class="pitfalls__fix">Half-open: <code>hi = sum + 1</code>, which is always a feasible exclusive bound because a single part equal to the whole array works.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Integer vs real search</span>
+    <div class="pitfalls__bug">Using integer binary search for a real-valued answer (minimise a distance) and stopping when <code>lo == hi</code> &mdash; they never meet.</div>
+    <div class="pitfalls__fix">Loop a fixed 80 times, or <code>while (hi - lo &gt; 1e-7)</code>, and return <code>(lo+hi)/2</code>. Never compare doubles with <code>==</code>.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Koko / shipping / magnetic force</td>
+        <td>Same firstTrue, different feasible: hours-needed, days-needed, or min-distance placement</td>
+        <td><code>return firstTrue(lo, hi, x -&gt; check(x));</code></td>
+        <td><a href="https://leetcode.com/problems/koko-eating-bananas/" target="_blank" rel="noopener">LC 875</a></td>
+      </tr>
+      <tr>
+        <td>Largest feasible (max-min)</td>
+        <td>Search the first infeasible and subtract one, or invert the predicate</td>
+        <td><code>if (!feasible(mid)) hi = mid; else lo = mid + 1; return lo - 1;</code></td>
+        <td><a href="https://leetcode.com/problems/magnetic-force-between-two-balls/" target="_blank" rel="noopener">LC 1552</a></td>
+      </tr>
+      <tr>
+        <td>Real-valued</td>
+        <td>Same idea over doubles, fixed iteration count</td>
+        <td><code>for (int it = 0; it &lt; 80; it++) { mid = (lo+hi)/2; if (ok(mid)) hi = mid; else lo = mid; }</code></td>
+        <td>sqrt / min-max distance</td>
+      </tr>
+      <tr>
+        <td>Reconstruct the split</td>
+        <td>After finding x, walk the greedy once and record the cuts</td>
+        <td><code>if (sum + v &gt; x) { cuts.add(i); sum = v; }</code></td>
+        <td>interview follow-up</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Prove that feasible is monotone for split-array.</summary>
+    <div class="followup__body">
+      <p>If a split exists with every part &le; x, the same split has every part &le; x+1. So the set of feasible capacities is a suffix of the integers, and the first true value is well-defined.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Now return the actual parts, not just the min-max sum.</summary>
+    <div class="followup__body">
+      <p>Run the same greedy with the optimal capacity: start a new part whenever adding the next element would exceed it. Because the capacity is optimal, this uses at most k parts. If you need exactly k, split leftover singleton parts from the right.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if k can be as large as n?</summary>
+    <div class="followup__body">
+      <p>Then the answer is max(a): every element is its own part. Your lower bound already handles this; just make sure feasible returns true for cap = max(a) when k &ge; n.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you do it in O(n) expected time?</summary>
+    <div class="followup__body">
+      <p>The decision tree of the search depends on the data, so you cannot skip the log in the comparison model for an arbitrary feasible. In practice the log is 30 and is not worth removing.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>The answer is a real number and the judge uses 1e-6 absolute error.</summary>
+    <div class="followup__body">
+      <p>Loop 80 times (2^{-80} is far smaller than 1e-6 over any reasonable range) or iterate while hi-lo &gt; 1e-7. Returning (lo+hi)/2 is fine. Do not mix integer mid-rounding with doubles.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/koko-eating-bananas/" target="_blank" rel="noopener">Koko Eating Bananas</a></td>
+        <td><span class="badge badge--lc">LC 875</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>firstTrue on a rate</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/" target="_blank" rel="noopener">Capacity To Ship Packages Within D Days</a></td>
+        <td><span class="badge badge--lc">LC 1011</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>firstTrue on a capacity</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/split-array-largest-sum/" target="_blank" rel="noopener">Split Array Largest Sum</a></td>
+        <td><span class="badge badge--lc">LC 410</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>minimise max part sum</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/magnetic-force-between-two-balls/" target="_blank" rel="noopener">Magnetic Force Between Two Balls</a></td>
+        <td><span class="badge badge--lc">LC 1552</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>maximise min distance</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/kth-smallest-number-in-multiplication-table/" target="_blank" rel="noopener">Kth Smallest Number in Multiplication Table</a></td>
+        <td><span class="badge badge--lc">LC 668</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>count-how-many-leq as feasible</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/find-k-th-smallest-pair-distance/" target="_blank" rel="noopener">Find K-th Smallest Pair Distance</a></td>
+        <td><span class="badge badge--lc">LC 719</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>sort + two pointers inside feasible</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/minimize-max-distance-to-gas-station/" target="_blank" rel="noopener">Minimize Max Distance to Gas Station</a></td>
+        <td><span class="badge badge--lc">LC 774</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>real-valued firstTrue</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.spoj.com/problems/AGGRCOW/" target="_blank" rel="noopener">Aggressive Cows</a></td>
+        <td><span class="badge badge--gfg">SPOJ</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>the classic max-min placement</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/1117/C" target="_blank" rel="noopener">Magic Ship</a></td>
+        <td><span class="badge badge--cf">CF 1117C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>firstTrue on days, vector reachability</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/670/D2" target="_blank" rel="noopener">Magic Powder</a></td>
+        <td><span class="badge badge--cf">CF 670D2</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>firstTrue on cookies baked</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 668 — Kth in the multiplication table</summary>
+  <div class="spoiler__body">
+    <p>feasible(x) = "at least k entries of the n&times;m table are &le; x". For a fixed row i the count is min(m, x/i). Sum over rows in O(n). firstTrue over [1, n*m]. The k-th smallest <em>is</em> the smallest x with count(x) &ge; k.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 1117C — Magic Ship</summary>
+  <div class="spoiler__body">
+    <p>After t days the wind contributes a known vector W(t) (prefix sums of the weather string, cycling). You can spend t extra moves of length 1. feasible(t) iff manhattan(target - start - W(t)) &le; t and (t - manhattan) is even. Binary search t.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Search the answer, not the array.</strong> The input is only used inside <code>feasible</code>.</li>
+    <li><strong>Monotonicity is the licence to search.</strong> If x works, x+1 must work. Prove it.</li>
+    <li><strong>Bounds sandwich the answer:</strong> lo is necessary, hi is exclusive and proven feasible.</li>
+    <li><strong>The check is a greedy scan</strong> almost every time. If you cannot write it, you have the wrong x.</li>
+    <li><strong>Same four lines as ordinary binary search.</strong> Only the predicate changes.</li>
+  </ul>
+  <div class="recap__oneliner">while(lo&lt;hi){mid=lo+(hi-lo)/2; if(feasible(mid)) hi=mid; else lo=mid+1;} return lo;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

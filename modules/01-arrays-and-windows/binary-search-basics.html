@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Search Basics &mdash; DSA Course</title>
+<meta name="description" content="One template, written once, that never has an off-by-one error: find the first index where a monotone predicate becomes true, and express every search as that.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="binary-search-basics">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>Binary Search Basics</h1>
+  <p class="hero__tagline">One template, written once, that never has an off-by-one error: find the first index where a monotone predicate becomes true, and express every search as that.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">binary search</span>
+      <span class="chip">lower bound</span>
+      <span class="chip">monotone</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Everyone knows binary search and almost everyone writes it wrong under pressure. The bugs are always the same three: an infinite loop from the wrong midpoint rounding, an off-by-one from <code>hi = mid</code> versus <code>hi = mid - 1</code>, and an overflow from <code>(lo + hi) / 2</code>. The cure is not care; it is committing to a single template and never deviating.</p>
+<p>That template is <strong>find the first index where a predicate is true</strong>. Every other search is a rewrite of it. Looking for an exact value is "first index where <code>a[i] &ge; target</code>, then check". Upper bound is "first index where <code>a[i] &gt; target</code>". Counting occurrences is the difference of two such searches. Once you accept that framing, the boundary reasoning happens once, in one place, and never again.</p>
+<p>The deeper point is that binary search is not about sorted arrays. It is about <strong>monotone predicates</strong>: any function from the index space to <code>{false, true}</code> that never goes back from true to false. Sortedness is just the most common way to get one. That reframing is what turns binary search into <a href="binary-search-on-answer.html">binary search on the answer</a>, which is one of the highest-value techniques in competitive programming.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Do not search for a value; search for a <em>boundary</em>. Define a boolean predicate that is false-then-true over the range and find the first true. Every classic binary search is that with a different predicate.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>A <strong>sorted</strong> array (or one you may sort) with lookup, insertion-point, or count queries</li>
+        <li>"Find the first / last element satisfying &hellip;"</li>
+        <li>"How many elements are less than <code>x</code>?" &rarr; that is exactly a lower bound</li>
+        <li>A rotated sorted array, or a mountain / bitonic array &mdash; one comparison identifies which half is ordered</li>
+        <li>Any predicate you can evaluate in <code>O(1)</code> or <code>O(n)</code> that is <strong>monotone</strong> over the search space</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The array is unsorted and cannot be sorted &rarr; nothing to halve; use hashing or a linear scan</li>
+        <li>The predicate is not monotone &rarr; binary search will find <em>a</em> boundary but not necessarily the one you want; verify monotonicity first</li>
+        <li>You need <em>all</em> matches and there are many &rarr; find the boundaries and then scan the range</li>
+        <li><code>n</code> is tiny (below about 50) &rarr; a linear scan is faster in practice and impossible to get wrong</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"does x exist in the sorted array?"</td>
+        <td>Exact match</td>
+        <td><code>lowerBound</code>, then check <code>a[i] == x</code></td>
+      </tr>
+      <tr>
+        <td>"first index with a[i] &ge; x"</td>
+        <td>Lower bound</td>
+        <td>predicate <code>a[i] &ge; x</code></td>
+      </tr>
+      <tr>
+        <td>"first index with a[i] &gt; x"</td>
+        <td>Upper bound</td>
+        <td>predicate <code>a[i] &gt; x</code></td>
+      </tr>
+      <tr>
+        <td>"how many elements equal x?"</td>
+        <td>Count in a range</td>
+        <td><code>upperBound(x) &minus; lowerBound(x)</code></td>
+      </tr>
+      <tr>
+        <td>"insertion position to keep it sorted"</td>
+        <td>Lower bound</td>
+        <td>The same function, different name</td>
+      </tr>
+      <tr>
+        <td>"first and last position of x"</td>
+        <td>Two boundaries</td>
+        <td><code>lowerBound(x)</code> and <code>upperBound(x) &minus; 1</code></td>
+      </tr>
+      <tr>
+        <td>"minimum in a rotated sorted array"</td>
+        <td>One half is always sorted</td>
+        <td>Compare <code>a[mid]</code> with <code>a[hi]</code></td>
+      </tr>
+      <tr>
+        <td>"peak of a mountain array"</td>
+        <td>Slope is monotone</td>
+        <td>predicate <code>a[mid] &gt; a[mid+1]</code></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> <code>Arrays.binarySearch</code> on duplicates</td>
+        <td>Returns <em>any</em> matching index, not the first</td>
+        <td>Write your own lower bound</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>log&#8322;(10&#8310;) &asymp; 20</code> and <code>log&#8322;(10&#8313;) &asymp; 30</code>, so a binary search is essentially free. If <code>q</code> queries each need a search, the cost is <code>O(n log n + q log n)</code> &mdash; sorting usually dominates.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: search for a boundary, not a value</h2>
+<p>Model the search space as a sequence of booleans: <code>F F F F T T T T</code>. Binary search finds the position of the first <code>T</code>. The requirement is monotonicity: once the predicate is true it stays true. For a sorted array and the predicate <code>a[i] &ge; x</code>, monotonicity is immediate. For "can we finish in <code>t</code> minutes?" it usually needs a one-line argument, and that argument is the real content of <a href="binary-search-on-answer.html">binary search on the answer</a>.</p>
+<p>The template that never fails uses a half-open interval. Keep <code>lo</code> as the smallest candidate and <code>hi</code> as one past the largest. Loop while <code>lo &lt; hi</code>; compute <code>mid = lo + (hi - lo) / 2</code>; if the predicate holds at <code>mid</code>, the answer is at <code>mid</code> or earlier, so <code>hi = mid</code>; otherwise the answer is strictly after, so <code>lo = mid + 1</code>. When the loop ends, <code>lo == hi</code> is the first true index, or <code>n</code> if there is none.</p>
+<p>That version terminates for a simple reason: the interval length <code>hi - lo</code> strictly decreases every iteration. With floor division, <code>mid &lt; hi</code> always, so <code>hi = mid</code> makes progress; and <code>lo = mid + 1</code> obviously does. The classic infinite loop comes from writing <code>lo = mid</code> in the else branch, which can leave the interval unchanged when <code>hi - lo == 1</code>.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p>At the top of every iteration: <strong>the first index satisfying the predicate lies in <code>[lo, hi]</code></strong>. Equivalently, the predicate is false for every index below <code>lo</code>, and true for <code>hi</code> if <code>hi &lt; n</code>.</p><p>The loop preserves this and shrinks the interval, so on exit <code>lo == hi</code> is the answer. If the predicate is false everywhere, <code>lo</code> ends at <code>n</code> &mdash; which is exactly the "not found" signal you want, and needs no special case.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The one template to memorise</span>
+    <pre class="eq" style="text-align:left">int lo = 0, hi = n;            // half-open: hi is one past the end
+while (lo &lt; hi) {
+    int mid = lo + (hi - lo) / 2;
+    if (predicate(mid)) hi = mid;   // answer is mid or earlier
+    else                lo = mid + 1;
+}
+return lo;                     // first true index, or n</pre><p>Write this from memory until it is automatic. Then <em>never</em> write a different binary search &mdash; change the predicate instead.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title"><code>Arrays.binarySearch</code> and duplicates</span>
+    <p>Java's built-in returns <em>an</em> index of a matching element when duplicates exist, not the first or the last, and the choice is unspecified. When the element is absent it returns <code>-(insertionPoint) - 1</code>, so the insertion point is <code>-result - 1</code>. That is genuinely useful for lower-bound behaviour on unique arrays, but for duplicates you must write your own. Note that <code>TreeMap.floorKey</code> / <code>ceilingKey</code> and <code>TreeSet.floor</code> / <code>ceiling</code> give the same semantics with clearer names.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why exactly &lceil;log&#8322;(n+1)&rceil; steps</span>
+    <p>Each iteration at least halves the interval, so after <code>k</code> steps the length is at most <code>n / 2<sup>k</sup></code>. The loop stops when the length reaches 1, giving <code>k = &lceil;log&#8322;(n+1)&rceil;</code>. Concretely: 20 steps for a million elements, 30 for a billion, 60 for the whole <code>long</code> range. This is also the information-theoretic minimum, since each comparison yields one bit and you need <code>log&#8322; n</code> bits to identify one of <code>n</code> positions.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Lower bound: first index with <code>a[i] &ge; 5</code></h3>
+
+<p>Array <code>[1, 3, 3, 5, 5, 5, 8, 9]</code>. The predicate row shows <code>a[i] &ge; 5</code>, which is <code>F F F T T T T T</code> &mdash; monotone, which is the only requirement.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bsLower"></div>
+  <div class="viz-player" data-viz-target="bsLower">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a (sorted), looking for the first a[i] >= 5",
+      "array": [
+        1,
+        3,
+        3,
+        5,
+        5,
+        5,
+        8,
+        9
+      ],
+      "vars": [
+        "lo",
+        "hi",
+        "mid",
+        "a[mid] >= 5?"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Start with lo = 0, hi = 8 (one past the end). The answer is somewhere in [0, 8].",
+          "window": [
+            0,
+            7
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 8,
+            "mid": "—",
+            "a[mid] >= 5?": "—"
+          }
+        },
+        {
+          "note": "mid = 0 + (8-0)/2 = 4. a[4] = 5, which satisfies the predicate, so the answer is at 4 or earlier: hi = 4.",
+          "active": [
+            4
+          ],
+          "window": [
+            0,
+            7
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 8,
+            "mid": 4,
+            "a[mid] >= 5?": "true"
+          }
+        },
+        {
+          "note": "Interval is now [0, 4). Indices 4 through 7 are eliminated — they may satisfy the predicate but cannot be the FIRST.",
+          "active": [
+            4
+          ],
+          "window": [
+            0,
+            3
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 4,
+            "mid": 4,
+            "a[mid] >= 5?": "true"
+          }
+        },
+        {
+          "note": "mid = 0 + (4-0)/2 = 2. a[2] = 3, which is below 5, so the answer is strictly after: lo = 3.",
+          "active": [
+            2
+          ],
+          "x": [
+            2
+          ],
+          "window": [
+            0,
+            3
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 4,
+            "mid": 2,
+            "a[mid] >= 5?": "false"
+          }
+        },
+        {
+          "note": "Interval is [3, 4). Indices 0 through 2 are eliminated.",
+          "window": [
+            3,
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "lo": 3,
+            "hi": 4,
+            "mid": 2,
+            "a[mid] >= 5?": "false"
+          }
+        },
+        {
+          "note": "mid = 3 + (4-3)/2 = 3. a[3] = 5, true, so hi = 3.",
+          "active": [
+            3
+          ],
+          "window": [
+            3,
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "lo": 3,
+            "hi": 4,
+            "mid": 3,
+            "a[mid] >= 5?": "true"
+          }
+        },
+        {
+          "note": "lo == hi == 3, so the loop exits. The first index with a[i] >= 5 is 3. Three comparisons for eight elements.",
+          "best": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "lo": 3,
+            "hi": 3,
+            "mid": "—",
+            "a[mid] >= 5?": "answer = 3"
+          }
+        },
+        {
+          "note": "Upper bound uses the predicate a[i] > 5 instead, giving index 6. So the count of 5s is upperBound - lowerBound = 6 - 3 = 3.",
+          "best": [
+            3,
+            6
+          ],
+          "window": [
+            3,
+            5
+          ],
+          "values": {
+            "lo": "lower=3",
+            "hi": "upper=6",
+            "mid": "—",
+            "a[mid] >= 5?": "count = 3"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>The interval is half-open. When <code>lo == hi</code> the loop stops and <code>lo</code> is the first true index, index 3 here.</figcaption>
+</figure>
+
+<h3>Rotated sorted array: one half is always ordered</h3>
+
+<p>Array <code>[4, 5, 6, 7, 0, 1, 2]</code>, searching for <code>0</code>. Comparing <code>a[mid]</code> with <code>a[lo]</code> tells you which half is sorted, and then a range test tells you which half to keep.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="bsRotated"></div>
+  <div class="viz-player" data-viz-target="bsRotated">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "rotated array, target = 0",
+      "array": [
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2
+      ],
+      "vars": [
+        "lo",
+        "hi",
+        "mid",
+        "sorted half",
+        "decision"
+      ],
+      "speed": 1150,
+      "frames": [
+        {
+          "note": "lo = 0, hi = 6, mid = 3. a[3] = 7.",
+          "active": [
+            3
+          ],
+          "window": [
+            0,
+            6
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 6,
+            "mid": 3,
+            "sorted half": "—",
+            "decision": "—"
+          }
+        },
+        {
+          "note": "a[lo] = 4 <= a[mid] = 7, so the LEFT half [0,3] is fully sorted (4,5,6,7).",
+          "active": [
+            3
+          ],
+          "window": [
+            0,
+            3
+          ],
+          "best": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "lo": 0,
+            "hi": 6,
+            "mid": 3,
+            "sorted half": "left",
+            "decision": "—"
+          }
+        },
+        {
+          "note": "Is the target 0 inside [4, 7]? No. So it must be in the right half: lo = mid + 1 = 4.",
+          "x": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "window": [
+            4,
+            6
+          ],
+          "values": {
+            "lo": 4,
+            "hi": 6,
+            "mid": 3,
+            "sorted half": "left",
+            "decision": "go right"
+          }
+        },
+        {
+          "note": "lo = 4, hi = 6, mid = 5. a[5] = 1.",
+          "active": [
+            5
+          ],
+          "window": [
+            4,
+            6
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "lo": 4,
+            "hi": 6,
+            "mid": 5,
+            "sorted half": "—",
+            "decision": "—"
+          }
+        },
+        {
+          "note": "a[lo] = 0 <= a[mid] = 1, so the left half [4,5] is sorted (0,1).",
+          "active": [
+            5
+          ],
+          "window": [
+            4,
+            5
+          ],
+          "best": [
+            4,
+            5
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": {
+            "lo": 4,
+            "hi": 6,
+            "mid": 5,
+            "sorted half": "left",
+            "decision": "—"
+          }
+        },
+        {
+          "note": "Is 0 inside [0, 1]? Yes. So discard the right: hi = mid - 1 = 4.",
+          "window": [
+            4,
+            4
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            6
+          ],
+          "values": {
+            "lo": 4,
+            "hi": 4,
+            "mid": 5,
+            "sorted half": "left",
+            "decision": "go left"
+          }
+        },
+        {
+          "note": "lo = hi = 4, mid = 4, a[4] = 0. Found at index 4 in three comparisons.",
+          "best": [
+            4
+          ],
+          "x": [
+            0,
+            1,
+            2,
+            3,
+            5,
+            6
+          ],
+          "values": {
+            "lo": 4,
+            "hi": 4,
+            "mid": 4,
+            "sorted half": "—",
+            "decision": "found"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>The rotation point breaks global sortedness but never breaks <em>both</em> halves at once, so one comparison always identifies a fully sorted side.</figcaption>
+</figure>
+
+<h3>Turning a question into a predicate</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  q(["a search question"]) --&gt; mono{"is the search space monotone?"}
+  mono -- no --&gt; nope["binary search does not apply; sort or rethink"]
+  mono -- yes --&gt; what{"what is asked?"}
+  what -- "does x exist" --&gt; ex["predicate: a[i] &gt;= x, then check a[lo] == x"]
+  what -- "first index &gt;= x" --&gt; lb["predicate: a[i] &gt;= x"]
+  what -- "first index &gt; x" --&gt; ub["predicate: a[i] &gt; x"]
+  what -- "last index &lt;= x" --&gt; last["upperBound(x) minus 1"]
+  what -- "count of x" --&gt; cnt["upperBound(x) minus lowerBound(x)"]
+  what -- "smallest feasible answer" --&gt; ans["predicate: feasible(candidate)"]
+  ex --&gt; tmpl["the one template: while lo &lt; hi, mid, hi=mid or lo=mid+1"]
+  lb --&gt; tmpl
+  ub --&gt; tmpl
+  last --&gt; tmpl
+  cnt --&gt; tmpl
+  ans --&gt; tmpl
+  </div>
+  <figcaption>Every branch ends at the same template. Only the predicate changes, which is the whole point of standardising on one implementation.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm monotonicity.</strong> State the predicate and check that it never goes from true back to false across the range.</li>
+  <li><strong>Set the half-open interval:</strong> <code>lo = 0</code>, <code>hi = n</code>. Use <code>hi = n</code>, not <code>n - 1</code>, so "no answer" falls out naturally.</li>
+  <li><strong>Loop while <code>lo &lt; hi</code></strong> &mdash; strict inequality, never <code>&le;</code> with this template.</li>
+  <li><strong>Compute <code>mid = lo + (hi - lo) / 2</code></strong> to avoid overflow.</li>
+  <li><strong>If the predicate holds at <code>mid</code>, set <code>hi = mid</code></strong>; otherwise <code>lo = mid + 1</code>. Never <code>lo = mid</code>.</li>
+  <li><strong>Return <code>lo</code></strong>, which is the first true index or <code>n</code>.</li>
+  <li><strong>For an exact match, check afterwards:</strong> <code>lo &lt; n && a[lo] == target</code>.</li>
+  <li><strong>Test on the three boundary cases:</strong> target below everything, above everything, and equal to a duplicated value.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Lower bound for <code>5</code> in <code>[1, 3, 3, 5, 5, 5, 8, 9]</code>, then upper bound, then the count. Note that the interval length strictly decreases every row, which is the termination proof.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>Search</th><th>lo</th><th>hi</th><th>mid</th><th>a[mid]</th><th>predicate</th><th>new interval</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>lower(5)</td><td>0</td><td>8</td><td>4</td><td>5</td><td>5 &ge; 5 true</td><td>[0, 4)</td><td>Half eliminated on the right.</td></tr>
+      <tr><td>lower(5)</td><td>0</td><td>4</td><td>2</td><td>3</td><td>3 &ge; 5 false</td><td>[3, 4)</td><td>Half eliminated on the left.</td></tr>
+      <tr class="trace-table__row--change"><td>lower(5)</td><td>3</td><td>4</td><td>3</td><td>5</td><td>5 &ge; 5 true</td><td>[3, 3)</td><td>Loop ends: <code>lo == hi == 3</code>.</td></tr>
+      <tr><td>upper(5)</td><td>0</td><td>8</td><td>4</td><td>5</td><td>5 &gt; 5 false</td><td>[5, 8)</td><td>Strict comparison flips this branch.</td></tr>
+      <tr><td>upper(5)</td><td>5</td><td>8</td><td>6</td><td>8</td><td>8 &gt; 5 true</td><td>[5, 6)</td><td>Narrowing from the right.</td></tr>
+      <tr class="trace-table__row--change"><td>upper(5)</td><td>5</td><td>6</td><td>5</td><td>5</td><td>5 &gt; 5 false</td><td>[6, 6)</td><td>Loop ends: <code>lo == hi == 6</code>.</td></tr>
+      <tr class="trace-table__row--change"><td>count</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>6 &minus; 3</td><td><strong>3</strong></td><td>Three occurrences of 5, computed with two searches and a subtraction.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The <em>only</em> difference between the two searches is <code>&ge;</code> versus <code>&gt;</code>. That is the payoff of the predicate framing: two classic functions differ by one character.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Binary Search Basics implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">The template</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Rotated and bitonic</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Java library</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Template">
+    <p>Learn <code>firstTrue</code> and derive everything else from it. The four wrappers below are one line each, which is the strongest argument for the approach.</p>
+    <div class="code" data-highlight="10-19,26,33,40,47">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BinarySearchTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.function.IntPredicate;
+    
+    public class BinarySearchTemplate {
+    
+        /**
+         * THE template. Returns the smallest i in [lo, hi) with pred(i) true,
+         * or hi if there is none. Requires pred to be monotone: F...FT...T.
+         * O(log(hi - lo)).
+         */
+        static int firstTrue(int lo, int hi, IntPredicate pred) {
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;      // never (lo + hi) / 2
+                if (pred.test(mid)) {
+                    hi = mid;                      // answer is mid or earlier
+                } else {
+                    lo = mid + 1;                  // answer is strictly after mid
+                }
+            }
+            return lo;
+        }
+    
+        /** First index with a[i] &gt;= x. Also the insertion point. */
+        static int lowerBound(int[] a, int x) {
+            return firstTrue(0, a.length, i -&gt; a[i] &gt;= x);
+        }
+    
+        /** First index with a[i] &gt; x. */
+        static int upperBound(int[] a, int x) {
+            return firstTrue(0, a.length, i -&gt; a[i] &gt; x);
+        }
+    
+        /** Index of x, or -1. */
+        static int find(int[] a, int x) {
+            int i = lowerBound(a, x);
+            return (i &lt; a.length &amp;&amp; a[i] == x) ? i : -1;
+        }
+    
+        /** How many elements equal x. */
+        static int count(int[] a, int x) {
+            return upperBound(a, x) - lowerBound(a, x);
+        }
+    
+        /** Largest index with a[i] &lt;= x, or -1 if none. */
+        static int lastAtMost(int[] a, int x) {
+            return upperBound(a, x) - 1;
+        }
+    
+        public static void main(String[] args) {
+            int[] a = {1, 3, 3, 5, 5, 5, 8, 9};
+            System.out.println("lowerBound(5) = " + lowerBound(a, 5));
+            System.out.println("upperBound(5) = " + upperBound(a, 5));
+            System.out.println("count(5)      = " + count(a, 5));
+            System.out.println("find(8)       = " + find(a, 8));
+            System.out.println("find(4)       = " + find(a, 4));
+            System.out.println("lastAtMost(4) = " + lastAtMost(a, 4));
+            System.out.println("lowerBound(0) = " + lowerBound(a, 0));   // before everything
+            System.out.println("lowerBound(99)= " + lowerBound(a, 99));  // past the end
+        }
+        // Output: lowerBound(5) = 3
+        //         upperBound(5) = 6
+        //         count(5)      = 3
+        //         find(8)       = 6
+        //         find(4)       = -1
+        //         lastAtMost(4) = 2
+        //         lowerBound(0) = 0
+        //         lowerBound(99)= 8
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Rotated">
+    <p>Two searches where the array is not globally sorted but a monotone predicate still exists. The trick in both cases is comparing <code>a[mid]</code> with an endpoint rather than with the target.</p>
+    <div class="code" data-highlight="10-13,29-38">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">RotatedSearch.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class RotatedSearch {
+    
+        /**
+         * Minimum of a rotated sorted array with distinct values. O(log n).
+         * Predicate: a[mid] &lt; a[hi] means the minimum is at mid or to its left.
+         */
+        static int findMin(int[] a) {
+            int lo = 0, hi = a.length - 1;
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (a[mid] &lt; a[hi]) {
+                    hi = mid;                      // right half is sorted; min is left of it
+                } else {
+                    lo = mid + 1;                  // a[mid] &gt; a[hi]: the drop is to the right
+                }
+            }
+            return a[lo];
+        }
+    
+        /**
+         * Search a rotated sorted array for target. O(log n).
+         * One half is always sorted; decide which, then test whether the target
+         * lies inside that half's range.
+         */
+        static int search(int[] a, int target) {
+            int lo = 0, hi = a.length - 1;
+            while (lo &lt;= hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (a[mid] == target) {
+                    return mid;
+                }
+                if (a[lo] &lt;= a[mid]) {             // left half [lo, mid] is sorted
+                    if (a[lo] &lt;= target &amp;&amp; target &lt; a[mid]) {
+                        hi = mid - 1;
+                    } else {
+                        lo = mid + 1;
+                    }
+                } else {                            // right half [mid, hi] is sorted
+                    if (a[mid] &lt; target &amp;&amp; target &lt;= a[hi]) {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+            }
+            return -1;
+        }
+    
+        /** Peak of a mountain array. Predicate a[mid] &gt; a[mid+1] is monotone. */
+        static int peakIndex(int[] a) {
+            int lo = 0, hi = a.length - 1;
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (a[mid] &gt; a[mid + 1]) {
+                    hi = mid;                      // we are past the peak (or on it)
+                } else {
+                    lo = mid + 1;                  // still climbing
+                }
+            }
+            return lo;
+        }
+    
+        public static void main(String[] args) {
+            int[] rot = {4, 5, 6, 7, 0, 1, 2};
+            System.out.println("min      = " + findMin(rot));
+            System.out.println("find 0   = " + search(rot, 0));
+            System.out.println("find 3   = " + search(rot, 3));
+            System.out.println("peak of [0,2,5,3,1] = " + peakIndex(new int[] {0, 2, 5, 3, 1}));
+        }
+        // Output: min      = 0
+        //         find 0   = 4
+        //         find 3   = -1
+        //         peak of [0,2,5,3,1] = 2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Library">
+    <p>What the JDK gives you and where it is not enough. Knowing <code>Arrays.binarySearch</code>'s exact return contract and the <code>TreeSet</code> navigation methods saves real time in interviews.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LibrarySearch.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.Arrays;
+    import java.util.Collections;
+    import java.util.List;
+    import java.util.TreeMap;
+    import java.util.TreeSet;
+    
+    public class LibrarySearch {
+    
+        public static void main(String[] args) {
+            int[] a = {1, 3, 3, 5, 5, 5, 8, 9};
+    
+            // Present: returns SOME matching index, unspecified which one.
+            System.out.println("binarySearch(5) = " + Arrays.binarySearch(a, 5));
+    
+            // Absent: returns -(insertionPoint) - 1.
+            int r = Arrays.binarySearch(a, 4);
+            System.out.println("binarySearch(4) = " + r
+                    + ", insertionPoint = " + (-r - 1));
+    
+            // Collections.binarySearch has the same contract for Lists.
+            List&lt;Integer&gt; list = Arrays.asList(1, 3, 3, 5, 5, 5, 8, 9);
+            System.out.println("Collections.binarySearch(8) = "
+                    + Collections.binarySearch(list, 8));
+    
+            // TreeSet: the readable way to get bound semantics.
+            TreeSet&lt;Integer&gt; set = new TreeSet&lt;&gt;(list);
+            System.out.println("floor(4)   = " + set.floor(4)      // largest &lt;= 4
+                    + "  ceiling(4) = " + set.ceiling(4)           // smallest &gt;= 4
+                    + "  lower(5)   = " + set.lower(5)             // largest  &lt; 5
+                    + "  higher(5)  = " + set.higher(5));          // smallest &gt; 5
+    
+            // TreeMap when duplicates must be counted.
+            TreeMap&lt;Integer, Integer&gt; freq = new TreeMap&lt;&gt;();
+            for (int v : a) {
+                freq.merge(v, 1, Integer::sum);
+            }
+            System.out.println("count of 5 = " + freq.get(5)
+                    + "  keys &lt; 5 = " + freq.headMap(5).keySet()
+                    + "  keys &gt;= 5 = " + freq.tailMap(5).keySet());
+    
+            // Searching a 2D matrix by treating it as one flat sorted array.
+            int[][] m = {{1, 3, 5}, {7, 9, 11}, {13, 15, 17}};
+            System.out.println("matrix contains 9  = " + searchMatrix(m, 9));
+            System.out.println("matrix contains 10 = " + searchMatrix(m, 10));
+        }
+    
+        /** Row-major sorted matrix: index k maps to (k / cols, k % cols). */
+        static boolean searchMatrix(int[][] m, int target) {
+            int rows = m.length, cols = m[0].length;
+            int lo = 0, hi = rows * cols;
+            while (lo &lt; hi) {
+                int mid = lo + (hi - lo) / 2;
+                if (m[mid / cols][mid % cols] &gt;= target) {
+                    hi = mid;
+                } else {
+                    lo = mid + 1;
+                }
+            }
+            return lo &lt; rows * cols &amp;&amp; m[lo / cols][lo % cols] == target;
+        }
+        // Output: binarySearch(5) = 4
+        //         binarySearch(4) = -4, insertionPoint = 3
+        //         Collections.binarySearch(8) = 6
+        //         floor(4)   = 3  ceiling(4) = 5  lower(5)   = 3  higher(5)  = 8
+        //         count of 5 = 3  keys &lt; 5 = [1, 3]  keys &gt;= 5 = [5, 8, 9]
+        //         matrix contains 9  = true
+        //         matrix contains 10 = false
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(log n) per search</span>
+    <span class="badge badge--space">Space O(1) iterative, O(log n) recursive</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Each iteration replaces the interval of length <code>L</code> with one of length at most <code>&lceil;L/2&rceil;</code>, so the recurrence is</p>
+    <p><span class="eq">T(n) = T(n/2) + &Theta;(1) &nbsp;&rArr;&nbsp; T(n) = &Theta;(log n)</span></p>
+    <p>by <a href="../00-foundations/recurrences-and-master-theorem.html">case 2 of the master theorem</a> with <code>c = log&#8322;1 = 0</code> and <code>f(n) = &Theta;(n&#8304;)</code>. Exactly <code>&lceil;log&#8322;(n+1)&rceil;</code> iterations run in the worst case.</p>
+    <p>This is also optimal. Each comparison yields one bit of information, and distinguishing <code>n + 1</code> possible outcomes (the <code>n</code> positions plus "absent") requires <code>log&#8322;(n+1)</code> bits, so <code>&Omega;(log n)</code> comparisons are necessary for any comparison-based search on an ordered structure.</p>
+    <p>The practical numbers: 20 iterations at <code>n = 10&#8310;</code>, 30 at <code>n = 10&#8313;</code>, 63 over the whole <code>long</code> range. Note that a linear scan is often <em>faster</em> below about <code>n = 50</code>, because binary search's unpredictable branches defeat the CPU's branch predictor while a linear scan streams through cache perfectly.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Linear scan</td><td><code>O(n)</code></td><td><code>O(1)</code></td><td>n &lt; ~50, or unsorted data</td></tr>
+      <tr><td>Binary search</td><td><code>O(log n)</code></td><td><code>O(1)</code></td><td>Sorted array, the default</td></tr>
+      <tr><td><code>Arrays.binarySearch</code></td><td><code>O(log n)</code></td><td><code>O(1)</code></td><td>Unique keys only; odd return contract</td></tr>
+      <tr><td><code>TreeSet.floor</code> / <code>ceiling</code></td><td><code>O(log n)</code></td><td><code>O(n)</code></td><td>Dynamic set with ordered queries</td></tr>
+      <tr><td><code>HashSet.contains</code></td><td><code>O(1)</code> expected</td><td><code>O(n)</code></td><td>Membership only, no ordering</td></tr>
+      <tr><td>Interpolation search</td><td><code>O(log log n)</code> uniform</td><td><code>O(1)</code></td><td>Uniformly distributed numeric keys</td></tr>
+      <tr><td>Sort + binary search</td><td><code>O(n log n + q log n)</code></td><td><code>O(1)</code></td><td>Many queries on a static array</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title"><code>(lo + hi) / 2</code> overflow</span>
+    <div class="pitfalls__bug">With <code>lo</code> and <code>hi</code> both near <code>2&times;10&#8313;</code>, the sum exceeds <code>int</code> and wraps negative, producing <code>ArrayIndexOutOfBoundsException</code> or an infinite loop. This bug lived in the JDK's own binary search for nine years.</div>
+    <div class="pitfalls__fix"><code>int mid = lo + (hi - lo) / 2;</code>. The difference always fits. This matters in practice for <a href="binary-search-on-answer.html">binary search on the answer</a>, where the bounds are values rather than indices.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Infinite loop from <code>lo = mid</code></span>
+    <div class="pitfalls__bug">Writing <code>else lo = mid;</code> instead of <code>lo = mid + 1;</code>. When <code>hi - lo == 1</code>, <code>mid == lo</code>, so the interval never shrinks and the loop spins forever.</div>
+    <div class="pitfalls__fix">With floor division and the half-open template, the true branch must be <code>hi = mid</code> and the false branch must be <code>lo = mid + 1</code>. If you ever need <code>lo = mid</code>, you must round the midpoint <em>up</em> instead &mdash; which is why standardising on one template is worth it.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Mixing half-open and closed intervals</span>
+    <div class="pitfalls__bug">Initialising <code>hi = n - 1</code> but looping <code>while (lo &lt; hi)</code>. Then the last element can never be returned, and "target larger than everything" gives <code>n - 1</code> instead of <code>n</code>.</div>
+    <div class="pitfalls__fix">Half-open throughout: <code>hi = n</code>, <code>while (lo &lt; hi)</code>, return <code>lo</code>. Pick one convention and never mix.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Assuming <code>Arrays.binarySearch</code> returns the first match</span>
+    <div class="pitfalls__bug">On <code>[5, 5, 5]</code> it may return index 0, 1 or 2 &mdash; the specification does not say which. Code that computes <code>result</code> as "the first occurrence" is wrong on duplicates.</div>
+    <div class="pitfalls__fix">Write your own <code>lowerBound</code>. It is five lines and its behaviour is fully specified, including the not-found case.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Applying binary search to a non-monotone predicate</span>
+    <div class="pitfalls__bug">Searching for a local maximum in an arbitrary array with <code>a[mid] &gt; a[mid+1]</code>. That predicate is not monotone unless the array is genuinely bitonic, so the search converges to <em>a</em> local peak, which may not be the one you want.</div>
+    <div class="pitfalls__fix">Verify monotonicity explicitly. If the predicate is <code>T F T F</code>, binary search is not applicable &mdash; consider <a href="../13-greedy-and-offline/ternary-search-and-convexity.html">ternary search</a> for unimodal functions.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Forgetting the existence check after a lower bound</span>
+    <div class="pitfalls__bug"><code>return lowerBound(a, x);</code> as if it were a find. It returns an insertion point even when <code>x</code> is absent, so callers see a plausible index for a value that is not there.</div>
+    <div class="pitfalls__fix"><code>int i = lowerBound(a, x); return (i &lt; n && a[i] == x) ? i : -1;</code>. Both conditions matter: the index check prevents an out-of-bounds read when <code>x</code> exceeds everything.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Binary searching an unsorted array</span>
+    <div class="pitfalls__bug">Forgetting to sort, or sorting by one key and searching by another. The search returns a plausible index that is simply wrong, and small tests often pass by luck.</div>
+    <div class="pitfalls__fix">Sort by the exact key you search on. If the array is sorted by a comparator, the predicate must use the same comparator.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Binary search on the answer</td>
+        <td>The search space is the set of possible answers rather than array indices, and the predicate is a feasibility check. This is the single most valuable generalisation.</td>
+        <td><code>lo = minAnswer, hi = maxAnswer + 1; predicate = canAchieve(mid)</code></td>
+        <td><a href="binary-search-on-answer.html">Binary Search on Answer</a></td>
+      </tr>
+      <tr>
+        <td>Binary search on a real interval</td>
+        <td>For continuous answers, iterate a fixed number of times (about 100) rather than comparing for equality, which never terminates reliably with floating point.</td>
+        <td><code>for (int it = 0; it &lt; 100; it++) { double mid = (lo+hi)/2; if (ok(mid)) hi = mid; else lo = mid; }</code></td>
+        <td><a href="binary-search-on-answer.html">Binary Search on Answer</a></td>
+      </tr>
+      <tr>
+        <td>Binary lifting (search on a tree)</td>
+        <td>Jump by powers of two to find an ancestor. Same halving idea applied to tree depth rather than array indices.</td>
+        <td><code>for (int k = LOG-1; k &gt;= 0; k--) if (up[k][v] != -1 &amp;&amp; depth[up[k][v]] &gt;= d) v = up[k][v];</code></td>
+        <td><a href="../05-trees/lca-binary-lifting.html">LCA Binary Lifting</a></td>
+      </tr>
+      <tr>
+        <td>Parallel binary search</td>
+        <td>Answer <code>q</code> monotone queries simultaneously by running all their searches in lockstep over <code>log</code> rounds.</td>
+        <td><code>for round in 1..log(maxAns): group queries by their current mid, process offline</code></td>
+        <td><a href="../13-greedy-and-offline/mos-algorithm.html">Offline techniques</a></td>
+      </tr>
+      <tr>
+        <td>Exponential (galloping) search</td>
+        <td>When the array is unbounded or the answer is likely near the start, double the bound until the predicate flips, then binary search inside that range.</td>
+        <td><code>int hi = 1; while (!pred(hi)) hi *= 2; return firstTrue(hi/2, hi, pred);</code></td>
+        <td>Unbounded or streaming input</td>
+      </tr>
+      <tr>
+        <td>Fractional cascading / descent on a segment tree</td>
+        <td>Answer "first index in [l, r] with value at least x" in <code>O(log n)</code> by descending the tree instead of binary searching an array.</td>
+        <td><code>descend: if (leftChild.max &gt;= x) go left, else go right</code></td>
+        <td><a href="../06-range-queries/segment-tree.html">Segment Tree</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Write binary search with no off-by-one errors. What is your approach?</summary>
+    <div class="followup__body">
+      <p>I use a single template: find the first index where a monotone predicate is true, with a half-open interval <code>[lo, hi)</code>. <code>lo = 0</code>, <code>hi = n</code>, loop while <code>lo &lt; hi</code>, <code>mid = lo + (hi - lo) / 2</code>, and then <code>hi = mid</code> on true or <code>lo = mid + 1</code> on false. It terminates because the interval strictly shrinks, and it returns <code>n</code> when nothing satisfies the predicate, which is exactly the not-found signal. Every other search &mdash; exact match, upper bound, count, last-at-most &mdash; is one line on top of it.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you handle duplicates?</summary>
+    <div class="followup__body">
+      <p>Two searches. <code>lowerBound(x)</code> uses the predicate <code>a[i] &ge; x</code> and gives the first occurrence; <code>upperBound(x)</code> uses <code>a[i] &gt; x</code> and gives one past the last. The count is the difference, and the last occurrence is <code>upperBound(x) - 1</code>. Note that <code>Arrays.binarySearch</code> cannot do this: it returns an unspecified matching index, which is why writing your own is worthwhile.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How does binary search work on a rotated sorted array?</summary>
+    <div class="followup__body">
+      <p>The key observation is that at least one half is always fully sorted, and one comparison identifies which: if <code>a[lo] &le; a[mid]</code>, the left half is sorted, otherwise the right half is. Then test whether the target lies within that sorted half's value range; if so recurse there, otherwise recurse in the other half. Each step still halves the interval, so it remains <code>O(log n)</code>. With duplicates it degrades to <code>O(n)</code> worst case, because <code>a[lo] == a[mid] == a[hi]</code> gives no information and you must shrink by one.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if the array is sorted but you cannot access its length?</summary>
+    <div class="followup__body">
+      <p>Exponential search. Probe indices <code>1, 2, 4, 8, &hellip;</code> until you either go out of bounds or find a value exceeding the target, then binary search within <code>[bound/2, bound]</code>. Finding the bound takes <code>O(log p)</code> where <code>p</code> is the answer's position, and the search takes another <code>O(log p)</code>, so the total is <code>O(log p)</code> &mdash; potentially far better than <code>O(log n)</code> when the target is near the front. This is the standard approach for unbounded or streaming data.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is binary search sometimes slower than a linear scan?</summary>
+    <div class="followup__body">
+      <p>Cache behaviour and branch prediction. A linear scan reads memory sequentially, which the hardware prefetcher handles perfectly, and its branch is predicted correctly almost every time. Binary search jumps unpredictably, causing a cache miss and a branch misprediction per step. Below roughly 50&ndash;100 elements the linear scan wins in wall-clock time despite the worse asymptotics. This is a good example of <a href="../00-foundations/complexity-analysis.html">constants mattering</a> when the input is small.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How would you binary search a 2D sorted matrix?</summary>
+    <div class="followup__body">
+      <p>If each row is sorted and every row starts after the previous one ends, treat it as one flat array of length <code>rows &times; cols</code> and map index <code>k</code> to <code>(k / cols, k % cols)</code> &mdash; a single <code>O(log(rc))</code> search. If only rows and columns are individually sorted (LeetCode 240), that mapping is invalid; instead start at the top-right corner and walk: move left when the value is too large, down when it is too small. That is <code>O(r + c)</code>, which is better than the <code>O(n<sup>1.585</sup>)</code> quadrant recursion.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Do LC 704 and LC 34 first to lock in the template, then LC 33 and LC 153 for the rotated variants. The predicate framing is what makes the harder ones routine.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/binary-search/" target="_blank" rel="noopener">Binary Search</a></td>
+        <td><span class="badge badge--lc">LC 704</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The template, unadorned</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/search-insert-position/" target="_blank" rel="noopener">Search Insert Position</a></td>
+        <td><span class="badge badge--lc">LC 35</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Lower bound, exactly</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/first-bad-version/" target="_blank" rel="noopener">First Bad Version</a></td>
+        <td><span class="badge badge--lc">LC 278</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>The predicate framing made explicit by the problem</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/" target="_blank" rel="noopener">Find First and Last Position of Element</a></td>
+        <td><span class="badge badge--lc">LC 34</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>lowerBound and upperBound side by side</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/search-in-rotated-sorted-array/" target="_blank" rel="noopener">Search in Rotated Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 33</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Identify the sorted half, then a range test</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/" target="_blank" rel="noopener">Find Minimum in Rotated Sorted Array</a></td>
+        <td><span class="badge badge--lc">LC 153</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Compare a[mid] with a[hi], never with a[lo]</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/search-in-rotated-sorted-array-ii/" target="_blank" rel="noopener">Search in Rotated Sorted Array II</a></td>
+        <td><span class="badge badge--lc">LC 81</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Duplicates force an O(n) worst case; know why</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/find-peak-element/" target="_blank" rel="noopener">Find Peak Element</a></td>
+        <td><span class="badge badge--lc">LC 162</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Slope predicate; any peak is acceptable</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/search-a-2d-matrix/" target="_blank" rel="noopener">Search a 2D Matrix</a></td>
+        <td><span class="badge badge--lc">LC 74</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Flatten to one index with / and %</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/search-a-2d-matrix-ii/" target="_blank" rel="noopener">Search a 2D Matrix II</a></td>
+        <td><span class="badge badge--lc">LC 240</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Flattening is invalid here; walk from the top-right</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/median-of-two-sorted-arrays/" target="_blank" rel="noopener">Median of Two Sorted Arrays</a></td>
+        <td><span class="badge badge--lc">LC 4</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Binary search the partition point, not the value</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/find-smallest-letter-greater-than-target/" target="_blank" rel="noopener">Find Smallest Letter Greater Than Target</a></td>
+        <td><span class="badge badge--lc">LC 744</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Upper bound with a wraparound</td></tr>
+      <tr><td>13</td>
+        <td><a href="https://leetcode.com/problems/peak-index-in-a-mountain-array/" target="_blank" rel="noopener">Peak Index in a Mountain Array</a></td>
+        <td><span class="badge badge--lc">LC 852</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Guaranteed bitonic, so the slope predicate is monotone</td></tr>
+      <tr><td>14</td>
+        <td><a href="https://leetcode.com/problems/time-based-key-value-store/" target="_blank" rel="noopener">Time Based Key-Value Store</a></td>
+        <td><span class="badge badge--lc">LC 981</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Last-at-most on a per-key sorted timestamp list</td></tr>
+      <tr><td>15</td>
+        <td><a href="https://leetcode.com/problems/missing-number-in-arithmetic-progression/" target="_blank" rel="noopener">Missing Number in Arithmetic Progression</a></td>
+        <td><span class="badge badge--lc">LC 1228</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Predicate on the deviation from the expected value</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 4 &mdash; binary search the partition, not the value</summary>
+  <div class="spoiler__body">
+    <p>Do not search for the median value. Search for how many elements of the shorter array belong to the left half of the merged arrangement &mdash; call it <code>i</code>. Then <code>j = (m + n + 1)/2 - i</code> is forced. A partition is correct when <code>A[i-1] &le; B[j]</code> and <code>B[j-1] &le; A[i]</code>, and this condition is monotone in <code>i</code>, so the template applies directly. Use <code>Integer.MIN_VALUE</code> and <code>MAX_VALUE</code> as sentinels for the out-of-range ends, and always binary search over the <em>shorter</em> array so the range is <code>O(log min(m, n))</code>. Transferable lesson: <em>when the answer itself is hard to search over, look for a structural parameter (a split point, a count, an index) that determines it and is monotone.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 81 &mdash; why duplicates cost you the logarithm</summary>
+  <div class="spoiler__body">
+    <p>In a rotated array with duplicates, <code>a[lo] == a[mid] == a[hi]</code> is possible &mdash; for example <code>[1,1,1,0,1]</code> &mdash; and in that situation neither half can be identified as sorted, so no information is gained. The only safe move is <code>lo++</code> (or <code>hi--</code>), which is <code>O(n)</code> in the worst case when the array is nearly all equal. This is not a flaw in the implementation; it is information-theoretic, since distinguishing the rotation point among <code>n</code> equal values genuinely requires looking at them. General lesson: <em>binary search needs each comparison to eliminate a constant fraction; when a comparison can be uninformative, the worst case degrades to linear.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>One template:</strong> half-open <code>[lo, hi)</code>, <code>while (lo &lt; hi)</code>, <code>mid = lo + (hi - lo) / 2</code>, <code>hi = mid</code> on true, <code>lo = mid + 1</code> on false, return <code>lo</code>.</li>
+    <li><strong>Search for a boundary, not a value.</strong> Lower bound, upper bound, count, exact match and last-at-most are all one line on top of <code>firstTrue</code>.</li>
+    <li><strong>Monotonicity is the only requirement</strong> &mdash; sortedness is just the most common source of it. That is what enables binary search on the answer.</li>
+    <li><strong>Three classic bugs:</strong> <code>(lo + hi) / 2</code> overflow, <code>lo = mid</code> infinite loop, and mixing closed with half-open intervals.</li>
+    <li><strong>Rotated arrays:</strong> one half is always sorted; compare <code>a[mid]</code> with an endpoint to find out which, then test the target's range.</li>
+  </ul>
+  <div class="recap__oneliner">lo=0, hi=n; while(lo&lt;hi){mid=lo+(hi-lo)/2; if(pred(mid)) hi=mid; else lo=mid+1;} return lo;</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

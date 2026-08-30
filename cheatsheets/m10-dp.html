@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10 Dynamic Programming &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>10 Dynamic Programming</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Pipeline</h3>
+    <ul><li>state → rec → memo → tabulate → space-opt</li><li>iterate so dependencies already filled</li></ul>
+  </article>
+  <article class="cheat-card">
+    <h3>0/1 knapsack 1D</h3>
+    <pre>for each item:
+  for s=W; s&gt;=w; s--
+    dp[s]=max(dp[s], dp[s-w]+val)</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>LIS n log n</h3>
+    <pre>tails increasing
+i = binarySearch(tails, x)
+if i==size add else tails[i]=x</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Interval</h3>
+    <pre>for len=2..n
+  for l=0; r=l+len-1
+    for k=l..r-1
+      dp[l][r] = opt(dp[l][k],dp[k+1][r])</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Digit DP</h3>
+    <pre>dfs(pos, tight, lead0, sum)
+tight: still prefix-equal to N</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Grundy</h3>
+    <pre>g[v]=mex{ g[to] }
+xor of components; 0 = lose</pre>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

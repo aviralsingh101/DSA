@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heavy-Light Decomposition &mdash; DSA Course</title>
+<meta name="description" content="Split a tree into heavy paths so a path query becomes O(log n) segment-tree queries instead of a walk.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="heavy-light-decomposition">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 09 &middot; Decompositions</span>
+  <h1>Heavy-Light Decomposition</h1>
+  <p class="hero__tagline">Split a tree into heavy paths so a path query becomes O(log n) segment-tree queries instead of a walk.</p>
+  <div class="hero__meta">
+    <span class="pill pill--hard">Hard</span>
+    <span class="hero__time">24 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../06-range-queries/segment-tree.html">Segment Tree</a>,
+      <a href="../05-trees/euler-tour-subtree-queries.html">Euler Tour</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">HLD</span>
+      <span class="chip">trees</span>
+      <span class="chip">segtree</span>
+      <span class="chip">P2</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Subtree queries flatten with an Euler tour. Path queries do not: a path is not a contiguous range in tin/tout order. Heavy-light decomposition (HLD) cuts the tree into O(log n) contiguous chains so each path is a short sequence of ranges.</p>
+<p>The heavy child of v is the child with the largest subtree. Edges to heavy children stay in the same chain; light edges start a new chain. Any root path then uses at most log n light edges, because each light edge at least halves the remaining subtree.</p>
+<p>Interview frequency is low. Google-hard onsite and CF Div1 still ask path-add / path-max on trees. If you can say the heavy-child definition and the log-chains argument you are ahead of most candidates.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>A path is a union of O(log n) chain segments. Put a segment tree on the flattened chains and a path query is O(log² n).</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>Path sum / min / max / add on a tree, n ≤ 1e5</li>
+        <li>Subtree and path queries in the same problem</li>
+        <li>"tree, queries on the path between u and v"</li>
+        <li>You already have a segment tree and need to lift it onto a tree</li>
+        <li>CF statements that mention HLD or "tree + range structure"</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>Only subtree queries → Euler tour + BIT is enough</li>
+        <li>Only LCA / distance → binary lifting, no HLD</li>
+        <li>Offline path queries with a property you can Mo → Mo on trees</li>
+        <li>n ≤ 2000 → naive parent walk is fine</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>path between u and v, static aggregates</td>
+        <td>HLD + segtree on chains</td>
+        <td>this page</td>
+      </tr>
+      <tr>
+        <td>subtree only</td>
+        <td>Euler tour</td>
+        <td>tin/tout range</td>
+      </tr>
+      <tr>
+        <td>kth ancestor / LCA only</td>
+        <td>binary lifting</td>
+        <td>no values</td>
+      </tr>
+      <tr>
+        <td>all-roots answers</td>
+        <td>rerooting DP</td>
+        <td>not HLD</td>
+      </tr>
+      <tr>
+        <td>count paths with a numeric property</td>
+        <td>centroid decomposition</td>
+        <td>often easier than HLD</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> centroid decomp</td>
+        <td>Centroid is for counting through a vertex; HLD is for path aggregates</td>
+        <td>different tool</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> n,q ≤ 1e5 and path updates/queries → O(log² n) per query is intended. n ≤ 1e5 and only subtree → do not pull HLD.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>dfs1 computes sz[], parent[], depth[], and heavy[v] = child of max sz. dfs2 assigns pos[] in chain order: visit the heavy child first so a chain occupies a contiguous segment of the segtree base array, then light children each start a new head[].</p>
+<p>query(u,v): while head[u] != head[v], lift the deeper head (by depth[head]) across its chain segment, then the last chain is a single range between u and v.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <p><em>Every node is on exactly one heavy path. Any leaf-to-root path contains at most log n light edges, so it crosses at most log n chains. After flattening, each chain is a contiguous pos[] range.</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why log n light edges</span>
+    <p>A light edge goes to a child whose subtree is ≤ half of its parent (otherwise it would be heavy). Walking toward the root across a light edge at least doubles the remaining size, so there are O(log n) of them.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Worked walkthrough</h3>
+
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="heavy-light-decompositionViz"></div>
+  <div class="viz-player" data-viz-target="heavy-light-decompositionViz">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "pos → node (chains A:1-2-4, B:3, C:5-6, D:7, E:8)",
+      "array": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "vars": [
+        "u",
+        "v",
+        "chains",
+        "ranges"
+      ],
+      "speed": 1000,
+      "frames": [
+        {
+          "note": "Tree rooted at 1. Heavy edges 1-2, 2-4, 5-6. Light edges start new chains.",
+          "window": [
+            0,
+            7
+          ],
+          "values": {
+            "u": "—",
+            "v": "—",
+            "chains": 5,
+            "ranges": "—"
+          }
+        },
+        {
+          "note": "Query path 4..6. 4 is on chain A (head 1), 6 on chain C (head 5).",
+          "active": [
+            3,
+            5
+          ],
+          "values": {
+            "u": 4,
+            "v": 6,
+            "chains": 2,
+            "ranges": "?"
+          }
+        },
+        {
+          "note": "depth[head[4]]=0 < depth[head[6]]=2, so lift 6 across chain C: range pos[5]..pos[6].",
+          "window": [
+            4,
+            5
+          ],
+          "active": [
+            5
+          ],
+          "values": {
+            "u": 4,
+            "v": 5,
+            "chains": "C done",
+            "ranges": "[5..6]"
+          }
+        },
+        {
+          "note": "Now v=5, parent is 2. 2 is on chain A with 4. Same head.",
+          "active": [
+            1,
+            3
+          ],
+          "values": {
+            "u": 4,
+            "v": 2,
+            "chains": "A",
+            "ranges": "[5..6] + ?"
+          }
+        },
+        {
+          "note": "Same chain: one range pos[2]..pos[4] covering 2 and 4. Path is 4-2-1-… no — 4-2-5? Parent of 5 is 2. Path 4-2-5-6.",
+          "window": [
+            1,
+            3
+          ],
+          "values": {
+            "u": 4,
+            "v": 2,
+            "chains": "A last",
+            "ranges": "[5..6]+[2..4]"
+          }
+        },
+        {
+          "note": "Two ranges, two segtree queries. O(log n) chains × O(log n) tree = O(log² n).",
+          "best": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": {
+            "u": 4,
+            "v": 6,
+            "chains": 2,
+            "ranges": "done"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Heavy edges stay on a chain</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n1["1 head A"] --&gt; n2["2 heavy"]
+  n1 --&gt; n3["3 light B"]
+  n2 --&gt; n4["4 heavy"]
+  n2 --&gt; n5["5 light C"]
+  n5 --&gt; n6["6 heavy"]
+  n1 --&gt; n7["7 light D"]
+  n3 --&gt; n8["8 light E"]
+  </div>
+  <figcaption>Thick (heavy) edges keep the same head. Light edges start a new chain.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>dfs1:</strong> compute sz, parent, depth; heavy[v] = argmax sz[child].</li>
+  <li><strong>dfs2:</strong> pos[v]=timer++; if heavy[v] exists, dfs2(heavy, same head); then each light child dfs2(child, child as head).</li>
+  <li><strong>Build a segtree</strong> on the base array indexed by pos, storing node values.</li>
+  <li><strong>path query(u,v):</strong> while head[u]!=head[v], query the deeper chain from pos[head] to pos[node], then climb to parent[head].</li>
+  <li><strong>Same-chain finish:</strong> query the pos-range between u and v.</li>
+  <li><strong>Path update</strong> is the same walk with range updates (lazy if needed).</li>
+  <li><strong>Subtree query</strong> is still a single pos-range if you assigned heavy-first (subtree is contiguous).</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Every step on the sample from the visual walkthrough.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>u</th><th>v</th><th>chains</th><th>ranges</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>5</td><td>—</td><td>Tree rooted at 1. Heavy edges 1-2, 2-4, 5-6. Light edges start new chains.</td></tr>
+      <tr><td>4</td><td>6</td><td>2</td><td>?</td><td>Query path 4..6. 4 is on chain A (head 1), 6 on chain C (head 5).</td></tr>
+      <tr><td>4</td><td>5</td><td>C done</td><td>[5..6]</td><td>depth[head[4]]=0 < depth[head[6]]=2, so lift 6 across chain C: range pos[5]..pos[6].</td></tr>
+      <tr><td>4</td><td>2</td><td>A</td><td>[5..6] + ?</td><td>Now v=5, parent is 2. 2 is on chain A with 4. Same head.</td></tr>
+      <tr><td>4</td><td>2</td><td>A last</td><td>[5..6]+[2..4]</td><td>Same chain: one range pos[2]..pos[4] covering 2 and 4. Path is 4-2-1-… no — 4-2-5? Parent of 5 is 2. Path 4-2-5-6.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>6</td><td>2</td><td>done</td><td>Two ranges, two segtree queries. O(log n) chains × O(log n) tree = O(log² n).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Heavy-Light Decomposition implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Naive path walk</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">HLD query walk</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Reusable skeleton</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Naive path walk">
+    <p>O(n) per query. Fine for n,q ≤ 2000.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">PathNaive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class PathNaive {
+        static int[] parent, depth, val;
+        static long query(int u, int v) {
+            long s = 0;
+            while (u != v) {
+                if (depth[u] &lt; depth[v]) { int t = u; u = v; v = t; }
+                s += val[u]; u = parent[u];
+            }
+            return s + val[u];
+        }
+        public static void main(String[] args) {
+            parent = new int[] {0, 0, 0, 1, 1}; depth = new int[] {0, 1, 1, 2, 2};
+            val = new int[] {0, 4, 2, 5, 1};
+            System.out.println(query(3, 4));
+        }
+        // Input : tree 0-1-3, 0-1-4, 0-2; values on nodes
+        // Output: 10   (5+4+1)
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="HLD query walk">
+    <div class="code" data-highlight="28-36">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HLD.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class HLD {
+        int n, timer;
+        int[] sz, parent, depth, heavy, head, pos, val;
+        List&lt;List&lt;Integer&gt;&gt; g;
+        long[] bit; // Fenwick on pos for point values
+    
+        HLD(int n) {
+            this.n = n;
+            g = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; n; i++) g.add(new ArrayList&lt;&gt;());
+            sz = new int[n]; parent = new int[n]; depth = new int[n];
+            heavy = new int[n]; head = new int[n]; pos = new int[n];
+            Arrays.fill(heavy, -1);
+            val = new int[n]; bit = new long[n + 2];
+        }
+        void add(int u, int v) { g.get(u).add(v); g.get(v).add(u); }
+    
+        void dfs1(int v, int p) {
+            sz[v] = 1; parent[v] = p;
+            int best = 0;
+            for (int to : g.get(v)) if (to != p) {
+                depth[to] = depth[v] + 1; dfs1(to, v); sz[v] += sz[to];
+                if (sz[to] &gt; best) { best = sz[to]; heavy[v] = to; }
+            }
+        }
+        void dfs2(int v, int h) {
+            head[v] = h; pos[v] = timer++;
+            if (heavy[v] != -1) dfs2(heavy[v], h);
+            for (int to : g.get(v)) if (to != parent[v] &amp;&amp; to != heavy[v]) dfs2(to, to);
+        }
+        void bitAdd(int i, long x) { for (i++; i &lt; bit.length; i += i &amp; -i) bit[i] += x; }
+        long bitSum(int i) { long s = 0; for (i++; i &gt; 0; i -= i &amp; -i) s += bit[i]; return s; }
+        long bitRange(int l, int r) { if (l &gt; r) { int t = l; l = r; r = t; } return bitSum(r) - bitSum(l - 1); }
+    
+        long path(int u, int v) {
+            long s = 0;
+            while (head[u] != head[v]) {
+                if (depth[head[u]] &lt; depth[head[v]]) { int t = u; u = v; v = t; }
+                s += bitRange(pos[head[u]], pos[u]);
+                u = parent[head[u]];
+            }
+            s += bitRange(pos[u], pos[v]);
+            return s;
+        }
+    
+        public static void main(String[] args) {
+            HLD h = new HLD(5);
+            h.add(0, 1); h.add(0, 2); h.add(1, 3); h.add(1, 4);
+            h.dfs1(0, 0); h.dfs2(0, 0);
+            int[] vals = {0, 4, 2, 5, 1};
+            for (int i = 0; i &lt; 5; i++) { h.val[i] = vals[i]; h.bitAdd(h.pos[i], vals[i]); }
+            System.out.println(h.path(3, 4));
+        }
+        // Input : tree 0-1-3, 0-1-4, 0-2; node values 0,4,2,5,1
+        // Output: 10
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Reusable skeleton">
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HLDTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>// dfs1 sizes + heavy child
+    // dfs2: pos, head; heavy first so chain is contiguous
+    // path: while heads differ, query deeper chain, climb to parent[head]
+    // last range is pos[u]..pos[v] on the shared chain
+    public class HLDTemplate {
+        public static void main(String[] args) {
+            System.out.println("see HLD.java");
+        }
+        // Input : (template)
+        // Output: see HLD.java
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) build, O(log² n) per path query/update</span>
+    <span class="badge badge--space">Space O(n)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>A path crosses O(log n) chains (light-edge argument). Each chain is one segment-tree / Fenwick query of O(log n). Product: O(log² n).</p>
+    <p><span class="eq">#light edges on a root path ≤ log₂ n &nbsp;⇒&nbsp; #chains on any path ≤ 2 log n</span></p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Parent walk</td><td>O(n) / query</td><td>O(n)</td><td>n,q ≤ 2000</td></tr>
+      <tr><td>HLD + BIT</td><td>O(log² n)</td><td>O(n)</td><td>path sums, point updates</td></tr>
+      <tr><td>HLD + lazy segtree</td><td>O(log² n)</td><td>O(n)</td><td>path range add</td></tr>
+      <tr><td>Euler + BIT</td><td>O(log n)</td><td>O(n)</td><td>subtree only</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Forgetting to visit the heavy child first</span>
+    <div class="pitfalls__bug">If dfs2 visits children in arbitrary order, a chain is not contiguous in pos[] and range queries are wrong.</div>
+    <div class="pitfalls__fix">Always `if (heavy[v] != -1) dfs2(heavy[v], sameHead)` before light children.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Comparing depth[u] instead of depth[head[u]]</span>
+    <div class="pitfalls__bug">You lift the deeper <em>node</em> rather than the deeper <em>chain head</em>, and skip part of a chain.</div>
+    <div class="pitfalls__fix">The node you climb is the one whose head is deeper.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Off-by-one when u and v are on the same chain</span>
+    <div class="pitfalls__bug">pos[u] and pos[v] need min/max. Forgetting that returns an empty or reversed range.</div>
+    <div class="pitfalls__fix">`bitRange` should swap if l > r, or compute `l = min(pos[u], pos[v])`.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Values on edges vs nodes</span>
+    <div class="pitfalls__bug">Edge-valued trees double-count the LCA or miss it, depending on how you assign the edge to a child.</div>
+    <div class="pitfalls__fix">Store the edge value on the deeper endpoint; when querying, skip the LCA node.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Root's parent</span>
+    <div class="pitfalls__bug">`parent[root] = root` then `u = parent[head[u]]` infinite-loops if you query a chain that includes the root incorrectly.</div>
+    <div class="pitfalls__fix">Stop when heads meet. Never climb past the root; `parent[root] = root` is OK only because the while condition fails first.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Path add, point read</td>
+        <td>Lazy segtree on pos, same walk</td>
+        <td><code>st.rangeAdd(l,r,x)</code></td>
+        <td>CF path-add</td>
+      </tr>
+      <tr>
+        <td>Edge values</td>
+        <td>Assign edge to child; skip LCA in the query</td>
+        <td><code>if(u!=v) range without lca</code></td>
+        <td>standard CF</td>
+      </tr>
+      <tr>
+        <td>Subtree + path</td>
+        <td>Heavy-first pos makes subtree contiguous</td>
+        <td><code>st.query(pos[v], pos[v]+sz[v]-1)</code></td>
+        <td>both in one structure</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Prove the number of chains on a path is O(log n).</summary>
+    <div class="followup__body">
+      <p>Each light edge at least halves subtree size toward the root, so a node has O(log n) light edges above it. A u–v path is two root paths minus the prefix to the LCA, hence O(log n) chains.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is HLD O(log² n) and not O(log n)?</summary>
+    <div class="followup__body">
+      <p>O(log n) chains, each needing an O(log n) structure query. You can sometimes drop a log with a specialised structure, but not with a general monoid.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you do this with Euler tours only?</summary>
+    <div class="followup__body">
+      <p>Not for arbitrary path aggregates. Euler + RMQ gives LCA, not path sums of values. You would need extra tricks (tree flattening with in/out and a difference on parent) that still resemble HLD.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>HLD vs centroid for "count paths with xor k".</summary>
+    <div class="followup__body">
+      <p>Centroid is the default for counting paths with a property. HLD is the default for <em>aggregating values already stored on the tree</em> under updates.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/minimum-edge-weight-equilibrium-queries-in-a-tree/" target="_blank" rel="noopener">Min Edge Weight Equilibrium Queries</a></td>
+        <td><span class="badge badge--lc">LC 2846</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>path counts; lifting often enough</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://www.spoj.com/problems/QTREE/" target="_blank" rel="noopener">QTREE</a></td>
+        <td><span class="badge badge--gfg">SPOJ QTREE</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>the classic HLD problem</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://codeforces.com/problemset/problem/343/D" target="_blank" rel="noopener">Water Tree</a></td>
+        <td><span class="badge badge--cf">CF 343D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>HLD or Euler + lazy</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://codeforces.com/problemset/problem/383/C" target="_blank" rel="noopener">Propagating Tree</a></td>
+        <td><span class="badge badge--cf">CF 383C</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Euler + parity, not always HLD</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://atcoder.jp/contests/abc294/tasks/abc294_g" target="_blank" rel="noopener">AtCoder ABC294 G</a></td>
+        <td><span class="badge badge--atc">ABC 294G</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>path sums on a tree</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://www.luogu.com.cn/problem/P3384" target="_blank" rel="noopener">Luogu P3384 HLD template</a></td>
+        <td><span class="badge badge--gfg">P3384</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>template</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/throne-inheritance/" target="_blank" rel="noopener">Throne Inheritance</a></td>
+        <td><span class="badge badge--lc">LC 1600</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>tree order, not HLD — contrast</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/1083/A" target="_blank" rel="noopener">The Fair Nut and the Best Path</a></td>
+        <td><span class="badge badge--cf">CF 1083A</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>tree DP, not HLD — know the difference</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for SPOJ QTREE</summary>
+  <div class="spoiler__body">
+    <p>Edge weights stored on the child. Path max = HLD + segtree max. Change-on-edge is a point update at that child pos.</p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for CF 343D</summary>
+  <div class="spoiler__body">
+    <p>Fill a subtree with 1s, empty a node, query whether a subtree is all 1s. Euler + lazy is enough; HLD also works. The fill is a range assign.</p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Heavy child = largest subtree.</strong> Light edges at least halve size.</li>
+    <li><strong>dfs2 visits heavy first</strong> so a chain is one pos-range.</li>
+    <li><strong>Path = O(log n) ranges.</strong> Lift the deeper head until heads match.</li>
+    <li><strong>Subtree is still one range</strong> under heavy-first numbering.</li>
+    <li><strong>Edge values live on the child.</strong> Skip the LCA when summing edges.</li>
+  </ul>
+  <div class="recap__oneliner">while(head[u]!=head[v]){ if(depth[head[u]]&lt;depth[head[v]])swap; qry(pos[head[u]],pos[u]); u=parent[head[u]]; }</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

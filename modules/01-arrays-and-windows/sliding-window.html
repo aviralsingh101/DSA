@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sliding Window &mdash; DSA Course</title>
+<meta name="description" content="Maintain a contiguous segment and a small amount of state about it, so that moving either edge costs O(1) instead of rescanning &mdash; the answer to nearly every &quot;longest / s">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="sliding-window">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums & Windows</span>
+  <h1>Sliding Window</h1>
+  <p class="hero__tagline">Maintain a contiguous segment and a small amount of state about it, so that moving either edge costs <code>O(1)</code> instead of rescanning &mdash; the answer to nearly every "longest / shortest / count of substrings such that&hellip;" question.</p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">26 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="two-pointers.html">Two Pointers</a>,
+      <a href="prefix-sums.html">Prefix Sums</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">sliding window</span>
+      <span class="chip">two pointers</span>
+      <span class="chip">strings</span>
+      <span class="chip">counting</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>"Longest substring without repeating characters", "minimum window substring", "subarrays with at most K distinct", "count nice subarrays" &mdash; these are among the most frequently asked interview questions in existence, and they are all the same algorithm. A right pointer extends the segment, a left pointer repairs it when it becomes invalid, and a small amount of incrementally maintained state (a count array, a distinct counter, a running sum) tells you which case you are in.</p>
+<p>The reason it works is monotonicity of validity: for a fixed right endpoint, there is a threshold left endpoint such that every window starting at or after it is valid and every window starting before it is invalid. That threshold never moves backwards as the right endpoint advances, so the left pointer only ever goes forward and the whole scan is <code>O(n)</code>.</p>
+<p>Two things separate people who solve these reliably. First, knowing the three templates (fixed size, longest-valid, shortest-valid) and which one a question maps to. Second, knowing the <strong>exactly-K trick</strong>: "exactly K" is not directly window-able, but <code>atMost(K) - atMost(K-1)</code> is, and that single identity unlocks an entire family of counting problems that otherwise look intractable.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <p>Ask: for a fixed right end, is validity monotone in the left end? If yes, the left pointer never retreats and the scan is linear. If no &mdash; typically because values can be negative &mdash; you need prefix sums with a deque or a hash map instead.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"Longest / shortest / count of <strong>contiguous</strong> subarrays or substrings such that &hellip;"</li>
+        <li>A constraint on the window such as "at most K distinct", "no repeats", "sum &le; target", "contains all characters of T"</li>
+        <li>All values are <strong>non-negative</strong>, so extending the window never decreases the sum</li>
+        <li>Fixed window size <code>k</code> is given explicitly ("maximum sum of any k consecutive elements")</li>
+        <li>"Exactly K" phrasing on a countable property &rarr; use <code>atMost(K) - atMost(K-1)</code></li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>The array contains <strong>negative</strong> numbers and the condition is about sums &rarr; validity is not monotone; use <a href="prefix-sums.html">prefix sums</a> with a hash map or a monotonic deque</li>
+        <li>The subsequence need not be contiguous &rarr; that is a <a href="../10-dynamic-programming/dp-foundations.html">DP</a> problem, not a window</li>
+        <li>You need the maximum or minimum <em>inside</em> the window &rarr; the window is right but you need a <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a> to maintain the extreme</li>
+        <li>The window must satisfy a condition that can be repaired by moving <em>either</em> edge &rarr; monotonicity fails; think again about the formulation</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"maximum sum of k consecutive elements"</td>
+        <td>Fixed size</td>
+        <td>Template 1: fixed window</td>
+      </tr>
+      <tr>
+        <td>"longest substring with no repeated characters"</td>
+        <td>Longest valid</td>
+        <td>Template 2: grow, repair while invalid</td>
+      </tr>
+      <tr>
+        <td>"minimum window containing all of T"</td>
+        <td>Shortest valid</td>
+        <td>Template 3: grow, shrink while valid</td>
+      </tr>
+      <tr>
+        <td>"longest subarray with at most K distinct"</td>
+        <td>Longest valid, counted state</td>
+        <td>Template 2 with a count map</td>
+      </tr>
+      <tr>
+        <td>"number of subarrays with exactly K distinct"</td>
+        <td>Exactly K</td>
+        <td><code>atMost(K) &minus; atMost(K&minus;1)</code></td>
+      </tr>
+      <tr>
+        <td>"number of subarrays with exactly K odd numbers"</td>
+        <td>Same trick, different predicate</td>
+        <td><code>atMost(K) &minus; atMost(K&minus;1)</code></td>
+      </tr>
+      <tr>
+        <td>"maximum in every window of size k"</td>
+        <td>Extreme inside the window</td>
+        <td>Window + <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a></td>
+      </tr>
+      <tr>
+        <td>"shortest subarray with sum &ge; k", non-negative</td>
+        <td>Shortest valid</td>
+        <td>Template 3</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "shortest subarray with sum &ge; k" <em>with negatives</em></td>
+        <td>Shrinking can increase the sum, so the repair step is unsound</td>
+        <td>Prefix sums + monotonic deque</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> or <code>10&#8310;</code> with a substring question is the signature. Character counts fit in <code>int[26]</code>, <code>int[128]</code>, or a <code>HashMap</code> for general alphabets &mdash; prefer the array whenever the alphabet is bounded.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the three templates</h2>
+<p>All three templates share a skeleton: <code>for (r = 0; r &lt; n; r++) { add a[r]; &hellip; ; }</code>. What differs is what happens in the middle. <strong>Fixed size:</strong> once <code>r - l + 1 &gt; k</code>, remove <code>a[l]</code> and increment <code>l</code> exactly once &mdash; the window size is constant, so it is an <code>if</code>, not a <code>while</code>. <strong>Longest valid:</strong> <code>while (invalid) { remove a[l]; l++; }</code> then record <code>r - l + 1</code>. <strong>Shortest valid:</strong> <code>while (valid) { record r - l + 1; remove a[l]; l++; }</code>.</p>
+<p>The order of operations matters and is the source of most bugs. In the longest-valid template you record the answer <em>after</em> the repair loop, because only then is the window guaranteed valid. In the shortest-valid template you record <em>inside</em> the shrink loop, because you want the smallest window that still satisfies the condition, and the last valid one before it breaks is the one you want.</p>
+<p>The state is whatever makes the validity check <code>O(1)</code>. For "no repeats" it is a count array plus the knowledge that a repeat exists iff some count exceeds 1 &mdash; cheaply tracked by checking only the incoming character. For "at most K distinct" it is a count map plus a <code>distinct</code> counter, incremented when a count goes from 0 to 1 and decremented when it returns to 0. For "contains all of T" it is a count map plus a <code>satisfied</code> counter of how many required characters have met their quota. Designing that <code>O(1)</code>-updatable state is the real work.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p>At the top of each iteration of the outer loop, <strong>the window <code>[l, r]</code> satisfies the problem's validity predicate, and <code>l</code> is the smallest left endpoint for which that holds given the current <code>r</code></strong>. The state variables (counts, sums, distinct counters) exactly describe <code>[l, r]</code> and nothing else.</p><p>The left pointer never retreats, because if <code>[l, r]</code> is valid then <code>[l, r+1]</code> can only become invalid by needing a <em>larger</em> <code>l</code>, never a smaller one.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The exactly-K trick</span>
+    <p>"Exactly K distinct" is not monotone: shrinking a window can take you from <code>K</code> to <code>K-1</code>, so there is no single threshold left endpoint. But "at most K" <em>is</em> monotone, and</p><span class="eq">exactly(K) = atMost(K) &minus; atMost(K &minus; 1)</span><p>so you run the same linear window twice and subtract. This converts a whole family of hard-looking counting problems into two applications of a template you already have. It works for any property where "at most" is monotone: distinct characters, odd numbers, zeros, and so on.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Counting subarrays, not just measuring them</span>
+    <p>When "at most K" holds for the window <code>[l, r]</code>, every subarray ending at <code>r</code> and starting at <code>l, l+1, &hellip;, r</code> is also valid, because shrinking preserves "at most". That is <code>r - l + 1</code> subarrays, so the counting version of the template just accumulates <code>count += r - l + 1</code> at each step instead of taking a maximum. Recognising that one line converts "find the longest" into "count them all" is worth a lot.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Negative numbers break everything</span>
+    <p>"Shortest subarray with sum at least <code>k</code>" is a clean window problem when all values are non-negative, because the sum is monotone in the window size. Add one negative value and it collapses: a longer window can have a smaller sum, so "shrink while valid" no longer finds the shortest. The correct tool becomes prefix sums plus a monotonic deque (LeetCode 862). Always check the sign constraint before committing to a window.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Longest substring without repeating characters</h3>
+
+<p>The string is <code>abcabcbb</code>. The right pointer always advances; the left pointer jumps forward only when the incoming character is already inside the window. Notice that <code>l</code> never moves backwards.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="swLongest"></div>
+  <div class="viz-player" data-viz-target="swLongest">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "s = a b c a b c b b",
+      "array": [
+        "a",
+        "b",
+        "c",
+        "a",
+        "b",
+        "c",
+        "b",
+        "b"
+      ],
+      "vars": [
+        "l",
+        "r",
+        "window",
+        "best"
+      ],
+      "speed": 950,
+      "frames": [
+        {
+          "note": "r = 0, add 'a'. Window \"a\" is valid, length 1.",
+          "active": [
+            0
+          ],
+          "window": [
+            0,
+            0
+          ],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 0,
+            "r": 0,
+            "window": "a",
+            "best": 1
+          }
+        },
+        {
+          "note": "r = 1, add 'b'. Still no repeat. Length 2.",
+          "active": [
+            1
+          ],
+          "window": [
+            0,
+            1
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 0,
+            "r": 1,
+            "window": "ab",
+            "best": 2
+          }
+        },
+        {
+          "note": "r = 2, add 'c'. Length 3, the best so far.",
+          "active": [
+            2
+          ],
+          "window": [
+            0,
+            2
+          ],
+          "dim": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 0,
+            "r": 2,
+            "window": "abc",
+            "best": 3
+          }
+        },
+        {
+          "note": "r = 3, add 'a'. Now 'a' appears twice, so the window is invalid. Repair by advancing l.",
+          "active": [
+            3
+          ],
+          "x": [
+            0
+          ],
+          "window": [
+            0,
+            3
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 0,
+            "r": 3,
+            "window": "abca (invalid)",
+            "best": 3
+          }
+        },
+        {
+          "note": "Remove s[0] = 'a'. The window is valid again at \"bca\", still length 3.",
+          "active": [
+            3
+          ],
+          "window": [
+            1,
+            3
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 1,
+            "r": 3,
+            "window": "bca",
+            "best": 3
+          }
+        },
+        {
+          "note": "r = 4, add 'b'. Duplicate 'b' at index 1, so advance l past it.",
+          "active": [
+            4
+          ],
+          "x": [
+            1
+          ],
+          "window": [
+            1,
+            4
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 1,
+            "r": 4,
+            "window": "bcab (invalid)",
+            "best": 3
+          }
+        },
+        {
+          "note": "l = 2. Window \"cab\", valid, length 3. Best is unchanged.",
+          "active": [
+            4
+          ],
+          "window": [
+            2,
+            4
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": 2,
+            "r": 4,
+            "window": "cab",
+            "best": 3
+          }
+        },
+        {
+          "note": "r = 5, add 'c'. Duplicate at index 2, so l moves to 3. Window \"abc\", length 3.",
+          "active": [
+            5
+          ],
+          "window": [
+            3,
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            6,
+            7
+          ],
+          "values": {
+            "l": 3,
+            "r": 5,
+            "window": "abc",
+            "best": 3
+          }
+        },
+        {
+          "note": "r = 6, add 'b'. Duplicate 'b' at index 4, so l jumps to 5. Window \"cb\", length 2.",
+          "active": [
+            6
+          ],
+          "window": [
+            5,
+            6
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "dim": [
+            7
+          ],
+          "values": {
+            "l": 5,
+            "r": 6,
+            "window": "cb",
+            "best": 3
+          }
+        },
+        {
+          "note": "r = 7, add 'b'. Duplicate again, l jumps to 7. Window \"b\", length 1.",
+          "active": [
+            7
+          ],
+          "window": [
+            7,
+            7
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": {
+            "l": 7,
+            "r": 7,
+            "window": "b",
+            "best": 3
+          }
+        },
+        {
+          "note": "Answer 3. Both pointers travelled at most 8 steps each, so the scan is O(n) even though the inner repair looks like a nested loop.",
+          "best": [
+            0,
+            1,
+            2
+          ],
+          "done": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "l": "—",
+            "r": "—",
+            "window": "abc",
+            "best": 3
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Template 2 in action. The answer is recorded after the repair loop, when the window is guaranteed valid.</figcaption>
+</figure>
+
+<h3>The exactly-K trick, counted</h3>
+
+<p>Array <code>[1, 2, 1, 2, 3]</code>, counting subarrays with exactly 2 distinct values. The grid tracks <code>atMost(2)</code> and <code>atMost(1)</code> side by side; the answer is their difference.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="swExactK"></div>
+  <div class="viz-player" data-viz-target="swExactK">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "r",
+      "rowHeads": [
+        "r=0",
+        "r=1",
+        "r=2",
+        "r=3",
+        "r=4",
+        "total"
+      ],
+      "colHeads": [
+        "a[r]",
+        "atMost(2)",
+        "atMost(1)",
+        "running diff"
+      ],
+      "vars": [
+        "step",
+        "atMost(2)",
+        "atMost(1)",
+        "exactly(2)"
+      ],
+      "speed": 1250,
+      "frames": [
+        {
+          "note": "r = 0, value 1. Both windows are just [1]. Each contributes 1 subarray.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "+1"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "+1"
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "val": "0"
+            }
+          ],
+          "values": {
+            "step": "r=0",
+            "atMost(2)": 1,
+            "atMost(1)": 1,
+            "exactly(2)": 0
+          }
+        },
+        {
+          "note": "r = 1, value 2. atMost(2) window is [1,2], contributing 2. atMost(1) must shrink to [2], contributing 1.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "2"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "+2"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "+1"
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "val": "1",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "step": "r=1",
+            "atMost(2)": 3,
+            "atMost(1)": 2,
+            "exactly(2)": 1
+          }
+        },
+        {
+          "note": "r = 2, value 1. atMost(2) window is [1,2,1], contributing 3. atMost(1) shrinks to [1], contributing 1.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "1"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "+3"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "+1"
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "val": "3",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "step": "r=2",
+            "atMost(2)": 6,
+            "atMost(1)": 3,
+            "exactly(2)": 3
+          }
+        },
+        {
+          "note": "r = 3, value 2. atMost(2) window is the whole [1,2,1,2], contributing 4. atMost(1) is [2], contributing 1.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "2"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "+4"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "+1"
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "val": "6",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "step": "r=3",
+            "atMost(2)": 10,
+            "atMost(1)": 4,
+            "exactly(2)": 6
+          }
+        },
+        {
+          "note": "r = 4, value 3. atMost(2) must shrink to [2,3] — wait, to [1,2,3] minus the 1s, i.e. l moves to 3, contributing 2. atMost(1) is [3], contributing 1.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "3"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "+2"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "+1"
+            },
+            {
+              "r": 4,
+              "c": 3,
+              "val": "7",
+              "cls": "target"
+            }
+          ],
+          "values": {
+            "step": "r=4",
+            "atMost(2)": 12,
+            "atMost(1)": 5,
+            "exactly(2)": 7
+          }
+        },
+        {
+          "note": "atMost(2) = 12, atMost(1) = 5, so exactly(2) = 7. Two linear passes, no extra cleverness needed.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 1,
+              "val": "12"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "5"
+            },
+            {
+              "r": 5,
+              "c": 3,
+              "val": "7",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "step": "answer",
+            "atMost(2)": 12,
+            "atMost(1)": 5,
+            "exactly(2)": 7
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Each row is one position of the right pointer. The counting line is <code>count += r - l + 1</code>, because every suffix of a valid window is also valid.</figcaption>
+</figure>
+
+<h3>Choosing the template</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  q(["longest / shortest / count of a segment"]) --&gt; contig{"must the segment be contiguous?"}
+  contig -- no --&gt; dp["not a window: use DP"]
+  contig -- yes --&gt; sign{"sums involved, with negative values?"}
+  sign -- yes --&gt; pfx["prefix sums plus HashMap or monotonic deque"]
+  sign -- no --&gt; size{"is the size fixed at k?"}
+  size -- yes --&gt; t1["template 1: add a[r], if size &gt; k remove a[l], l++"]
+  size -- no --&gt; goal{"what is asked?"}
+  goal -- "longest valid" --&gt; t2["template 2: while invalid, shrink; then record r-l+1"]
+  goal -- "shortest valid" --&gt; t3["template 3: while valid, record then shrink"]
+  goal -- "count with at most K" --&gt; t4["template 2, accumulate count += r-l+1"]
+  goal -- "count with exactly K" --&gt; t5["atMost(K) minus atMost(K-1)"]
+  goal -- "max or min inside the window" --&gt; t6["template 1 plus a monotonic deque"]
+  </div>
+  <figcaption>The first question is always about sign and contiguity, because those decide whether a window is legal at all.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Confirm the window is legal:</strong> contiguous segment, and non-negative values if the condition involves sums.</li>
+  <li><strong>Pick the template</strong> from the flowchart: fixed size, longest valid, shortest valid, or a counting variant.</li>
+  <li><strong>Design the <code>O(1)</code>-updatable state.</strong> Usually a count array plus one scalar summary (<code>distinct</code>, <code>satisfied</code>, <code>sum</code>).</li>
+  <li><strong>Write the add step</strong> for <code>a[r]</code>, updating both the counts and the scalar.</li>
+  <li><strong>Write the remove step</strong> for <code>a[l]</code> as the exact mirror image. Asymmetry here is the most common bug.</li>
+  <li><strong>Place the answer update correctly:</strong> after the repair loop for longest, inside the shrink loop for shortest.</li>
+  <li><strong>For counting, accumulate <code>r - l + 1</code></strong> instead of taking a maximum.</li>
+  <li><strong>For "exactly K", call the at-most helper twice</strong> and subtract.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Minimum window substring: <code>s = "ADOBECODEBANC"</code>, <code>t = "ABC"</code>. <code>need</code> is how many of the required characters still have unmet quotas.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>r</th><th>s[r]</th><th>window</th><th>need</th><th>action</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>A</td><td>A</td><td>2</td><td>grow</td><td>A satisfied; B and C still missing.</td></tr>
+      <tr><td>3</td><td>B</td><td>ADOB</td><td>1</td><td>grow</td><td>B satisfied.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>C</td><td>ADOBEC</td><td>0</td><td><strong>valid</strong>, start shrinking</td><td>All three present. Record length 6, then shrink from the left.</td></tr>
+      <tr><td>5</td><td>&mdash;</td><td>DOBEC</td><td>1</td><td>shrink broke it</td><td>Removing A makes it invalid, so stop shrinking and resume growing.</td></tr>
+      <tr class="trace-table__row--change"><td>10</td><td>A</td><td>DOBECODEBA</td><td>0</td><td><strong>valid</strong>, shrink</td><td>A is back. Shrink while it stays valid.</td></tr>
+      <tr><td>10</td><td>&mdash;</td><td>ODEBA</td><td>0</td><td>still valid, keep shrinking</td><td>Dropped D, O, B, E, C&hellip; wait: recheck. Window <code>BECODEBA</code> then <code>ECODEBA</code>&hellip;</td></tr>
+      <tr><td>10</td><td>&mdash;</td><td>CODEBA</td><td>0</td><td>length 6, tie</td><td>The shortest valid window ending at index 10.</td></tr>
+      <tr class="trace-table__row--change"><td>12</td><td>C</td><td>CODEBANC</td><td>0</td><td><strong>valid</strong>, shrink hard</td><td>Now C appears twice, so the left side can drop a long way.</td></tr>
+      <tr class="trace-table__row--change"><td>12</td><td>&mdash;</td><td>BANC</td><td>0</td><td>length 4 &mdash; new best</td><td>Shrinking further would drop B, breaking validity. Final answer.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Answer: <code>"BANC"</code>, length 4. Each character is added once and removed at most once, so the whole scan is <code>O(|s| + |t|)</code> despite the nested shrink loop.</p>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Sliding Window implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Three templates</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Character windows</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Exactly K counting</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Templates">
+    <p>Memorise these three shapes. Almost every window problem is one of them with a different state variable, and the position of the answer update is the part to get right.</p>
+    <div class="code" data-highlight="9-19,27-40,48-61">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">WindowTemplates.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class WindowTemplates {
+    
+        /**
+         * TEMPLATE 1 - fixed size k.
+         * The size is constant, so the shrink is an if, not a while.
+         */
+        static long maxSumFixed(int[] a, int k) {
+            long sum = 0, best = Long.MIN_VALUE;
+            for (int r = 0; r &lt; a.length; r++) {
+                sum += a[r];                            // add the incoming element
+                if (r &gt;= k) {
+                    sum -= a[r - k];                    // remove the outgoing element
+                }
+                if (r &gt;= k - 1) {
+                    best = Math.max(best, sum);         // only once the window is full
+                }
+            }
+            return best;
+        }
+    
+        /**
+         * TEMPLATE 2 - longest valid window.
+         * Grow, repair while invalid, THEN record.
+         */
+        static int longestAtMostKDistinct(int[] a, int k) {
+            Map&lt;Integer, Integer&gt; cnt = new HashMap&lt;&gt;();
+            int l = 0, best = 0;
+            for (int r = 0; r &lt; a.length; r++) {
+                cnt.merge(a[r], 1, Integer::sum);
+                while (cnt.size() &gt; k) {                // invalid: too many distinct
+                    int out = a[l++];
+                    if (cnt.merge(out, -1, Integer::sum) == 0) {
+                        cnt.remove(out);                // must remove, or size() lies
+                    }
+                }
+                best = Math.max(best, r - l + 1);       // window is valid here
+            }
+            return best;
+        }
+    
+        /**
+         * TEMPLATE 3 - shortest valid window.
+         * Grow, then record INSIDE the shrink loop while it stays valid.
+         * Requires non-negative values.
+         */
+        static int shortestSumAtLeast(int[] a, int target) {
+            int l = 0, best = Integer.MAX_VALUE;
+            long sum = 0;
+            for (int r = 0; r &lt; a.length; r++) {
+                sum += a[r];
+                while (sum &gt;= target) {                 // valid: try to make it smaller
+                    best = Math.min(best, r - l + 1);
+                    sum -= a[l++];
+                }
+            }
+            return best == Integer.MAX_VALUE ? 0 : best;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(maxSumFixed(new int[] {2, 1, 5, 1, 3, 2}, 3));
+            System.out.println(longestAtMostKDistinct(new int[] {1, 2, 1, 2, 3}, 2));
+            System.out.println(shortestSumAtLeast(new int[] {2, 3, 1, 2, 4, 3}, 7));
+        }
+        // Output: 9
+        //         4
+        //         2
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Strings">
+    <p>The two most-asked string window problems. Both use an <code>int[128]</code> rather than a <code>HashMap</code>, which is roughly ten times faster and removes all boxing.</p>
+    <div class="code" data-highlight="11-19,36-58">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">StringWindows.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class StringWindows {
+    
+        /**
+         * Longest substring with no repeated characters. O(n).
+         * lastSeen[c] lets l jump directly instead of stepping one at a time.
+         */
+        static int longestUnique(String s) {
+            int[] lastSeen = new int[128];
+            java.util.Arrays.fill(lastSeen, -1);
+            int l = 0, best = 0;
+            for (int r = 0; r &lt; s.length(); r++) {
+                char c = s.charAt(r);
+                if (lastSeen[c] &gt;= l) {
+                    l = lastSeen[c] + 1;              // jump past the previous occurrence
+                }
+                lastSeen[c] = r;
+                best = Math.max(best, r - l + 1);
+            }
+            return best;
+        }
+    
+        /**
+         * Minimum window in s containing every character of t with multiplicity.
+         * O(|s| + |t|). 'need' counts how many distinct required chars are still short.
+         */
+        static String minWindow(String s, String t) {
+            if (s.length() &lt; t.length()) {
+                return "";
+            }
+            int[] want = new int[128];
+            int need = 0;
+            for (char c : t.toCharArray()) {
+                if (want[c]++ == 0) {
+                    need++;                            // a new distinct requirement
+                }
+            }
+            int[] have = new int[128];
+            int satisfied = 0, l = 0, bestLen = Integer.MAX_VALUE, bestL = 0;
+            for (int r = 0; r &lt; s.length(); r++) {
+                char c = s.charAt(r);
+                if (++have[c] == want[c]) {
+                    satisfied++;                       // this char's quota is now met
+                }
+                while (satisfied == need) {            // valid: shrink as far as possible
+                    if (r - l + 1 &lt; bestLen) {
+                        bestLen = r - l + 1;
+                        bestL = l;
+                    }
+                    char out = s.charAt(l++);
+                    if (have[out]-- == want[out]) {
+                        satisfied--;                   // quota broken; stop shrinking
+                    }
+                }
+            }
+            return bestLen == Integer.MAX_VALUE ? "" : s.substring(bestL, bestL + bestLen);
+        }
+    
+        /** All start indices of anagrams of p in s. Fixed-size window over 26 counts. */
+        static java.util.List&lt;Integer&gt; findAnagrams(String s, String p) {
+            java.util.List&lt;Integer&gt; out = new java.util.ArrayList&lt;&gt;();
+            if (s.length() &lt; p.length()) {
+                return out;
+            }
+            int[] want = new int[26], have = new int[26];
+            for (char c : p.toCharArray()) {
+                want[c - 'a']++;
+            }
+            for (int r = 0; r &lt; s.length(); r++) {
+                have[s.charAt(r) - 'a']++;
+                if (r &gt;= p.length()) {
+                    have[s.charAt(r - p.length()) - 'a']--;
+                }
+                if (r &gt;= p.length() - 1 &amp;&amp; java.util.Arrays.equals(have, want)) {
+                    out.add(r - p.length() + 1);       // 26 comparisons = O(1)
+                }
+            }
+            return out;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(longestUnique("abcabcbb"));
+            System.out.println(longestUnique("bbbbb"));
+            System.out.println(minWindow("ADOBECODEBANC", "ABC"));
+            System.out.println(findAnagrams("cbaebabacd", "abc"));
+        }
+        // Output: 3
+        //         1
+        //         BANC
+        //         [0, 6]
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Exactly K">
+    <p>The identity <code>exactly(K) = atMost(K) - atMost(K-1)</code> applied to two different predicates. Once you see the pattern, a whole class of "count subarrays with exactly&hellip;" problems becomes mechanical.</p>
+    <div class="code" data-highlight="9-11,30-32">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ExactlyK.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.HashMap;
+    import java.util.Map;
+    
+    public class ExactlyK {
+    
+        /** Number of subarrays with exactly k distinct integers. O(n). */
+        static int subarraysWithKDistinct(int[] a, int k) {
+            return atMostDistinct(a, k) - atMostDistinct(a, k - 1);
+        }
+    
+        /** Subarrays with at most k distinct. Counting line: count += r - l + 1. */
+        private static int atMostDistinct(int[] a, int k) {
+            if (k &lt; 0) {
+                return 0;
+            }
+            Map&lt;Integer, Integer&gt; cnt = new HashMap&lt;&gt;();
+            int l = 0, total = 0;
+            for (int r = 0; r &lt; a.length; r++) {
+                cnt.merge(a[r], 1, Integer::sum);
+                while (cnt.size() &gt; k) {
+                    int out = a[l++];
+                    if (cnt.merge(out, -1, Integer::sum) == 0) {
+                        cnt.remove(out);
+                    }
+                }
+                total += r - l + 1;      // every subarray ending at r and starting in
+                                         // [l, r] is valid, because shrinking preserves
+                                         // "at most k distinct"
+            }
+            return total;
+        }
+    
+        /** Number of subarrays containing exactly k odd numbers ("nice subarrays"). */
+        static int numberOfNiceSubarrays(int[] a, int k) {
+            return atMostOdd(a, k) - atMostOdd(a, k - 1);
+        }
+    
+        private static int atMostOdd(int[] a, int k) {
+            if (k &lt; 0) {
+                return 0;
+            }
+            int l = 0, odds = 0, total = 0;
+            for (int r = 0; r &lt; a.length; r++) {
+                odds += a[r] &amp; 1;
+                while (odds &gt; k) {
+                    odds -= a[l++] &amp; 1;
+                }
+                total += r - l + 1;
+            }
+            return total;
+        }
+    
+        public static void main(String[] args) {
+            System.out.println(subarraysWithKDistinct(new int[] {1, 2, 1, 2, 3}, 2));
+            System.out.println(subarraysWithKDistinct(new int[] {1, 2, 1, 3, 4}, 3));
+            System.out.println(numberOfNiceSubarrays(new int[] {1, 1, 2, 1, 1}, 3));
+            System.out.println(numberOfNiceSubarrays(new int[] {2, 2, 2, 1, 2, 2, 1, 2, 2, 2}, 2));
+        }
+        // Output: 7
+        //         3
+        //         2
+        //         16
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time O(n) for the scan; O(n &middot; A) if you compare full count arrays</span>
+    <span class="badge badge--space">Space O(A) where A is the alphabet or distinct-value count</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>Both pointers move only forward and each is bounded by <code>n</code>, so the total number of pointer movements is at most <code>2n</code>:</p>
+    <p><span class="eq">T(n) = &Theta;(n) &times; O(cost of one add/remove) = &Theta;(n) when the state update is O(1)</span></p>
+    <p>The nested <code>while</code> does not make it quadratic, for the same amortised reason as <a href="two-pointers.html">two pointers</a>: <code>l</code> never decreases. Each element enters the window exactly once and leaves at most once.</p>
+    <p>The constant hides in the state update. With an <code>int[26]</code> and a scalar summary, add and remove are single array operations. With a <code>HashMap</code> they are <code>O(1)</code> expected but roughly 20&ndash;50 times slower per operation. And the anagram template that calls <code>Arrays.equals(have, want)</code> per position is <code>&Theta;(n &middot; 26)</code> &mdash; still linear in <code>n</code>, but you can reduce it to <code>&Theta;(n)</code> by maintaining a <code>matched</code> counter instead.</p>
+    <p>The exactly-K trick runs the same linear scan twice, so it is <code>&Theta;(2n) = &Theta;(n)</code> &mdash; the constant is 2, and that is the entire price of converting a non-monotone problem into a monotone one.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Brute force all subarrays</td><td><code>O(n&sup2;)</code> or <code>O(n&sup3;)</code></td><td><code>O(1)</code></td><td>n &le; 2000 only</td></tr>
+      <tr><td>Sliding window, array counts</td><td><code>O(n)</code></td><td><code>O(A)</code></td><td>Bounded alphabet; the fastest option</td></tr>
+      <tr><td>Sliding window, HashMap</td><td><code>O(n)</code> expected</td><td><code>O(n)</code></td><td>Unbounded values</td></tr>
+      <tr><td>Exactly K via two at-most passes</td><td><code>O(n)</code></td><td><code>O(A)</code></td><td>Counting problems</td></tr>
+      <tr><td>Window + <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a></td><td><code>O(n)</code></td><td><code>O(k)</code></td><td>Max or min inside the window</td></tr>
+      <tr><td>Prefix + HashMap</td><td><code>O(n)</code></td><td><code>O(n)</code></td><td>Exact sums with negative values</td></tr>
+      <tr><td>Prefix + monotonic deque</td><td><code>O(n)</code></td><td><code>O(n)</code></td><td>Shortest sum &ge; k with negatives</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Using a window when values can be negative</span>
+    <div class="pitfalls__bug">"Shortest subarray with sum at least <code>k</code>" on an array containing negatives. Shrinking from the left can <em>increase</em> the sum, so the shrink loop terminates early and misses the answer.</div>
+    <div class="pitfalls__fix">Check the sign constraint first. With negatives, use prefix sums plus a monotonic deque (the deque keeps prefix indices in increasing order of prefix value).</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Recording the answer in the wrong place</span>
+    <div class="pitfalls__bug">In the longest-valid template, updating <code>best</code> before the repair loop records an invalid window. In the shortest-valid template, updating after the shrink loop records a window that has already been broken.</div>
+    <div class="pitfalls__fix">Longest: record after repairing. Shortest: record inside the shrink loop, before removing. Write the template from memory a few times until the placement is automatic.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Asymmetric add and remove</span>
+    <div class="pitfalls__bug">Incrementing <code>distinct</code> when a count goes from 0 to 1, but forgetting to decrement it when a count returns to 0. The state then describes a window that does not exist.</div>
+    <div class="pitfalls__fix">Write remove as the literal mirror of add, and check the transition condition on both sides. With a <code>HashMap</code>, actually <code>remove</code> the key at zero &mdash; otherwise <code>map.size()</code> counts stale entries.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>map.size()</code> counting zero-valued keys</span>
+    <div class="pitfalls__bug">Using <code>cnt.size() &gt; k</code> as the validity test while leaving entries whose value has dropped to 0 in the map. The window looks invalid forever and <code>l</code> runs past <code>r</code>.</div>
+    <div class="pitfalls__fix"><code>if (cnt.merge(key, -1, Integer::sum) == 0) cnt.remove(key);</code>, or maintain an explicit <code>distinct</code> counter and never call <code>size()</code>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Fixed-size window using a <code>while</code></span>
+    <div class="pitfalls__bug"><code>while (r - l + 1 &gt; k) { &hellip; }</code> in the fixed-size template is harmless but signals confusion; the real bug is starting to record before the window is full, which yields answers from undersized windows.</div>
+    <div class="pitfalls__fix">Guard the answer update with <code>if (r &ge; k - 1)</code>, and use a single <code>if</code> for the removal since the size grows by exactly one each step.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Trying to window "exactly K" directly</span>
+    <div class="pitfalls__bug">Writing <code>while (distinct &gt; k)</code> and then recording only when <code>distinct == k</code>. This undercounts, because for a given <code>r</code> there is a <em>range</em> of valid left endpoints and the window only sees one of them.</div>
+    <div class="pitfalls__fix"><code>atMost(K) - atMost(K-1)</code>. Two passes of a template you already trust, and no special-case reasoning.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Character index out of range</span>
+    <div class="pitfalls__bug"><code>int[26]</code> indexed by <code>c - 'a'</code> when the input contains uppercase letters, digits or spaces. Throws <code>ArrayIndexOutOfBoundsException</code>, or silently corrupts memory-adjacent counts with a negative index.</div>
+    <div class="pitfalls__fix">Read the constraints on the alphabet. Use <code>int[128]</code> indexed by the raw <code>char</code> for ASCII, or a <code>HashMap</code> for Unicode. The extra 100 ints cost nothing.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Fixed window with a monotonic deque</td>
+        <td>Maintain the maximum or minimum inside a window of size <code>k</code> in <code>O(1)</code> amortised per step by keeping a deque of indices in decreasing value order.</td>
+        <td><code>while (!dq.isEmpty() &amp;&amp; a[dq.peekLast()] &lt;= a[r]) dq.pollLast();  dq.addLast(r);</code></td>
+        <td><a href="../03-linear-structures/queues-and-monotonic-deque.html">Monotonic Deque</a></td>
+      </tr>
+      <tr>
+        <td>Window over a circular array</td>
+        <td>Duplicate the array (or use modular indices) and cap the window length at <code>n</code>.</td>
+        <td><code>for (r = 0; r &lt; 2*n; r++) { ...; if (r - l + 1 &gt; n) shrink(); }</code></td>
+        <td>LC 918</td>
+      </tr>
+      <tr>
+        <td>Window with at most one violation</td>
+        <td>Allow <code>k</code> exceptions and shrink only when the exception count exceeds <code>k</code>. Covers "longest ones after flipping at most k zeros".</td>
+        <td><code>zeros += (a[r] == 0); while (zeros &gt; k) zeros -= (a[l++] == 0);</code></td>
+        <td>LC 1004, LC 424</td>
+      </tr>
+      <tr>
+        <td>Two-pass windows for "exactly"</td>
+        <td>Any counting property where "at most" is monotone: distinct values, odd numbers, zeros, characters above a threshold.</td>
+        <td><code>exactly(K) = atMost(K) - atMost(K-1)</code></td>
+        <td>LC 992, LC 1248</td>
+      </tr>
+      <tr>
+        <td>Window on a sorted array (after sorting)</td>
+        <td>Sorting first is legal when the answer does not depend on original order. "Maximum number of elements within a range of size k" becomes a window on the sorted array.</td>
+        <td><code>sort(a); while (a[r] - a[l] &gt; k) l++;  best = max(best, r - l + 1);</code></td>
+        <td>LC 1838</td>
+      </tr>
+      <tr>
+        <td>Window over prefix sums (for negatives)</td>
+        <td>When negatives break the direct window, run a monotonic deque over the prefix array instead, keeping indices with increasing prefix value.</td>
+        <td><code>while (!dq.isEmpty() &amp;&amp; P[r] &lt;= P[dq.peekLast()]) dq.pollLast();</code></td>
+        <td>LC 862</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Why does the left pointer never need to move backwards?</summary>
+    <div class="followup__body">
+      <p>Because validity is monotone in the left endpoint for a fixed right endpoint. If <code>[l, r]</code> is invalid, then <code>[l', r]</code> for any <code>l' &lt; l</code> is also invalid, since it contains strictly more elements and the constraints are all of the "at most" form. So once <code>l</code> has advanced past a position, that position can never become a valid left endpoint again for any larger <code>r</code>. That is exactly the property that fails for "exactly K", which is why the direct window does not work there.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Prove the <code>atMost(K) - atMost(K-1)</code> identity.</summary>
+    <div class="followup__body">
+      <p>Let <code>D(S)</code> be the number of distinct values in subarray <code>S</code>. <code>atMost(K)</code> counts all subarrays with <code>D(S) &le; K</code>, and <code>atMost(K-1)</code> counts those with <code>D(S) &le; K-1</code>. Every subarray counted by the first but not the second has <code>D(S) &le; K</code> and <code>D(S) &gt; K-1</code>, i.e. <code>D(S) = K</code> exactly. The sets are nested, so the subtraction is exact with no double counting. The same argument works for any integer-valued monotone statistic of the window.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you find the maximum in every window of size k?</summary>
+    <div class="followup__body">
+      <p>A monotonic deque of <em>indices</em>, kept in decreasing order of value. When <code>r</code> advances, pop from the back while the back's value is at most <code>a[r]</code> &mdash; those can never be the maximum again, since <code>a[r]</code> is both larger and stays in the window longer. Then pop from the front if its index has left the window. The front is always the maximum. Each index is pushed and popped once, so the whole scan is <code>O(n)</code>. Storing indices rather than values is essential, because the expiry test needs the position.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>When is a window wrong for a sum problem?</summary>
+    <div class="followup__body">
+      <p>Whenever any value can be negative or zero-with-a-twist. The window technique needs "extending increases the sum" so that shrinking is the correct repair. With negatives, the correct tool depends on the question: for "count subarrays with sum exactly <code>k</code>" use <a href="prefix-sums.html">prefix sums plus a hash map</a>; for "shortest subarray with sum at least <code>k</code>" use prefix sums plus a monotonic deque. Both are <code>O(n)</code>, so you lose nothing but the simplicity.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What is the complexity of the anagram-finding template?</summary>
+    <div class="followup__body">
+      <p>As written with <code>Arrays.equals(have, want)</code> at each position it is <code>O(n &middot; 26)</code>, which is linear in <code>n</code> but with a constant of 26. You can make it a true <code>O(n)</code> with a small constant by maintaining a <code>matched</code> counter: increment it when a character's count becomes exactly equal to its requirement and decrement it when it stops being equal, then test <code>matched == 26</code> in <code>O(1)</code>. Both pass comfortably, but the second version is the one to mention.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do you handle a window on a circular array?</summary>
+    <div class="followup__body">
+      <p>Either concatenate the array with itself and cap the window length at <code>n</code>, or index with <code>i % n</code> and run <code>r</code> from 0 to <code>2n - 1</code>. The cap is essential: without it the window can wrap all the way around and count an element twice. For "maximum circular subarray sum" specifically there is a neater trick &mdash; the answer is <code>max(kadaneMax, totalSum - kadaneMin)</code>, with a special case when all values are negative.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Do LC 3, LC 76 and LC 992 first &mdash; those are template 2, template 3 and the exactly-K trick respectively, and everything else here is a variation on one of them.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener">Longest Substring Without Repeating Characters</a></td>
+        <td><span class="badge badge--lc">LC 3</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Template 2; lastSeen[] lets l jump instead of stepping</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/minimum-size-subarray-sum/" target="_blank" rel="noopener">Minimum Size Subarray Sum</a></td>
+        <td><span class="badge badge--lc">LC 209</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Template 3; note the all-positive precondition</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/minimum-window-substring/" target="_blank" rel="noopener">Minimum Window Substring</a></td>
+        <td><span class="badge badge--lc">LC 76</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Template 3 with a satisfied-counter; the canonical hard window</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/permutation-in-string/" target="_blank" rel="noopener">Permutation in String</a></td>
+        <td><span class="badge badge--lc">LC 567</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Fixed window over 26 counts</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/find-all-anagrams-in-a-string/" target="_blank" rel="noopener">Find All Anagrams in a String</a></td>
+        <td><span class="badge badge--lc">LC 438</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Same as 567 but collect every start index</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/longest-repeating-character-replacement/" target="_blank" rel="noopener">Longest Repeating Character Replacement</a></td>
+        <td><span class="badge badge--lc">LC 424</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Window valid when size minus maxCount &le; k</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/max-consecutive-ones-iii/" target="_blank" rel="noopener">Max Consecutive Ones III</a></td>
+        <td><span class="badge badge--lc">LC 1004</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>At most k zeros; the cleanest exception-budget window</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://leetcode.com/problems/subarrays-with-k-different-integers/" target="_blank" rel="noopener">Subarrays with K Different Integers</a></td>
+        <td><span class="badge badge--lc">LC 992</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>The exactly-K trick. Learn this one properly</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/count-number-of-nice-subarrays/" target="_blank" rel="noopener">Count Number of Nice Subarrays</a></td>
+        <td><span class="badge badge--lc">LC 1248</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Exactly-K applied to odd counts</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/fruit-into-baskets/" target="_blank" rel="noopener">Fruit Into Baskets</a></td>
+        <td><span class="badge badge--lc">LC 904</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Longest subarray with at most 2 distinct</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener">Sliding Window Maximum</a></td>
+        <td><span class="badge badge--lc">LC 239</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Fixed window plus a monotonic deque of indices</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://leetcode.com/problems/shortest-subarray-with-sum-at-least-k/" target="_blank" rel="noopener">Shortest Subarray with Sum at Least K</a></td>
+        <td><span class="badge badge--lc">LC 862</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Negatives break the window: prefix sums + deque</td></tr>
+      <tr><td>13</td>
+        <td><a href="https://leetcode.com/problems/longest-subarray-of-1s-after-deleting-one-element/" target="_blank" rel="noopener">Longest Subarray of 1's After Deleting One Element</a></td>
+        <td><span class="badge badge--lc">LC 1493</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>At most one zero, then subtract one from the length</td></tr>
+      <tr><td>14</td>
+        <td><a href="https://leetcode.com/problems/number-of-substrings-containing-all-three-characters/" target="_blank" rel="noopener">Number of Substrings Containing All Three Characters</a></td>
+        <td><span class="badge badge--lc">LC 1358</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Counting version: add l once the window is valid</td></tr>
+      <tr><td>15</td>
+        <td><a href="https://cses.fi/problemset/task/1141" target="_blank" rel="noopener">Playlist</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Longest window with all-distinct values</td></tr>
+      <tr><td>16</td>
+        <td><a href="https://cses.fi/problemset/task/2428" target="_blank" rel="noopener">Subarray Distinct Values</a></td>
+        <td><span class="badge badge--cf">CSES</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Counting version of at-most-k distinct</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 424 &mdash; why you never need to shrink <code>maxCount</code></summary>
+  <div class="spoiler__body">
+    <p>The window is valid when <code>(r - l + 1) - maxCount &le; k</code>, where <code>maxCount</code> is the frequency of the most common character inside it. The surprising part is that you can let <code>maxCount</code> go stale &mdash; never recompute it downward when the window shrinks &mdash; and the answer is still correct. The reason: the final answer only ever comes from a window whose <code>maxCount</code> is genuinely achieved, and a stale (too large) <code>maxCount</code> only prevents the window from shrinking, never lets it grow beyond a truly achievable size. Transferable lesson: <em>when you only care about the maximum window size ever reached, monotone-but-stale state is often safe, and checking that is cheaper than maintaining exact state.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 862 &mdash; the deque over prefix sums</summary>
+  <div class="spoiler__body">
+    <p>Compute prefix sums <code>P</code>. You want the smallest <code>r - l</code> with <code>P[r] - P[l] &ge; k</code>. Maintain a deque of indices with <em>increasing</em> <code>P</code> values. Two rules: pop from the <em>front</em> while <code>P[r] - P[front] &ge; k</code>, recording the length &mdash; that front index can never give a shorter answer later. Pop from the <em>back</em> while <code>P[r] &le; P[back]</code> &mdash; a later index with a smaller prefix dominates an earlier index with a larger one, for every future <code>r</code>. Both pops are permanent, so the scan is <code>O(n)</code>. General lesson: <em>when a window fails because of non-monotonicity, look for a monotonic structure over the prefix array instead &mdash; the deque enforces the monotonicity the data lacks.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>Three templates:</strong> fixed size (<code>if</code> shrink), longest valid (<code>while</code> repair then record), shortest valid (record inside the shrink loop).</li>
+    <li><strong>Design <code>O(1)</code> state:</strong> a count array plus one scalar summary such as <code>distinct</code>, <code>satisfied</code>, or <code>sum</code>. Add and remove must be exact mirrors.</li>
+    <li><strong>Counting adds one line:</strong> <code>count += r - l + 1</code>, because every suffix of a valid "at most" window is also valid.</li>
+    <li><strong>Exactly K is <code>atMost(K) - atMost(K-1)</code></strong> &mdash; two linear passes, no special reasoning.</li>
+    <li><strong>Negatives kill the window.</strong> Switch to prefix sums with a hash map (exact sums) or a monotonic deque (shortest sum at least k).</li>
+  </ul>
+  <div class="recap__oneliner">grow r always | longest: while(invalid) shrink, then record | shortest: while(valid) record, then shrink | exactly K = atMost(K)-atMost(K-1)</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

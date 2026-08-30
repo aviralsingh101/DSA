@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 Arrays & Windows &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>01 Arrays & Windows</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Prefix</h3>
+    <pre>P[0]=0; P[i+1]=P[i]+a[i];
+sum(l,r)=P[r+1]-P[l]
+diff: d[l]+=v; d[r+1]-=v</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Kadane</h3>
+    <pre>cur=best=a[0];
+for i=1..n-1:
+  cur=max(a[i], cur+a[i]);
+  best=max(best,cur);</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Two pointers</h3>
+    <pre>l=0,r=n-1
+while l&lt;r:
+  if sum&lt;t l++; else r--;</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Window</h3>
+    <pre>l=0
+for r in 0..n-1:
+  add a[r]
+  while invalid: remove a[l]; l++
+  update ans</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>firstTrue</h3>
+    <pre>while(lo&lt;hi){
+  mid=lo+(hi-lo)/2;
+  if(pred(mid)) hi=mid;
+  else lo=mid+1;
+} return lo;</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Pitfalls</h3>
+    <ul><li>Kadane seeded at 0 fails all-negative</li><li>(lo+hi)/2 overflow</li><li>empty window vs at-least-one</li></ul>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

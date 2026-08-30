@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kadane's Algorithm &mdash; DSA Course</title>
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="kadane">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 01 &middot; Arrays, Prefix Sums &amp; Windows</span>
+  <h1>Kadane's Algorithm</h1>
+  <p class="hero__tagline">
+    Find the maximum-sum contiguous subarray in one pass and constant memory, by asking only
+    one question at each index: is it better to extend the current subarray, or to start a new one
+    here?
+  </p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">20 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
+      <a href="prefix-sums.html">Prefix Sums</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">arrays</span>
+      <span class="chip">dp in disguise</span>
+      <span class="chip">single pass</span>
+      <span class="chip">O(1) space</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>
+  You are given an array that mixes positive and negative numbers, and you must pick a
+  <em>contiguous</em> block whose sum is as large as possible. If every number were positive the
+  answer would be the whole array, so the entire difficulty comes from deciding when a negative
+  prefix is worth carrying and when it should be abandoned.
+</p>
+<p>
+  The obvious approach enumerates every pair <code>(l, r)</code> and sums the block. Even with a
+  running sum that removes the innermost loop, you still evaluate
+  <code>n(n+1)/2</code> subarrays, which is &Theta;(n&sup2;). At the usual competitive constraint of
+  <code>n = 10&#8309;</code> that is about 5 &times; 10&#8313; additions &mdash; comfortably a TLE
+  in any language, and roughly a minute of CPU in Java. At <code>n = 2 &times; 10&#8309;</code> it is
+  hopeless.
+</p>
+
+<div class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The insight</span>
+    <p>
+      You never need to know <em>where</em> the best subarray started. You only need the best sum of
+      a subarray that <strong>ends at the current index</strong>. That single number can be updated
+      from its own previous value in constant time, which collapses the quadratic search into one
+      pass.
+    </p>
+  </div>
+</div>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>"maximum sum <em>contiguous</em> subarray", "largest sum subarray", "best substring score"</li>
+        <li>The words <em>subarray</em>, <em>substring</em> or <em>consecutive</em> together with
+          <em>maximum</em> or <em>minimum</em>, and <strong>no constraint on the length</strong></li>
+        <li>The array contains negative values (otherwise the answer is trivially the whole array)</li>
+        <li>The quantity is <strong>additive</strong> along the array and you are free to choose where
+          the block begins</li>
+        <li>"maximum profit from one buy then one sell" &mdash; that is Kadane on the difference array</li>
+        <li>"you may apply at most one operation to a contiguous segment" &mdash; Kadane with an extra
+          state dimension</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>A non-contiguous <em>subsequence</em> is allowed &rarr; just add the positives, or it is an
+          <a href="../10-dynamic-programming/lis.html">LIS</a>-style DP</li>
+        <li>The block has a <strong>fixed length k</strong> &rarr;
+          <a href="sliding-window.html">fixed sliding window</a></li>
+        <li>You must <strong>count</strong> subarrays with a property, not maximise &rarr;
+          <a href="../02-sorting-hashing-bits/hashing-patterns.html">prefix sums + HashMap</a></li>
+        <li>The sum must equal, or stay under, a target &rarr;
+          <a href="prefix-sums.html">prefix sums</a> with hashing or binary search</li>
+        <li>There is a length constraint such as "length at least k" &rarr; prefix sums plus a
+          <a href="../03-linear-structures/queues-and-monotonic-deque.html">monotonic deque</a></li>
+        <li>The array is <strong>updated between queries</strong> &rarr;
+          <a href="../06-range-queries/segment-tree.html">segment tree</a> storing a 4-tuple per node</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"contiguous", "subarray", "substring"</td>
+        <td>The candidate is an interval, so one index scan can represent all of them</td>
+        <td>Kadane or sliding window</td>
+      </tr>
+      <tr>
+        <td>"maximum sum" and negatives are allowed</td>
+        <td>You must decide where the interval starts, which is the whole problem</td>
+        <td>Kadane</td>
+      </tr>
+      <tr>
+        <td>"all elements are positive"</td>
+        <td>Extending is always profitable</td>
+        <td>Return the total; no algorithm needed</td>
+      </tr>
+      <tr>
+        <td>"at most one deletion / one multiply / one reversal"</td>
+        <td>The state is (index, operations used), still O(1) per index</td>
+        <td>Kadane written as an explicit DP with 2&ndash;3 states</td>
+      </tr>
+      <tr>
+        <td>"the array is circular"</td>
+        <td>The answer is a normal subarray, or the complement of a minimum-sum one</td>
+        <td>Run Kadane twice, for max and for min</td>
+      </tr>
+      <tr>
+        <td>"maximum sum submatrix" in a 2D grid</td>
+        <td>Fix a pair of columns, compress each row to one number</td>
+        <td>Kadane inside an O(n&sup2;) column loop</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "count subarrays with sum k"</td>
+        <td>Counting, not maximising &mdash; a running max cannot count</td>
+        <td>Prefix sums + HashMap of frequencies</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "maximum <em>subsequence</em> sum"</td>
+        <td>Non-contiguous, so the choice at each index is independent</td>
+        <td>Sum of all positive values</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints">
+    <strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> or larger with O(1) work per
+    element &rarr; a single &Theta;(n) pass is intended. If instead <code>n &le; 2000</code>, the
+    setter is probably allowing the O(n&sup2;) double loop &mdash; take it, because it is far harder
+    to get wrong under interview pressure.
+  </p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea and the invariant</h2>
+<p>
+  Walk left to right and maintain one number, <code>cur</code>, meaning <em>the best sum I can
+  achieve with a subarray that finishes exactly here</em>. When you step from index
+  <code>i-1</code> to <code>i</code>, there are only two possibilities for that best subarray: it
+  is the single element <code>a[i]</code> on its own, or it is the best subarray ending at
+  <code>i-1</code> with <code>a[i]</code> glued onto its right end. Nothing else can be optimal,
+  because any longer candidate ending at <code>i</code> has a prefix ending at <code>i-1</code>
+  which would then have to beat the best one &mdash; a contradiction.
+</p>
+
+<div class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The invariant</span>
+    <p>
+      After the iteration for index <code>i</code> finishes:
+    </p>
+    <ul>
+      <li><code>cur</code> = the maximum sum of a non-empty subarray <strong>ending exactly at
+        <code>i</code></strong>;</li>
+      <li><code>best</code> = the maximum sum of a non-empty subarray ending at
+        <strong>any index &le; <code>i</code></strong>.</li>
+    </ul>
+    <p>
+      Say this out loud in an interview:
+      <em>"Let cur be the best sum ending at i. A best subarray ending at i is either just a[i], or
+      the best one ending at i&minus;1 extended by a[i], so cur = max(a[i], cur + a[i]). The answer
+      is the maximum of cur over all i."</em>
+    </p>
+  </div>
+</div>
+
+<div class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">It is a one-line DP</span>
+    <p>
+      Kadane is not a special trick, it is the DP
+      <code>dp[i] = max(a[i], dp[i-1] + a[i])</code> with the answer
+      <code>max<sub>i</sub> dp[i]</code>, rolled down to O(1) space because
+      <code>dp[i]</code> depends only on <code>dp[i-1]</code>. Recognising that framing is what lets
+      you extend it: every variant below is the same recurrence with more states.
+    </p>
+  </div>
+</div>
+
+<div class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The prefix-sum view (useful for variants)</span>
+    <p>
+      With <code>P[k] = a[0] + &hellip; + a[k-1]</code>, the sum of <code>a[l..r]</code> is
+      <code>P[r+1] &minus; P[l]</code>. So the answer is
+      <code>max<sub>r</sub> (P[r+1] &minus; min<sub>l&le;r</sub> P[l])</code>: sweep right, keep the
+      minimum prefix seen so far. This is the same algorithm, and it is the version to reach for
+      when a variant adds a length constraint, because "minimum prefix so far" generalises to
+      "minimum prefix in a window".
+    </p>
+  </div>
+</div>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>Kadane stepping through the array</h3>
+<p>
+  Amber is the current candidate subarray <code>a[start..i]</code>, green cells have been discarded
+  for good, and faded cells have not been read yet. Watch how the amber block <em>jumps forward</em>
+  instead of growing whenever the carried sum turns out to be dead weight.
+</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="kadaneScan"></div>
+  <div class="viz-player" data-viz-target="kadaneScan">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "a =",
+      "array": [-2, 1, -3, 4, -1, 2, 1, -5, 4],
+      "vars": ["i", "cur", "best", "start"],
+      "speed": 1100,
+      "frames": [
+        { "note": "Initialise on the first element, never on 0: cur = best = a[0] = -2. The candidate subarray is [0..0].",
+          "active": [0], "window": [0, 0], "dim": [1,2,3,4,5,6,7,8],
+          "pointers": { "i": 0 }, "values": { "i": 0, "cur": -2, "best": -2, "start": 0 } },
+        { "note": "cur + a[1] = -2 + 1 = -1, but a[1] = 1 alone is bigger. Restart: the -2 prefix was dead weight. start = 1.",
+          "active": [1], "window": [1, 1], "done": [0], "dim": [2,3,4,5,6,7,8],
+          "pointers": { "i": 1 }, "values": { "i": 1, "cur": 1, "best": 1, "start": 1 } },
+        { "note": "cur + a[2] = 1 - 3 = -2, and a[2] = -3 alone is worse. Extend, even though cur went negative.",
+          "active": [2], "window": [1, 2], "done": [0], "dim": [3,4,5,6,7,8],
+          "pointers": { "i": 2 }, "values": { "i": 2, "cur": -2, "best": 1, "start": 1 } },
+        { "note": "cur + a[3] = -2 + 4 = 2, but a[3] = 4 alone is bigger. Restart at index 3 and best jumps to 4.",
+          "active": [3], "window": [3, 3], "done": [0,1,2], "dim": [4,5,6,7,8],
+          "pointers": { "i": 3 }, "values": { "i": 3, "cur": 4, "best": 4, "start": 3 } },
+        { "note": "cur + a[4] = 4 - 1 = 3 beats a[4] = -1. Extend: a small dip is worth paying for.",
+          "active": [4], "window": [3, 4], "done": [0,1,2], "dim": [5,6,7,8],
+          "pointers": { "i": 4 }, "values": { "i": 4, "cur": 3, "best": 4, "start": 3 } },
+        { "note": "cur + a[5] = 3 + 2 = 5. Extend, and best improves to 5.",
+          "active": [5], "window": [3, 5], "done": [0,1,2], "dim": [6,7,8],
+          "pointers": { "i": 5 }, "values": { "i": 5, "cur": 5, "best": 5, "start": 3 } },
+        { "note": "cur + a[6] = 5 + 1 = 6. Extend, and best improves to 6. This is the answer, though we cannot know that yet.",
+          "active": [6], "window": [3, 6], "done": [0,1,2], "dim": [7,8],
+          "pointers": { "i": 6 }, "values": { "i": 6, "cur": 6, "best": 6, "start": 3 } },
+        { "note": "cur + a[7] = 6 - 5 = 1 still beats a[7] = -5, so extend. cur drops to 1 but best is untouched.",
+          "active": [7], "window": [3, 7], "done": [0,1,2], "dim": [8],
+          "pointers": { "i": 7 }, "values": { "i": 7, "cur": 1, "best": 6, "start": 3 } },
+        { "note": "cur + a[8] = 1 + 4 = 5. Extend. cur = 5 never catches best = 6, so the recovery came too late.",
+          "active": [8], "window": [3, 8], "done": [0,1,2],
+          "pointers": { "i": 8 }, "values": { "i": 8, "cur": 5, "best": 6, "start": 3 } },
+        { "note": "Done. best = 6, witnessed by a[3..6] = [4, -1, 2, 1]. One pass, eight comparisons, no extra memory.",
+          "best": [3, 4, 5, 6], "done": [0,1,2,7,8],
+          "pointers": { "i": -1 }, "values": { "i": "n", "cur": 5, "best": 6, "start": 3 } }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>
+    Kadane on <code>a = [-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>. The candidate window only ever
+    grows on the right or teleports to the current index &mdash; it never shrinks from the left,
+    which is exactly what distinguishes Kadane from a sliding window.
+  </figcaption>
+</figure>
+
+<h3>What the brute force is actually doing</h3>
+<p>
+  The quadratic solution fills a triangular table of every subarray sum. Seeing it makes two things
+  obvious: the work is <code>n(n+1)/2</code> cells, and each row is just the previous cell plus one
+  element &mdash; which is the redundancy Kadane removes.
+</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="kadaneBrute"></div>
+  <div class="viz-player" data-viz-target="kadaneBrute">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "sum",
+      "rowHeads": ["l=0", "l=1", "l=2", "l=3", "l=4", "l=5"],
+      "colHeads": ["r=0", "r=1", "r=2", "r=3", "r=4", "r=5"],
+      "vars": ["l", "rowMax", "globalMax"],
+      "speed": 1100,
+      "frames": [
+        { "note": "Row l = 0 on the small array [-2, 1, -3, 4, -1, 2]. Six sums, each one addition on top of the previous. Row max is 1.",
+          "cells": [ {"r":0,"c":0,"val":-2}, {"r":0,"c":1,"val":-1}, {"r":0,"c":2,"val":-4},
+                     {"r":0,"c":3,"val":0}, {"r":0,"c":4,"val":-1}, {"r":0,"c":5,"val":1,"cls":"target"} ],
+          "values": { "l": 0, "rowMax": 1, "globalMax": 1 } },
+        { "note": "Row l = 1. Five sums. Row max is 3, so the global best improves.",
+          "cells": [ {"r":1,"c":1,"val":1}, {"r":1,"c":2,"val":-2}, {"r":1,"c":3,"val":2},
+                     {"r":1,"c":4,"val":1}, {"r":1,"c":5,"val":3,"cls":"target"} ],
+          "values": { "l": 1, "rowMax": 3, "globalMax": 3 } },
+        { "note": "Row l = 2. Four sums. Row max is only 2, so nothing improves. All of this work was wasted.",
+          "cells": [ {"r":2,"c":2,"val":-3}, {"r":2,"c":3,"val":1}, {"r":2,"c":4,"val":0},
+                     {"r":2,"c":5,"val":2,"cls":"target"} ],
+          "values": { "l": 2, "rowMax": 2, "globalMax": 3 } },
+        { "note": "Row l = 3. Three sums, and row max 5 is a new global best.",
+          "cells": [ {"r":3,"c":3,"val":4}, {"r":3,"c":4,"val":3}, {"r":3,"c":5,"val":5,"cls":"target"} ],
+          "values": { "l": 3, "rowMax": 5, "globalMax": 5 } },
+        { "note": "Row l = 4. Two sums, row max 1.",
+          "cells": [ {"r":4,"c":4,"val":-1}, {"r":4,"c":5,"val":1,"cls":"target"} ],
+          "values": { "l": 4, "rowMax": 1, "globalMax": 5 } },
+        { "note": "Row l = 5. One sum, row max 2.",
+          "cells": [ {"r":5,"c":5,"val":2,"cls":"target"} ],
+          "values": { "l": 5, "rowMax": 2, "globalMax": 5 } },
+        { "note": "6 + 5 + 4 + 3 + 2 + 1 = 21 = n(n+1)/2 sums to find one answer. Kadane reads the same array with 5 comparisons.",
+          "cells": [ {"r":3,"c":5,"val":5,"cls":"answer"} ],
+          "values": { "l": "-", "rowMax": "-", "globalMax": 5 } }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>
+    Every subarray sum of <code>[-2, 1, -3, 4, -1, 2]</code>, row by row. Only the cells on or above
+    the diagonal exist, so the table is triangular: &Theta;(n&sup2;) cells.
+  </figcaption>
+</figure>
+
+<h3>One iteration, as a decision</h3>
+<figure class="viz">
+  <div class="mermaid">
+flowchart TD
+  readA(["read a[i]"]) --> cmpNode{"is cur + a[i] &lt; a[i] ?"}
+  cmpNode -- yes --> restartNode["restart: cur = a[i], start = i"]
+  cmpNode -- no --> extendNode["extend: cur = cur + a[i]"]
+  restartNode --> updNode{"is cur &gt; best ?"}
+  extendNode --> updNode
+  updNode -- yes --> recNode["best = cur, bestL = start, bestR = i"]
+  updNode -- no --> keepNode["leave best alone"]
+  recNode --> nextNode(["advance to i + 1"])
+  keepNode --> nextNode
+  </div>
+  <figcaption>
+    The complete body of the loop. Notice there is no inner loop and no lookback &mdash; every
+    decision uses only <code>cur</code>, <code>best</code> and <code>a[i]</code>.
+  </figcaption>
+</figure>
+
+<h3>The dependency chain that makes it O(1) space</h3>
+<figure class="viz">
+  <div class="mermaid">
+graph LR
+  D0["dp[0] = a[0]"] --> D1["dp[1] = max(a[1], dp[0] + a[1])"]
+  D1 --> D2["dp[2] = max(a[2], dp[1] + a[2])"]
+  D2 --> DI["dp[i] = max(a[i], dp[i-1] + a[i])"]
+  DI --> ANS["answer = max over i of dp[i]"]
+  </div>
+  <figcaption>
+    Each state depends on exactly one predecessor, so the whole <code>dp</code> array collapses into
+    the single variable <code>cur</code>. Whenever you see this shape, expect O(1) space.
+  </figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Reject the empty array.</strong> With no elements there is no non-empty subarray, so
+    throw rather than returning a silently wrong 0.</li>
+  <li><strong>Seed from the first element.</strong> <code>cur = best = a[0]</code>,
+    <code>start = bestL = bestR = 0</code>.</li>
+  <li><strong>For each <code>i</code> from 1 to n&minus;1, compare</strong> <code>cur + a[i]</code>
+    against <code>a[i]</code>.</li>
+  <li><strong>If <code>a[i]</code> wins, restart:</strong> <code>cur = a[i]</code> and
+    <code>start = i</code>. The carried prefix was negative, so drop it.</li>
+  <li><strong>Otherwise extend:</strong> <code>cur = cur + a[i]</code>, leaving
+    <code>start</code> where it is.</li>
+  <li><strong>Record a strict improvement:</strong> if <code>cur &gt; best</code> then
+    <code>best = cur</code>, <code>bestL = start</code>, <code>bestR = i</code>.</li>
+  <li><strong>Return <code>best</code></strong>, with <code>a[bestL..bestR]</code> as the witness
+    subarray.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>
+  Every iteration on <code>a = [-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>. Highlighted rows are the four
+  moments <code>best</code> actually changes.
+</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr>
+        <th>i</th><th>a[i]</th><th>cur + a[i]</th><th>cur</th><th>best</th><th>start</th>
+        <th>best range</th><th>Action / why</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change">
+        <td>0</td><td>-2</td><td>&mdash;</td><td>-2</td><td>-2</td><td>0</td><td>[0..0]</td>
+        <td>Seed. Seeding with 0 instead of <code>a[0]</code> is the classic bug.</td>
+      </tr>
+      <tr class="trace-table__row--change">
+        <td>1</td><td>1</td><td>-1</td><td>1</td><td>1</td><td>1</td><td>[1..1]</td>
+        <td>1 &gt; -1, so <strong>restart</strong>. The negative prefix is abandoned.</td>
+      </tr>
+      <tr>
+        <td>2</td><td>-3</td><td>-2</td><td>-2</td><td>1</td><td>1</td><td>[1..1]</td>
+        <td>-2 &gt; -3, so <strong>extend</strong>. cur is allowed to be negative.</td>
+      </tr>
+      <tr class="trace-table__row--change">
+        <td>3</td><td>4</td><td>2</td><td>4</td><td>4</td><td>3</td><td>[3..3]</td>
+        <td>4 &gt; 2, so <strong>restart</strong> at 3. best improves.</td>
+      </tr>
+      <tr>
+        <td>4</td><td>-1</td><td>3</td><td>3</td><td>4</td><td>3</td><td>[3..3]</td>
+        <td>3 &gt; -1, <strong>extend</strong>. Paying -1 keeps the strong prefix.</td>
+      </tr>
+      <tr class="trace-table__row--change">
+        <td>5</td><td>2</td><td>5</td><td>5</td><td>5</td><td>3</td><td>[3..5]</td>
+        <td><strong>Extend</strong>; the -1 investment pays off.</td>
+      </tr>
+      <tr class="trace-table__row--change">
+        <td>6</td><td>1</td><td>6</td><td>6</td><td>6</td><td>3</td><td>[3..6]</td>
+        <td><strong>Extend</strong>. This is the final answer.</td>
+      </tr>
+      <tr>
+        <td>7</td><td>-5</td><td>1</td><td>1</td><td>6</td><td>3</td><td>[3..6]</td>
+        <td><strong>Extend</strong> (1 &gt; -5). cur collapses but best is a separate variable.</td>
+      </tr>
+      <tr>
+        <td>8</td><td>4</td><td>5</td><td>5</td><td>6</td><td>3</td><td>[3..6]</td>
+        <td><strong>Extend</strong>. 5 never reaches 6, so nothing is recorded.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Read row i = 2 again</span>
+    <p>
+      At <code>i = 2</code> the running sum <code>cur</code> is negative and we still extend. People
+      "fix" this by resetting <code>cur</code> to 0 whenever it goes negative. That is correct only
+      if the empty subarray is allowed &mdash; it silently returns 0 on an all-negative array. The
+      comparison <code>max(a[i], cur + a[i])</code> has no such hole.
+    </p>
+  </div>
+</div>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Kadane implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="brute">Brute force O(n&sup2;)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="opt">Optimal O(n)</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="tmpl">Reusable template</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Brute force">
+    <p>
+      Worth writing first in an interview: it is obviously correct, it gives you a reference to test
+      against, and stating its complexity out loud is what motivates the optimisation.
+    </p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KadaneBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>public class KadaneBrute {
+
+    /** Every subarray [l..r], with a running sum so there is no third loop. */
+    static long maxSubarrayBrute(int[] a) {
+        if (a == null || a.length == 0) {
+            throw new IllegalArgumentException("no non-empty subarray exists");
+        }
+        long best = Long.MIN_VALUE;
+        for (int l = 0; l &lt; a.length; l++) {
+            long sum = 0;                       // long: n * max|a[i]| overflows int
+            for (int r = l; r &lt; a.length; r++) {
+                sum += a[r];
+                best = Math.max(best, sum);
+            }
+        }
+        return best;
+    }
+
+    public static void main(String[] args) {
+        int[] a = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+        System.out.println(maxSubarrayBrute(a));
+    }
+    // Input : [-2,1,-3,4,-1,2,1,-5,4]
+    // Output: 6
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Optimal">
+    <p>
+      The two highlighted lines are the entire algorithm. Everything else is scaffolding.
+    </p>
+    <div class="code" data-highlight="14-15">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Kadane.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>public class Kadane {
+
+    /**
+     * cur  = best sum of a subarray ending exactly at i
+     * best = best sum of a subarray ending at any index &lt;= i
+     */
+    static long maxSubarray(int[] a) {
+        if (a == null || a.length == 0) {
+            throw new IllegalArgumentException("no non-empty subarray exists");
+        }
+        long cur = a[0];
+        long best = a[0];
+        for (int i = 1; i &lt; a.length; i++) {
+            cur = Math.max(a[i], cur + a[i]);
+            best = Math.max(best, cur);
+        }
+        return best;
+    }
+
+    public static void main(String[] args) {
+        int[] a = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+        System.out.println(maxSubarray(a));
+    }
+    // Input : [-2,1,-3,4,-1,2,1,-5,4]
+    // Output: 6   (subarray [4,-1,2,1])
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Reusable template">
+    <p>
+      The version to memorise, because the follow-up "which subarray?" arrives about half the time.
+      Note the strict <code>&gt;</code> on the best update: it returns the leftmost and shortest
+      optimal subarray, which is usually what a judge expects when ties exist.
+    </p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KadaneWithIndices.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>public class KadaneWithIndices {
+
+    /** {bestSum, bestLeft, bestRight}; bestRight is inclusive. */
+    static long[] maxSubarray(int[] a) {
+        if (a == null || a.length == 0) {
+            throw new IllegalArgumentException("no non-empty subarray exists");
+        }
+        long cur = a[0], best = a[0];
+        int start = 0, bestL = 0, bestR = 0;
+        for (int i = 1; i &lt; a.length; i++) {
+            if (cur + a[i] &lt; a[i]) {        // restarting beats extending
+                cur = a[i];
+                start = i;
+            } else {
+                cur += a[i];
+            }
+            if (cur &gt; best) {               // strict: keep the leftmost, shortest witness
+                best = cur;
+                bestL = start;
+                bestR = i;
+            }
+        }
+        return new long[] {best, bestL, bestR};
+    }
+
+    public static void main(String[] args) {
+        int[] a = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+        long[] r = maxSubarray(a);
+        System.out.println(r[0] + " [" + r[1] + ".." + r[2] + "]");
+
+        int[] allNeg = {-7, -3, -9, -4};
+        System.out.println(maxSubarray(allNeg)[0]);
+    }
+    // Input : [-2,1,-3,4,-1,2,1,-5,4]  then  [-7,-3,-9,-4]
+    // Output: 6 [3..6]
+    //         -3
+}</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time &Theta;(n)</span>
+    <span class="badge badge--space">Space &Theta;(1)</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p><strong>Brute force.</strong> The outer loop fixes <code>l</code>; the inner loop performs
+      <code>n &minus; l</code> additions. Summing over all <code>l</code>:</p>
+    <span class="eq">T(n) = &Sigma;<sub>l=0..n-1</sub> (n &minus; l) = n + (n&minus;1) + &hellip; + 1 = n(n+1)/2 = &Theta;(n&sup2;)</span>
+    <p>That matches the 21 cells for <code>n = 6</code> in the triangular table above.</p>
+    <p><strong>Kadane.</strong> The loop body is a fixed number of comparisons and one addition, and
+      it executes exactly <code>n &minus; 1</code> times, with no recursion and no nesting:</p>
+    <span class="eq">T(n) = (n &minus; 1) &middot; &Theta;(1) = &Theta;(n)</span>
+    <p>Space is four scalars regardless of <code>n</code>, so &Theta;(1). Note that &Theta;(n) is a
+      <em>lower</em> bound too: any correct algorithm must read every element, since changing one
+      unread value can change the answer.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Triple loop, re-summing each block</td><td>O(n&sup3;)</td><td>O(1)</td>
+        <td>Never ship it; only as a correctness oracle for n &le; 200</td></tr>
+      <tr><td>Double loop with a running sum</td><td>O(n&sup2;)</td><td>O(1)</td>
+        <td>n &le; 5000. Perfectly acceptable if the constraints allow it</td></tr>
+      <tr><td>Prefix sums with a running minimum</td><td>O(n)</td><td>O(n)</td>
+        <td>When you also need arbitrary range sums, or a length constraint is coming</td></tr>
+      <tr><td>Divide and conquer (cross-boundary merge)</td><td>O(n log n)</td><td>O(log n)</td>
+        <td>Only as a stepping stone to the segment-tree version</td></tr>
+      <tr><td><strong>Kadane</strong></td><td>&Theta;(n)</td><td>&Theta;(1)</td>
+        <td>Always. This is the expected answer</td></tr>
+      <tr><td>Segment tree of (total, prefix, suffix, best)</td><td>O(n) build, O(log n) per op</td><td>O(n)</td>
+        <td>When elements are updated between queries</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Initialising <code>best = 0</code></span>
+    <div class="pitfalls__bug"><code>long best = 0; long cur = 0;</code> &mdash; returns
+      <code>0</code> for <code>[-7, -3, -9]</code>, because the empty subarray sneaks in as a
+      candidate. This is the single most common Kadane bug.</div>
+    <div class="pitfalls__fix"><code>long best = a[0], cur = a[0];</code> and loop from
+      <code>i = 1</code>. If the problem <em>does</em> allow an empty subarray, return
+      <code>Math.max(0, best)</code> explicitly so the intent is visible.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title"><code>int</code> overflow on the running sum</span>
+    <div class="pitfalls__bug"><code>int cur, best;</code> with <code>n = 10&#8309;</code> and
+      <code>|a[i]| &le; 10&#8313;</code> &mdash; the true sum reaches 10&sup1;&#8308;, which silently
+      wraps. You get a plausible-looking wrong answer, not an exception.</div>
+    <div class="pitfalls__fix">Use <code>long</code> for <code>cur</code> and <code>best</code>
+      whenever <code>n &times; max|a[i]|</code> can exceed 2&sup3;&sup1; &minus; 1. Cheap insurance;
+      do it by default.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Empty or null input</span>
+    <div class="pitfalls__bug"><code>long cur = a[0];</code> on an empty array throws
+      <code>ArrayIndexOutOfBoundsException</code> from inside your algorithm, which looks like a
+      logic error to the interviewer.</div>
+    <div class="pitfalls__fix">Guard first and state the contract: "a non-empty subarray is
+      required, so an empty input is invalid input". Handle it, then move on.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Resetting <code>cur = 0</code> when it goes negative</span>
+    <div class="pitfalls__bug"><code>if (cur &lt; 0) cur = 0; cur += a[i];</code> &mdash; equivalent
+      to allowing the empty subarray, so it is wrong on all-negative input, and it also loses the
+      <code>start</code> index you need for the "which subarray?" follow-up.</div>
+    <div class="pitfalls__fix">Keep the comparison form
+      <code>cur = Math.max(a[i], cur + a[i])</code>. It is the same number of operations and has no
+      special case.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Using <code>&gt;=</code> when recording the best</span>
+    <div class="pitfalls__bug"><code>if (cur &gt;= best)</code> &mdash; still returns the right
+      <em>sum</em>, but reports the last and longest tied subarray. On
+      <code>[1, 0, 0]</code> it answers <code>[0..2]</code> where most judges expect
+      <code>[0..0]</code>.</div>
+    <div class="pitfalls__fix">Use strict <code>&gt;</code> for the leftmost shortest witness. If the
+      problem wants the longest, use <code>&gt;=</code> deliberately and say so.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">All-equal or single-element arrays</span>
+    <div class="pitfalls__bug">Loops written as <code>for (int i = 0; i &lt; n; i++)</code> while
+      also seeding from <code>a[0]</code> double-count the first element, giving
+      <code>2 &times; a[0]</code> on a one-element array.</div>
+    <div class="pitfalls__fix">Seed from index 0 and start the loop at <code>i = 1</code>. Test
+      <code>[5]</code>, <code>[-5]</code> and <code>[2,2,2]</code> before you say you are done.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Circular variant: forgetting the all-negative case</span>
+    <div class="pitfalls__bug"><code>return Math.max(kadaneMax, total - kadaneMin);</code> &mdash;
+      on <code>[-3, -2, -5]</code> the minimum subarray is the whole array, so
+      <code>total - kadaneMin = 0</code>, which corresponds to the empty subarray.</div>
+    <div class="pitfalls__fix"><code>if (kadaneMax &lt; 0) return kadaneMax;</code> before combining.
+      A negative maximum proves every element is negative.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Maximum <em>product</em> subarray</td>
+        <td>A negative can become the best by meeting another negative, so a single running maximum
+          is not enough. Track the running max <em>and</em> min, and swap them at a negative element.</td>
+        <td><code>long t = mx;
+mx = max(a[i], max(mx*a[i], mn*a[i]));
+mn = min(a[i], min(t*a[i], mn*a[i]));</code></td>
+        <td><a href="https://leetcode.com/problems/maximum-product-subarray/" target="_blank" rel="noopener">LC 152</a></td>
+      </tr>
+      <tr>
+        <td>Circular array</td>
+        <td>The optimal block either does not wrap (plain Kadane) or wraps, in which case its
+          complement is a minimum-sum non-wrapping block.</td>
+        <td><code>ans = max(kMax, total - kMin);
+if (kMax &lt; 0) ans = kMax;</code></td>
+        <td><a href="https://leetcode.com/problems/maximum-sum-circular-subarray/" target="_blank" rel="noopener">LC 918</a></td>
+      </tr>
+      <tr>
+        <td>At most one deletion</td>
+        <td>Add a second state: best sum ending at <code>i</code> having already deleted one element.</td>
+        <td><code>del = max(del + a[i], keep);
+keep = max(a[i], keep + a[i]);
+best = max(best, max(keep, del));</code></td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray-sum-with-one-deletion/" target="_blank" rel="noopener">LC 1186</a></td>
+      </tr>
+      <tr>
+        <td>Maximum <em>absolute</em> sum</td>
+        <td>The largest magnitude is either the maximum subarray sum or the negation of the minimum
+          one, so run Kadane twice.</td>
+        <td><code>return Math.max(kadaneMax(a), -kadaneMin(a));</code></td>
+        <td><a href="https://leetcode.com/problems/maximum-absolute-sum-of-any-subarray/" target="_blank" rel="noopener">LC 1749</a></td>
+      </tr>
+      <tr>
+        <td>Length at least <code>k</code></td>
+        <td>The "restart anywhere" freedom is gone, so switch to the prefix-sum view: for each
+          <code>r</code>, subtract the minimum <code>P[l]</code> with <code>l &le; r - k + 1</code>.</td>
+        <td><code>minP = min(minP, P[i-k+1]);
+best = max(best, P[i+1] - minP);</code></td>
+        <td><a href="https://leetcode.com/problems/maximum-average-subarray-ii/" target="_blank" rel="noopener">LC 644</a></td>
+      </tr>
+      <tr>
+        <td>2D maximum-sum submatrix</td>
+        <td>Fix a pair of columns, collapse each row to the sum between those columns, then run
+          plain Kadane on that 1D array.</td>
+        <td><code>for (c1..) for (c2&gt;=c1..) {
+  rowSums[r] += g[r][c2];
+  best = max(best, kadane(rowSums));
+}</code></td>
+        <td><a href="https://www.geeksforgeeks.org/problems/maximum-sum-rectangle2948/1" target="_blank" rel="noopener">GfG</a></td>
+      </tr>
+      <tr>
+        <td>Supports updates</td>
+        <td>Store four values per segment-tree node &mdash; total, best prefix, best suffix, best
+          inner &mdash; and merge them. Kadane becomes the merge rule.</td>
+        <td><code>best = max(max(L.best, R.best),
+           L.suf + R.pre);</code></td>
+        <td><a href="https://codeforces.com/problemset/problem/1359/D" target="_blank" rel="noopener">CF 1359D</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>Now return the actual subarray, not just the sum.</summary>
+    <div class="followup__body">
+      <p>
+        Track <code>start</code>, the left end of the current candidate. It only moves when you
+        restart. When <code>cur</code> beats <code>best</code>, snapshot
+        <code>bestL = start</code> and <code>bestR = i</code>. That is the "Reusable template" tab
+        above, and it costs three extra <code>int</code>s.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Prove it. Why is looking only at <code>cur</code> enough?</summary>
+    <div class="followup__body">
+      <p>
+        Induction on <code>i</code>. Assume <code>cur</code> is the maximum sum over subarrays
+        ending at <code>i-1</code>. Any non-empty subarray ending at <code>i</code> is either
+        <code>[i, i]</code> with sum <code>a[i]</code>, or <code>[l, i]</code> with
+        <code>l &lt; i</code>, whose sum is <code>sum(l..i-1) + a[i]</code>. Maximising the second
+        form over <code>l</code> maximises <code>sum(l..i-1)</code>, which is exactly
+        <code>cur</code> by hypothesis. So the new maximum is
+        <code>max(a[i], cur + a[i])</code>, establishing the invariant at <code>i</code>. Every
+        subarray ends at some index, so the maximum over all of them is the maximum of
+        <code>cur</code> over all <code>i</code>, which <code>best</code> accumulates.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>The data arrives as a stream and you cannot store it. Does anything break?</summary>
+    <div class="followup__body">
+      <p>
+        Nothing. Kadane is already a streaming algorithm: it touches each element once, in order,
+        and keeps O(1) state. You can answer "best so far" after every element. The only thing you
+        lose is the ability to <em>replay</em> the witness subarray, so if you need the values and
+        not just the indices you must buffer <code>a[bestL..bestR]</code>.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if the empty subarray is allowed?</summary>
+    <div class="followup__body">
+      <p>
+        Then the answer is <code>Math.max(0, best)</code>, and only then is the
+        "reset to 0 when negative" formulation correct. Always ask this: it is the difference between
+        <code>-3</code> and <code>0</code> on an all-negative array, and it is the most common
+        ambiguity in the problem statement.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Extend it to a 2D matrix: maximum-sum submatrix.</summary>
+    <div class="followup__body">
+      <p>
+        Choose the left and right columns (<code>O(m&sup2;)</code> pairs). For a fixed pair, collapse
+        each row into a single number &mdash; the sum of that row between the two columns &mdash;
+        maintained incrementally as the right column advances. Run 1D Kadane on that length-<code>n</code>
+        array. Total <code>O(m&sup2; n)</code>, so put the smaller dimension in the column role.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Elements get updated between queries. Now what?</summary>
+    <div class="followup__body">
+      <p>
+        Kadane's O(1) state is not mergeable, but a slightly bigger one is. Store per segment:
+        <code>total</code>, best prefix sum, best suffix sum, and best inner sum. Merging two
+        children takes the best of (left best, right best, left suffix + right prefix). That is a
+        <a href="../06-range-queries/segment-tree.html">segment tree</a> with O(log n) point update
+        and O(log n) range query. This follow-up is the standard bridge from an easy array question
+        to a hard data-structure question.
+      </p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Can you parallelise it?</summary>
+    <div class="followup__body">
+      <p>
+        Yes, using the same 4-tuple. Split the array into <code>p</code> chunks, compute the tuple
+        for each chunk independently, then reduce with the merge rule above. The reduction is
+        associative, which is precisely why the segment tree works. Depth is
+        <code>O(log p)</code> with <code>O(n/p)</code> work per chunk.
+      </p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>Work down the list. Stop when the Medium tier needs no hints.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/best-time-to-buy-and-sell-stock/" target="_blank" rel="noopener">Best Time to Buy and Sell Stock</a></td>
+        <td><span class="badge badge--lc">LC 121</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Kadane on the difference array, or running minimum</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener">Maximum Subarray</a></td>
+        <td><span class="badge badge--lc">LC 53</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Plain Kadane; also do the divide-and-conquer follow-up</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/maximum-absolute-sum-of-any-subarray/" target="_blank" rel="noopener">Maximum Absolute Sum of Any Subarray</a></td>
+        <td><span class="badge badge--lc">LC 1749</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kadane twice: max and min</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/maximum-product-subarray/" target="_blank" rel="noopener">Maximum Product Subarray</a></td>
+        <td><span class="badge badge--lc">LC 152</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Two running extremes, swapped on negatives</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/maximum-sum-circular-subarray/" target="_blank" rel="noopener">Maximum Sum Circular Subarray</a></td>
+        <td><span class="badge badge--lc">LC 918</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Complement trick + all-negative guard</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/maximum-subarray-sum-with-one-deletion/" target="_blank" rel="noopener">Maximum Subarray Sum with One Deletion</a></td>
+        <td><span class="badge badge--lc">LC 1186</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kadane with a second state</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/k-concatenation-maximum-sum/" target="_blank" rel="noopener">K-Concatenation Maximum Sum</a></td>
+        <td><span class="badge badge--lc">LC 1191</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Kadane on two copies, plus (k&minus;2) &times; total if total &gt; 0</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://www.geeksforgeeks.org/problems/maximum-sum-rectangle2948/1" target="_blank" rel="noopener">Maximum Sum Rectangle in a 2D Matrix</a></td>
+        <td><span class="badge badge--gfg">GfG</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Column-pair compression + 1D Kadane</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://leetcode.com/problems/substring-with-largest-variance/" target="_blank" rel="noopener">Substring With Largest Variance</a></td>
+        <td><span class="badge badge--lc">LC 2272</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Kadane on +1/&minus;1 with a "must contain at least one b" constraint</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://leetcode.com/problems/max-sum-of-rectangle-no-larger-than-k/" target="_blank" rel="noopener">Max Sum of Rectangle No Larger Than K</a></td>
+        <td><span class="badge badge--lc">LC 363</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Column compression + prefix sums in a TreeSet (Kadane fails here &mdash; know why)</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/1155/D" target="_blank" rel="noopener">Beautiful Array</a></td>
+        <td><span class="badge badge--cf">CF 1155D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Kadane with three states: before / inside / after the multiplied segment</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://codeforces.com/problemset/problem/1359/D" target="_blank" rel="noopener">Yet Another Yet Another Task</a></td>
+        <td><span class="badge badge--cf">CF 1359D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Fix the maximum element, then run Kadane with a ceiling</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 363 &mdash; Max Sum of Rectangle No Larger Than K</summary>
+  <div class="spoiler__body">
+    <p>
+      Kadane maximises, but here you want the largest sum <strong>not exceeding</strong>
+      <code>k</code>, and that objective is not built from local maxima. Compress column pairs as
+      usual, then for the resulting 1D array walk prefix sums <code>P[r]</code> and ask for the
+      smallest earlier prefix with <code>P[l] &ge; P[r] &minus; k</code>. A
+      <code>TreeSet&lt;Integer&gt;</code> answers that with <code>ceiling</code> in O(log n), giving
+      <code>O(m&sup2; n log n)</code>. The lesson to internalise: <em>"at most k" kills greedy running
+      maxima and calls for an ordered structure over prefixes.</em>
+    </p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 2272 &mdash; Substring With Largest Variance</summary>
+  <div class="spoiler__body">
+    <p>
+      Fix an ordered pair of letters <code>(a, b)</code> &mdash; only 26 &times; 25 pairs. Map
+      <code>a</code> to +1, <code>b</code> to &minus;1, ignore everything else, and you want the
+      maximum subarray sum <em>that contains at least one</em> &minus;1. Run Kadane while tracking a
+      second value: the best sum of a window that has already consumed one <code>b</code>. When you
+      would restart, remember that a <code>b</code> is available "for free" if one was just dropped.
+      The reusable lesson: <em>a "must include at least one X" constraint becomes an extra Kadane
+      state, not a different algorithm.</em>
+    </p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>The trigger is the word "contiguous" plus "maximum" with no length constraint.</strong>
+      That is the recognition you are training, not the code.</li>
+    <li><strong>The invariant is everything:</strong> <code>cur</code> is the best sum
+      <em>ending exactly at <code>i</code></em>. If you can say that sentence, you can rederive the
+      algorithm and every variant on the spot.</li>
+    <li><strong>Seed from <code>a[0]</code>, never from 0</strong>, unless the empty subarray is
+      explicitly allowed. Use <code>long</code>.</li>
+    <li><strong>Variants add states, not algorithms.</strong> Deletion, multiplication, "at least one
+      b", products &mdash; each is one more running value in the same single pass.</li>
+    <li><strong>When updates appear, upgrade to the 4-tuple</strong> (total, prefix, suffix, best) and
+      you have a segment tree. Kadane is the merge rule.</li>
+  </ul>
+  <div class="recap__oneliner">cur = Math.max(a[i], cur + a[i]);  best = Math.max(best, cur);</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

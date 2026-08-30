@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pattern Index &mdash; DSA Course</title>
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="pattern-index">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<section class="hero">
+  <span class="hero__chip">Module 14 &middot; Interview Execution</span>
+  <h1>Pattern Index</h1>
+  <p class="hero__tagline">
+    One hundred signals from problem statements, mapped to the technique and the one-line Java
+    template. Re-read this weekly. This is the page that rebuilds recognition.
+  </p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">filter, do not memorise</span>
+    <span class="hero__tags">
+      <span class="chip">recognition</span>
+      <span class="chip">lookup</span>
+      <span class="chip">P0</span>
+    </span>
+  </div>
+</section>
+
+<p>
+  Cover the right-hand columns. Given only the phrase in the left column, name the pattern out
+  loud, then check. When you miss, write the phrase down &mdash; that phrase is the reusable
+  artefact, not “I should revise DP”.
+</p>
+
+<div class="filterbar">
+  <input type="search" placeholder="Filter signals, patterns, templates&hellip;" data-filter-target="signals" data-filter-count="#sig-count" aria-label="Filter pattern table">
+  <span class="filterbar__count" id="sig-count"></span>
+</div>
+
+<div class="table-scroll bleed-wide">
+<table class="signal-table" id="signals">
+  <thead>
+    <tr><th>Signal in the statement</th><th>Likely pattern</th><th>Topic</th><th>One-line Java</th></tr>
+  </thead>
+  <tbody>
+    <tr class="signal-table__group"><td colspan="4">Constraint-based signals</td></tr>
+    <tr><td><code>n ≤ 10</code> or <code>n ≤ 8</code></td><td>Permutations / factorial brute</td><td><a href="modules/04-recursion-and-dnc/subsets-permutations-combinations.html">Subsets &amp; perms</a></td><td><code>nextPermutation / used[] dfs</code></td></tr>
+    <tr><td><code>n ≤ 20</code> or <code>n ≤ 22</code></td><td>Bitmask enumeration or bitmask DP</td><td><a href="modules/10-dynamic-programming/bitmask-dp.html">Bitmask DP</a></td><td><code>for (int m=0;m&lt;1&lt;&lt;n;m++)</code></td></tr>
+    <tr><td><code>n ≤ 40</code> and subset-sum shaped</td><td>Meet in the middle</td><td><a href="modules/04-recursion-and-dnc/meet-in-the-middle.html">MITM</a></td><td><code>enum(L); enum(R); two-pointers on halves</code></td></tr>
+    <tr><td><code>n ≤ 100</code> and a 3-index state</td><td>O(n³) DP / Floyd / interval DP</td><td><a href="modules/10-dynamic-programming/interval-dp.html">Interval DP</a></td><td><code>dp[l][r] = min over k</code></td></tr>
+    <tr><td><code>n ≤ 500</code></td><td>O(n³) OK (Floyd, MCM)</td><td><a href="modules/08-graphs-advanced/floyd-warshall.html">Floyd</a></td><td><code>for(k)for(i)for(j) rel</code></td></tr>
+    <tr><td><code>n ≤ 2000</code></td><td>O(n²) intended</td><td><a href="modules/00-foundations/constraints-to-complexity.html">Constraints</a></td><td><code>double loop is fine</code></td></tr>
+    <tr><td><code>n ≤ 1e5</code> and one pass needed</td><td>O(n) or O(n log n)</td><td><a href="modules/00-foundations/constraints-to-complexity.html">Constraints</a></td><td><code>sort or single scan</code></td></tr>
+    <tr><td><code>n ≤ 1e5</code> + many range queries</td><td>Prefix / BIT / segtree</td><td><a href="modules/06-range-queries/fenwick-tree.html">Fenwick</a></td><td><code>bit.query(r)-bit.query(l-1)</code></td></tr>
+    <tr><td><code>n ≤ 1e5</code> + updates + queries</td><td>Fenwick or segment tree</td><td><a href="modules/06-range-queries/segment-tree.html">Segtree</a></td><td><code>st.update(i,v); st.query(l,r)</code></td></tr>
+    <tr><td><code>n ≤ 1e7</code></td><td>O(n) only, linear sieve / counting</td><td><a href="modules/11-math-and-number-theory/primes-and-sieves.html">Sieves</a></td><td><code>linear sieve to n</code></td></tr>
+    <tr><td><code>k ≤ 20</code> bits / flags</td><td>Bitmask over k, not n</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>mask &amp; (1&lt;&lt;b)</code></td></tr>
+    <tr><td>Values up to 1e9 but <code>n</code> small</td><td>Coordinate compress, then BIT</td><td><a href="modules/13-greedy-and-offline/coordinate-compression.html">Compression</a></td><td><code>sort unique; rank = lower_bound</code></td></tr>
+    <tr><td>Time 1s, Java, lots of integers</td><td>Fast IO + <code>long</code></td><td><a href="modules/00-foundations/java-for-dsa.html">Java for DSA</a></td><td><code>StreamTokenizer / BufferedReader</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — arrays and windows</td></tr>
+    <tr><td>"contiguous" / "subarray" / "substring" + maximum sum</td><td>Kadane</td><td><a href="modules/01-arrays-and-windows/kadane.html">Kadane</a></td><td><code>cur=max(a[i],cur+a[i]); best=max(best,cur)</code></td></tr>
+    <tr><td>"subarray sum equals k" / "count subarrays"</td><td>Prefix + HashMap</td><td><a href="modules/02-sorting-hashing-bits/hashing-patterns.html">Hashing</a></td><td><code>freq.merge(pref,1,Integer::sum); ans+=freq.get(pref-k)</code></td></tr>
+    <tr><td>"range sum" on a static array</td><td>Prefix sums</td><td><a href="modules/01-arrays-and-windows/prefix-sums.html">Prefix sums</a></td><td><code>P[r+1]-P[l]</code></td></tr>
+    <tr><td>"range add, then read once"</td><td>Difference array</td><td><a href="modules/01-arrays-and-windows/prefix-sums.html">Prefix sums</a></td><td><code>d[l]+=v; d[r+1]-=v; prefix rebuild</code></td></tr>
+    <tr><td>"longest / shortest window" with a budget</td><td>Variable sliding window</td><td><a href="modules/01-arrays-and-windows/sliding-window.html">Window</a></td><td><code>while(!ok) shrink L; ans=max(ans,R-L+1)</code></td></tr>
+    <tr><td>fixed length k window</td><td>Fixed sliding window</td><td><a href="modules/01-arrays-and-windows/sliding-window.html">Window</a></td><td><code>sum+=a[i]; if(i&gt;=k) sum-=a[i-k]</code></td></tr>
+    <tr><td>"at most k" then "exactly k"</td><td>atMost(k) − atMost(k−1)</td><td><a href="modules/01-arrays-and-windows/sliding-window.html">Window</a></td><td><code>atMost(k)-atMost(k-1)</code></td></tr>
+    <tr><td>two ends, sorted, pair / 3-sum</td><td>Two pointers opposite</td><td><a href="modules/01-arrays-and-windows/two-pointers.html">Two pointers</a></td><td><code>while(l&lt;r) if(sum&lt;t)l++; else r--</code></td></tr>
+    <tr><td>"remove duplicates in place" / "same direction"</td><td>Slow/fast write pointer</td><td><a href="modules/01-arrays-and-windows/two-pointers.html">Two pointers</a></td><td><code>if(a[i]!=a[w-1]) a[w++]=a[i]</code></td></tr>
+    <tr><td>"0, 1, 2" / three colours / three partitions</td><td>Dutch national flag</td><td><a href="modules/01-arrays-and-windows/two-pointers.html">Two pointers</a></td><td><code>lo, mid, hi three-way partition</code></td></tr>
+    <tr><td>"container with most water" / two lines</td><td>Opposite pointers + greedy shrink</td><td><a href="modules/01-arrays-and-windows/two-pointers.html">Two pointers</a></td><td><code>if(h[l]&lt;h[r])l++; else r--</code></td></tr>
+    <tr><td>"first / last occurrence" in a sorted array</td><td>Lower / upper bound</td><td><a href="modules/01-arrays-and-windows/binary-search-basics.html">Binary search</a></td><td><code>firstTrue(i -&gt; a[i]&gt;=x)</code></td></tr>
+    <tr><td>"minimum possible maximum" / "capacity / speed / days"</td><td>Binary search on the answer</td><td><a href="modules/01-arrays-and-windows/binary-search-on-answer.html">BS on answer</a></td><td><code>if(feasible(mid)) hi=mid; else lo=mid+1</code></td></tr>
+    <tr><td>"k-th smallest" unsorted</td><td>Quickselect or size-k heap</td><td><a href="modules/01-arrays-and-windows/kth-and-selection.html">Selection</a></td><td><code>p=partition(); if(p==k)return</code></td></tr>
+    <tr><td>"median of two sorted arrays"</td><td>Cut search on the shorter</td><td><a href="modules/01-arrays-and-windows/kth-and-selection.html">Selection</a></td><td><code>i from A, j=half-i; check crosses</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — stacks, heaps, design</td></tr>
+    <tr><td>"next greater / smaller"</td><td>Monotonic stack</td><td><a href="modules/03-linear-structures/stacks-and-monotonic-stack.html">Mono stack</a></td><td><code>while(!st.isEmpty() &amp;&amp; a[st.peek()]&lt;a[i]) pop</code></td></tr>
+    <tr><td>"largest rectangle" / histogram</td><td>Monotonic stack of increasing bars</td><td><a href="modules/03-linear-structures/stacks-and-monotonic-stack.html">Mono stack</a></td><td><code>area = h[p]*(i - st.peek() - 1)</code></td></tr>
+    <tr><td>"trapping rain water"</td><td>Mono stack or two pointers + running max</td><td><a href="modules/03-linear-structures/stacks-and-monotonic-stack.html">Mono stack</a></td><td><code>water += min(Lmax,Rmax)-h[i]</code></td></tr>
+    <tr><td>"sliding window maximum"</td><td>Monotonic deque of decreasing values</td><td><a href="modules/03-linear-structures/queues-and-monotonic-deque.html">Mono deque</a></td><td><code>while(back &lt; a[i]) pollLast; offer i</code></td></tr>
+    <tr><td>"k largest / merge k lists / median stream"</td><td>Heap</td><td><a href="modules/03-linear-structures/heaps-and-priority-queue.html">Heaps</a></td><td><code>new PriorityQueue&lt;&gt;(); poll/offer</code></td></tr>
+    <tr><td>"LRU cache"</td><td>HashMap + doubly linked list</td><td><a href="modules/03-linear-structures/design-data-structures.html">Design DS</a></td><td><code>map + dummy head/tail, move-to-front</code></td></tr>
+    <tr><td>"insert, delete, getRandom O(1)"</td><td>HashMap + array swap-remove</td><td><a href="modules/03-linear-structures/design-data-structures.html">Design DS</a></td><td><code>map.put(x,list.size()); list.add(x)</code></td></tr>
+    <tr><td>"floor / ceiling / count &lt; x" on a dynamic set</td><td>TreeMap / TreeSet</td><td><a href="modules/03-linear-structures/treemap-treeset-patterns.html">TreeMap</a></td><td><code>tm.floorKey(x); tm.higherKey(x)</code></td></tr>
+    <tr><td>cycle in a linked list / find entry</td><td>Floyd tortoise-hare</td><td><a href="modules/03-linear-structures/linked-lists.html">Linked lists</a></td><td><code>fast=fast.next.next; then reset slow</code></td></tr>
+    <tr><td>"reverse in groups of k"</td><td>Iterative reverse of a window</td><td><a href="modules/03-linear-structures/linked-lists.html">Linked lists</a></td><td><code>prev, cur, next for k steps</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — sorting, hashing, bits, matrix</td></tr>
+    <tr><td>"merge overlapping intervals" / meeting rooms</td><td>Sort + sweep</td><td><a href="modules/02-sorting-hashing-bits/intervals.html">Intervals</a></td><td><code>Arrays.sort(a, Comparator.comparingInt(x-&gt;x[0]))</code></td></tr>
+    <tr><td>values are a permutation of 1..n</td><td>Cyclic sort / index as key</td><td><a href="modules/02-sorting-hashing-bits/cyclic-sort-and-index-tricks.html">Cyclic sort</a></td><td><code>while(a[i]!=i+1) swap(i, a[i]-1)</code></td></tr>
+    <tr><td>"first missing positive"</td><td>In-place index marking</td><td><a href="modules/02-sorting-hashing-bits/cyclic-sort-and-index-tricks.html">Cyclic sort</a></td><td><code>if(1&lt;=x&lt;=n) a[x-1]=-abs(a[x-1])</code></td></tr>
+    <tr><td>anagrams / "grouped by sorted letters"</td><td>HashMap with sorted-string key</td><td><a href="modules/02-sorting-hashing-bits/hashing-patterns.html">Hashing</a></td><td><code>char[] c=s.toCharArray(); Arrays.sort(c)</code></td></tr>
+    <tr><td>"rotate matrix" / "set zeroes in O(1) space"</td><td>Layer / first-row flags</td><td><a href="modules/02-sorting-hashing-bits/matrix-patterns.html">Matrix</a></td><td><code>m[i][j] = m[n-1-j][i] cycle of 4</code></td></tr>
+    <tr><td>"single number" / pairs cancel</td><td>XOR fold</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>int x=0; for(v:a) x^=v</code></td></tr>
+    <tr><td>"every number three times except one"</td><td>Bit counts % 3</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>ones, twos bit-machine</code></td></tr>
+    <tr><td>enumerate all subsets of a small set</td><td>Masks 0..2ⁿ−1</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>for(m=0;m&lt;1&lt;&lt;n;m++)</code></td></tr>
+    <tr><td>enumerate all submasks of every mask</td><td>O(3ⁿ) submask loop</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>for(int s=m;s&gt;0;s=(s-1)&amp;m)</code></td></tr>
+    <tr><td>lowest set bit / Fenwick index</td><td>lowbit</td><td><a href="modules/02-sorting-hashing-bits/bit-manipulation.html">Bits</a></td><td><code>int b = x &amp; -x</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — recursion and greedy</td></tr>
+    <tr><td>"all subsets / permutations / combinations"</td><td>Backtracking / bitmasks</td><td><a href="modules/04-recursion-and-dnc/subsets-permutations-combinations.html">Subsets</a></td><td><code>choose i / skip i; or swap-perms</code></td></tr>
+    <tr><td>duplicates in the input, unique outputs</td><td>Sort + skip-equal / used[]</td><td><a href="modules/04-recursion-and-dnc/subsets-permutations-combinations.html">Subsets</a></td><td><code>if(i&gt;s &amp;&amp; a[i]==a[i-1]) continue</code></td></tr>
+    <tr><td>N-Queens / Sudoku / word search</td><td>Backtrack + prune</td><td><a href="modules/04-recursion-and-dnc/backtracking-with-pruning.html">Pruning</a></td><td><code>place; dfs; unplace</code></td></tr>
+    <tr><td>count inversions / closest pair</td><td>Divide and conquer</td><td><a href="modules/04-recursion-and-dnc/divide-and-conquer.html">D&amp;C</a></td><td><code>inv = L + R + mergeCount</code></td></tr>
+    <tr><td>"prove a greedy" / activity selection</td><td>Exchange or stay-ahead</td><td><a href="modules/13-greedy-and-offline/greedy-foundations.html">Greedy</a></td><td><code>sort by end; take if start ≥ lastEnd</code></td></tr>
+    <tr><td>jump game II / gas station / task scheduler</td><td>Classic greedy</td><td><a href="modules/13-greedy-and-offline/greedy-classics.html">Greedy classics</a></td><td><code>farthest / surplus tank / idle formula</code></td></tr>
+    <tr><td>max overlapping intervals / skyline</td><td>Sweep line events</td><td><a href="modules/13-greedy-and-offline/sweep-line.html">Sweep</a></td><td><code>events: +1 at start, −1 at end</code></td></tr>
+    <tr><td>many offline queries on a static array</td><td>Mo's algorithm</td><td><a href="modules/13-greedy-and-offline/mos-algorithm.html">Mo</a></td><td><code>sort by block(L), then R</code></td></tr>
+    <tr><td>unimodal min / max of a convex cost</td><td>Ternary search</td><td><a href="modules/13-greedy-and-offline/ternary-search-and-convexity.html">Ternary</a></td><td><code>m1=lo+(hi-lo)/3; m2=hi-(hi-lo)/3</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — trees</td></tr>
+    <tr><td>pre/in/post / level order / serialise</td><td>DFS / BFS traversal</td><td><a href="modules/05-trees/binary-tree-basics-and-traversals.html">Traversals</a></td><td><code>dfs(node.left); dfs(node.right)</code></td></tr>
+    <tr><td>diameter / path sum / views / distance-k</td><td>Tree problem patterns</td><td><a href="modules/05-trees/binary-tree-problem-patterns.html">Tree patterns</a></td><td><code>int[] {up, down} from children</code></td></tr>
+    <tr><td>validate BST / kth smallest / successor</td><td>BST bounds + inorder</td><td><a href="modules/05-trees/bst.html">BST</a></td><td><code>if(v&lt;=lo||v&gt;=hi) false; recurse(lo,v),(v,hi)</code></td></tr>
+    <tr><td>answer for every node as root</td><td>Rerooting DP</td><td><a href="modules/05-trees/tree-dp-and-rerooting.html">Rerooting</a></td><td><code>dfs1 down; dfs2 reroot</code></td></tr>
+    <tr><td>LCA / kth ancestor / path aggregate</td><td>Binary lifting</td><td><a href="modules/05-trees/lca-binary-lifting.html">LCA</a></td><td><code>up[k][v]=up[k-1][up[k-1][v]]</code></td></tr>
+    <tr><td>subtree as a contiguous range</td><td>Euler tour tin/tout</td><td><a href="modules/05-trees/euler-tour-subtree-queries.html">Euler tour</a></td><td><code>bit.range(tin[v], tout[v])</code></td></tr>
+    <tr><td>prefix matching / word dictionary / autocomplete</td><td>Trie</td><td><a href="modules/05-trees/trie.html">Trie</a></td><td><code>node.next[c-'a']; node.end</code></td></tr>
+    <tr><td>maximum XOR pair / XOR &lt; k</td><td>Binary XOR trie</td><td><a href="modules/05-trees/xor-trie.html">XOR trie</a></td><td><code>prefer opposite bit if that child exists</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — graphs</td></tr>
+    <tr><td>unweighted shortest / "minimum steps"</td><td>BFS</td><td><a href="modules/07-graphs-core/bfs.html">BFS</a></td><td><code>q.offer(s); dist[v]=dist[u]+1</code></td></tr>
+    <tr><td>grid flood / islands / connected components</td><td>DFS or BFS flood fill</td><td><a href="modules/07-graphs-core/dfs-and-components.html">DFS</a></td><td><code>int[] dr={-1,1,0,0}; int[] dc={0,0,-1,1}</code></td></tr>
+    <tr><td>word ladder / lock / implicit states</td><td>BFS on the state graph</td><td><a href="modules/07-graphs-core/bfs.html">BFS</a></td><td><code>encode state; visit in a Set</code></td></tr>
+    <tr><td>cycle? / course schedule / odd cycle</td><td>3-colour DFS or BFS colour</td><td><a href="modules/07-graphs-core/cycle-detection-and-bipartite.html">Cycles</a></td><td><code>color[u]=1; dfs; color[u]=2</code></td></tr>
+    <tr><td>prerequisites / order / longest path in DAG</td><td>Topo + DAG DP</td><td><a href="modules/07-graphs-core/topological-sort-and-dag-dp.html">Topo</a></td><td><code>Kahn indegree 0 queue</code></td></tr>
+    <tr><td>positive weights shortest path</td><td>Dijkstra</td><td><a href="modules/07-graphs-core/dijkstra.html">Dijkstra</a></td><td><code>pq of (dist,v); skip stale</code></td></tr>
+    <tr><td>weights only 0 and 1</td><td>0-1 BFS</td><td><a href="modules/07-graphs-core/zero-one-bfs.html">0-1 BFS</a></td><td><code>if(w==0) addFirst else addLast</code></td></tr>
+    <tr><td>negative edges / negative cycle</td><td>Bellman-Ford</td><td><a href="modules/08-graphs-advanced/bellman-ford-and-negative-cycles.html">Bellman-Ford</a></td><td><code>repeat n-1 relax; one more = cycle</code></td></tr>
+    <tr><td>all-pairs / transitive closure</td><td>Floyd-Warshall</td><td><a href="modules/08-graphs-advanced/floyd-warshall.html">Floyd</a></td><td><code>d[i][j]=min(d[i][j], d[i][k]+d[k][j])</code></td></tr>
+    <tr><td>minimum spanning / bottleneck path</td><td>Kruskal + DSU or Prim</td><td><a href="modules/08-graphs-advanced/mst-kruskal-prim.html">MST</a></td><td><code>sort edges; if(dsu.union) take</code></td></tr>
+    <tr><td>strongly connected / 2-SAT</td><td>Tarjan / Kosaraju SCC</td><td><a href="modules/08-graphs-advanced/scc-tarjan-kosaraju.html">SCC</a></td><td><code>low[v]=min(low[v],low[to])</code></td></tr>
+    <tr><td>critical connections / bridges</td><td>Tarjan lowlink</td><td><a href="modules/08-graphs-advanced/bridges-and-articulation-points.html">Bridges</a></td><td><code>if(low[to]&gt;tin[v]) bridge</code></td></tr>
+    <tr><td>reconstruct itinerary / Euler path</td><td>Hierholzer</td><td><a href="modules/08-graphs-advanced/eulerian-path-and-circuit.html">Euler</a></td><td><code>while(adj has edge) dfs; path.addFirst</code></td></tr>
+    <tr><td>max flow / min cut / assignment as flow</td><td>Dinic / Edmonds-Karp</td><td><a href="modules/08-graphs-advanced/max-flow-min-cut.html">Flow</a></td><td><code>level BFS + blocking DFS</code></td></tr>
+    <tr><td>bipartite matching / min vertex cover</td><td>Kuhn / König</td><td><a href="modules/08-graphs-advanced/bipartite-matching.html">Matching</a></td><td><code>tryKuhn(u) via vis[] + pair[]</code></td></tr>
+    <tr><td>union of components / offline connectivity</td><td>DSU</td><td><a href="modules/06-range-queries/dsu.html">DSU</a></td><td><code>find with path compression; union by size</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — dynamic programming</td></tr>
+    <tr><td>"number of ways" / "count the number of"</td><td>DP counting, not greedy</td><td><a href="modules/10-dynamic-programming/dp-foundations.html">DP foundations</a></td><td><code>dp[i] += dp[prev]</code></td></tr>
+    <tr><td>climbing stairs / house robber / decode ways</td><td>1-D DP</td><td><a href="modules/10-dynamic-programming/dp-1d.html">1-D DP</a></td><td><code>dp[i]=dp[i-1]+dp[i-2]</code></td></tr>
+    <tr><td>subset sum / knapsack / coin change</td><td>Knapsack family</td><td><a href="modules/10-dynamic-programming/knapsack-family.html">Knapsack</a></td><td><code>for i: for s=W; s&gt;=w; s-- dp[s]|=dp[s-w]</code></td></tr>
+    <tr><td>longest increasing subsequence</td><td>O(n log n) patience</td><td><a href="modules/10-dynamic-programming/lis.html">LIS</a></td><td><code>Collections.binarySearch(tails, x)</code></td></tr>
+    <tr><td>grid paths / min path sum / cherry pickup</td><td>Grid DP</td><td><a href="modules/10-dynamic-programming/grid-dp.html">Grid DP</a></td><td><code>dp[i][j]=a+min(dp[i-1][j],dp[i][j-1])</code></td></tr>
+    <tr><td>LCS / edit distance / palindrome subsequence</td><td>String DP</td><td><a href="modules/10-dynamic-programming/string-dp.html">String DP</a></td><td><code>dp[i][j]= dp[i-1][j-1]+1 if eq</code></td></tr>
+    <tr><td>"burst balloons" / MCM / last operation</td><td>Interval DP</td><td><a href="modules/10-dynamic-programming/interval-dp.html">Interval DP</a></td><td><code>for len: for l: r=l+len-1; for k</code></td></tr>
+    <tr><td>TSP / assignment / Hamiltonian</td><td>Bitmask DP</td><td><a href="modules/10-dynamic-programming/bitmask-dp.html">Bitmask DP</a></td><td><code>dp[mask][v] from dp[mask^(1&lt;&lt;v)][u]</code></td></tr>
+    <tr><td>count numbers ≤ N with digit property</td><td>Digit DP</td><td><a href="modules/10-dynamic-programming/digit-dp.html">Digit DP</a></td><td><code>dfs(pos, tight, leading, sum)</code></td></tr>
+    <tr><td>win/lose / Nim / mex</td><td>Grundy / game DP</td><td><a href="modules/10-dynamic-programming/game-theory-and-grundy.html">Grundy</a></td><td><code>g[v]=mex of g[moves]</code></td></tr>
+    <tr><td>sum over subsets / SOS</td><td>SOS DP</td><td><a href="modules/10-dynamic-programming/sos-dp.html">SOS</a></td><td><code>for b: for m: if(m&gt;&gt;b&amp;1) f[m]+=f[m^(1&lt;&lt;b)]</code></td></tr>
+    <tr><td>expected value / probability of reaching</td><td>Expectation DP</td><td><a href="modules/10-dynamic-programming/probability-and-expectation-dp.html">Expectation</a></td><td><code>E[s] = 1 + avg E[next]</code></td></tr>
+
+    <tr class="signal-table__group"><td colspan="4">Keyword signals — math and strings</td></tr>
+    <tr><td>product / power under a prime MOD</td><td>Fast pow + Fermat inverse</td><td><a href="modules/11-math-and-number-theory/modular-arithmetic.html">Modular</a></td><td><code>modPow(a, MOD-2)</code></td></tr>
+    <tr><td>nCr many queries, n ≤ 1e6</td><td>Fact + invFact precompute</td><td><a href="modules/11-math-and-number-theory/combinatorics.html">Combinatorics</a></td><td><code>fact[n]*invFact[r]%M*invFact[n-r]%M</code></td></tr>
+    <tr><td>gcd / linear Diophantine / CRT</td><td>Extended Euclid</td><td><a href="modules/11-math-and-number-theory/gcd-and-extended-euclid.html">Ext. Euclid</a></td><td><code>extGcd(a,b) -&gt; ax+by=g</code></td></tr>
+    <tr><td>primes up to n / factor many numbers</td><td>SPF sieve</td><td><a href="modules/11-math-and-number-theory/primes-and-sieves.html">Sieves</a></td><td><code>spf[x*p]=p; while(x%spf==0) x/=</code></td></tr>
+    <tr><td>linear recurrence k-th term, k huge</td><td>Matrix exponentiation</td><td><a href="modules/11-math-and-number-theory/matrix-exponentiation.html">Matpow</a></td><td><code>T^n via binary exponentiation</code></td></tr>
+    <tr><td>pattern search / period / borders</td><td>KMP prefix function</td><td><a href="modules/12-strings-advanced/kmp-and-prefix-function.html">KMP</a></td><td><code>while(j&amp;&amp;s[i]!=s[j]) j=pi[j-1]; pi[i]=j</code></td></tr>
+    <tr><td>all substring hashes in O(1)</td><td>Rolling hash</td><td><a href="modules/12-strings-advanced/rolling-hash.html">Hash</a></td><td><code>(h[r]-h[l]*p[r-l]) % MOD</code></td></tr>
+    <tr><td>longest palindromic substring in O(n)</td><td>Manacher</td><td><a href="modules/12-strings-advanced/manacher.html">Manacher</a></td><td><code>p[i] radius; mirror of center</code></td></tr>
+    <tr><td>many patterns at once</td><td>Aho-Corasick</td><td><a href="modules/12-strings-advanced/aho-corasick.html">Aho</a></td><td><code>trie + failure links</code></td></tr>
+    <tr><td>lexicographically smallest / largest</td><td>Greedy + stack, or suffix array</td><td><a href="modules/03-linear-structures/stacks-and-monotonic-stack.html">Mono stack</a></td><td><code>pop while top &gt; next and remaining allows</code></td></tr>
+    <tr><td>"connected" after unions / Kruskal</td><td>DSU</td><td><a href="modules/06-range-queries/dsu.html">DSU</a></td><td><code>if(find(u)!=find(v)) unite</code></td></tr>
+    <tr><td>path queries on a tree, n log² n OK</td><td>HLD</td><td><a href="modules/09-decompositions/heavy-light-decomposition.html">HLD</a></td><td><code>while(head[u]!=head[v]) lift deeper</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">How to drill this page</span>
+    <p>Ten minutes, twice a week: hide the last three columns with a piece of paper, read a
+    signal, say the pattern. Then do one unlabelled set on
+    <a href="mock-drills.html">Mock Drills</a>.</p>
+  </div>
+</div>
+
+<div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="assets/vendor/mermaid.min.js"></script>
+  <script src="assets/js/nav-data.js"></script>
+  <script src="assets/js/viz.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

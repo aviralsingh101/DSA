@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java Toolkit &mdash; DSA Course</title>
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="java-toolkit">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<section class="hero">
+  <span class="hero__chip">Module 14 &middot; Interview Execution</span>
+  <h1>Java Toolkit</h1>
+  <p class="hero__tagline">
+    Copy-paste vault: the templates you should be able to type from memory in a contest or a
+    hard onsite. Every snippet is Java 17, compilable, no extra libraries.
+  </p>
+  <div class="hero__meta">
+    <span class="pill pill--medium">Medium</span>
+    <span class="hero__time">print or keep open</span>
+    <span class="chip">templates</span>
+    <span class="chip">P0</span>
+  </div>
+</section>
+
+<p>Type one of these from memory each week. Binary search, DSU, Dijkstra and the window skeleton
+must be muscle memory before you grind.</p>
+
+<h2>Fast IO and longs</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FastIO.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>import java.io.*;
+import java.util.*;
+
+public class FastIO {
+    static StreamTokenizer st = new StreamTokenizer(
+        new BufferedReader(new InputStreamReader(System.in)));
+    static int ni() throws IOException { st.nextToken(); return (int) st.nval; }
+    static long nl() throws IOException { st.nextToken(); return (long) st.nval; }
+
+    static long gcd(long a, long b) { return b == 0 ? a : gcd(b, a % b); }
+    static long lcm(long a, long b) { return a / gcd(a, b) * b; } // divide first
+
+    static final int MOD = 1_000_000_007;
+    static long modPow(long a, long e) {
+        long r = 1; a %= MOD;
+        while (e &gt; 0) {
+            if ((e &amp; 1) == 1) r = r * a % MOD;
+            a = a * a % MOD; e &gt;&gt;= 1;
+        }
+        return r;
+    }
+    static long modInv(long a) { return modPow(a, MOD - 2); } // MOD prime
+}
+</code></pre>
+</div>
+
+<h2>Binary search firstTrue</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FirstTrue.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static int firstTrue(int lo, int hi, java.util.function.IntPredicate pred) {
+    while (lo &lt; hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (pred.test(mid)) hi = mid;
+        else lo = mid + 1;
+    }
+    return lo;
+}
+</code></pre>
+</div>
+
+<h2>DSU</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DSU.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static class DSU {
+    final int[] p, sz;
+    int comps;
+    DSU(int n) {
+        p = new int[n]; sz = new int[n]; comps = n;
+        for (int i = 0; i &lt; n; i++) { p[i] = i; sz[i] = 1; }
+    }
+    int find(int x) { return p[x] == x ? x : (p[x] = find(p[x])); }
+    boolean union(int a, int b) {
+        a = find(a); b = find(b);
+        if (a == b) return false;
+        if (sz[a] &lt; sz[b]) { int t = a; a = b; b = t; }
+        p[b] = a; sz[a] += sz[b]; comps--;
+        return true;
+    }
+}
+</code></pre>
+</div>
+
+<h2>Fenwick (BIT)</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Fenwick.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static class Fenwick {
+    final long[] t;
+    Fenwick(int n) { t = new long[n + 1]; }
+    void add(int i, long v) { for (i++; i &lt; t.length; i += i &amp; -i) t[i] += v; }
+    long sum(int i) {              // sum of [0, i]
+        long s = 0; for (i++; i &gt; 0; i -= i &amp; -i) s += t[i]; return s;
+    }
+    long range(int l, int r) { return sum(r) - sum(l - 1); }
+}
+</code></pre>
+</div>
+
+<h2>Segment tree (point update, range min)</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">SegTree.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static class SegTree {
+    final int n; final int[] t;
+    SegTree(int[] a) {
+        n = a.length; t = new int[4 * n];
+        build(1, 0, n - 1, a);
+    }
+    void build(int v, int l, int r, int[] a) {
+        if (l == r) { t[v] = a[l]; return; }
+        int m = l + (r - l) / 2;
+        build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+        t[v] = Math.min(t[v * 2], t[v * 2 + 1]);
+    }
+    void upd(int v, int l, int r, int i, int x) {
+        if (l == r) { t[v] = x; return; }
+        int m = l + (r - l) / 2;
+        if (i &lt;= m) upd(v * 2, l, m, i, x); else upd(v * 2 + 1, m + 1, r, i, x);
+        t[v] = Math.min(t[v * 2], t[v * 2 + 1]);
+    }
+    int qry(int v, int l, int r, int ql, int qr) {
+        if (qr &lt; l || r &lt; ql) return Integer.MAX_VALUE;
+        if (ql &lt;= l &amp;&amp; r &lt;= qr) return t[v];
+        int m = l + (r - l) / 2;
+        return Math.min(qry(v * 2, l, m, ql, qr), qry(v * 2 + 1, m + 1, r, ql, qr));
+    }
+}
+</code></pre>
+</div>
+
+<h2>Dijkstra</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Dijkstra.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static long[] dijkstra(List&lt;List&lt;int[]&gt;&gt; g, int src) {
+    int n = g.size();
+    long[] d = new long[n];
+    Arrays.fill(d, Long.MAX_VALUE / 4);
+    d[src] = 0;
+    PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingLong(a -&gt; a[0]));
+    pq.offer(new long[] {0, src});
+    while (!pq.isEmpty()) {
+        long[] cur = pq.poll();
+        int u = (int) cur[1];
+        if (cur[0] != d[u]) continue;
+        for (int[] e : g.get(u)) {
+            int v = e[0], w = e[1];
+            if (d[v] &gt; d[u] + w) {
+                d[v] = d[u] + w;
+                pq.offer(new long[] {d[v], v});
+            }
+        }
+    }
+    return d;
+}
+</code></pre>
+</div>
+
+<h2>Binary-lifting LCA</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">LCA.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static class LCA {
+    final int LOG; final int[][] up; final int[] depth;
+    LCA(List&lt;List&lt;Integer&gt;&gt; g, int root) {
+        int n = g.size(); LOG = 32 - Integer.numberOfLeadingZeros(n);
+        up = new int[LOG][n]; depth = new int[n];
+        dfs(g, root, root);
+        for (int k = 1; k &lt; LOG; k++)
+            for (int v = 0; v &lt; n; v++) up[k][v] = up[k - 1][up[k - 1][v]];
+    }
+    void dfs(List&lt;List&lt;Integer&gt;&gt; g, int v, int p) {
+        up[0][v] = p;
+        for (int to : g.get(v)) if (to != p) {
+            depth[to] = depth[v] + 1; dfs(g, to, v);
+        }
+    }
+    int lift(int v, int d) {
+        for (int k = 0; d &gt; 0; k++, d &gt;&gt;= 1) if ((d &amp; 1) == 1) v = up[k][v];
+        return v;
+    }
+    int lca(int a, int b) {
+        if (depth[a] &lt; depth[b]) { int t = a; a = b; b = t; }
+        a = lift(a, depth[a] - depth[b]);
+        if (a == b) return a;
+        for (int k = LOG - 1; k &gt;= 0; k--)
+            if (up[k][a] != up[k][b]) { a = up[k][a]; b = up[k][b]; }
+        return up[0][a];
+    }
+}
+</code></pre>
+</div>
+
+<h2>KMP prefix function</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">KMP.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static int[] prefixFunction(String s) {
+    int n = s.length(); int[] pi = new int[n];
+    for (int i = 1; i &lt; n; i++) {
+        int j = pi[i - 1];
+        while (j &gt; 0 &amp;&amp; s.charAt(i) != s.charAt(j)) j = pi[j - 1];
+        if (s.charAt(i) == s.charAt(j)) j++;
+        pi[i] = j;
+    }
+    return pi;
+}
+</code></pre>
+</div>
+
+<h2>Sieve + SPF</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Sieve.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static int[] spf(int n) {
+    int[] s = new int[n + 1];
+    for (int i = 2; i &lt;= n; i++) {
+        if (s[i] == 0) {
+            s[i] = i;
+            if ((long) i * i &lt;= n) for (int j = i * i; j &lt;= n; j += i)
+                if (s[j] == 0) s[j] = i;
+        }
+    }
+    return s;
+}
+</code></pre>
+</div>
+
+<h2>Directions, Pair, debug</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Helpers.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>static final int[] DR = {-1, 1, 0, 0}, DC = {0, 0, -1, 1};
+
+static class P {
+    final int x, y;
+    P(int x, int y) { this.x = x; this.y = y; }
+    public boolean equals(Object o) {
+        return o instanceof P p &amp;&amp; p.x == x &amp;&amp; p.y == y;
+    }
+    public int hashCode() { return 31 * x + y; }
+}
+
+static void dbg(Object... a) { System.err.println(Arrays.deepToString(a)); }
+
+static Comparator&lt;int[]&gt; by0then1 =
+    Comparator.comparingInt((int[] x) -&gt; x[0]).thenComparingInt(x -&gt; x[1]);
+</code></pre>
+</div>
+
+<h2>Sliding window skeleton</h2>
+<div class="code">
+  <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Window.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+<pre><code>int l = 0;
+for (int r = 0; r &lt; n; r++) {
+    // add a[r]
+    while (/* invalid */) { /* remove a[l] */ l++; }
+    // update answer with [l, r]
+}
+</code></pre>
+</div>
+
+<div class="recap">
+  <h2>Memorise these four first</h2>
+  <ul>
+    <li>firstTrue binary search</li>
+    <li>DSU find/union</li>
+    <li>Dijkstra with stale-skip</li>
+    <li>Sliding-window add/shrink</li>
+  </ul>
+  <div class="recap__oneliner">mid = lo + (hi - lo) / 2;   // never (lo + hi) / 2</div>
+</div>
+
+<div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="assets/vendor/mermaid.min.js"></script>
+  <script src="assets/js/nav-data.js"></script>
+  <script src="assets/js/viz.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11 Math &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>11 Math</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Mod</h3>
+    <pre>(a%M+M)%M
+modPow; inv = modPow(a,M-2)
+negatives: ((a%M)+M)%M</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Ext Euclid</h3>
+    <pre>ax+by=g
+if b==0: x=1,y=0
+else recurse; x=y1; y=x1-(a/b)*y1</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>nCr</h3>
+    <pre>fact[n]*invF[r]%M*invF[n-r]%M</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Matpow</h3>
+    <pre>F_n = T^{n-1} * F_1
+T = [[1,1],[1,0]] for Fib</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Geometry</h3>
+    <ul><li>cross z = x1 y2 − y1 x2; sign = orientation</li><li>shoelace area</li><li>integer-only when possible</li></ul>
+  </article>
+  <article class="cheat-card">
+    <h3>Hull</h3>
+    <ul><li>Andrew monotone chain: sort x, lower then upper</li><li>pop while not left turn</li></ul>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+/* ==========================================================================
+   print.css — printable cheat sheets. Forces a light, ink-cheap rendering.
+   ========================================================================== */
+
+@page { margin: 12mm 10mm; }
+
+@media print {
+  :root, html[data-theme="light"], html[data-theme="dark"] {
+    --bg: #ffffff;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #f4f4f4;
+    --bg-code: #f7f7f7;
+    --border: #bbbbbb;
+    --border-strong: #999999;
+    --text: #000000;
+    --text-dim: #333333;
+    --text-faint: #666666;
+    --accent: #00695c;
+    --info: #1a4b8c;
+    --warn: #8a5a00;
+    --danger: #9b1c1c;
+    --success: #1b5e20;
+    --purple: #4a267d;
+    --accent-soft: transparent;
+    --info-soft: transparent;
+    --warn-soft: transparent;
+    --danger-soft: transparent;
+    --success-soft: transparent;
+    --purple-soft: transparent;
+    --shadow: none;
+  }
+
+  body { background: #fff !important; color: #000 !important; font-size: 10pt; }
+
+  /* chrome off */
+  .sidebar,
+  .topbar,
+  .toc,
+  .nav-backdrop,
+  .prevnext,
+  .viz-player__controls,
+  .code__copy,
+  .filterbar,
+  .no-print { display: none !important; }
+
+  body.page { display: block !important; }
+  .shell { display: block !important; }
+  .content { padding: 0 !important; max-width: none !important; }
+  .content > * { max-width: none !important; }
+
+  /* expand everything that is collapsed on screen */
+  details { display: block !important; }
+  details > summary { list-style: none; }
+  .tabs__panel { display: block !important; }
+  .tabs__panel::before {
+    content: attr(data-panel);
+    display: block;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin: 8pt 0 4pt;
+  }
+  .tabs__list { display: none !important; }
+
+  /* keep blocks whole */
+  .cheat-card,
+  .card,
+  .callout,
+  .code,
+  .complexity,
+  .recognise__col,
+  .drill,
+  figure,
+  table { break-inside: avoid; page-break-inside: avoid; }
+
+  h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+  .content h2 { margin-top: 14pt; font-size: 14pt; }
+  .content h3 { font-size: 11pt; }
+  h1 { font-size: 18pt; }
+
+  .cheat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; }
+
+  /* borders instead of fills */
+  .cheat-card, .card, .callout, .code, .complexity { box-shadow: none !important; }
+  .cell--best, .dp-cell--answer { background: #ddd !important; color: #000 !important; }
+  .cell--best .cell__val, .dp-cell--answer { color: #000 !important; }
+
+  pre, code { font-size: 8.5pt !important; }
+  pre { white-space: pre-wrap !important; word-break: break-word; }
+
+  a { color: #000 !important; text-decoration: underline; }
+  /* print destinations for external links only */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 7.5pt;
+    color: #555;
+    word-break: break-all;
+  }
+  .problems a[href^="http"]::after { content: ""; }
+
+  .print-only { display: block !important; }
+}
+
+.print-only { display: none; }

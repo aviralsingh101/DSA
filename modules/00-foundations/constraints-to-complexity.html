@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Constraints → Complexity &mdash; DSA Course</title>
+<meta name="description" content="The single highest-leverage page in this course: read the constraint line, and the problem tells you which algorithm it wants before you have understood the question.">
+<link rel="stylesheet" href="../../assets/css/theme.css">
+<link rel="stylesheet" href="../../assets/css/components.css">
+<link rel="stylesheet" href="../../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="constraints-to-complexity">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+<!-- ============================================================ 1. HERO -->
+<section class="hero">
+  <span class="hero__chip">Module 00 &middot; Foundations</span>
+  <h1>Constraints → Complexity</h1>
+  <p class="hero__tagline">The single highest-leverage page in this course: read the constraint line, and the problem tells you which algorithm it wants before you have understood the question.</p>
+  <div class="hero__meta">
+    <span class="pill pill--easy">Easy</span>
+    <span class="hero__time">25 min read</span>
+    <span class="hero__prereq">Prerequisites:
+      <a href="complexity-analysis.html">Complexity Analysis</a>
+    </span>
+    <span class="hero__tags">
+      <span class="chip">pattern recognition</span>
+      <span class="chip">constraints</span>
+      <span class="chip">triage</span>
+      <span class="chip">meta</span>
+    </span>
+  </div>
+</section>
+
+<!-- ================================================== 2. WHY THIS EXISTS -->
+<h2>Why this exists</h2>
+<p>Every problem statement contains a hint that is impossible to hide: the bounds. A setter who wants an <code>O(n log n)</code> solution must set <code>n</code> large enough to kill <code>O(n&sup2;)</code> and small enough that <code>O(n log n)</code> passes. That pins the bound into a narrow window. Read the window backwards and you recover the intended complexity, which usually recovers the intended <em>technique</em>.</p>
+<p>This is the specific skill that decays when you stop competing. Experienced engineers still know what a segment tree is; what they lose is the reflex that says "<code>n &le; 20</code>, therefore subsets, therefore bitmask" in under two seconds. Recovering that reflex is worth more than re-reading any single algorithm.</p>
+<p>It also protects you in interviews where no constraints are given. Ask for them. "How large is <code>n</code>?" is not a stalling question &mdash; it is the question that determines whether the expected answer is two pointers or a suffix automaton, and asking it signals that you think about cost before you think about code.</p>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">How to use this page</span>
+    <p>Cover the right-hand column of the main table below. Read a constraint, say the complexity and the likely technique out loud, then reveal. Do this once a week. It takes four minutes and it is the highest-return four minutes in your preparation.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 3. RECOGNISE THIS PATTERN -->
+<section class="recognise">
+  <h2>Recognise this pattern</h2>
+  <div class="recognise__cols">
+    <div class="recognise__col recognise__col--yes">
+      <h3>Say yes when you see</h3>
+      <ul>
+        <li>There is an explicit bound on <code>n</code>, <code>m</code>, <code>q</code>, <code>a<sub>i</sub></code>, or the sum of <code>n</code> over test cases</li>
+        <li>A bound looks oddly specific &mdash; <code>n &le; 22</code>, <code>n &le; 500</code>, <code>n &le; 5000</code> &mdash; which is a deliberate signature, not a round number</li>
+        <li>Two different parameters are bounded differently (<code>n &le; 10&#8309;</code> but <code>a<sub>i</sub> &le; 100</code>) &rarr; the small one is your state space</li>
+        <li>The time limit is unusually generous (3&ndash;5 s) &rarr; a heavy log factor or <code>&radic;n</code> approach is expected</li>
+        <li>Memory limit is tight (32&nbsp;MB or 64&nbsp;MB) &rarr; the intended solution has <code>O(n)</code> or <code>O(&radic;n)</code> space, ruling out some DP tables</li>
+      </ul>
+    </div>
+    <div class="recognise__col recognise__col--no">
+      <h3>Not this pattern when</h3>
+      <ul>
+        <li>No constraints are given at all &rarr; <strong>ask</strong>; do not assume</li>
+        <li>The bound is on the output size rather than the input &rarr; the complexity is output-sensitive, and enumeration may be unavoidable</li>
+        <li>The problem is interactive with a query budget &rarr; the "complexity" you must respect is the number of queries (often <code>log n</code> or <code>n log n</code>)</li>
+        <li>It is a constructive problem ("output any valid arrangement") &rarr; the bound tells you the output size, and the difficulty is the invariant, not the running time</li>
+      </ul>
+    </div>
+  </div>
+
+  <table class="recognise__table">
+    <thead>
+      <tr><th>Signal in the statement</th><th>What it means</th><th>Reach for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>n &le; 10</code></td>
+        <td>Factorial or exponential search is fine</td>
+        <td>Permutations, brute force, full DFS</td>
+      </tr>
+      <tr>
+        <td><code>n &le; 20&ndash;25</code></td>
+        <td><code>2&#8319;</code> is 10&#8310;&ndash;3&times;10&#8311;</td>
+        <td><a href="../02-sorting-hashing-bits/bit-manipulation.html">Bitmask</a> enumeration, <a href="../10-dynamic-programming/bitmask-dp.html">bitmask DP</a>, meet in the middle</td>
+      </tr>
+      <tr>
+        <td><code>n &le; 40</code></td>
+        <td><code>2&#8319;</code> is too big, <code>2<sup>n/2</sup></code> is not</td>
+        <td><a href="../04-recursion-and-dnc/meet-in-the-middle.html">Meet in the middle</a></td>
+      </tr>
+      <tr>
+        <td><code>n &le; 100</code></td>
+        <td><code>n&#8308;</code> = 10&#8312; is borderline, <code>n&sup3;</code> is safe</td>
+        <td><a href="../10-dynamic-programming/interval-dp.html">Interval DP</a>, <a href="../08-graphs-advanced/max-flow-min-cut.html">flows</a>, triple loops</td>
+      </tr>
+      <tr>
+        <td><code>n &le; 500</code></td>
+        <td><code>n&sup3;</code> = 1.25&times;10&#8312;</td>
+        <td><a href="../08-graphs-advanced/floyd-warshall.html">Floyd-Warshall</a>, <a href="../10-dynamic-programming/interval-dp.html">O(n&sup3;) interval DP</a></td>
+      </tr>
+      <tr>
+        <td><code>n &le; 5000</code></td>
+        <td><code>n&sup2;</code> = 2.5&times;10&#8311;</td>
+        <td><code>O(n&sup2;)</code> DP such as <a href="../10-dynamic-programming/lis.html">LIS</a> or <a href="../10-dynamic-programming/string-dp.html">edit distance</a></td>
+      </tr>
+      <tr>
+        <td><code>n &le; 10&#8309;</code> / <code>2&times;10&#8309;</code></td>
+        <td>The most common bound in existence</td>
+        <td><code>O(n log n)</code>: sort, <a href="../01-arrays-and-windows/two-pointers.html">two pointers</a>, <a href="../01-arrays-and-windows/binary-search-on-answer.html">binary search on answer</a>, <a href="../06-range-queries/segment-tree.html">segment tree</a></td>
+      </tr>
+      <tr>
+        <td><code>n &le; 10&#8310;&ndash;10&#8311;</code></td>
+        <td>Even a <code>log</code> factor may be too slow</td>
+        <td><code>O(n)</code>: counting, prefix sums, sieve, linear DP, fast IO mandatory</td>
+      </tr>
+      <tr>
+        <td><code>n &le; 10&#8313;&ndash;10&sup1;&#8312;</code></td>
+        <td>You cannot even read the input</td>
+        <td><a href="../11-math-and-number-theory/matrix-exponentiation.html">Matrix power</a>, <a href="../10-dynamic-programming/digit-dp.html">digit DP</a>, closed-form maths, <code>O(&radic;n)</code> factorisation</td>
+      </tr>
+      <tr>
+        <td><code>a<sub>i</sub> &le; 10&#8309;</code> while <code>n &le; 10&#8309;</code></td>
+        <td>The value range is a legitimate state space</td>
+        <td>Counting arrays, <a href="../11-math-and-number-theory/primes-and-sieves.html">sieve</a>, DP over values</td>
+      </tr>
+      <tr>
+        <td><code>q</code> queries and <code>n</code> elements, both 10&#8309;</td>
+        <td><code>O(nq)</code> = 10&sup1;&#8304; is dead</td>
+        <td>Precomputation, offline sorting, <a href="../06-range-queries/fenwick-tree.html">BIT</a>, <a href="../13-greedy-and-offline/mos-algorithm.html">Mo's</a></td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> "sum of <code>n</code> over all tests &le; 2&times;10&#8309;"</td>
+        <td>The <em>total</em> is bounded, so per-test <code>O(n log n)</code> is fine even with 10&#8308; tests</td>
+        <td>Never allocate <code>O(maxN)</code> per test case</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Java's budget is roughly <code>10&#8312;</code> simple operations per second. Halve it for <code>HashMap</code>-heavy code, quarter it for boxed collections, and add 0.5&ndash;1&nbsp;s of JVM startup on some judges.</p>
+</section>
+
+<!-- ============================================ 4. CORE IDEA & INVARIANT -->
+<h2>Core idea: read the bound backwards</h2>
+<p>A setter chooses bounds to separate solutions. If <code>O(n&sup2;)</code> should fail and <code>O(n log n)</code> should pass, <code>n</code> has to land somewhere around <code>10&#8309;</code>. There is no way to write the statement without leaking that. So the procedure is: take the bound, compute which complexity classes fit inside <code>10&#8312;</code> operations, and then ask which techniques deliver those classes.</p>
+<p>The second half of that procedure is the part people forget. Knowing "<code>n &le; 20</code> means <code>O(2&#8319;)</code>" is only half an answer; the useful reflex is "<code>O(2&#8319;)</code> over <code>n &le; 20</code> means the state is a <em>subset</em>, so I am enumerating masks or writing bitmask DP". Complexity classes map to a small number of state shapes, and that mapping is what you are drilling.</p>
+<p>Two refinements matter in practice. First, look for a <strong>second, smaller bound</strong>: when <code>n</code> is huge but <code>a<sub>i</sub> &le; 100</code> or <code>k &le; 10</code>, the small parameter is almost always the DP dimension. Second, unusual bounds are signatures: <code>n &le; 40</code> means meet in the middle, <code>n &le; 500</code> means <code>O(n&sup3;)</code>, and a bound of <code>10&sup1;&#8312;</code> means you will never iterate over the input at all.</p>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The reflex to rebuild</span>
+    <p>Given a bound, complete this sentence without pausing: <em>"<code>n &le; X</code>, so I have about <code>Y</code> operations to spend, so the intended complexity is <code>Z</code>, so the state is probably <code>W</code>."</em></p><p>For example: <em>"<code>n &le; 22</code>, so about 4&times;10&#8310; masks, so <code>O(2&#8319; &middot; n)</code>, so the state is a subset of items plus a last element &mdash; travelling-salesman-shaped bitmask DP."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Powers of two worth knowing cold</span>
+    <p><code>2&sup1;&#8304; = 1024</code>, <code>2&sup2;&#8304; &asymp; 10&#8310;</code>, <code>2&sup3;&#8304; &asymp; 10&#8313;</code>, <code>2&#8310;&#8304; &asymp; 10&sup1;&#8312;</code>. Also <code>10! &asymp; 3.6&times;10&#8310;</code>, <code>13! &asymp; 6&times;10&#8313;</code>, and <code>log&#8322;(10&#8310;) &asymp; 20</code>. These five facts let you price almost any bound in your head. And note the boundary of <code>int</code>: <code>2&sup3;&sup1; &minus; 1 &asymp; 2.1&times;10&#8313;</code>, so a bound of <code>10&#8313;</code> on values plus any summing means <code>long</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The sum-over-test-cases trap</span>
+    <p><code>t &le; 10&#8308;</code> with "the sum of <code>n</code> over all test cases does not exceed 2&times;10&#8309;" is <em>not</em> permission to be slow, and it is also not a reason to fear <code>O(n log n)</code>. It means your per-test work must be proportional to <em>that test's</em> <code>n</code>. The classic failure is clearing an <code>O(maxN)</code> array every test: 10&#8308; tests times 2&times;10&#8309; clears is 2&times;10&#8313; operations. Clear only the indices you touched.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Reading the memory limit too</span>
+    <p>256&nbsp;MB holds about 6&times;10&#8311; <code>int</code>s or 3&times;10&#8311; <code>long</code>s. So a 2D <code>int</code> DP table of <code>5000 &times; 5000</code> is 100&nbsp;MB &mdash; it fits, barely. <code>10&#8309; &times; 100</code> is 40&nbsp;MB, fine. <code>10&#8309; &times; 10&#8309;</code> is impossible, which is itself a hint that the DP must be rolled down to one or two rows.</p>
+  </div>
+</aside>
+
+<!-- ============================================= 5. VISUAL WALKTHROUGH -->
+<h2>Visual walkthrough</h2>
+
+<h3>The lookup table, one row at a time</h3>
+
+<p>Rows are input bounds; the columns are the deduction chain. Step through it and say each row out loud before revealing the next. After a few passes the middle column becomes automatic, which is the entire goal.</p>
+
+<figure class="viz">
+  <div class="dp-grid" data-viz-id="constraintMap"></div>
+  <div class="viz-player" data-viz-target="constraintMap">
+    <script type="application/json" class="viz-frames">
+    {
+      "corner": "bound",
+      "rowHeads": [
+        "n≤10",
+        "n≤25",
+        "n≤40",
+        "n≤100",
+        "n≤500",
+        "n≤5e3",
+        "n≤1e5",
+        "n≤1e6",
+        "n≤1e9",
+        "n≤1e18"
+      ],
+      "colHeads": [
+        "ops available",
+        "target complexity",
+        "typical state shape"
+      ],
+      "vars": [
+        "bound",
+        "say this out loud"
+      ],
+      "speed": 1500,
+      "frames": [
+        {
+          "note": "n <= 10: permutations are only 3.6e6, so exhaustive search is intended. Write the clearest brute force you can.",
+          "cells": [
+            {
+              "r": 0,
+              "c": 0,
+              "val": "n!"
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "val": "O(n!)",
+              "cls": "target"
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "val": "orderings"
+            }
+          ],
+          "values": {
+            "bound": "n≤10",
+            "say this out loud": "permute everything"
+          }
+        },
+        {
+          "note": "n <= 25: 2^n masks. This bound is almost a signature for subsets. If there is also a 'last chosen' element, it is bitmask DP.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 0,
+              "val": "3e7"
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "val": "O(2ⁿ·n)",
+              "cls": "target"
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "val": "subset mask"
+            }
+          ],
+          "values": {
+            "bound": "n≤25",
+            "say this out loud": "bitmask"
+          }
+        },
+        {
+          "note": "n <= 40: 2^40 is 1e12, too big; 2^20 per half is 1e6. Split the input in two and combine.",
+          "cells": [
+            {
+              "r": 2,
+              "c": 0,
+              "val": "2·2^(n/2)"
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "val": "O(2^(n/2)·n)",
+              "cls": "target"
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "val": "two halves"
+            }
+          ],
+          "values": {
+            "bound": "n≤40",
+            "say this out loud": "meet in the middle"
+          }
+        },
+        {
+          "note": "n <= 100: n^4 = 1e8 is borderline, n^3 = 1e6 is comfortable. Interval DP and flow modelling live here.",
+          "cells": [
+            {
+              "r": 3,
+              "c": 0,
+              "val": "1e8"
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "val": "O(n³)–O(n⁴)",
+              "cls": "target"
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "val": "(i,j) intervals"
+            }
+          ],
+          "values": {
+            "bound": "n≤100",
+            "say this out loud": "interval DP or flow"
+          }
+        },
+        {
+          "note": "n <= 500: n^3 = 1.25e8. This exact bound is the Floyd-Warshall signature; if the problem is about all-pairs distances, stop looking.",
+          "cells": [
+            {
+              "r": 4,
+              "c": 0,
+              "val": "1.25e8"
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "val": "O(n³)",
+              "cls": "target"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "all pairs"
+            }
+          ],
+          "values": {
+            "bound": "n≤500",
+            "say this out loud": "Floyd-Warshall"
+          }
+        },
+        {
+          "note": "n <= 5000: n^2 = 2.5e7. Two-dimensional DP over prefixes: LIS the slow way, edit distance, LCS.",
+          "cells": [
+            {
+              "r": 5,
+              "c": 0,
+              "val": "2.5e7"
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "val": "O(n²)",
+              "cls": "target"
+            },
+            {
+              "r": 5,
+              "c": 2,
+              "val": "(i,j) prefixes"
+            }
+          ],
+          "values": {
+            "bound": "n≤5e3",
+            "say this out loud": "quadratic DP"
+          }
+        },
+        {
+          "note": "n <= 1e5: the most common bound there is. n^2 = 1e10 is dead, so you need sorting, two pointers, binary search, or a log-factor structure.",
+          "cells": [
+            {
+              "r": 6,
+              "c": 0,
+              "val": "1e8"
+            },
+            {
+              "r": 6,
+              "c": 1,
+              "val": "O(n log n)",
+              "cls": "target"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "sorted order / tree"
+            }
+          ],
+          "values": {
+            "bound": "n≤1e5",
+            "say this out loud": "sort, two pointers, or segment tree"
+          }
+        },
+        {
+          "note": "n <= 1e6: even a log factor is uncomfortable. Aim for a single linear pass, and switch to BufferedReader.",
+          "cells": [
+            {
+              "r": 7,
+              "c": 0,
+              "val": "1e8"
+            },
+            {
+              "r": 7,
+              "c": 1,
+              "val": "O(n)",
+              "cls": "target"
+            },
+            {
+              "r": 7,
+              "c": 2,
+              "val": "one pass / counting"
+            }
+          ],
+          "values": {
+            "bound": "n≤1e6",
+            "say this out loud": "linear, and fix your IO"
+          }
+        },
+        {
+          "note": "n <= 1e9: you cannot iterate the input. Either the answer has a closed form, or the state is the digits, or you factorise in O(sqrt n).",
+          "cells": [
+            {
+              "r": 8,
+              "c": 0,
+              "val": "—"
+            },
+            {
+              "r": 8,
+              "c": 1,
+              "val": "O(log n) / O(√n)",
+              "cls": "target"
+            },
+            {
+              "r": 8,
+              "c": 2,
+              "val": "digits / divisors"
+            }
+          ],
+          "values": {
+            "bound": "n≤1e9",
+            "say this out loud": "maths, not iteration"
+          }
+        },
+        {
+          "note": "n <= 1e18: definitely maths. Matrix exponentiation for linear recurrences, digit DP for counting, and long everywhere.",
+          "cells": [
+            {
+              "r": 9,
+              "c": 0,
+              "val": "—"
+            },
+            {
+              "r": 9,
+              "c": 1,
+              "val": "O(log n)",
+              "cls": "target"
+            },
+            {
+              "r": 9,
+              "c": 2,
+              "val": "matrix power / digit DP"
+            }
+          ],
+          "values": {
+            "bound": "n≤1e18",
+            "say this out loud": "closed form or log-time power"
+          }
+        },
+        {
+          "note": "Now cover the middle and right columns and go back to the top. Recall, not recognition, is what you are training.",
+          "cells": [
+            {
+              "r": 1,
+              "c": 2,
+              "val": "subset mask",
+              "cls": "answer"
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "val": "all pairs",
+              "cls": "answer"
+            },
+            {
+              "r": 6,
+              "c": 2,
+              "val": "sorted order / tree",
+              "cls": "answer"
+            }
+          ],
+          "values": {
+            "bound": "drill it",
+            "say this out loud": "weekly"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Bound &rarr; budget &rarr; complexity &rarr; state shape. The right-hand column is the one that actually wins interviews, because it names the technique rather than the cost.</figcaption>
+</figure>
+
+<h3>Where the one-second wall sits</h3>
+
+<p>Each cell is an input size; the value is how many operations an <code>O(n&sup2;)</code> solution would perform. Watch exactly where it crosses <code>10&#8312;</code> &mdash; that crossing point is what "<code>n &le; 5000</code> means quadratic" really encodes.</p>
+
+<figure class="viz">
+  <div class="array-viz" data-viz-id="budget"></div>
+  <div class="viz-player" data-viz-target="budget">
+    <script type="application/json" class="viz-frames">
+    {
+      "label": "n² operations for n =",
+      "array": [
+        "1e2",
+        "1e3",
+        "3e3",
+        "5e3",
+        "1e4",
+        "3e4",
+        "1e5",
+        "1e6"
+      ],
+      "indexLabels": [
+        "100",
+        "1e3",
+        "3e3",
+        "5e3",
+        "1e4",
+        "3e4",
+        "1e5",
+        "1e6"
+      ],
+      "vars": [
+        "n",
+        "n² ops",
+        "verdict"
+      ],
+      "speed": 950,
+      "frames": [
+        {
+          "note": "n = 100 gives 1e4 operations. Instant. At this size even O(n^4) is fine.",
+          "active": [
+            0
+          ],
+          "arr": [
+            "1e4",
+            "1e6",
+            "9e6",
+            "2.5e7",
+            "1e8",
+            "9e8",
+            "1e10",
+            "1e12"
+          ],
+          "done": [],
+          "dim": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "n": "100",
+            "n² ops": "1e4",
+            "verdict": "instant"
+          }
+        },
+        {
+          "note": "n = 1000 gives 1e6. Still instant, and this is why n <= 1000 usually means the setter allows O(n^2) or even O(n^2 log n).",
+          "active": [
+            1
+          ],
+          "done": [
+            0
+          ],
+          "dim": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "n": "1e3",
+            "n² ops": "1e6",
+            "verdict": "instant"
+          }
+        },
+        {
+          "note": "n = 3000 gives 9e6. Comfortable.",
+          "active": [
+            2
+          ],
+          "done": [
+            0,
+            1
+          ],
+          "dim": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "n": "3e3",
+            "n² ops": "9e6",
+            "verdict": "fine"
+          }
+        },
+        {
+          "note": "n = 5000 gives 2.5e7. Fine in Java with primitive arrays. This is the classic 'quadratic DP intended' bound.",
+          "active": [
+            3
+          ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "dim": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "n": "5e3",
+            "n² ops": "2.5e7",
+            "verdict": "fine"
+          }
+        },
+        {
+          "note": "n = 1e4 gives 1e8. Exactly at the wall: it passes with tight primitive loops and fails with boxed collections.",
+          "active": [
+            4
+          ],
+          "window": [
+            4,
+            4
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dim": [
+            5,
+            6,
+            7
+          ],
+          "values": {
+            "n": "1e4",
+            "n² ops": "1e8",
+            "verdict": "borderline"
+          }
+        },
+        {
+          "note": "n = 3e4 gives 9e8. About 10 seconds. Over the wall.",
+          "active": [
+            5
+          ],
+          "x": [
+            5
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "dim": [
+            6,
+            7
+          ],
+          "values": {
+            "n": "3e4",
+            "n² ops": "9e8",
+            "verdict": "too slow"
+          }
+        },
+        {
+          "note": "n = 1e5 gives 1e10, roughly two minutes. This is why n <= 1e5 is the universal signal that quadratic is out.",
+          "active": [
+            6
+          ],
+          "x": [
+            5,
+            6
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "dim": [
+            7
+          ],
+          "values": {
+            "n": "1e5",
+            "n² ops": "1e10",
+            "verdict": "hopeless"
+          }
+        },
+        {
+          "note": "n = 1e6 gives 1e12. Hours. Meanwhile O(n log n) at the same size is 2e7 — five hundred thousand times cheaper.",
+          "active": [
+            7
+          ],
+          "x": [
+            5,
+            6,
+            7
+          ],
+          "done": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "values": {
+            "n": "1e6",
+            "n² ops": "1e12",
+            "verdict": "hopeless"
+          }
+        },
+        {
+          "note": "The green band is where O(n^2) lives: n up to about 1e4. Memorise the boundary, not the table.",
+          "best": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "x": [
+            5,
+            6,
+            7
+          ],
+          "window": [
+            4,
+            4
+          ],
+          "values": {
+            "n": "—",
+            "n² ops": "wall at 1e8",
+            "verdict": "n ≤ ~1e4"
+          }
+        }
+      ]
+    }
+    </script>
+  </div>
+  <figcaption>Operation counts for <code>O(n&sup2;)</code>. The wall is between <code>n = 10&#8308;</code> and <code>n = 3&times;10&#8308;</code>, which is why setters who want to allow quadratic solutions choose bounds near 5000.</figcaption>
+</figure>
+
+<h3>Triage flow for a fresh problem</h3>
+
+<figure class="viz bleed-wide">
+  <div class="mermaid">
+flowchart TD
+  read(["read the constraint line"]) --&gt; two{"is there a second, smaller bound?"}
+  two -- yes --&gt; small["make the small parameter your DP dimension"]
+  two -- no --&gt; size{"how big is n?"}
+  small --&gt; size
+  size -- "n &lt;= 25" --&gt; mask["subsets: bitmask or bitmask DP"]
+  size -- "n &lt;= 40" --&gt; mitm["split in half: meet in the middle"]
+  size -- "n &lt;= 500" --&gt; cubic["O(n^3): Floyd-Warshall, interval DP, flow"]
+  size -- "n &lt;= 5000" --&gt; quad["O(n^2) DP over prefix pairs"]
+  size -- "n &lt;= 2e5" --&gt; nlogn["O(n log n): sort, two pointers, binary search, segment tree"]
+  size -- "n &lt;= 1e7" --&gt; linear["O(n): counting, prefix sums, sieve, fast IO"]
+  size -- "n &gt;= 1e9" --&gt; maths["maths: matrix power, digit DP, closed form"]
+  nlogn --&gt; queries{"are there q queries too?"}
+  queries -- yes --&gt; offline["precompute, or go offline: BIT, Mo's, sweep"]
+  queries -- no --&gt; done(["start solving"])
+  </div>
+  <figcaption>Run this before you start solving. It takes about fifteen seconds and eliminates most wrong directions.</figcaption>
+</figure>
+
+<!-- ======================================================= 6. ALGORITHM -->
+<h2>Algorithm</h2>
+<ol class="stepper">
+  <li><strong>Find every bound</strong> in the statement: <code>n</code>, <code>m</code>, <code>q</code>, <code>k</code>, value ranges, and the sum-over-tests clause.</li>
+  <li><strong>Pick the largest one</strong> and compute the operation budget: about <code>10&#8312;</code> divided by nothing if you use primitive arrays, by 2&ndash;5 if you use collections.</li>
+  <li><strong>List the complexity classes that fit.</strong> Usually only two survive, which is the whole point of the exercise.</li>
+  <li><strong>Look for a second, smaller bound.</strong> If <code>k &le; 10</code> or <code>a<sub>i</sub> &le; 100</code>, that parameter is almost certainly a DP dimension or a state.</li>
+  <li><strong>Translate the class into a state shape:</strong> subsets, prefix pairs, intervals, sorted order, digits, or all pairs.</li>
+  <li><strong>Check the memory limit</strong> against your intended table. If it does not fit, the DP is meant to be rolled to one or two rows.</li>
+  <li><strong>Sanity-check the output type.</strong> Bounds near <code>10&#8313;</code> with any summation or multiplication mean <code>long</code>.</li>
+  <li><strong>Only now start solving</strong>, with the target complexity already fixed.</li>
+</ol>
+
+<!-- ========================================================= 7. DRY RUN -->
+<h2>Dry run</h2>
+<p>Ten real constraint lines and the deduction each one forces. This is the exercise to repeat weekly &mdash; cover the last two columns first.</p>
+
+<div class="table-scroll">
+  <table class="trace-table">
+    <thead>
+      <tr><th>#</th><th>Constraint line</th><th>Budget</th><th>Target</th><th>State shape</th><th>Action / why</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace-table__row--change"><td>1</td><td><code>1 &le; n &le; 22</code></td><td>4&times;10&#8310; masks</td><td><code>O(2&#8319;&middot;n)</code></td><td>subset + last element</td><td>Bitmask DP. The oddly specific 22 exists so <code>2&#8319;&middot;n</code> fits.</td></tr>
+      <tr><td>2</td><td><code>n &le; 16</code>, grid <code>n&times;n</code></td><td>2&#8310; masks</td><td><code>O(2&#8319;&middot;n&sup2;)</code></td><td>column mask per row</td><td>Broken-profile / tiling DP over rows.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td><code>n &le; 40</code>, subset sum</td><td>2&times;2&sup2;&#8304;</td><td><code>O(2<sup>n/2</sup> log)</code></td><td>two halves, sorted</td><td>Meet in the middle. 40 is the signature.</td></tr>
+      <tr><td>4</td><td><code>n &le; 400</code>, remove stones</td><td>6&times;10&#8311;</td><td><code>O(n&sup3;)</code></td><td>interval (l, r)</td><td>Interval DP; the cube of 400 is the budget.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td><code>n &le; 500</code>, all-pairs distance</td><td>1.25&times;10&#8312;</td><td><code>O(n&sup3;)</code></td><td>dist[i][j]</td><td>Floyd-Warshall, essentially always.</td></tr>
+      <tr><td>6</td><td><code>n &le; 2000</code>, two strings</td><td>4&times;10&#8310;</td><td><code>O(nm)</code></td><td>prefix pair (i, j)</td><td>Edit distance / LCS shaped DP.</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td><code>n &le; 2&times;10&#8309;</code>, <code>a<sub>i</sub> &le; 10&#8313;</code></td><td>&asymp;3.5&times;10&#8310; steps</td><td><code>O(n log n)</code></td><td>sorted order</td><td>Sort then two pointers or binary search. <code>a<sub>i</sub></code> at 10&#8313; means <code>long</code> sums.</td></tr>
+      <tr><td>8</td><td><code>n, q &le; 2&times;10&#8309;</code>, range updates</td><td>&asymp;7&times;10&#8310;</td><td><code>O((n+q) log n)</code></td><td>segment tree node</td><td>Lazy segment tree or BIT with a difference array.</td></tr>
+      <tr><td>9</td><td><code>n &le; 10&#8310;</code>, <code>a<sub>i</sub> &le; 10&#8310;</code></td><td>10&#8312;</td><td><code>O(n log log n)</code></td><td>value-indexed array</td><td>Sieve or counting over values, not over indices.</td></tr>
+      <tr class="trace-table__row--change"><td>10</td><td><code>1 &le; n &le; 10&sup1;&#8312;</code>, count nice numbers</td><td>&mdash;</td><td><code>O(18 &middot; states)</code></td><td>digit position + carry flags</td><td>Digit DP. A 10&sup1;&#8312; bound is never about iteration.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Drill format</span>
+    <p>Cover the last two columns. Read a constraint line, say the target complexity and the state
+    shape aloud, then reveal. Eight out of ten in under two minutes means the reflex is back.</p>
+  </div>
+</aside>
+
+<!-- ============================================ 8. JAVA IMPLEMENTATION -->
+<h2>Java implementation</h2>
+
+<div class="tabs">
+  <div class="tabs__list" role="tablist" aria-label="Constraints → Complexity implementations">
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Budget calculator</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">The sum-over-tests trap</button>
+  </div>
+
+  <div class="tabs__panel is-active" data-panel="Budget calculator">
+    <p>Run this once and read the output as a table. Seeing your own machine confirm the boundaries makes them stick better than reading them.</p>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ConstraintTriage.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class ConstraintTriage {
+    
+        private static final double BUDGET = 1e8;   // rough ops/second for Java
+    
+        static double ops(String cls, double n) {
+            switch (cls) {
+                case "log n":     return Math.log(n) / Math.log(2);
+                case "sqrt n":    return Math.sqrt(n);
+                case "n":         return n;
+                case "n log n":   return n * Math.log(n) / Math.log(2);
+                case "n^2":       return n * n;
+                case "n^3":       return n * n * n;
+                case "2^n":       return Math.pow(2, n);
+                case "n!":        return gamma(n);
+                default:          throw new IllegalArgumentException(cls);
+            }
+        }
+    
+        private static double gamma(double n) {
+            double f = 1;
+            for (int i = 2; i &lt;= n &amp;&amp; f &lt; 1e300; i++) {
+                f *= i;
+            }
+            return f;
+        }
+    
+        public static void main(String[] args) {
+            String[] classes = {"log n", "sqrt n", "n", "n log n", "n^2", "n^3", "2^n", "n!"};
+            double[] sizes = {10, 25, 100, 500, 5000, 100000, 1000000};
+            System.out.printf("%-8s", "class");
+            for (double n : sizes) {
+                System.out.printf("%12s", "n=" + (long) n);
+            }
+            System.out.println();
+            for (String c : classes) {
+                System.out.printf("%-8s", c);
+                for (double n : sizes) {
+                    double o = ops(c, n);
+                    System.out.printf("%12s", (o &lt;= BUDGET ? "OK " : "-- ")
+                            + String.format("%.0e", o));
+                }
+                System.out.println();
+            }
+        }
+        // Output (abridged): the OK/-- boundary runs diagonally, exactly as in the table above.
+    }</code></pre>
+    </div>
+  </div>
+
+  <div class="tabs__panel" data-panel="Multi-test trap">
+    <p>The correct skeleton for <code>t</code> test cases with a bounded total. The whole point is the clearing strategy: touch only what you used.</p>
+    <div class="code" data-highlight="22-25">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">MultiTestPattern.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.io.DataInputStream;
+    import java.io.IOException;
+    
+    public class MultiTestPattern {
+    
+        static final int MAX = 200_001;
+        static int[] cnt = new int[MAX];        // allocated once, never per test
+    
+        /**
+         * WRONG: java.util.Arrays.fill(cnt, 0) per test is O(MAX) each, so with
+         * t = 1e4 tests that is 2e9 writes even though the total n is only 2e5.
+         * RIGHT: undo exactly the indices this test touched.
+         */
+        static long solveOneTest(int[] a) {
+            long distinctPairs = 0;
+            for (int v : a) {
+                distinctPairs += cnt[v];       // pairs with an earlier equal value
+                cnt[v]++;
+            }
+            for (int v : a) {
+                cnt[v] = 0;                    // O(n), not O(MAX)
+            }
+            return distinctPairs;
+        }
+    
+        public static void main(String[] args) throws IOException {
+            FastReader in = new FastReader();
+            int t = in.nextInt();
+            StringBuilder out = new StringBuilder();
+            while (t-- &gt; 0) {
+                int n = in.nextInt();
+                int[] a = new int[n];
+                for (int i = 0; i &lt; n; i++) {
+                    a[i] = in.nextInt();
+                }
+                out.append(solveOneTest(a)).append('\n');
+            }
+            System.out.print(out);             // one write, not n writes
+        }
+    
+        /** Minimal fast reader; see the Java for DSA page for the full version. */
+        static class FastReader {
+            private final DataInputStream in = new DataInputStream(System.in);
+            int nextInt() throws IOException {
+                int ret = 0, b = in.read();
+                while (b &lt; '0') {
+                    b = in.read();
+                }
+                while (b &gt;= '0') {
+                    ret = ret * 10 + (b - '0');
+                    b = in.read();
+                }
+                return ret;
+            }
+        }
+        // Input : 2 / 3 / 1 1 2 / 2 / 5 5
+        // Output: 1
+        //         1
+    }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= 9. COMPLEXITY -->
+<h2>Complexity</h2>
+
+<div class="complexity">
+  <div class="complexity__badges">
+    <span class="badge badge--time">Time meta-topic</span>
+    <span class="badge badge--space">Space meta-topic</span>
+  </div>
+
+  <div class="complexity__derivation">
+    <p>The whole page rests on inverting one inequality. If the intended complexity is <code>f(n)</code> and the budget is <code>B &asymp; 10&#8312;</code>, the setter must choose <code>n</code> with <code>f(n) &le; B</code> for the intended solution and <code>g(n) &gt; B</code> for the solution being excluded. Solving <code>f(n) = B</code> gives the boundary:</p>
+    <p><span class="eq">n&sup2; = 10&#8312; &rArr; n = 10&#8308;&nbsp;&nbsp;&nbsp; n&sup3; = 10&#8312; &rArr; n &asymp; 464&nbsp;&nbsp;&nbsp; 2&#8319; = 10&#8312; &rArr; n &asymp; 26&nbsp;&nbsp;&nbsp; n! = 10&#8312; &rArr; n &asymp; 11</span></p>
+    <p>Those four numbers explain almost every bound you will ever see: <code>n &le; 5000</code> (quadratic, with headroom), <code>n &le; 500</code> (cubic), <code>n &le; 20&ndash;25</code> (exponential), <code>n &le; 10</code> (factorial). And for the linearithmic case:</p>
+    <p><span class="eq">n log&#8322; n = 10&#8312; &rArr; n &asymp; 4&times;10&#8310;</span></p>
+    <p>which is why <code>n &le; 10&#8309;</code> or <code>2&times;10&#8309;</code> is such a comfortable, and therefore common, choice for an <code>O(n log n)</code> problem: it leaves a 20&ndash;40&times; safety margin for slow languages.</p>
+  </div>
+
+  <table class="complexity__compare">
+    <thead>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>n &le; 10</code></td><td><code>O(n!)</code></td><td><code>O(n)</code></td><td>Permutation brute force</td></tr>
+      <tr><td><code>n &le; 25</code></td><td><code>O(2&#8319; n)</code></td><td><code>O(2&#8319;)</code></td><td>Bitmask enumeration or DP</td></tr>
+      <tr><td><code>n &le; 40</code></td><td><code>O(2<sup>n/2</sup> n)</code></td><td><code>O(2<sup>n/2</sup>)</code></td><td>Meet in the middle</td></tr>
+      <tr><td><code>n &le; 500</code></td><td><code>O(n&sup3;)</code></td><td><code>O(n&sup2;)</code></td><td>Floyd-Warshall, interval DP</td></tr>
+      <tr><td><code>n &le; 5000</code></td><td><code>O(n&sup2;)</code></td><td><code>O(n)</code> rolled</td><td>Prefix-pair DP</td></tr>
+      <tr><td><code>n &le; 2&times;10&#8309;</code></td><td><code>O(n log n)</code></td><td><code>O(n)</code></td><td>Sorting, trees, two pointers</td></tr>
+      <tr><td><code>n &le; 10&#8311;</code></td><td><code>O(n)</code></td><td><code>O(n)</code> or <code>O(1)</code></td><td>Counting, sieve, single pass</td></tr>
+      <tr><td><code>n &le; 10&sup1;&#8312;</code></td><td><code>O(log n)</code></td><td><code>O(1)</code></td><td>Matrix power, digit DP, maths</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================ 10. EDGE CASES & PITFALLS -->
+<h2>Edge cases and pitfalls</h2>
+
+<ul class="pitfalls">
+  <li>
+    <span class="pitfalls__title">Reading only the bound on <code>n</code></span>
+    <div class="pitfalls__bug">Seeing <code>n &le; 10&#8309;</code> and concluding <code>O(n log n)</code>, while missing <code>q &le; 10&#8309;</code> on the next line. <code>O(n log n)</code> per query is <code>10&sup1;&#8304;</code>.</div>
+    <div class="pitfalls__fix">Read every bound and multiply the ones that compose. With <code>n</code> and <code>q</code> both large you need <code>O((n + q) log n)</code> total, which means precomputation, a persistent structure, or going offline.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Ignoring the value range as a state space</span>
+    <div class="pitfalls__bug">Treating <code>a<sub>i</sub> &le; 10&#8309;</code> as irrelevant metadata. Many problems are <code>O(maxA)</code> or <code>O(maxA log log maxA)</code>, and no amount of thinking about <code>n</code> will find that solution.</div>
+    <div class="pitfalls__fix">When operations are keyed by value ("delete all copies of <code>v</code>", "pairs with gcd <code>g</code>"), index by value. Counting arrays and sieves over <code>maxA</code> are the standard shape.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Clearing a global array per test case</span>
+    <div class="pitfalls__bug"><code>Arrays.fill(cnt, 0)</code> inside the test loop with <code>MAX = 2&times;10&#8309;</code> and <code>t = 10&#8308;</code> tests: 2&times;10&#8313; writes, a guaranteed timeout even though your algorithm is linear.</div>
+    <div class="pitfalls__fix">Undo only the indices you touched, or stamp entries with the test number and treat a stale stamp as zero. See the Multi-test trap tab.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Trusting the bound and ignoring the constant</span>
+    <div class="pitfalls__bug">An <code>O(n log n)</code> solution at <code>n = 2&times;10&#8309;</code> using <code>PriorityQueue&lt;int[]&gt;</code> and <code>Scanner</code>. The class is right and it still times out, because the constant is 20&ndash;50&times;.</div>
+    <div class="pitfalls__fix">Once the class fits, check the constant: primitive arrays over boxed collections, <code>BufferedReader</code> or <code>DataInputStream</code> over <code>Scanner</code>, and buffered output. See <a href="java-for-dsa.html">Java for DSA</a>.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Missing the <code>long</code> requirement hidden in the bounds</span>
+    <div class="pitfalls__bug"><code>n &le; 10&#8309;</code> and <code>a<sub>i</sub> &le; 10&#8313;</code>, then summing into an <code>int</code>. The true sum reaches <code>10&sup1;&#8308;</code> and wraps silently to a plausible wrong answer.</div>
+    <div class="pitfalls__fix">Multiply the two largest bounds in your head. If the product exceeds <code>2.1&times;10&#8313;</code>, use <code>long</code>. This check costs two seconds and prevents a whole class of unexplained wrong answers.</div>
+  </li>
+  <li>
+    <span class="pitfalls__title">Assuming an interview has no constraints</span>
+    <div class="pitfalls__bug">Jumping straight to a <code>HashMap</code> solution when the interviewer intended <code>n &le; 100</code> and wanted to discuss a cleaner quadratic, or intended streaming input that will not fit in memory at all.</div>
+    <div class="pitfalls__fix">Ask two questions before coding: "how large is the input?" and "does it fit in memory?". These change the answer more than any other clarification, and asking them is itself a positive signal.</div>
+  </li>
+</ul>
+
+<!-- ======================================================= 11. VARIANTS -->
+<h2>Variants</h2>
+
+<div class="table-scroll">
+  <table class="variants">
+    <thead>
+      <tr><th>Variant</th><th>What changes</th><th>Code delta</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bounded sum over test cases</td>
+        <td><code>t</code> can be huge while the total <code>n</code> is small. Per-test work must be proportional to that test's size, and nothing may be <code>O(maxN)</code>.</td>
+        <td><code>for each test: work = O(n_i log n_i); total = O(sum n_i log max n)</code></td>
+        <td>Codeforces default format</td>
+      </tr>
+      <tr>
+        <td>Two parameters with different bounds</td>
+        <td>The small parameter becomes a DP dimension. <code>n &le; 10&#8309;</code> with <code>k &le; 10</code> almost always means <code>O(nk)</code> states.</td>
+        <td><code>dp[i][j] with i over n and j over k  =&gt;  O(n*k)</code></td>
+        <td><a href="../10-dynamic-programming/dp-1d.html">1-D DP</a></td>
+      </tr>
+      <tr>
+        <td>Generous time limit (3&ndash;5 s)</td>
+        <td>A signal that the intended solution has a heavy constant or an extra log: <code>O(n log&sup2; n)</code>, <code>O(n&radic;n)</code>, or a segment tree with a <code>TreeSet</code> per node.</td>
+        <td><code>n sqrt(n) at n=1e5 is 3e7 -&gt; fine with 3 seconds</code></td>
+        <td><a href="../13-greedy-and-offline/mos-algorithm.html">Mo's Algorithm</a></td>
+      </tr>
+      <tr>
+        <td>Tight memory limit (32&ndash;64 MB)</td>
+        <td>Rules out large DP tables. The intended solution rolls the DP, or is offline, or streams the input.</td>
+        <td><code>dp[2][W] instead of dp[n+1][W]</code></td>
+        <td><a href="../10-dynamic-programming/knapsack-family.html">Knapsack</a></td>
+      </tr>
+      <tr>
+        <td>Interactive with a query budget</td>
+        <td>The cost model is queries, not operations. A budget of about 20 for <code>n = 10&#8310;</code> means binary search; <code>n + log n</code> means a linear scan plus a refinement.</td>
+        <td><code>queries &lt;= 30 with n &lt;= 1e9  =&gt;  binary search on the answer</code></td>
+        <td><a href="../01-arrays-and-windows/binary-search-on-answer.html">Binary Search on Answer</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =============================================== 12. INTERVIEW FOLLOW-UPS -->
+<h2>Interview follow-ups</h2>
+
+<div class="followups">
+  <details class="followup">
+    <summary>The interviewer gives no constraints. What do you ask?</summary>
+    <div class="followup__body">
+      <p>Three questions, in this order. <strong>"How large can the input be?"</strong> &mdash; decides the target complexity. <strong>"Does it fit in memory, or is it a stream?"</strong> &mdash; decides whether you may sort or must keep <code>O(1)</code> state. <strong>"What are the value ranges, and can they be negative?"</strong> &mdash; decides <code>int</code> versus <code>long</code> and whether tricks like counting sort or Dijkstra are available. Each answer eliminates whole families of solutions, which is exactly what you want before you commit.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary><code>n &le; 10&#8309;</code> but the answer needs pairs. Is the problem impossible?</summary>
+    <div class="followup__body">
+      <p>No &mdash; it means you must count pairs without enumerating them. The standard moves are: sort and use <a href="../01-arrays-and-windows/two-pointers.html">two pointers</a> so each pair is implied rather than visited; use a <a href="../02-sorting-hashing-bits/hashing-patterns.html">prefix-sum plus HashMap</a> so that each new index counts all its partners at once; or use a <a href="../06-range-queries/fenwick-tree.html">BIT</a> over compressed values to count how many earlier elements satisfy a predicate. "Count pairs" almost never means "visit pairs".</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Why is <code>n &le; 40</code> such a distinctive bound?</summary>
+    <div class="followup__body">
+      <p>Because it sits precisely in the gap between exponential and polynomial. <code>2&#8308;&#8304; &asymp; 10&sup1;&sup2;</code> is too slow, but <code>2&sup2;&#8304; &asymp; 10&#8310;</code> is trivial, and no polynomial algorithm is expected to exist (these are usually subset-sum variants, which are NP-hard). So the setter is telling you to split the input in half, enumerate each half, sort one side and binary search from the other: <a href="../04-recursion-and-dnc/meet-in-the-middle.html">meet in the middle</a>. Bounds of 30&ndash;45 should trigger that thought immediately.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>How do I use the memory limit as a hint?</summary>
+    <div class="followup__body">
+      <p>Convert it to a count: 256&nbsp;MB is about 6&times;10&#8311; <code>int</code>s. Then check your intended table. If the natural DP is <code>dp[n][W]</code> with <code>n = 10&#8309;</code> and <code>W = 10&#8309;</code>, that is <code>10&sup1;&#8304;</code> cells &mdash; impossible &mdash; so the setter must intend a rolled DP with <code>O(W)</code> memory, or a completely different formulation. A memory limit that is tight relative to the obvious table is a strong hint that the obvious table is not the solution.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>Does this reasoning transfer to LeetCode, where limits are looser?</summary>
+    <div class="followup__body">
+      <p>Yes, and LeetCode is arguably more explicit: the constraints block is always present and always tight. <code>1 &le; nums.length &le; 10&#8309;</code> means <code>O(n log n)</code>; <code>&le; 10&#8308;</code> often tolerates <code>O(n&sup2;)</code>; <code>&le; 20</code> is bitmask; <code>&le; 12</code> is permutations. The one difference is that the JavaScript/Python budget is lower, so LeetCode's authors leave more headroom &mdash; an <code>O(n&sup2;)</code> at <code>n = 10&#8308;</code> usually passes in Java.</p>
+    </div>
+  </details>
+
+  <details class="followup">
+    <summary>What if my complexity fits but the problem still feels impossible?</summary>
+    <div class="followup__body">
+      <p>Then you have probably identified the wrong state. Go back to the second bound. A huge <code>n</code> with a tiny <code>k</code>, or a tiny value range, or "at most 10 distinct letters" is the setter handing you the state dimension. The most common form of this is <code>n &le; 10&#8309;</code> with <code>a<sub>i</sub> &le; 100</code>: the answer is <code>O(100n)</code> or <code>O(100&sup2;)</code>, and no amount of cleverness about <code>n</code> alone will find it.</p>
+    </div>
+  </details>
+</div>
+
+<!-- ======================================================= 13. PRACTICE -->
+<h2>Practice</h2>
+<p>For each of these, look <strong>only</strong> at the constraints, write down your predicted complexity and technique, and only then read the statement. Score yourself.</p>
+
+<div class="table-scroll">
+  <table class="problems">
+    <thead>
+      <tr><th>#</th><th>Problem</th><th>Platform</th><th>Level</th><th>Pattern used</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td>
+        <td><a href="https://leetcode.com/problems/partition-equal-subset-sum/" target="_blank" rel="noopener">Partition Equal Subset Sum</a></td>
+        <td><span class="badge badge--lc">LC 416</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n &le; 200, sum &le; 2e4 &rarr; O(n &times; sum) knapsack, not O(2&#8319;)</td></tr>
+      <tr><td>2</td>
+        <td><a href="https://leetcode.com/problems/shortest-path-visiting-all-nodes/" target="_blank" rel="noopener">Shortest Path Visiting All Nodes</a></td>
+        <td><span class="badge badge--lc">LC 847</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n &le; 12 &rarr; bitmask over visited sets; BFS on (node, mask)</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/find-the-shortest-superstring/" target="_blank" rel="noopener">Find the Shortest Superstring</a></td>
+        <td><span class="badge badge--lc">LC 943</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n &le; 12 &rarr; TSP-shaped bitmask DP</td></tr>
+      <tr><td>4</td>
+        <td><a href="https://leetcode.com/problems/course-schedule-iv/" target="_blank" rel="noopener">Course Schedule IV</a></td>
+        <td><span class="badge badge--lc">LC 1462</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n &le; 100 &rarr; O(n&sup3;) transitive closure is intended</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/number-of-ways-to-rearrange-sticks-with-k-sticks-visible/" target="_blank" rel="noopener">Number of Ways to Rearrange Sticks</a></td>
+        <td><span class="badge badge--lc">LC 1866</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n, k &le; 1000 &rarr; O(nk) DP; the two bounds are the two dimensions</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/count-numbers-with-unique-digits/" target="_blank" rel="noopener">Count Numbers with Unique Digits</a></td>
+        <td><span class="badge badge--lc">LC 357</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n &le; 8 but the range is 10&#8319; &rarr; combinatorics or digit DP, never enumeration</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/sum-of-floored-pairs/" target="_blank" rel="noopener">Sum of Floored Pairs</a></td>
+        <td><span class="badge badge--lc">LC 1782</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n &le; 1e5 but a_i &le; 1e5 &rarr; the value range is the state; harmonic-series loop</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/455/A" target="_blank" rel="noopener">Boredom</a></td>
+        <td><span class="badge badge--cf">CF 455A</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>a_i &le; 1e5 &rarr; DP over values, O(maxA), and long for the answer</td></tr>
+      <tr><td>9</td>
+        <td><a href="https://codeforces.com/problemset/problem/677/A" target="_blank" rel="noopener">Vanya and Fence</a></td>
+        <td><span class="badge badge--cf">CF 677A</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>Trivially O(n); practise noticing when the constraint imposes nothing</td></tr>
+      <tr><td>10</td>
+        <td><a href="https://codeforces.com/problemset/problem/431/C" target="_blank" rel="noopener">k-Tree</a></td>
+        <td><span class="badge badge--cf">CF 431C</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>n &le; 100, k &le; 100 &rarr; O(n &times; k &times; 2) DP; the three bounds are the state</td></tr>
+      <tr><td>11</td>
+        <td><a href="https://codeforces.com/problemset/problem/313/B" target="_blank" rel="noopener">Ilya and Queries</a></td>
+        <td><span class="badge badge--cf">CF 313B</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>m and n both 1e5 &rarr; O(nm) is dead, so prefix sums are forced</td></tr>
+      <tr><td>12</td>
+        <td><a href="https://codeforces.com/problemset/problem/633/D" target="_blank" rel="noopener">Fibonacci-ish</a></td>
+        <td><span class="badge badge--cf">CF 633D</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>n &le; 1000 &rarr; O(n&sup2; log) pair enumeration is intended</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<details class="spoiler">
+  <summary>Hint for LC 1782 &mdash; when the value range, not n, is the complexity parameter</summary>
+  <div class="spoiler__body">
+    <p>Both <code>n</code> and <code>a<sub>i</sub></code> are bounded by <code>10&#8309;</code>, and you need <code>&Sigma; &lfloor;a<sub>i</sub>/a<sub>j</sub>&rfloor;</code> over all pairs &mdash; <code>10&sup1;&#8304;</code> pairs, so pairs are out. Build <code>cnt[v]</code> and its prefix sums, then for each distinct divisor <code>d</code> loop over multiples <code>d, 2d, 3d, &hellip;</code> and add <code>k &times; (count of values in [kd, (k+1)d))</code>. The outer-plus-inner loop is the harmonic series, <code>O(maxA log maxA)</code>. Transferable lesson: <em>when both <code>n</code> and the value range are bounded by the same number, try indexing by value &mdash; the harmonic series often rescues you.</em></p>
+  </div>
+</details>
+
+<details class="spoiler">
+  <summary>Hint for LC 847 &mdash; recognising a bitmask from the bound alone</summary>
+  <div class="spoiler__body">
+    <p><code>n &le; 12</code> is far too small to be about <code>n</code>. <code>2&sup1;&sup2; = 4096</code>, and <code>4096 &times; 12 = 49152</code> states &mdash; trivial. So the state must be a <em>subset</em>. Here it is <code>(currentNode, maskOfVisited)</code>, and because every edge has weight 1 you want plain <a href="../07-graphs-core/bfs.html">BFS</a> over those <code>n &times; 2&#8319;</code> states rather than DP. The reusable move: <em>a bound of 10&ndash;22 on a set of items means the item set itself is part of the state.</em></p>
+  </div>
+</details>
+
+<!-- ========================================================= 14. RECAP -->
+<div class="recap">
+  <h2>Recap</h2>
+  <ul>
+    <li><strong>The bound is the answer key.</strong> Compute the budget, list the classes that fit, and translate the class into a state shape before you start solving.</li>
+    <li><strong>Four boundaries explain almost every constraint:</strong> <code>n&sup2; = 10&#8312;</code> at <code>n = 10&#8308;</code>, <code>n&sup3;</code> at 464, <code>2&#8319;</code> at 26, <code>n!</code> at 11.</li>
+    <li><strong>Always look for the second, smaller bound.</strong> A tiny <code>k</code> or a small value range is the setter handing you the DP dimension.</li>
+    <li><strong>Oddly specific bounds are signatures:</strong> 40 means meet in the middle, 500 means <code>O(n&sup3;)</code>, 22 means bitmask, <code>10&sup1;&#8312;</code> means maths.</li>
+    <li><strong>Multiply the two largest bounds to decide <code>int</code> versus <code>long</code></strong>, and read the memory limit as a hint about whether the obvious DP table is intended.</li>
+  </ul>
+  <div class="recap__oneliner">n&lt;=10:n!  n&lt;=25:2^n  n&lt;=40:2^(n/2)  n&lt;=500:n^3  n&lt;=5e3:n^2  n&lt;=2e5:n log n  n&lt;=1e7:n  n&gt;=1e9:log n</div>
+</div>
+
+<div class="prevnext"></div>
+
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+
+  <script src="../../assets/vendor/mermaid.min.js"></script>
+  <script src="../../assets/js/nav-data.js"></script>
+  <script src="../../assets/js/viz.js"></script>
+  <script src="../../assets/js/app.js"></script>
+</body>
+</html>

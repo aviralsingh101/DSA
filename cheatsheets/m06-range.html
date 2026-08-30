@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 Range Queries &mdash; Cheat Sheet</title>
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+<link rel="stylesheet" href="../assets/css/print.css" media="print">
+</head>
+<body class="page" data-topic-id="">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div class="shell">
+    <header id="topbar" class="topbar"></header>
+    <main class="content">
+
+      <section class="hero">
+        <span class="hero__chip">Cheat sheet</span>
+        <h1>06 Range Queries</h1>
+        <p class="hero__tagline">Print-optimised. Signatures, complexities, the invariants you say out loud.</p>
+      </section>
+      <div class="cheat-grid">
+  <article class="cheat-card">
+    <h3>Sparse table</h3>
+    <pre>st[k][i]=op(st[k-1][i], st[k-1][i+(1&lt;&lt;k-1)])
+q(l,r): k=log(r-l+1); op(st[k][l],st[k][r-(1&lt;&lt;k)+1])</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Fenwick</h3>
+    <pre>add: for(i++;i&lt;n;i+=i&amp;-i) t[i]+=v
+sum: for(i++;i&gt;0;i-=i&amp;-i) s+=t[i]</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Segtree merge</h3>
+    <pre>pull: t[v]=op(t[L],t[R])
+query: disjoint skip; covered return; else mix</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>Lazy</h3>
+    <pre>apply to node + mark lazy
+push before going down
+compose updates</pre>
+  </article>
+  <article class="cheat-card">
+    <h3>DSU</h3>
+    <pre>find: p[x]==x?x:p[x]=find(p[x])
+union by size; comps--</pre>
+  </article>
+</div>
+
+      <div class="prevnext"></div>
+    </main>
+  </div>
+  <nav id="toc" class="toc"></nav>
+  <script src="../assets/vendor/mermaid.min.js"></script>
+  <script src="../assets/js/nav-data.js"></script>
+  <script src="../assets/js/viz.js"></script>
+  <script src="../assets/js/app.js"></script>
+</body>
+</html>
