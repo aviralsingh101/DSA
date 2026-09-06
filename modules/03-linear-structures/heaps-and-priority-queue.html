@@ -22,7 +22,7 @@
   <p class="hero__tagline">A binary heap is an array with parent-child arithmetic: sift in O(log n), heapify in O(n), and the interview patterns are k-largest, merge-k, two-heap median, and lazy deletion.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
       <a href="../01-arrays-and-windows/kth-and-selection.html">K-th Element & Selection</a>
@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A heap gives the current min (or max) in O(1) and insert / delete-min in O(log n). Problems that look like sorting but only need the extreme of a live set — k largest, merge k sorted lists, running median — are heap problems. Arrays.sort costs an extra log you often do not have to pay, and does not work at all on a stream.</p>
-<p>Two facts separate people who have used PriorityQueue from people who understand it. First, heapify is O(n), not O(n log n): sift down from the last parent, and the geometric series of subtree heights sums to less than 2n. Second, Java's PriorityQueue cannot delete an arbitrary element in log time, so "remove this later" is lazy deletion: leave it in the heap and skip it when it shows up at the top.</p>
-<p>The two-heap median combines both. A max-heap of the lower half and a min-heap of the upper half, kept within one of size, gives the median in O(1) and insertions in O(log n). Sliding-window median adds lazy deletion on top.</p>
+<p>You are handed <code>[3, 2, 1, 5, 6, 4]</code> and asked for the 2nd-largest number. Sorting the whole array answers 5 and costs <code>n log n</code> &mdash; about <code>1.7&times;10&#8310;</code> comparisons at <code>n = 10&#8309;</code> &mdash; and it cannot run at all on a stream that never sits still long enough to sort. A <em>heap</em> is a tree stored as an array that keeps the current minimum (or maximum) at the root, so you can read the extreme in one lookup and insert or delete it in <code>log n</code> sifts. Problems that look like sorting but only need the extreme of a live set &mdash; k largest, merge k sorted lists, a running median &mdash; are heap problems.</p>
+<p>Two facts separate people who have called <code>PriorityQueue</code> from people who understand it. First, building a heap from an array is <code>O(n)</code>, not <code>O(n log n)</code>: you sift down from the last parent, and the geometric series of subtree heights sums to less than <code>2n</code>. Second, Java's heap cannot delete an arbitrary element in logarithmic time, so "remove this later" is <em>lazy deletion</em> &mdash; leave the stale value in the heap and skip it when it eventually shows up at the top, rather than calling the linear <code>remove</code>.</p>
+<p>The two-heap median combines both ideas. A max-heap of the lower half and a min-heap of the upper half, kept within one of each other in size, gives the median in one peek and accepts each insertion in <code>log n</code>. Sliding-window median adds lazy deletion on top so a value that just left the window is ignored the next time it reaches a root. In a real statement the signal is <code>n &le; 10&#8309;</code> next to "k largest", "merge k lists", or a stream of operations that must answer after every insert.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A heap answers "what is the best of a live set?" in logarithmic updates. If you need the k-th, keep a heap of size k or two heaps that split at the median. If you need to delete from the middle, fake it with lazy skipping.</p>
+    <p>A heap answers "what is the best of a live set?" in logarithmic updates. If you need the k-th, keep a heap of size k or two heaps that split at the median. If you need to delete from the middle, fake it with lazy skipping rather than a linear remove.</p>
   </div>
 </aside>
 
@@ -118,18 +118,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with k-largest or a stream of operations is the heap signature. n log n sort is the fallback when k is Θ(n). Never (a,b) → b-a on ints: overflow. Use Integer.compare or reverseOrder().</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with k-largest or a stream of operations is the heap signature: you can afford <code>n log k</code>, not a full sort, and not a linear scan per query. Full <code>n log n</code> sort is the fallback when <code>k</code> is already <code>&Theta;(n)</code>. Never write a comparator as <code>(a, b) &rarr; b - a</code> on ints &mdash; overflow breaks the contract. Use <code>Integer.compare</code> or <code>reverseOrder()</code>.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>A binary heap is an array h[0..n) with parent (i-1)/2 and children 2i+1, 2i+2. Min-heap: h[parent] ≤ h[child]. Sift-up after insert, sift-down after removing the root. Both O(log n) because height is floor(log n). Heapify builds in O(n) by sifting down from n/2-1 to 0. Java PriorityQueue is a min-heap; max-heap via Collections.reverseOrder().</p>
-<p>For k-largest, a min-heap of size k is the default: the root is the k-th largest, and anything smaller is discarded. Two-heap median: every value in lo (max-heap) is ≤ every value in hi (min-heap), and lo.size() == hi.size() or lo.size() == hi.size()+1. Lazy deletion: a Map of stale counts; prune tops before every peek/poll.</p>
+<p>A binary heap is an array <code>h[0..n)</code> with a parent at <code>(i-1)/2</code> and children at <code>2i+1</code> and <code>2i+2</code>. A min-heap keeps <code>h[parent] &le; h[child]</code> at every index, so the root is the global minimum. Insert appends and sifts up; delete-min swaps the last leaf into the root and sifts down. Both walks are <code>O(log n)</code> because the height is <code>floor(log n)</code>. Heapify builds the same property in <code>O(n)</code> by sifting down from the last parent <code>n/2-1</code> to 0. Java <code>PriorityQueue</code> is a min-heap; a max-heap is <code>new PriorityQueue&lt;&gt;(Collections.reverseOrder())</code>.</p>
+<p>For k-largest, a min-heap of size <code>k</code> is the default: the root is the smallest of the k largest seen so far, which is exactly the current k-th, and anything smaller than that root is discarded. Two-heap median: every value in <code>lo</code> (a max-heap of the lower half) is <code>&le;</code> every value in <code>hi</code> (a min-heap of the upper half), and the sizes differ by at most one. Lazy deletion is a map of stale counts: before every peek or poll, throw away a root whose cancel-count is still positive, because <code>remove(x)</code> on a <code>PriorityQueue</code> is linear.</p>
+<p>Trace k-largest on <code>[3, 2, 1, 5, 6, 4]</code> with <code>k = 2</code> and a min-heap. See 3: the heap is not full, so it becomes <code>[3]</code>. See 2: insert, heap <code>[2, 3]</code>, root 2. See 1: the heap is full and 1 is smaller than the root, so discard it. See 5: 5 beats 2, evict 2, heap <code>[3, 5]</code>. See 6: evict 3, heap <code>[5, 6]</code>. See 4: 4 loses to 5 and is discarded. The root 5 is the 2nd-largest, and you never stored more than two numbers.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p><strong>Heap property:</strong> every parent is at least as extreme as its children, so the root is the global extreme.</p><p><strong>k-largest min-heap:</strong> the heap holds the k largest seen so far; its root is the smallest of those, i.e. the current k-th.</p><p><strong>Two-heap median:</strong> lo.peek() is the median on an odd count, or average the two peeks (even), with a long cast.</p>
+    <p><strong>Heap property:</strong> every parent is at least as extreme as its children, so the root is the global extreme.</p><p><strong>k-largest min-heap:</strong> the heap holds the k largest seen so far; its root is the smallest of those, i.e. the current k-th.</p><p><strong>Two-heap median:</strong> <code>lo.peek()</code> is the median on an odd count, or the average of the two peeks on an even count, with a <code>long</code> cast.</p><p>In plain words, the best of the live set always sits at the root, a size-k heap for k-largest never keeps a value that can no longer be among the k winners, and the two median heaps always split the numbers so everything on the left is <code>&le;</code> everything on the right. If a parent is ever worse than a child, or the two halves drift more than one apart, the next peek is a lie.</p>
   </div>
 </aside>
 
@@ -170,7 +171,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "See 3. Heap not full, insert. Heap [3].",
+          "note": "See 3. The heap is still empty so 3 is inserted and becomes the only candidate.",
           "active": [
             0
           ],
@@ -188,7 +189,7 @@
           }
         },
         {
-          "note": "See 2. Insert. Min-heap [2, 3], root 2.",
+          "note": "See 2. Insert beside 3. The min-heap is now [2, 3] and the root 2 is the current 2nd-largest.",
           "active": [
             1
           ],
@@ -208,7 +209,7 @@
           }
         },
         {
-          "note": "See 1. Heap full and 1 < root, discard.",
+          "note": "See 1. The heap is already size 2 and 1 is smaller than the root, so 1 can never be among the two largest.",
           "active": [
             2
           ],
@@ -322,18 +323,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the live set and the order.</strong> Min-heap or max-heap? Size k or n or two halves?</li>
-  <li><strong>For k-largest:</strong> min-heap of size k. Offer x; if size > k, poll. Root is the k-th.</li>
-  <li><strong>For merge-k:</strong> min-heap of current heads (the node, so you can advance next).</li>
-  <li><strong>For stream median:</strong> offer into lo or hi, then rebalance sizes to differ by at most one.</li>
-  <li><strong>For expiry:</strong> do not call remove. Increment a stale counter and skip tops in prune().</li>
-  <li><strong>Build from an array with heapify</strong> (sift down from n/2-1), not n inserts.</li>
-  <li><strong>Comparators:</strong> Integer.compare or reverseOrder(), never subtraction.</li>
+  <li><strong>Name the live set and the order first</strong> so the polarity is not guessed later. Decide min-heap or max-heap, and whether the heap holds k items, everything, or two halves split at the median.</li>
+  <li><strong>For k-largest, keep a min-heap of size k.</strong> Offer each value, then poll if the size exceeds k, because the extreme you need to evict is the smallest of the current winners. The root at the end is the k-th largest.</li>
+  <li><strong>For merge-k, heap the current heads</strong> as nodes, not just values, so after you poll a node you can offer its <code>next</code>. A value-only heap would lose the rest of that list.</li>
+  <li><strong>For a stream median, offer into lo or hi</strong> by comparing with <code>lo.peek()</code>, then rebalance so the sizes differ by at most one. Without that fix-up the next peek is a value from the wrong half.</li>
+  <li><strong>For expiry, never call remove.</strong> Increment a stale counter for the leaving value and skip a root in <code>prune()</code> whenever its count is still positive, because <code>remove</code> is linear and n of them are quadratic.</li>
+  <li><strong>Build from an array with heapify</strong>, sifting down from the last parent <code>n/2-1</code>, not with n separate inserts. The geometric series of heights is what makes the build linear.</li>
+  <li><strong>Write comparators with Integer.compare or reverseOrder()</strong>, never subtraction of two ints. Overflow on large magnitudes breaks the heap contract silently and the root is no longer the true extreme.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Walk <code>[3, 2, 1, 5, 6, 4]</code> with a min-heap of size <code>k = 2</code>. The root is always the smaller of the two largest seen so far, which is the running 2nd-largest.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -341,9 +342,9 @@ flowchart TD
       <tr><th>x</th><th>heap</th><th>kth</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>3</td><td>[3]</td><td>—</td><td>See 3. Heap not full, insert. Heap [3].</td></tr>
-      <tr><td>2</td><td>[2, 3]</td><td>2</td><td>See 2. Insert. Min-heap [2, 3], root 2.</td></tr>
-      <tr><td>1</td><td>[2, 3]</td><td>2</td><td>See 1. Heap full and 1 < root, discard.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>[3]</td><td>—</td><td>See 3. The heap is still empty so 3 is inserted and becomes the only candidate.</td></tr>
+      <tr><td>2</td><td>[2, 3]</td><td>2</td><td>See 2. Insert beside 3. The min-heap is now [2, 3] and the root 2 is the current 2nd-largest.</td></tr>
+      <tr><td>1</td><td>[2, 3]</td><td>2</td><td>See 1. The heap is already size 2 and 1 is smaller than the root, so 1 can never be among the two largest.</td></tr>
       <tr><td>5</td><td>[3, 5]</td><td>3</td><td>See 5. 5 > 2, evict 2, insert 5. Heap [3, 5], root 3.</td></tr>
       <tr><td>6</td><td>[5, 6]</td><td>5</td><td>See 6. 6 > 3, evict 3, insert 6. Heap [5, 6], root 5.</td></tr>
       <tr class="trace-table__row--change"><td>4</td><td>[5, 6]</td><td>5</td><td>See 4. 4 < 5, discard. Answer: k-th largest is the root 5. O(n log k), not O(n log n).</td></tr>
@@ -525,8 +526,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>K-largest: n offers into a heap of size at most k:</p><span class="eq">T(n, k) = n log k</span>
-    <p>Heapify: Σ h · n / 2^h &lt; 2n. Merge-k: n polls on a heap of size k. Lazy deletion is amortised O(1) extra polls per inserted element.</p>
+    <p>K-largest: n offers into a heap of size at most k, and each offer or poll sifts <code>O(log k)</code> levels:</p><span class="eq">T(n, k) = n log k</span>
+    <p>At <code>n = 10&#8309;</code> and <code>k = 100</code> that is about <code>7&times;10&#8309;</code> comparisons, not the <code>1.7&times;10&#8310;</code> of a full sort. Heapify sums <code>h &middot; n / 2^h</code> over heights and stays under <code>2n</code>. Merge-k is n polls on a heap of size k. Lazy deletion adds at most one extra poll per inserted element, still amortised constant extra work.</p>
   </div>
 
   <table class="complexity__compare">
@@ -550,33 +551,33 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Max-heap via (a, b) → b - a</span>
-    <div class="pitfalls__bug">Overflow on large magnitudes. The comparator contract breaks silently.</div>
-    <div class="pitfalls__fix">new PriorityQueue<>(Collections.reverseOrder()) or Integer.compare(b, a).</div>
+    <div class="pitfalls__bug">Subtracting two ints overflows on large magnitudes and the comparator contract breaks silently, so the root is no longer the true max. It looks like the textbook trick for reversing order.</div>
+    <div class="pitfalls__fix">Build the max-heap with Collections.reverseOrder, or compare with Integer.compare(b, a). Never subtract two ints just to reverse their order.</div>
   </li>
   <li>
     <span class="pitfalls__title">Min-heap of size n for k-largest</span>
-    <div class="pitfalls__bug">You keep everything and pay n log n. The point is a heap of size k.</div>
-    <div class="pitfalls__fix">Offer, then if (size > k) poll(). Opposite polarity: min-heap for k-largest.</div>
+    <div class="pitfalls__bug">You keep every value and pay n log n, which is exactly the sort you were trying to avoid. The sample still returns the right k-th, so the wasted work hides.</div>
+    <div class="pitfalls__fix">Offer, then if (size > k) poll(). Opposite polarity: a min-heap of size k for k-largest.</div>
   </li>
   <li>
     <span class="pitfalls__title">Calling pq.remove(x) in a loop</span>
-    <div class="pitfalls__bug">remove is linear. Inside n operations it is quadratic.</div>
-    <div class="pitfalls__fix">Lazy deletion: a stale-count map and prune-while-top-is-stale.</div>
+    <div class="pitfalls__bug">remove scans the whole heap, so it is linear. Inside n operations that is quadratic, and the code still looks like the obvious "delete this key" API.</div>
+    <div class="pitfalls__fix">Lazy deletion: a stale-count map, and prune the top while its cancel-count is still positive.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to rebalance the two heaps</span>
-    <div class="pitfalls__bug">Sizes drift by more than one. Median is a wrong peek, often passing the first two ops.</div>
-    <div class="pitfalls__fix">After every offer: if lo.size() > hi.size()+1 move lo→hi; if hi.size() > lo.size() move hi→lo.</div>
+    <div class="pitfalls__bug">Sizes drift by more than one, so the median is a peek from the wrong half. The first two operations often still pass because the heaps have not had time to skew.</div>
+    <div class="pitfalls__fix">After every offer: if lo is two bigger, move lo to hi; if hi is bigger at all, move hi to lo.</div>
   </li>
   <li>
     <span class="pitfalls__title">Averaging two ints without long</span>
-    <div class="pitfalls__bug">(lo.peek() + hi.peek()) / 2.0 overflows int before the promotion to double.</div>
-    <div class="pitfalls__fix">((long) lo.peek() + hi.peek()) / 2.0.</div>
+    <div class="pitfalls__bug">(lo.peek() + hi.peek()) / 2.0 adds two ints first, wraps past two billion, and only then promotes to double. The overflow has already happened.</div>
+    <div class="pitfalls__fix">((long) lo.peek() + hi.peek()) / 2.0 so the sum is a long before the divide.</div>
   </li>
   <li>
     <span class="pitfalls__title">Heapifying by n inserts</span>
-    <div class="pitfalls__bug">You tell the interviewer build is O(n log n). It can be O(n).</div>
-    <div class="pitfalls__fix">Sift down from n/2-1. Sketch the geometric series.</div>
+    <div class="pitfalls__bug">You tell the interviewer that building the heap is O(n log n), which is true of n inserts and false of heapify. The distinction is a common follow-up.</div>
+    <div class="pitfalls__fix">Sift down from n/2-1 to 0. Sketch the geometric series of heights to defend the O(n) bound.</div>
   </li>
 </ul>
 
@@ -631,7 +632,7 @@ flowchart TD
   <details class="followup">
     <summary>Prove heapify is O(n).</summary>
     <div class="followup__body">
-      <p>At height h there are at most n/2^{h+1} nodes, each costing O(h). Sum h·n/2^h converges to 2n because Sum h x^h = x/(1-x)^2 at x=1/2. Quoting "geometric series of heights" is the short version.</p>
+      <p>At height h there are at most <code>n / 2^{h+1}</code> nodes, and sifting one of them costs <code>O(h)</code>. The sum <code>h &middot; n / 2^h</code> over h converges to less than <code>2n</code> because <code>Sum h x^h = x / (1-x)^2</code> at <code>x = 1/2</code>. Quoting "geometric series of heights" is the short interview version of the same argument.</p>
     </div>
   </details>
 
@@ -645,7 +646,7 @@ flowchart TD
   <details class="followup">
     <summary>When is quickselect better than a heap for k-th?</summary>
     <div class="followup__body">
-      <p>When the array is mutable, you need one k-th, and you do not need the k elements as a set. Expected O(n). Heaps are deterministic O(n log k), work on streams, and return the k elements. Lead with the heap in a design-flavoured interview.</p>
+      <p>When the array is mutable, you need one k-th, and you do not need the k elements as a set afterwards. Expected time is linear. Heaps are deterministic <code>O(n log k)</code>, work on streams that you cannot rearrange, and return the k elements themselves. Lead with the heap in a design-flavoured interview and mention quickselect as the one-shot alternative.</p>
     </div>
   </details>
 </div>

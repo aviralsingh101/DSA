@@ -7,7 +7,7 @@ export const topics = [
 pack({
   "id": "sparse-table-and-rmq",
   "difficulty": "Medium",
-  "readTime": "22 min",
+  "readTime": "26 min",
   "tagline": "Idempotent range queries on a static array in <code>O(1)</code> after an <code>O(n log n)</code> doubling table &mdash; two overlapping blocks, no inverse required.",
   "tags": [
     "sparse table",
@@ -26,11 +26,12 @@ pack({
     ]
   ],
   "why": [
-    "Prefix sums give <code>O(1)</code> range sums because addition has an inverse. Minimum, maximum, gcd and bitwise AND do not: knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>. A sparse table exploits a different algebraic property, <em>idempotence</em>: overlapping ranges may be combined freely because <code>min(S, S) = min(S)</code>.",
-    "The table stores, for every index i and every k, the min (or gcd, or AND) of the block of length <code>2<sup>k</sup></code> starting at i. Any query range of length L is covered by two such blocks of length <code>2<sup>floor(log2 L)</sup></code>, one aligned with the left end and one with the right. Two lookups, one combine, <code>O(1)</code>.",
-    "The catch is that the array must be static: a point update invalidates <code>O(n)</code> table entries. For mixed updates use a segment tree. For invertible ops on a static array, prefix sums are smaller and simpler. This page is the remaining quadrant: static + idempotent."
+    "You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> that will never change, and someone keeps asking: what is the smallest value between these two indices? Scanning the range is correct, but a hundred thousand queries each walking a hundred thousand cells is ten billion steps and the judge will cut you off. A prefix-sum array would answer a range <em>sum</em> in one subtraction, because addition has an inverse: if you know the sum up to <code>r</code> and the sum up to <code>l-1</code>, you can peel the left prefix off. Minimum has no inverse of that kind. Knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>, because the overall minimum might sit in the left prefix and hide the answer you actually wanted.",
+    "A sparse table exploits a different algebraic property, <em>idempotence</em> &mdash; combining a value with itself gives the same value back, so <code>min(x, x) = x</code>. That means two ranges that overlap in the middle can still be combined freely: the overlap is counted twice, and the minimum does not care. The table stores, for every starting index <code>i</code> and every length that is a power of two, the minimum (or gcd, or bitwise AND) of that block. Any query range of length <code>L</code> is then covered by two such blocks of length <code>2<sup>floor(log<sub>2</sub> L)</sup></code>, one glued to the left end and one glued to the right. Two array lookups and one combine, and you are done in constant time.",
+    "The catch is that the array must stay still. Changing one cell invalidates every block that covers it, which in the worst case is about <code>n</code> table entries, so a single point update is as expensive as rebuilding. For mixed updates you want a segment tree. For invertible operations on a static array, a prefix sum is smaller and simpler. This page is the remaining quadrant: the array never changes, and the operation is idempotent.",
+    "In a real statement the signal is a static array sitting next to limits such as <code>n, q &le; 10&#8310;</code> and a query that is minimum, maximum, gcd, or bitwise AND / OR. That combination rules out a scan per query, and it is exactly what a sparse table is for. The same doubling then covers the Euler-tour reduction of lowest-common-ancestor, and any other problem that secretly asks for the minimum of a range that never moves."
   ],
-  "insight": "Idempotent operations can overlap. Cover [L, R] with two power-of-two blocks and combine them; the overlap is free.",
+  "insight": "Idempotent operations can overlap, so any range is the combine of two power-of-two blocks glued to its ends. The overlap is free for min, gcd and AND; it would double-count a sum, which is why this table is not a prefix array.",
   "yes": [
     "Range minimum / maximum / gcd / AND / OR on a <strong>static</strong> array, many queries",
     "The constraints are <code>n, q &le; 10&#8310;</code> and you cannot afford <code>O(log n)</code> per query constants of a segment tree",
@@ -81,13 +82,14 @@ pack({
       "<a href=\"../01-arrays-and-windows/sliding-window.html\">monotonic deque</a>"
     ]
   ],
-  "constraint": "<code>n, q &le; 10&#8310;</code> static RMQ is the textbook sparse-table prompt. Memory is <code>n log n</code> integers (about 80 MB at n = 10&#8310; with 32-bit cells), which is acceptable. If n is 10&#8311; you cannot afford the table.",
+  "constraint": "<code>n, q &le; 10&#8310;</code> on a static array with a min / max / gcd / AND query is the textbook sparse-table prompt. The table holds <code>n log n</code> integers &mdash; about 80 MB at <code>n = 10&#8310;</code> with 32-bit cells &mdash; which is acceptable. If <code>n</code> is <code>10&#8311;</code> you cannot afford that memory, and if even one update appears you should switch to a segment tree instead.",
   "core": [
-    "Let <code>st[k][i]</code> be the combine of <code>a[i .. i + 2<sup>k</sup> - 1]</code>. The k = 0 row is a copy of the array. The recurrence is <code>st[k][i] = op(st[k-1][i], st[k-1][i + 2<sup>k-1</sup>])</code>, defined for every i where the second block still fits. Building is a double loop, k outer, i inner.",
-    "A query [L, R] inclusive has length <code>len = R - L + 1</code>. Let <code>k = floor(log2(len))</code>. The two blocks <code>[L, L+2<sup>k</sup>-1]</code> and <code>[R-2<sup>k</sup>+1, R]</code> both lie inside [L, R] and together cover it. Their overlap is harmless because op is idempotent. Precompute <code>lg[i]</code> so the floor-log is an array lookup, not a library call.",
-    "Idempotence is load-bearing. Sum is <em>not</em> idempotent: two overlapping blocks would double-count the middle. That is why sparse tables are not a replacement for prefix sums. The operations that work: min, max, gcd, lcm (with care), AND, OR, and \"first index of the minimum\"."
+    "You need a two-dimensional table <code>st[k][i]</code>. The cell <code>st[k][i]</code> holds the combine of the contiguous block <code>a[i .. i + 2<sup>k</sup> - 1]</code>, a stretch of length <code>2<sup>k</sup></code> that starts at index <code>i</code>. Row <code>k = 0</code> is just a copy of the array, because a block of length 1 is a single element. Every later row is filled from the row below it: <code>st[k][i] = op(st[k-1][i], st[k-1][i + 2<sup>k-1</sup>])</code>, which glues two already-computed halves of length <code>2<sup>k-1</sup></code> into one block of length <code>2<sup>k</sup></code>. The outer loop must be <code>k</code>, then <code>i</code>, because each row reads the row you just finished. You only write a cell when the second half still fits inside the array.",
+    "A query on the closed interval <code>[L, R]</code> has length <code>len = R - L + 1</code>. Let <code>k = floor(log<sub>2</sub> len)</code>, the largest power of two that still fits inside the range. The left block <code>[L, L + 2<sup>k</sup> - 1]</code> starts at <code>L</code> and stays inside the query. The right block <code>[R - 2<sup>k</sup> + 1, R]</code> ends at <code>R</code> and also stays inside. Together they cover every index in <code>[L, R]</code>, and they overlap in the middle whenever <code>len</code> is not itself a power of two. That overlap is harmless precisely because the operation is idempotent. Precompute an array <code>lg[i]</code> so the floor-log is one lookup, not a floating-point call in a hot loop.",
+    "Idempotence is load-bearing. Sum is <em>not</em> idempotent: two overlapping blocks would add the middle twice and report a number that looks plausible and is wrong. That is why a sparse table is not a replacement for prefix sums, even though both answer range queries on a static array. The operations that work are minimum, maximum, gcd, lcm (with care around zeros), bitwise AND, bitwise OR, and \"the first index at which the minimum occurs\" if you store an argmin instead of a value.",
+    "Walk the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> through a query on indices <code>[2, 6]</code>. The length is 5, so <code>k = floor(log<sub>2</sub> 5) = 2</code> and each block has length 4. The left block is indices 2..5, values 4, 1, 5, 9, minimum 1, which is already stored as <code>st[2][2]</code>. The right block starts at <code>6 - 4 + 1 = 3</code>, indices 3..6, values 1, 5, 9, 2, minimum 1, stored as <code>st[2][3]</code>. Combining them gives <code>min(1, 1) = 1</code>. The overlap [3, 5] sat in both blocks and did not change the answer. A sum table on the same two blocks would have added 1+5+9 twice and reported 32 instead of 21."
   ],
-  "invariant": "<p>For an idempotent associative op, any range is the combine of two (possibly overlapping) dyadic blocks:</p><span class=\"eq\">op(L, R) = op( st[k][L], st[k][R - 2<sup>k</sup> + 1] ),&nbsp; k = &lfloor;log<sub>2</sub>(R - L + 1)&rfloor;</span><p>Interview sentence: <em>\"I overlap two power-of-two windows; min does not mind the overlap, sum would.\"</em></p>",
+  "invariant": "<p>For an idempotent associative operation, any range is the combine of two (possibly overlapping) dyadic blocks:</p><span class=\"eq\">op(L, R) = op( st[k][L], st[k][R - 2<sup>k</sup> + 1] ),&nbsp; k = &lfloor;log<sub>2</sub>(R - L + 1)&rfloor;</span><p>In plain words, you never have to tile the query with disjoint pieces. You grab the longest power-of-two window that starts at <code>L</code> and the longest power-of-two window that ends at <code>R</code>, and because taking the minimum of a value twice does not change it, the stretch that was in both windows is free. Sum would charge you twice for that stretch, which is why this identity is reserved for min, max, gcd and the bitwise cousins.</p><p>Interview sentence: <em>\"I overlap two power-of-two windows; min does not mind the overlap, sum would.\"</em></p>",
   "extra": [
     {
       "kind": "warn",
@@ -118,7 +120,7 @@ pack({
   ],
   "frames": [
     {
-      "note": "The array. Query [L, R] = [2, 6], length 5.",
+      "note": "The array. Query [L, R] = [2, 6], values 4, 1, 5, 9, 2, so the length is 5.",
       "active": [
         2,
         3,
@@ -266,13 +268,13 @@ pack({
   ],
   "mermaid": "flowchart TD\n  q([\"range query on an array\"]) --> upd{\"does the array change?\"}\n  upd -- yes --> kind{\"point update or range update?\"}\n  kind -- point --> fen[\"Fenwick or segment tree\"]\n  kind -- range --> lazy[\"lazy segment tree\"]\n  upd -- no --> op{\"which operation?\"}\n  op -- \"sum or XOR\" --> pfx[\"prefix array, O of 1 query\"]\n  op -- \"min, max, gcd, AND, OR\" --> st[\"sparse table, O of 1 query\"]",
   "steps": [
-    "<strong>Allocate</strong> <code>st[LOG][n]</code> and <code>lg[n+1]</code>. <code>LOG = 32 - Integer.numberOfLeadingZeros(n)</code>.",
-    "<strong>lg:</strong> <code>lg[1] = 0</code>; for i = 2..n, <code>lg[i] = lg[i >> 1] + 1</code>.",
-    "<strong>Row 0:</strong> copy the array into <code>st[0][i]</code>.",
-    "<strong>Double:</strong> for k = 1..LOG-1, for i such that <code>i + (1<<k) - 1 &lt; n</code>, <code>st[k][i] = op(st[k-1][i], st[k-1][i + (1<<(k-1))])</code>.",
-    "<strong>Query [L, R]:</strong> <code>k = lg[R - L + 1]</code>, return <code>op(st[k][L], st[k][R - (1<<k) + 1])</code>.",
-    "<strong>Do not use this for sum.</strong> Overlap would double-count.",
-    "<strong>Updates:</strong> rebuild the table, or switch to a segment tree."
+    "<strong>Allocate the two tables.</strong> Create <code>st[LOG][n]</code> and <code>lg[n+1]</code>, with <code>LOG = 32 - Integer.numberOfLeadingZeros(n)</code>, so you have one row per power of two that can appear as a block length.",
+    "<strong>Fill the floor-log array first.</strong> Set <code>lg[1] = 0</code> and then <code>lg[i] = lg[i >> 1] + 1</code> for every later i, because a query must read <code>k</code> in constant time and a floating-point log will round the wrong way at powers of two.",
+    "<strong>Copy the array into row 0.</strong> A block of length <code>2<sup>0</sup> = 1</code> is a single element, so <code>st[0][i] = a[i]</code> is the base case every later row will double from.",
+    "<strong>Double each row from the one below.</strong> For k from 1, for every i whose block of length <code>1&lt;&lt;k</code> still fits, write <code>st[k][i] = op(st[k-1][i], st[k-1][i + (1&lt;&lt;(k-1))])</code>. The outer loop is k because each row reads the finished row beneath it.",
+    "<strong>Answer [L, R] with two lookups.</strong> Read <code>k = lg[R - L + 1]</code> and return <code>op(st[k][L], st[k][R - (1&lt;&lt;k) + 1])</code>. The <code>+ 1</code> is what makes the right block end exactly at R.",
+    "<strong>Refuse this structure for sum or XOR.</strong> The two blocks overlap on almost every query, so a sum would double-count the middle and XOR would cancel it to zero. Those operations belong on a prefix array.",
+    "<strong>Rebuild, or switch, if an update arrives.</strong> One write invalidates every block that covers that index, which is linear in n. Rare updates can rebuild the whole table; mixed updates want a segment tree."
   ],
   "code": [
     {
@@ -304,9 +306,9 @@ pack({
     "time": "O(n log n) build, O(1) query",
     "space": "O(n log n)",
     "derivation": [
-      "<p>Row k has at most n entries, and there are <code>log n</code> rows, each filled with a constant-time combine:</p>",
+      "<p>Row k has at most n entries, and there are <code>log n</code> rows, each filled with a constant-time combine. At <code>n = 10&#8310;</code> that is about <code>10&#8310; &times; 20 = 2&times;10&#8311;</code> writes, which is a few milliseconds:</p>",
       "<span class=\"eq\">T<sub>build</sub> = &Theta;(n log n),&nbsp;&nbsp; T<sub>query</sub> = &Theta;(1)</span>",
-      "<p>A segment tree is <code>O(n)</code> build and <code>O(log n)</code> query, and supports updates. When there are no updates and q is huge, the sparse table wins on query constants (two array reads vs a dozen). At <code>n = 10&#8310;</code> the table is the memory you pay for those constants.</p>",
+      "<p>A segment tree is <code>O(n)</code> build and <code>O(log n)</code> query, and supports updates. When there are no updates and q is huge, the sparse table wins on query constants (two array reads vs a dozen). At <code>n = 10&#8310;</code> the table is the memory you pay for those constants, about 80 MB of 32-bit cells.</p>",
       "<p>Farach-Colton/Bender RMQ is <code>O(n)</code> build and <code>O(1)</code> query after a Cartesian-tree reduction; nobody codes it in a contest. Binary lifting LCA is the usual alternative when the RMQ is on a tree, not an array.</p>"
     ],
     "compare": [
@@ -339,8 +341,8 @@ pack({
   "pitfalls": [
     {
       "title": "Using it for sum / XOR",
-      "bug": "The two blocks overlap, the middle is combined twice, and XOR of a value with itself is 0, so you can even \"zero out\" the overlap. Silently wrong.",
-      "fix": "Sparse tables are for idempotent ops. Sum and XOR go to prefix arrays."
+      "bug": "The two blocks overlap, the middle is combined twice, and XOR of a value with itself is 0, so you can even \"zero out\" the overlap. Silently wrong, and it looks fine on any query whose length is itself a power of two.",
+      "fix": "Sparse tables are for idempotent ops only. Sum and XOR go to a prefix array; test a query whose length is not a power of two, because that is where the overlap appears."
     },
     {
       "title": "Off-by-one in the right block",
@@ -350,12 +352,12 @@ pack({
     {
       "title": "Floating-point log",
       "bug": "<code>(int)(Math.log(len) / Math.log(2))</code> rounding down incorrectly at powers of two, picking k too large, and reading off the end of a row.",
-      "fix": "Integer <code>lg[]</code> table, or <code>31 - Integer.numberOfLeadingZeros(len)</code>."
+      "fix": "Build an integer <code>lg[]</code> table, or use <code>31 - Integer.numberOfLeadingZeros(len)</code>. Check a query whose length is exactly 8 or 16, where the float version most often slips."
     },
     {
       "title": "Building with i outer, k inner",
-      "bug": "<code>st[k][i]</code> reads <code>st[k-1][...]</code> that has not been filled yet if k is the inner loop.",
-      "fix": "k outermost, then i. Same dependency as binary-lifting's doubling."
+      "bug": "<code>st[k][i]</code> reads <code>st[k-1][...]</code> that has not been filled yet if k is the inner loop. The cell looks initialised because Java zeros the array, so you silently combine zeros instead of real values.",
+      "fix": "Keep k as the outermost loop, then i. The dependency is the same as binary-lifting's doubling: each row is defined only in terms of the finished row below it."
     },
     {
       "title": "Inclusive / exclusive bounds mix-up",
@@ -525,7 +527,7 @@ pack({
 pack({
   "id": "fenwick-tree",
   "difficulty": "Medium",
-  "readTime": "24 min",
+  "readTime": "28 min",
   "tagline": "Point update and prefix sum in <code>O(log n)</code> each, using the lowest set bit to jump responsibility ranges &mdash; the smallest structure that beats a prefix array once updates appear.",
   "tags": [
     "Fenwick",
@@ -545,11 +547,12 @@ pack({
     ]
   ],
   "why": [
-    "A prefix array answers range sums in O(1) and dies the moment you change an element: every prefix to the right is stale. A Fenwick tree (Binary Indexed Tree) keeps the same prefix-sum algebra but stores each value in <code>O(log n)</code> buckets so an update touches <code>O(log n)</code> of them and a prefix query adds <code>O(log n)</code> of them. That is the cheapest dynamic range-sum structure.",
-    "The addressing trick is the lowest set bit. Index i is responsible for a range of length <code>lsb(i) = i &amp; -i</code> ending at i. Walking <code>i += lsb(i)</code> climbs to every bucket that contains i (the update). Walking <code>i -= lsb(i)</code> drops to a disjoint cover of [1, i] (the query). Two loops, no recursion, tiny constants.",
-    "Almost every \"count inversions / count smaller to the left / range-sum with updates\" interview problem is this page plus optional coordinate compression. Segment trees are more general; Fenwick is what you write when the operation is prefix-shaped."
+    "You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, and between asking for the sum of a prefix someone keeps changing a single cell. A prefix-sum array answers each range in one subtraction, but the moment you write <code>a[3] += 2</code> every prefix that includes index 3 is stale, and rewriting those prefixes costs a linear scan. With a hundred thousand updates and a hundred thousand sums you are looking at ten billion writes, and the judge will cut you off. You need the same prefix algebra without the linear repair.",
+    "A Fenwick tree, also called a Binary Indexed Tree, keeps each array value inside a handful of <em>buckets</em> instead of one running total. Index <code>i</code> (counting from 1) owns a contiguous range that <em>ends</em> at <code>i</code> and has length equal to the value of i's lowest set bit, written <code>lsb(i) = i &amp; -i</code>. So index 6, whose binary form is <code>110</code>, owns a range of length 2 ending at 6, which is the pair <code>a[5], a[6]</code>. An update of cell <code>i</code> walks every bucket that contains <code>i</code>; a prefix query walks a disjoint set of buckets that tile <code>[1, i]</code>. Each walk is a handful of array reads, never a scan.",
+    "The two walks go in opposite directions because they are answering opposite questions. A prefix query wants buckets that sit <em>inside</em> <code>[1, i]</code> and do not overlap, so it peels the bucket ending at the current index off the prefix and jumps to whatever is left, which is <code>i -= lsb(i)</code>. An update wants every bucket that <em>contains</em> index <code>i</code>, including ones that stretch past i to a later end, so it climbs to the next larger owner with <code>i += lsb(i)</code>. Same lowest-set-bit quantity, opposite arithmetic.",
+    "In a real statement the signal is point updates mixed with prefix or range sums at limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out a prefix array and is exactly what Fenwick is for. The same twenty lines then cover inversion counting, \"how many values to the left are smaller\", frequency queries on compressed ranks, and the two-tree trick that turns range-add plus range-sum into four point updates. Reach for a segment tree only when the operation is not a prefix of something invertible."
   ],
-  "insight": "lsb(i) is the length of i's bucket. Update climbs by adding it; query drops by subtracting it. Both walks are O(log n) because each step clears or sets a bit.",
+  "insight": "Index i owns the contiguous sum of length <code>i &amp; -i</code> that ends at i. A prefix query subtracts that length to peel off disjoint buckets; an update adds it to climb to every larger bucket that still contains i. The two walks are opposite because one is covering a prefix and the other is notifying the owners of a single cell.",
   "yes": [
     "Point add / point set mixed with prefix or range sums",
     "\"Count inversions\", \"count smaller elements to the left / right\"",
@@ -600,23 +603,29 @@ pack({
       "Use a segtree when the op is not a prefix sum / XOR"
     ]
   ],
-  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> point-update range-sum is Fenwick's home. Values that are 10&#8313; with n of 10&#8309; need <code>long</code>. Coordinate-compress if the value universe is 10&#8313; but n is 10&#8309;.",
+  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> with point updates and prefix or range sums is Fenwick's home. Each operation is about twenty array reads, so the whole batch finishes in milliseconds. Values of <code>10&#8313;</code> with <code>n</code> of <code>10&#8309;</code> overflow an <code>int</code> prefix and need <code>long</code>. If the value universe is <code>10&#8313;</code> but you only have <code>n</code> items, compress the coordinates down to ranks <code>1..n</code> before you index the tree.",
   "core": [
-    "Index the tree 1-based. <code>bit[i]</code> stores the sum of <code>a[i - lsb(i) + 1 .. i]</code>, a half-open-length bucket ending at i. <code>lsb(i) = i &amp; -i</code> works because Java ints are two's complement: <code>-i</code> is <code>~i + 1</code>, so the conjunction isolates the lowest 1.",
-    "Prefix sum of the first i elements is the sum of the disjoint buckets you land on while repeatedly subtracting the lsb, which peels off the lowest 1 each time and so terminates in O(popcount(i)) &le; O(log n) steps. An update at i adds delta to every bucket that contains i, found by repeatedly adding the lsb (setting the next higher bit of the current suffix).",
-    "Range sum [l, r] is two prefixes. Range add [l, r] += v on a point-query structure is the difference-array trick inside the BIT: add v at l, add -v at r+1. Two BITs give range add and range sum together, which is the usual contest upgrade before reaching for a lazy segment tree."
+    "Index the tree from 1, never from 0. The cell <code>bit[i]</code> stores the sum of the closed range <code>a[i - lsb(i) + 1 .. i]</code>: a contiguous bucket that ends at i and has length <code>lsb(i)</code>. That length is <code>i &amp; -i</code> because Java integers are two's complement: <code>-i</code> equals <code>~i + 1</code>, which flips every bit of i and then adds one. Adding one walks through the trailing zeros of i, flips them back to zero, and leaves the lowest 1 of i sitting alone in the conjunction. For i = 12 = <code>1100</code> in binary, <code>-i</code> ends with <code>0100</code>, the conjunction is 4, and so <code>bit[12]</code> owns the four entries that end at 12. The same identity is why you must never call it on 0: <code>0 &amp; -0</code> is 0, and adding zero is an infinite loop.",
+    "A prefix sum of the first i elements is the sum of the disjoint buckets you land on while repeatedly subtracting the lowest set bit. Each subtraction clears the lowest 1 of the current index, so the walk visits at most one bucket per bit and finishes in at most <code>log<sub>2</sub> i</code> steps. An update at i does the opposite: it adds the delta into <code>bit[i]</code> and then into every larger bucket that still contains i, found by repeatedly adding the lowest set bit. Adding the lsb carries into a higher bit and lands on the next index whose owned range is a proper multiple of the current one, which is exactly the next owner that covers i. The two loops share one helper and no recursion.",
+    "A range sum <code>[l, r]</code> is two prefixes, <code>prefix(r) - prefix(l - 1)</code>, which is legal only because addition has an inverse. The same inverse is why Fenwick cannot do range minimum: there is nothing you can subtract from <code>min(a[1..r])</code> to recover <code>min(a[l..r])</code>. A range add on a point-query tree is the difference-array trick sitting inside the BIT: add <code>v</code> at l and add <code>-v</code> at r+1. Two Fenwick trees together give range add and range sum, which is the usual contest upgrade before you reach for a lazy segment tree.",
+    "Walk the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> after the tree is built. One-based, the buckets are <code>bit[1]=3</code> (just a[1]), <code>bit[2]=4</code> (a[1]+a[2]), <code>bit[3]=4</code> (just a[3]), <code>bit[4]=9</code> (a[1]..a[4]), <code>bit[5]=5</code>, <code>bit[6]=14</code> (a[5]+a[6]), <code>bit[7]=2</code>, <code>bit[8]=31</code> (the whole array). Asking for prefix(7) starts at 7, adds <code>bit[7]=2</code>, drops to 6, adds <code>bit[6]=14</code>, drops to 4, adds <code>bit[4]=9</code>, and lands on 0 with a total of 25, which is 3+1+4+1+5+9+2. An update of +2 at index 3 climbs the other way: 3, then 4, then 8, because those are the three buckets whose owned ranges contain 3. After that write, the same three query nodes would read 27."
   ],
-  "invariant": "<p>With 1-based indexing and <code>lsb(i) = i &amp; -i</code>:</p><span class=\"eq\">bit[i] = sum(a[i - lsb(i) + 1 .. i])</span><p>Interview sentence: <em>\"Update adds lsb, query subtracts lsb; both are walking the binary representation of the index.\"</em></p>",
+  "invariant": "<p>With 1-based indexing and <code>lsb(i) = i &amp; -i</code>, each cell owns a contiguous suffix of the prefix that ends at i:</p><span class=\"eq\">bit[i] = sum(a[i - lsb(i) + 1 .. i])</span><p>In plain words, index i does not store \"the sum up to i\". It stores only the last <code>lsb(i)</code> entries before i, and a prefix is recovered by adding those leftover chunks as you strip one set bit at a time. That is why the query walks down (subtract lsb, peel a finished chunk) and the update walks up (add lsb, notify the next larger owner): one of them is assembling a prefix from pieces that sit inside it, and the other is telling every piece that still covers the cell you just changed.</p><p>Interview sentence: <em>\"Update adds lsb, query subtracts lsb; both are walking the binary representation of the index.\"</em></p>",
   "extra": [
     {
       "kind": "math",
       "title": "Why i &amp; -i is the lowest set bit",
-      "html": "<p>In two's complement, <code>-i</code> flips every bit of i and adds one, which leaves the lowest 1 of i in place and turns every lower 0 into 0 in the conjunction. Example: i = 12 = 1100<sub>2</sub>, -i = ...0100<sub>2</sub>, conjunction 0100<sub>2</sub> = 4, and bit[12] covers four entries.</p>"
+      "html": "<p>In two's complement, <code>-i</code> flips every bit of i and adds one, which leaves the lowest 1 of i in place and turns every lower 0 into 0 in the conjunction. Example: i = 12 = 1100<sub>2</sub>, -i = ...0100<sub>2</sub>, conjunction 0100<sub>2</sub> = 4, and bit[12] covers four entries ending at 12. That numeric value <em>is</em> the length of the range i owns, not a coincidence: the lowest set bit of i is the largest power of two that divides i, and Fenwick assigns i a bucket of exactly that length.</p>"
     },
     {
       "kind": "key",
       "title": "Always 1-based",
       "html": "<p><code>i &amp; -i</code> on 0 is 0, so <code>i += 0</code> is an infinite loop. The tree starts at index 1. Translate 0-based array index i to Fenwick index i+1.</p>"
+    },
+    {
+      "kind": "idea",
+      "title": "Why the two walks go opposite ways",
+      "html": "<p>A prefix query asks \"which of my own buckets tile [1, i]?\" and those buckets end at or before i, so you subtract the lsb and drop to a shorter leftover prefix. An update asks \"which buckets in the whole tree still contain i?\" and those buckets end at or after i, so you add the lsb and climb to the next larger owner. Same helper, opposite question.</p>"
     }
   ],
   "array": [
@@ -637,7 +646,7 @@ pack({
   ],
   "frames": [
     {
-      "note": "Built tree. bit[i] holds the sum of lsb(i) entries ending at i. Query prefix(7).",
+      "note": "Built tree. bit[i] holds the sum of lsb(i) entries ending at i, not the whole prefix. Query prefix(7).",
       "dim": [
         0,
         1,
@@ -781,13 +790,13 @@ pack({
   ],
   "mermaid": "graph TD\n  f8[\"bit8 covers 1-8\"] --> f4[\"bit4 covers 1-4\"]\n  f8 --> f6[\"bit6 covers 5-6\"]\n  f8 --> f7[\"bit7 covers 7\"]\n  f4 --> f2[\"bit2 covers 1-2\"]\n  f4 --> f3[\"bit3 covers 3\"]\n  f2 --> f1[\"bit1 covers 1\"]\n  f6 --> f5[\"bit5 covers 5\"]",
   "steps": [
-    "<strong>Allocate <code>long[] bit</code> of length <code>n + 1</code>.</strong> Index 0 is unused.",
-    "<strong>lsb:</strong> <code>i &amp; -i</code>. Never call it on 0.",
-    "<strong>add(i, v):</strong> for <code>(; i &lt; bit.length; i += i &amp; -i) bit[i] += v</code>. Translate 0-based array index x to <code>i = x + 1</code>.",
-    "<strong>prefix(i):</strong> for <code>(; i &gt; 0; i -= i &amp; -i) acc += bit[i]</code>.",
-    "<strong>range(l, r)</strong> (1-based inclusive) is <code>prefix(r) - prefix(l - 1)</code>.",
-    "<strong>Build</strong> by adding each a[i] once, or in O(n) by filling bit[i] = a[i] then pushing to the parent <code>i + lsb(i)</code>.",
-    "<strong>Compress coordinates</strong> before using the BIT as a frequency tree over large values."
+    "<strong>Allocate a 1-based tree.</strong> Create <code>long[] bit</code> of length <code>n + 1</code> and leave index 0 unused, because <code>0 &amp; -0</code> is 0 and a loop that adds zero never terminates.",
+    "<strong>Define lsb as <code>i &amp; -i</code>.</strong> That quantity is both the length of i's owned range and the hop you take on every walk, so it is the only helper the two loops share. Never evaluate it at 0.",
+    "<strong>add(i, v): climb by adding the lsb.</strong> Loop <code>for (; i &lt; bit.length; i += i &amp; -i) bit[i] += v</code>. Translate a 0-based array index x to <code>i = x + 1</code> first, so you notify every bucket whose owned range contains x.",
+    "<strong>prefix(i): drop by subtracting the lsb.</strong> Loop <code>for (; i &gt; 0; i -= i &amp; -i) acc += bit[i]</code>. Each hop peels off the bucket that ends at the current i, and what remains is a strictly shorter prefix.",
+    "<strong>Range [l, r] is two prefixes.</strong> Return <code>prefix(r) - prefix(l - 1)</code> with both ends 1-based and inclusive. <code>prefix(0)</code> is 0 because the loop never runs, which is what makes a query that starts at the first cell safe.",
+    "<strong>Build by adding each a[i] once, or in linear time.</strong> The naive build is n updates. The linear build writes <code>bit[i] = a[i]</code> and then pushes each cell onto its parent <code>i + lsb(i)</code>, so each index is written a constant number of times.",
+    "<strong>Compress coordinates before using the tree as a frequency map.</strong> If values go up to <code>10&#8313;</code> you cannot allocate a bucket per value. Sort the unique keys, rank them 1..n, and index the tree by rank so inversion-counting stays <code>O(n log n)</code>."
   ],
   "code": [
     {
@@ -854,17 +863,17 @@ pack({
   "pitfalls": [
     {
       "title": "0-based index in a 1-based tree",
-      "bug": "<code>add(0, v)</code> does <code>i += 0</code> forever, or immediately ArrayIndexOutOfBounds. The most common Fenwick crash.",
-      "fix": "Array index i maps to Fenwick index i+1. Assert <code>i &gt;= 1</code> in add."
+      "bug": "<code>add(0, v)</code> does <code>i += 0</code> forever, or immediately ArrayIndexOutOfBounds. The most common Fenwick crash, and it looks like a harmless 0-based habit.",
+      "fix": "Map every 0-based array index i to Fenwick index i+1, and assert <code>i &gt;= 1</code> at the top of add. A unit test that updates a[0] will catch the translation."
     },
     {
       "title": "<code>int</code> overflow in the buckets",
-      "bug": "n = 10&#8309;, values 10&#8313;, prefixes 10&sup1;&#8308;. Wrapping buckets still look vaguely plausible after a subtraction.",
-      "fix": "<code>long[] bit</code> always."
+      "bug": "n = 10&#8309;, values 10&#8313;, prefixes 10&sup1;&#8308;. Wrapping buckets still look vaguely plausible after a subtraction, so the sample can pass and hidden tests fail.",
+      "fix": "Allocate <code>long[] bit</code> every time, even when the array itself is <code>int[]</code>. A single prefix of the whole array is the overflow check."
     },
     {
       "title": "range(l, r) with l = 1 calling prefix(0) incorrectly",
-      "bug": "Writing <code>prefix(r) - prefix(l)</code> drops a[l]. Or calling prefix(-1) when someone passed 0-based l = 0.",
+      "bug": "Writing <code>prefix(r) - prefix(l)</code> drops a[l], and the remaining sum still looks like a plausible range. Or calling prefix(-1) when someone passed 0-based l = 0.",
       "fix": "<code>prefix(r) - prefix(l - 1)</code> with l, r 1-based. prefix(0) is 0 because the loop never runs."
     },
     {
@@ -874,7 +883,7 @@ pack({
     },
     {
       "title": "Forgetting to compress before a frequency BIT",
-      "bug": "Values up to 10&#8313;, allocating <code>new long[1_000_000_001]</code>, OOM. Or using the raw value as an index and throwing.",
+      "bug": "Values up to 10&#8313;, allocating <code>new long[1_000_000_001]</code>, OOM. Or using the raw value as an index and throwing, which looks like a bounds bug rather than a missing compression.",
       "fix": "Sort unique values, rank them 1..n, BIT of size n. Ties need a stable policy (strictly greater vs greater-or-equal) matching the inversion definition."
     }
   ],
@@ -1040,7 +1049,7 @@ pack({
 pack({
   "id": "segment-tree",
   "difficulty": "Medium",
-  "readTime": "24 min",
+  "readTime": "26 min",
   "tagline": "A binary tree over the array: each node is an associative combine of a dyadic segment, so point updates and range queries are <code>O(log n)</code> for any combine, not just sums.",
   "tags": [
     "segment tree",
@@ -1059,11 +1068,12 @@ pack({
     ]
   ],
   "why": [
-    "A Fenwick tree is perfect for prefix sums and a sparse table is perfect for static idempotent queries. Everything else &mdash; range minimum with updates, range gcd, range merge of two sorted lists, \"number of brackets sequences in a segment\" &mdash; needs a node that can store an arbitrary associative value. That node layout is a segment tree.",
-    "The array is the leaves. Each internal node stores op(left, right) of a contiguous segment whose length is a power of two in the heap layout (or an arbitrary split in the recursive layout). A point update walks the O(log n) ancestors of a leaf. A range query is covered by O(log n) canonical nodes, never more than two per level.",
-    "Once you can write build / update / query for a sum, swapping the combine for min, gcd, or a struct (CF 380C's bracket pair) is a one-line change. Lazy propagation, the next page, is what you add when the <em>update</em> is also a range."
+    "You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, and the questions mix two things a Fenwick tree and a sparse table each refuse: you need the minimum (or the gcd, or a little struct) of a range, <em>and</em> you also need to change a cell in between questions. A Fenwick tree wants an inverse so it can subtract prefixes, and minimum has none. A sparse table wants the array to stay still, and a point write invalidates a linear number of its blocks. Scanning the range per query is correct and dies at a hundred thousand by a hundred thousand.",
+    "A segment tree stores the array at the leaves of a binary tree and, at every internal node, the combine of a contiguous segment of the array. The word <em>associative</em> here means only that <code>op(op(a, b), c) = op(a, op(b, c))</code>, so the order of grouping does not matter and a node is allowed to cache the combine of its two children. A point update walks the <code>O(log n)</code> ancestors of one leaf and recomputes each of them from its two children. A range query is answered by <code>O(log n)</code> <em>canonical</em> nodes &mdash; nodes whose segment sits entirely inside the query &mdash; and never more than two of those per level.",
+    "Once you can write build, point-update and range-query for a sum, swapping the combine for minimum, gcd, XOR, or a struct (the open / close / already-matched triple of CF 380C) is a one-line change plus a new identity. Lazy propagation, the next page, is the extra machinery you add when the <em>update</em> itself is a range rather than a single cell.",
+    "In a real statement the signal is point updates sitting next to a range query that is not a prefix of an invertible operation, at limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out Fenwick and the sparse table, and it is exactly what a segment tree is for. If the interviewer then says \"now add v to every index in [l, r]\", you are being walked onto the next page."
   ],
-  "insight": "Any associative op gets O(log n) point update and range query. The query touches O(log n) canonical nodes that exactly partition the range.",
+  "insight": "Any associative combine gets a point update and a range query in a handful of node visits. The query never reads a node that sticks out past the range; it stops at the O(log n) canonical nodes that sit entirely inside and partition it exactly.",
   "yes": [
     "Point update + range query for min, max, gcd, or a custom struct",
     "The operation is associative but not invertible (so Fenwick prefixes do not work)",
@@ -1114,13 +1124,14 @@ pack({
       "Write a segtree when the node is not a prefix sum"
     ]
   ],
-  "constraint": "<code>n, q &le; 2&times;10&#8309;</code>. Allocate <code>4n</code> nodes for the recursive tree (or <code>2n</code> for the iterative one). Recursion depth is log n, safe. Combine must be associative; it need not be commutative or invertible.",
+  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> with point updates and an associative range query is the signature. Allocate <code>4n</code> nodes for the recursive heap layout (or <code>2n</code> for the iterative one); a tight <code>2n</code> on the recursive tree walks off the end of the array. Recursion depth is <code>log n</code>, which is safe. The combine must be associative; it need not be commutative or invertible.",
   "core": [
-    "Recursive layout: node p covers [l, r]. If l == r it holds a[l]. Otherwise <code>m = l + (r - l) / 2</code>, the left child p<<1 covers [l, m], the right child p<<1|1 covers [m+1, r], and <code>t[p] = op(t[left], t[right])</code>. Build is a postorder fill. A point update at i walks to the leaf and recomputes on the way up.",
-    "A query [ql, qr] at node [l, r] has three cases: no overlap (return identity), complete cover (return t[p]), partial overlap (recurse both children and combine). The identity is 0 for sum, +&infin; for min, 0 for XOR, 0 for gcd. Completely covered nodes are the canonical partition; there are O(log n) of them.",
-    "Iterative layout packs the tree into <code>t[n..2n)</code> as leaves and parents at i>>1. It is faster and has no recursion, but the recursive form is what you want in an interview because the overlap cases are explicit and lazy tags later hang on the same nodes."
+    "Give every node an index p and a closed segment [l, r] that it is responsible for. If l equals r the node is a leaf and holds <code>a[l]</code>. Otherwise the midpoint is <code>m = l + (r - l) / 2</code> (never <code>(l + r) / 2</code>, which overflows on large indices), the left child <code>p &lt;&lt; 1</code> covers [l, m], the right child <code>p &lt;&lt; 1 | 1</code> covers [m+1, r], and <code>t[p] = op(t[left], t[right])</code>. Build fills the tree bottom-up: write the children first, then the parent. A point update at index i walks down to the unique leaf that holds i, writes the new value, and recomputes every ancestor from its two children on the way back up, so the path of <code>log n</code> nodes is the only thing that changes.",
+    "A query asking for the combine of [ql, qr], sitting at a node whose segment is [l, r], has three cases. If the node is disjoint from the query you return the <em>identity</em> of the operation &mdash; the value that combining with anything leaves unchanged, so 0 for sum or XOR, <code>Integer.MAX_VALUE</code> for min, 0 for gcd. If the node sits entirely inside the query you return <code>t[p]</code> and stop, because that cached combine is already the answer for this piece. If the node only partially overlaps you recurse into both children and combine what they return. The nodes that took the \"entirely inside\" branch are the canonical partition of the query, and there are O(log n) of them.",
+    "The iterative layout packs the same tree into <code>t[n .. 2n)</code> as leaves and parents at <code>i &gt;&gt; 1</code>. It is faster and has no recursion, which is why contests prefer it for a plain point-update tree. The recursive form is what you want in an interview, because the three overlap cases are written out as named branches and the lazy tags on the next page hang on exactly those same nodes.",
+    "Walk a sum query on [2, 6] of the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, whose whole-array root holds 31. The root [0, 7] only partially overlaps [2, 6], so you split. The left half [0, 3] is still partial; inside it the node [2, 3] (values 4, 1, sum 5) sits fully inside the query and is taken whole. The right half [4, 7] splits again: [4, 5] (5+9=14) is fully inside, [6, 7] is partial, so you take the leaf 2 and reject the leaf 6. The three canonical pieces are [2, 3], [4, 5] and [6, 6], and 5+14+2 = 21, which is 4+1+5+9+2. A point write at index 3 then walks only the ancestors of that leaf and recomputes each from its two children."
   ],
-  "invariant": "<p>Every node stores the combine of its segment. A query returns the combine of O(log n) canonical nodes that partition [ql, qr]:</p><span class=\"eq\">t[p] = op(a[l], a[l+1], &hellip;, a[r])</span><p>Interview sentence: <em>\"I recurse until a node is either disjoint or fully inside; the fully-inside nodes are the answer.\"</em></p>",
+  "invariant": "<p>Every node stores the combine of its segment. A query returns the combine of O(log n) canonical nodes that partition [ql, qr]:</p><span class=\"eq\">t[p] = op(a[l], a[l+1], &hellip;, a[r])</span><p>In plain words, you never add a node that sticks out past the query, and you never walk into a node that is already fully inside it. The nodes you stop at are a disjoint cover of exactly the indices you were asked about, so combining them is the combine of the range. That is also why a point update only repairs the ancestors of one leaf: every other node's segment does not contain that leaf, so its cached value is still right.</p><p>Interview sentence: <em>\"I recurse until a node is either disjoint or fully inside; the fully-inside nodes are the answer.\"</em></p>",
   "extra": [
     {
       "kind": "key",
@@ -1184,7 +1195,7 @@ pack({
       }
     },
     {
-      "note": "Root [0,7] partially overlaps. Recurse both children.",
+      "note": "Root [0, 7] only partially overlaps [2, 6], so it cannot return t[1]. Recurse into both children.",
       "active": [
         0
       ],
@@ -1339,13 +1350,13 @@ pack({
   ],
   "mermaid": "graph TD\n  s1[\"1: 0-7 = 31\"] --> s2[\"2: 0-3 = 9\"]\n  s1 --> s3[\"3: 4-7 = 22\"]\n  s2 --> s4[\"4: 0-1 = 4\"]\n  s2 --> s5[\"5: 2-3 = 5\"]\n  s3 --> s6[\"6: 4-5 = 14\"]\n  s3 --> s7[\"7: 6-7 = 8\"]\n  s4 --> s8[\"8: 0 = 3\"]\n  s4 --> s9[\"9: 1 = 1\"]\n  s5 --> s10[\"10: 2 = 4\"]\n  s5 --> s11[\"11: 3 = 1\"]\n  s6 --> s12[\"12: 4 = 5\"]\n  s6 --> s13[\"13: 5 = 9\"]\n  s7 --> s14[\"14: 6 = 2\"]\n  s7 --> s15[\"15: 7 = 6\"]",
   "steps": [
-    "<strong>Allocate <code>t[4n]</code></strong> and pick the identity of the op (0 for sum).",
-    "<strong>Build(p, l, r):</strong> leaf copies a[l]; otherwise split at <code>m = l + (r-l)/2</code>, build children, <code>t[p] = t[p<<1] + t[p<<1|1]</code>.",
-    "<strong>Update(p, l, r, i, v):</strong> if leaf, store v. Else recurse into the child that contains i, then recompute t[p].",
-    "<strong>Query(p, l, r, ql, qr):</strong> disjoint &rarr; identity; fully inside &rarr; t[p]; else combine the two recursive calls.",
-    "<strong>Never add t[p] on a partial overlap.</strong> That would include indices outside the query.",
-    "<strong>Use <code>long</code></strong> for sums. Use <code>m = l + (r - l) / 2</code>, never <code>(l+r)/2</code> on large indices.",
-    "<strong>Swap the combine</strong> (and the identity) to get min, gcd, XOR, or a struct."
+    "<strong>Allocate <code>t[4n]</code> and pick the identity.</strong> Four times n is what the recursive heap indexing actually reaches on a non-power-of-two n. The identity is 0 for sum, <code>MAX_VALUE</code> for min, 0 for gcd; getting it wrong poisons every query that misses a child.",
+    "<strong>Build(p, l, r) bottom-up.</strong> A leaf copies <code>a[l]</code>; otherwise split at <code>m = l + (r-l)/2</code>, build both children, then write <code>t[p] = op(t[p&lt;&lt;1], t[p&lt;&lt;1|1])</code> so the parent is defined only after the children exist.",
+    "<strong>Update(p, l, r, i, v) repairs one path.</strong> If the node is a leaf, store v. Otherwise recurse into the unique child whose segment contains i, then recompute <code>t[p]</code> from the two children on the way back up. The rest of the tree is untouched.",
+    "<strong>Query(p, l, r, ql, qr) is a three-way branch.</strong> Disjoint returns the identity; fully inside returns <code>t[p]</code>; otherwise combine the two recursive calls. Those three cases are the whole algorithm.",
+    "<strong>Never return t[p] on a partial overlap.</strong> That cached value includes indices outside [ql, qr], so a query that only wanted the left half of a node would silently swallow the right half as well.",
+    "<strong>Use <code>long</code> for sums, and split with <code>l + (r-l)/2</code>.</strong> An <code>int</code> prefix of <code>n = 10&#8309;</code> values of <code>10&#8313;</code> wraps, and <code>(l+r)/2</code> goes negative on large compressed coordinates.",
+    "<strong>Swap the combine and the identity to change the operation.</strong> Min, gcd, XOR, or a struct node are the same recursion with a different <code>op</code> and a different \"do nothing\" value. The layout of the tree does not change."
   ],
   "code": [
     {
@@ -1412,7 +1423,7 @@ pack({
     {
       "title": "Adding t[p] on a partial overlap",
       "bug": "Missing the complete-cover check and always combining children, or worse, returning t[p] whenever the node overlaps at all. The second includes indices outside [ql, qr].",
-      "fix": "Three-way branch: disjoint / complete / partial. Only complete returns t[p]."
+      "fix": "Three-way branch: disjoint / complete / partial. Only the complete-cover case returns t[p]. A query that stops one index short of a child is the test."
     },
     {
       "title": "Wrong identity",
@@ -1421,18 +1432,18 @@ pack({
     },
     {
       "title": "Allocating 2n for the recursive heap",
-      "bug": "Indices run past 2n on non-power-of-two n (the right spine goes to about 4n). Silent corruption or AIOOB.",
-      "fix": "<code>new long[n * 4]</code>. Iterative trees may use 2n."
+      "bug": "Indices run past 2n on non-power-of-two n (the right spine goes to about 4n). Silent corruption or AIOOB, and it looks fine on the power-of-two sample.",
+      "fix": "Allocate <code>new long[n * 4]</code> for the recursive tree. Iterative trees may use 2n because their layout is a packed complete tree."
     },
     {
       "title": "<code>(l + r) / 2</code> overflow",
-      "bug": "On large index ranges (coordinate-compressed to 10&#8313; in a dynamic tree) l+r overflows int and the split goes negative.",
-      "fix": "<code>int m = l + (r - l) / 2;</code> everywhere, including lazy."
+      "bug": "On large index ranges (coordinate-compressed to 10&#8313; in a dynamic tree) l+r overflows int and the split goes negative, so the recursion never hits the leaf you intended.",
+      "fix": "Write <code>int m = l + (r - l) / 2;</code> at every split, including the lazy tree on the next page. A query at index <code>10&#8313; - 1</code> is the overflow test."
     },
     {
       "title": "Updating t[p] before the recursive call returns",
       "bug": "Recompute from children that still hold the old value. The new leaf is written but ancestors stay stale, and later queries on large ranges miss the update.",
-      "fix": "Recurse first, then <code>t[p] = op(t[left], t[right])</code>."
+      "fix": "Recurse into the child first, then write <code>t[p] = op(t[left], t[right])</code> on the way back up. An update followed by a query of the whole array is the staleness test."
     }
   ],
   "variants": [
@@ -1462,7 +1473,7 @@ pack({
     ],
     [
       "Can the combine be non-commutative?",
-      "<p>Yes, as long as it is associative. Always combine left child then right child in that order. Matrix products on a path, or string concatenation, work. Do not swap children.</p>"
+      "<p>Yes, as long as it is associative. Always combine the left child and then the right child, in that order, so the grouping matches the array from left to right. Matrix products along a path, or string concatenation of a segment, both work. Swapping the two children would reverse the product and fail the first non-commutative test.</p>"
     ],
     [
       "What is a merge-sort tree?",
@@ -1470,7 +1481,7 @@ pack({
     ],
     [
       "When is the iterative form worth it?",
-      "<p>When you are tight on time in a contest and the tree is not lazy. In an interview the recursive form is clearer, and it is the one you will extend with lazy tags on the next page. Learn recursive first.</p>"
+      "<p>When you are tight on time in a contest and the tree is not lazy. The iterative form has no recursion, tighter constants, and a 2n array. In an interview the recursive form is clearer, the three overlap cases read as named branches, and it is the one you will extend with lazy tags on the next page. Learn recursive first and switch only when a clock is running.</p>"
     ]
   ],
   "problems": [
@@ -1597,14 +1608,14 @@ pack({
       "body": "<p>n is a power of two. Leaves are the array. Odd-height parents OR their children, even-height parents XOR (or the other way around, matching the statement). A point update recomputes ancestors, switching the op at each level. The root is the answer after each update. Implementation is a segment tree whose combine is not uniform; pass a boolean down, or key off the node's range length.</p>"
     }
   ],
-  "dryIntro": "Query sum[2, 6] walking the tree. Only the canonical (fully covered) nodes contribute to acc.",
+  "dryIntro": "A sum query on indices [2, 6] of the sample, walking the tree from the root. Only the canonical (fully covered) nodes add into acc; a partial node is split and a disjoint node returns 0.",
   "dryAfter": "<p>Node 4 [0,1] and node 15 [7,7] are disjoint and return 0. Three additions, answer 21.</p>"
 }),
 
 pack({
   "id": "segment-tree-lazy",
   "difficulty": "Hard",
-  "readTime": "26 min",
+  "readTime": "28 min",
   "tagline": "Range updates become O(log n) by parking a tag on a canonical node and pushing it to the children only when you next have to split that node.",
   "tags": [
     "lazy propagation",
@@ -1619,11 +1630,12 @@ pack({
     ]
   ],
   "why": [
-    "A plain segment tree updates a <em>point</em> in O(log n). Updating a range of length k by walking k leaves is O(k log n) and dies at k = n. The observation is the same canonical cover used by queries: a range update touches O(log n) nodes that exactly partition the range. If you can apply the update to a whole node in O(1), you are done &mdash; provided you remember to tell the children later.",
-    "That memory is a lazy tag. When a node is fully inside the update range you apply the update to t[p] immediately (so queries that stop here are correct) and add the update to lazy[p] instead of recursing. The next time a query or update needs to look at a child, you <em>push</em>: apply the tag to both children, clear it, then proceed. Tags sink only on demand, so the total work stays O(log n).",
-    "This is the default contest structure for range add + range sum / min, range assign, and range XOR. It is also the first place people write a segment tree that is wrong on hidden tests: forgotten pushes, tags applied twice, or combining children before pushing. The invariant below is the whole topic."
+    "You are given the same array <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, but now the update itself is a range: add 2 to every index from 1 to 5, then report the sum (or the minimum) of some other range. A plain segment tree updates one leaf in <code>O(log n)</code>. Doing that for each of the k cells in the update is <code>O(k log n)</code>, and at k = n a hundred thousand such updates is two billion steps. The observation that saves you is the same canonical cover the query already uses: any range splits into O(log n) nodes that sit entirely inside it. If you can apply the update to a whole node in constant time, you never have to touch its leaves &mdash; provided you remember to tell the children later.",
+    "That memory is a <em>pending tag</em>, stored in a second array <code>lazy[p]</code>. A pending tag on node p means: \"the combine <code>t[p]</code> already includes this update, so any query that stops here is correct, but my children have not been told yet and their <code>t</code> values are stale.\" When a later operation needs to look at a child, you <em>push</em> the tag down: apply the same update to both children (which updates their <code>t</code> and their own lazy slots), then clear <code>lazy[p]</code> so you cannot apply it twice. Tags sink only on demand, which is why a range update stays O(log n) even though most of the array was logically changed.",
+    "Push-down is safe for a precise reason. The update is <em>uniform</em> across p's segment: every leaf under p receives the same add (or the same assign). Applying that update to the left child and the right child, each scaled by its own length, is exactly what would have happened if you had walked every leaf. Clearing the parent tag afterwards is safe because the information has moved, not vanished: <code>t[p]</code> is still the true combine, and the children now carry the responsibility that p was holding. You must not push on a full-cover query, because you do not need the children; pushing there would turn the lazy tree back into an eager one.",
+    "In a real statement the signal is mixed range updates and range queries at <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out walking leaves and is the default contest structure for range add plus range sum or min, for range assign, and for range XOR. It is also the first place a segment tree goes wrong on hidden tests: a forgotten push, a tag applied twice, or a parent recomputed from children that have not yet seen the tag."
   ],
-  "insight": "Apply the update to a fully covered node in O(1), store a tag, and push that tag to the children only when you next split the node.",
+  "insight": "A pending tag means t[p] is already correct and the children are the ones who are behind. Apply on a fully covered node in constant time, store the tag, and push that tag down only when you next have to split the node. Pushing is safe because a uniform update on a parent is the same uniform update on each child.",
   "yes": [
     "Range add / range assign mixed with range sum or range min",
     "\"Add v to [l, r], then report min / sum of [l2, r2]\", many mixed operations",
@@ -1674,13 +1686,14 @@ pack({
       "Lazy segtree when you also need min, or a custom combine"
     ]
   ],
-  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> with mixed range updates and range queries. Each operation must be O(log n), so you cannot walk the leaves. Tags must compose: applying v2 after v1 is one combined tag.",
+  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> with mixed range updates and range queries is the signature. Each operation must stay O(log n), so you cannot walk the leaves of an update. Tags must compose: applying v2 after v1 has to collapse into a single combined tag, otherwise two pending updates on the same node would need a queue.",
   "core": [
-    "Keep t[p] always equal to the true combine of the segment, including updates that have been applied to p but not yet pushed. lazy[p] is the update that children have <em>not</em> received. apply(p, v) writes v into t[p] (for a range add: <code>t[p] += v * length</code>) and into lazy[p]. push(p) calls apply on both children with lazy[p], then zeros the tag.",
-    "Range update: disjoint &rarr; return; complete cover &rarr; apply and return (do not recurse); otherwise push, recurse both children, recompute t[p] from children. Range query is the same three-way branch, with a push on the partial case so the children are up to date before you read them.",
-    "Tags must compose. For range add, composition is addition: lazy += v. For range assign, a new assign overwrites the old tag (and you must still push first if a child might have a different pending tag). Mixing add and assign needs two tags or a single tagged union with a defined override rule."
+    "Keep two arrays. <code>t[p]</code> is always the true combine of p's segment, including every update that has been applied to p, even the ones not yet pushed to the children. <code>lazy[p]</code> is the pending tag: the update the children have not received. The helper <code>apply(p, v)</code> writes v into both places at once: for a range add it does <code>t[p] += v * (r - l + 1)</code> so the cached sum stays honest, and <code>lazy[p] += v</code> so a later push can repeat the same add on the children. The helper <code>push(p)</code> is the move: if the tag is non-zero and p is not a leaf, call apply on both children with <code>lazy[p]</code>, then zero the tag. After a push, p's children are as up to date as p was, and p is no longer responsible for telling them.",
+    "A range update uses the same three-way branch as a query. If the node is disjoint, return. If the node sits entirely inside the update, apply and return without recursing: that is the whole point of the tag. If the node only partially overlaps, push first so the children see whatever p was holding, recurse into both children, then recompute <code>t[p]</code> from those (now updated) children. A range query is the same three-way branch, with the same push on the partial case, because you must not read a child that has not yet received its parent's tag. A full-cover query returns <code>t[p]</code> and does not push, because t[p] already includes the tag.",
+    "Tags must compose, because two updates can land on the same node before either is pushed. For range add, composition is addition: <code>lazy[p] += v</code>. For range assign, a new assign overwrites the old tag, because \"set everything to 7\" cancels a previous \"set everything to 3\". Mixing add and assign needs two tags, or a single tagged union with a defined override rule (assign wins, then add). If the update cannot be summarised from <code>t[p]</code> and the segment length alone &mdash; integer division of every element is the usual counter-example &mdash; lazy propagation does not apply and you are on a different structure.",
+    "Walk add 2 to indices [1, 5] on the sample whose whole-array sum is 31. The canonical cover of [1, 5] is the leaf [1, 1], the node [2, 3], and the node [4, 5]. Apply writes leaf t = 1+2 = 3 with lazy 2, node [2, 3] t = 5+4 = 9 with lazy 2, and node [4, 5] t = 14+4 = 18 with lazy 2. The ancestors recompute from those new child values to 13, 26 and 39, which is the old 31 plus 2 times 5. The leaves under [2, 3] still hold 4 and 1; they are stale, and that is fine. A later query of [2, 6] hits [2, 3] as a full cover, reads 9, and does not push. It does the same for [4, 5] (18) and takes the untouched leaf 2, for a total of 29, matching the new array [3, 3, 6, 3, 7, 11, 2, 6] on indices 2..6."
   ],
-  "invariant": "<p>After every public operation:</p><span class=\"eq\">t[p] is correct for p's segment;&nbsp; lazy[p] is the update children have not yet seen</span><p>Interview sentence: <em>\"I apply on a full cover and I push before I split. I never read a child without pushing the parent first.\"</em></p>",
+  "invariant": "<p>After every public operation, two facts hold at every node:</p><span class=\"eq\">t[p] is the true combine of p's segment;&nbsp; lazy[p] is the update the children have not yet seen</span><p>In plain words, a pending tag is not a sticky note you might forget: it is a promise that this node's cached answer is already right and that the work of telling the children has been deferred. Push-down is safe because the update is the same at every leaf under p, so applying it to the two children (each scaled by its own length) is exactly the walk you skipped, and clearing the parent tag afterwards cannot lose information &mdash; the children now carry it. Reading a child without pushing first is the one thing that breaks the promise, because you would combine two stale halves and write the wrong number back into t[p].</p><p>Interview sentence: <em>\"I apply on a full cover and I push before I split. I never read a child without pushing the parent first.\"</em></p>",
   "extra": [
     {
       "kind": "key",
@@ -1691,6 +1704,11 @@ pack({
       "kind": "math",
       "title": "Why t[p] += v * length",
       "html": "<p>A range add of v increases every one of the (r-l+1) leaves by v, so the sum increases by v times the length. For range min the length factor is absent: min += v. Applying the wrong formula is a silent off-by-factor.</p>"
+    },
+    {
+      "kind": "idea",
+      "title": "Why push-down cannot lose the update",
+      "html": "<p>The tag on p is a deferred copy of an update that t[p] already reflects. Pushing writes that same update into both children and then zeros lazy[p]. Nothing is discarded: t[p] stays correct, and the children now hold the promise p was keeping. Applying the tag twice would be the actual loss, which is why the zero after the push is load-bearing.</p>"
     }
   ],
   "array": [
@@ -1923,13 +1941,13 @@ pack({
   ],
   "mermaid": "graph TD\n  z1[\"1: sum 39\"] --> z2[\"2: sum 13\"]\n  z1 --> z3[\"3: sum 26\"]\n  z2 --> z4[\"4: 0-1\"]\n  z2 --> z5[\"5: 2-3 tag plus 2\"]\n  z3 --> z6[\"6: 4-5 tag plus 2\"]\n  z3 --> z7[\"7: 6-7\"]\n  z4 --> z8[\"8: a0 = 3\"]\n  z4 --> z9[\"9: a1 tag plus 2\"]\n  z5 --> z10[\"10: stale\"]\n  z5 --> z11[\"11: stale\"]\n  z6 --> z12[\"12: stale\"]\n  z6 --> z13[\"13: stale\"]\n  z7 --> z14[\"14: a6 = 2\"]\n  z7 --> z15[\"15: a7 = 6\"]",
   "steps": [
-    "<strong>Store two arrays:</strong> <code>t[4n]</code> (current combine) and <code>lazy[4n]</code> (pending child update). Build t as in the plain tree; lazy starts at 0.",
-    "<strong>apply(p, l, r, v):</strong> <code>t[p] += v * (r - l + 1)</code>, <code>lazy[p] += v</code>. This is O(1) and makes t[p] correct.",
-    "<strong>push(p, l, r):</strong> if lazy[p] is non-zero and p is not a leaf, apply it to both children, then zero lazy[p].",
-    "<strong>Range update:</strong> disjoint return; complete cover &rarr; apply and return; else push, recurse, recompute t[p] from children.",
-    "<strong>Range query:</strong> the same three-way branch, with push on the partial case.",
-    "<strong>Never recurse without pushing</strong> on a node that you are about to split.",
-    "<strong>Compose tags.</strong> For add, +=. For assign, overwrite (after a push, or with an explicit override rule)."
+    "<strong>Store two arrays, t and lazy.</strong> <code>t[4n]</code> holds the current combine of each segment; <code>lazy[4n]</code> holds the pending child update. Build t as in the plain tree; every lazy slot starts at 0, meaning \"nothing pending\".",
+    "<strong>apply(p, l, r, v) updates t and the tag together.</strong> For a range add write <code>t[p] += v * (r - l + 1)</code> and <code>lazy[p] += v</code>. This is O(1) and is what makes t[p] correct even though the children have not been visited.",
+    "<strong>push(p, l, r) moves the tag one level down.</strong> If lazy[p] is non-zero and p is not a leaf, apply that tag to both children, then zero lazy[p] so the same update cannot fire twice. Leaves have no children to tell.",
+    "<strong>Range update is apply-and-stop on a full cover.</strong> Disjoint returns; complete cover calls apply and returns without recursing; otherwise push, recurse both children, then recompute t[p] from the children. Stopping on a full cover is what keeps the update O(log n).",
+    "<strong>Range query uses the same three-way branch.</strong> The partial case must push first so the children are up to date before you read them. The full-cover case returns t[p] and does not push, because t[p] already includes the tag.",
+    "<strong>Never recurse on a node you have not pushed.</strong> A child you read while a tag still sits on the parent is stale, and writing the combine of two stale children back into t[p] corrupts the only copy of the truth you had.",
+    "<strong>Compose tags instead of queuing them.</strong> For add, <code>lazy += v</code>. For assign, overwrite the old tag (after a push, or with an explicit override rule). Two tags that cannot collapse into one will not fit in a single long."
   ],
   "code": [
     {
@@ -1997,7 +2015,7 @@ pack({
     {
       "title": "Forgetting to push before splitting",
       "bug": "Partial-overlap update or query recurses into children that have not received the parent's tag. Combining those stale children then overwrites t[p] with a wrong value, and the tag is still sitting on p so a later push double-applies.",
-      "fix": "First line of the partial branch: <code>push(p, l, r);</code>"
+      "fix": "The first line of the partial-overlap branch, in both update and query, is <code>push(p, l, r);</code> A query that hits a node you tagged on the previous update is the test."
     },
     {
       "title": "apply uses the wrong length factor",
@@ -2007,7 +2025,7 @@ pack({
     {
       "title": "Pushing a leaf",
       "bug": "apply on a leaf is fine; push on a leaf tries to write children that do not exist (or exist as garbage indices). AIOOB or silent corruption.",
-      "fix": "<code>if (lazy[p] == 0 || l == r) return;</code> at the top of push."
+      "fix": "<code>if (lazy[p] == 0 || l == r) return;</code> at the top of push, so a leaf never indexes children that do not exist. A range update of a single cell is the leaf-push test."
     },
     {
       "title": "Recomputing t[p] without pushing",
@@ -2055,7 +2073,7 @@ pack({
     ],
     [
       "How does CF 52C handle the circular case?",
-      "<p>A range that wraps (l &gt; r) is two linear updates [l, n] and [1, r]. Each is an ordinary lazy range add. Queries wrap the same way, combining two range mins. The tree itself stays linear; the circle is a client-side split.</p>"
+      "<p>A range that wraps (l &gt; r) is two linear updates [l, n] and [1, r]. Each is an ordinary lazy range add. Queries wrap the same way, combining two range mins. The tree itself stays linear; the circle is a client-side split of one circular request into two ordinary ones, which is why you do not need a special circular node type.</p>"
     ]
   ],
   "problems": [
@@ -2182,7 +2200,7 @@ pack({
       "body": "<p>XOR of x on a range flips, independently, each bit of x. For bit b, the new count of 1s in a node is length minus old count. Keep 20 trees of 1-counts, or one node storing 20 counts. Range sum is the sum over bits of count[b] * 2^b. Lazy tag is the XOR still to apply. Push flips the children's counts for bits set in the tag.</p>"
     }
   ],
-  "dryIntro": "Range add [1, 5] += 2 on the sample, then query [2, 6]. acc is the query accumulator.",
+  "dryIntro": "Range add [1, 5] += 2 on the sample, then a sum query on [2, 6]. Watch the tags park on the canonical cover and the query read those tagged nodes without pushing them.",
   "dryAfter": "<p>The five updated leaves were never all visited. Leaves 10..13 stay stale until something splits nodes 5 or 6.</p>"
 }),
 
@@ -2208,11 +2226,12 @@ pack({
     ]
   ],
   "why": [
-    "A graph that only grows (edges are added, never deleted) has a running question: \"are u and v already connected?\" DFS from scratch is O(n) per query. A disjoint-set union (union-find) stores each component as a rooted tree and answers the question by comparing two roots, in essentially constant time.",
-    "The two standard accelerations are path compression (find flattens the path to the root, so the next find is a single hop) and union by rank or size (always hang the smaller tree under the larger, so height stays logarithmic even without compression). Together they are inverse-Ackermann, which for all n you will ever see is &le; 4.",
-    "Interviews love DSU because the code is twenty lines and the applications are not obvious: redundant edges, equality equations, accounts merge, offline connectivity, Kruskal's MST, and \"number of islands\" on a grid. If the graph is static, a DFS is simpler; DSU is the tool for <em>incremental</em> connectivity."
+    "Picture a room of computers that starts with no cables plugged in at all. Cables get added one at a time, and in between installations somebody keeps asking: can machine 3 currently reach machine 7? You can answer any single question with a depth-first search, following wires from 3 until you either arrive at 7 or run out of cable to follow. That is perfectly correct, but it costs a fresh walk over the whole network every time you are asked. With a hundred thousand cables and a hundred thousand questions you are looking at something like ten billion steps, and the judge will cut you off long before you finish.",
+    "The structure on this page removes the repeated walking by never touching the wires again. Every group of machines that can already reach each other elects one member as its <em>representative</em>, and every other member of the group stores a pointer to somebody nearer that representative. Those pointers form a tree for each group, and the whole collection of trees is called a forest &mdash; hence the name <em>disjoint-set union</em>, usually shortened to union-find. The question \"can 3 reach 7?\" now becomes \"do 3 and 7 climb to the same representative?\", which you answer by following pointers upwards from each of them and comparing where you land.",
+    "Left completely alone, that idea can still be slow. If every merge happens to hang a tall tree underneath a short one, the pointers can end up forming a single chain of length <code>n</code>, and climbing that chain is exactly as slow as the search you were trying to avoid. Two small habits prevent it. <em>Union by size</em> always hangs the smaller group underneath the larger one, so a group can only get taller when it merges with something at least as big as itself. <em>Path compression</em> re-points every node you touched on the way up to aim straight at the representative, so the next question about any of them finishes in one hop.",
+    "In a real problem statement the signal is the phrase \"edges are added\" (never removed) sitting next to limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out re-running a search per query, and it is exactly what union-find is for. The same twenty lines then cover a surprisingly wide spread of problems: rejecting the one cable that closes a loop, merging duplicate user accounts that share an email address, checking a batch of <code>a == b</code> and <code>a != b</code> claims for a contradiction, and Kruskal's minimum spanning tree, which is this structure plus a sort and nothing else."
   ],
-  "insight": "find is \"who is the root\"; union hangs one root under the other. Path compression plus union by rank makes both operations effectively constant.",
+  "insight": "Two elements belong to the same group exactly when they climb to the same representative, so <code>find</code> answers every question you will be asked and <code>union</code> only ever re-points one representative at another. Keep the trees short by hanging the smaller group underneath, flatten whatever you just walked over, and both operations end up costing about as much as a handful of array reads.",
   "yes": [
     "Edges arrive one by one; after each, ask whether two nodes are connected",
     "\"Redundant connection\", \"number of connected components after adding edges\"",
@@ -2263,13 +2282,14 @@ pack({
       "TreeMap / BIT for order statistics"
     ]
   ],
-  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> incremental connectivity. Without the two accelerations, a skew chain is O(n) per find and you TLE. With them, q operations are comfortably linear-ish.",
+  "constraint": "<code>n, q &le; 2&times;10&#8309;</code> with edges only ever being added is the signature. Answering each of those queries with a fresh traversal would be roughly <code>4&times;10&#8309;&#8304;</code> steps, which no judge accepts, while union-find handles the entire batch in about <code>q</code> array operations. If the statement ever deletes an edge, this structure on its own is the wrong tool; and if you drop either of the two accelerations, a deliberately constructed chain pushes a single <code>find</code> back up to <code>O(n)</code>.",
   "core": [
-    "Each element x stores parent[x], initially itself. find(x) walks parent until parent[r] == r; that r is the representative. Path compression sets every node on the walk to r (recursive: <code>parent[x] = find(parent[x])</code>). After that, the tree is almost flat.",
-    "union(a, b) finds both roots. If they match, the edge is redundant. Otherwise hang one root under the other. Union by rank: hang the lower rank under the higher, and increment rank only on a tie. Union by size: hang the smaller component under the larger and add the sizes. Either keeps height O(log n) even without compression.",
-    "The inverse-Ackermann bound is the combination. You never need to quote Ackermann in an interview; say \"effectively O(1) per operation with path compression and union by rank\". For Kruskal, sort the edges first; DSU then tells you which ones are tree edges."
+    "You need two arrays. <code>parent[x]</code> holds the element that <code>x</code> currently points at, and it starts out as <code>x</code> itself, which is how you say \"every element begins alone in a group that it represents\". <code>size[x]</code> is only meaningful when <code>x</code> is a representative, where it counts how many elements that group contains, and it starts at 1. The operation <code>find(x)</code> is the climb: while <code>parent[x]</code> is not equal to <code>x</code>, move up to <code>parent[x]</code>. The element where the loop stops is the one pointing at itself, and that element is the representative of the group containing <code>x</code>.",
+    "<code>union(a, b)</code> starts by calling <code>find</code> on both arguments, because you must never re-point an ordinary member &mdash; only a representative. If the two roots come back equal, <code>a</code> and <code>b</code> were already in one group, the edge you were handed is redundant, and you report that without changing anything. If the roots differ, compare their sizes and make sure <code>ra</code> is the larger of the two, swapping the two variables if it is not. Then write <code>parent[rb] = ra</code> and add <code>size[rb]</code> into <code>size[ra]</code>. One group has absorbed the other with a single pointer write.",
+    "Path compression is the second habit and it costs one extra line. While climbing inside <code>find</code>, once you know the representative <code>r</code>, set the parent of every node you passed to <code>r</code> directly. The usual recursive spelling does this implicitly, because <code>parent[x] = find(parent[x])</code> assigns the final answer on the way back out of the recursion. The trees therefore get flatter every time you query them, which is why the cost is quoted as <code>&alpha;(n)</code>, the inverse Ackermann function. You never need that function's definition: it stays below 5 for any <code>n</code> a computer can hold, so treat each operation as constant and say so out loud.",
+    "Walk five elements through the whole thing. Everything points at itself, so there are five groups. <code>union(0, 1)</code> finds roots 0 and 1, the sizes tie, so 1 is hung under 0 and <code>size[0]</code> becomes 2. <code>union(2, 3)</code> does the same on the other side. Now <code>union(1, 2)</code> climbs from 1 up to root 0 and from 2 up to root 2, sees sizes 2 and 2, and hangs root 2 underneath root 0, so <code>size[0]</code> is 4. Finally asking <code>find(3)</code> climbs 3 to 2 to 0 and, thanks to compression, leaves both 3 and 2 pointing straight at 0."
   ],
-  "invariant": "<p>x and y are in the same component iff they have the same root:</p><span class=\"eq\">connected(x, y) &hArr; find(x) = find(y)</span><p>Interview sentence: <em>\"I hang roots, not arbitrary nodes, and I flatten paths on the way up.\"</em></p>",
+  "invariant": "<p>Two elements are in the same component exactly when the climb from each one ends at the same place:</p><span class=\"eq\">connected(x, y) &hArr; find(x) = find(y)</span><p>In plain words, the pointer you store is never a claim about the original graph &mdash; it is not \"my neighbour\", it is only \"one step towards whoever currently speaks for my group\". That is precisely why re-pointing a representative during <code>union</code>, or shortening a path during <code>find</code>, cannot change any answer: both of them shuffle pointers around inside a single group without ever moving an element from one group into another.</p><p>Interview sentence: <em>\"I hang roots, not arbitrary nodes, and I flatten paths on the way up.\"</em></p>",
   "extra": [
     {
       "kind": "warn",
@@ -2297,7 +2317,7 @@ pack({
   ],
   "frames": [
     {
-      "note": "Start: five singleton components. parent[i] = i.",
+      "note": "Starting position: five separate groups of one element each, because every slot holds parent[i] = i and so represents itself.",
       "arr": [
         0,
         1,
@@ -2320,7 +2340,7 @@ pack({
       }
     },
     {
-      "note": "union(0,1): both rank 0, attach 1 under 0, rank[0] becomes 1.",
+      "note": "union(0,1): both are roots of rank 0, so the tie is broken arbitrarily. Element 1 is hung under 0 and rank[0] rises to 1.",
       "arr": [
         0,
         0,
@@ -2340,7 +2360,7 @@ pack({
       }
     },
     {
-      "note": "union(1,2): find(1)=0, find(2)=2. rank[0] > rank[2], attach 2 under 0.",
+      "note": "union(1,2): climbing from 1 lands on root 0, and 2 is already a root. Since rank[0] beats rank[2], the shorter tree at 2 is hung under 0.",
       "arr": [
         0,
         0,
@@ -2363,7 +2383,7 @@ pack({
       }
     },
     {
-      "note": "union(3,4): attach 4 under 3, rank[3] becomes 1. Two components remain.",
+      "note": "union(3,4): a separate merge on the far side of the array hangs 4 under 3 and lifts rank[3] to 1, leaving two groups in total.",
       "arr": [
         0,
         0,
@@ -2388,7 +2408,7 @@ pack({
       }
     },
     {
-      "note": "union(2,3): find(2)=0, find(3)=3. Ranks equal (1 and 1), attach 3 under 0, rank[0] becomes 2.",
+      "note": "union(2,3): the roots are 0 and 3 with equal rank 1, so one is picked and 3 is hung under 0; only a genuine tie increments the rank, so rank[0] becomes 2.",
       "arr": [
         0,
         0,
@@ -2412,7 +2432,7 @@ pack({
       }
     },
     {
-      "note": "find(4): parent[4] is 3, parent[3] is 0. Compress: parent[4] = 0. One hop next time.",
+      "note": "find(4) climbs from 4 to 3 and then to the root 0. Path compression now rewrites parent[4] = 0, so asking about element 4 again costs a single hop.",
       "arr": [
         0,
         0,
@@ -2437,7 +2457,7 @@ pack({
       }
     },
     {
-      "note": "connected(1, 4) is true: both find to 0. The last union was the one that merged the two remaining trees.",
+      "note": "connected(1, 4) reports true because both elements climb to representative 0. Everything now points directly at that root, which is compression paying off.",
       "arr": [
         0,
         0,
@@ -2459,13 +2479,14 @@ pack({
   ],
   "mermaid": "graph TD\n  u0[\"0 rank 2\"] --> u1[\"1\"]\n  u0 --> u2[\"2\"]\n  u0 --> u3[\"3\"]\n  u3 --> u4[\"4\"]",
   "steps": [
-    "<strong>parent[i] = i</strong>, <code>rank[i] = 0</code> (or <code>size[i] = 1</code>). Start with n components.",
-    "<strong>find(x):</strong> if parent[x] != x, parent[x] = find(parent[x]). Return parent[x].",
-    "<strong>union(a, b):</strong> a = find(a), b = find(b). If equal, return false (cycle / already connected).",
-    "<strong>Hang by rank:</strong> if rank[a] &lt; rank[b] swap. parent[b] = a. If ranks were equal, rank[a]++.",
-    "<strong>connected</strong> is find(a) == find(b). Count components by decrementing on a successful union.",
-    "<strong>Do not parent[a] = b without find.</strong> Hang roots only.",
-    "<strong>Iterative find</strong> if n can be 10&#8309; and the tree might be a chain (forgotten rank)."
+    "<strong>Initialise the two arrays.</strong> Set <code>parent[i] = i</code> and <code>rank[i] = 0</code> (or <code>size[i] = 1</code>) for every element, which declares <code>n</code> separate groups of one member each, every member representing itself. Keep a counter <code>comps = n</code> if the problem asks how many groups survive.",
+    "<strong>find(x): climb to the representative.</strong> Follow <code>parent</code> upwards until you reach the element that points at itself. Every membership question in the problem reduces to this one walk, so this is the operation worth making fast.",
+    "<strong>Compress the path while you climb.</strong> Once the representative <code>r</code> is known, re-point every node you visited so it aims directly at <code>r</code>; the recursive line <code>parent[x] = find(parent[x])</code> does it for free on the way back out. Future queries on those nodes now take one hop.",
+    "<strong>union(a, b): resolve both ends first.</strong> Compute <code>a = find(a)</code> and <code>b = find(b)</code> before touching anything. If the two are equal then these elements already share a group, the edge closes a cycle, and you return <code>false</code> having changed nothing.",
+    "<strong>Hang the smaller tree under the larger.</strong> If <code>rank[a] &lt; rank[b]</code> swap the two roots so <code>a</code> is the taller one, then write <code>parent[b] = a</code>, and increment <code>rank[a]</code> only when the two ranks were equal. Merging the small side into the big side is what keeps every tree short.",
+    "<strong>Answer the queries from the roots.</strong> <code>connected(a, b)</code> is simply <code>find(a) == find(b)</code>, and the number of groups falls by exactly one on every union that returned <code>true</code>, so decrement <code>comps</code> at that point and nowhere else.",
+    "<strong>Never write parent[a] = b without calling find.</strong> Hanging a non-representative under something else detaches whatever was below it, silently splitting a group in half. Every pointer write in this structure targets a root.",
+    "<strong>Prefer an iterative find when n reaches 10&#8309;.</strong> If you ever skip union by rank, a chain of depth <code>n</code> can appear and a recursive climb overflows the Java stack; walking to the root and then walking the path a second time to flatten it is stack-safe."
   ],
   "code": [
     {
@@ -2497,9 +2518,10 @@ pack({
     "time": "Almost O(1) per find/union (inverse Ackermann)",
     "space": "O(n)",
     "derivation": [
-      "<p>Union by rank alone makes every tree height O(log n), so find is O(log n). Path compression alone is amortised O(log n). Together they are amortised <code>&alpha;(n)</code>, the inverse Ackermann function, with <code>&alpha;(n) &le; 4</code> for n up to the number of atoms in the universe:</p>",
+      "<p>Take the two accelerations one at a time. Union by rank guarantees that a tree only gets taller when it merges with another tree of the same height, which means a tree of height <code>h</code> must contain at least <code>2&#8319;</code> elements, and therefore <code>h &le; log&#8322; n</code>. That alone caps one <code>find</code> at roughly 20 pointer steps when <code>n = 10&#8310;</code>. Path compression on its own, without any ranking, is also enough for an amortised <code>O(log n)</code>.</p>",
+      "<p>Used together the amortised cost per operation drops to <code>&alpha;(n)</code>, the inverse Ackermann function, which is at most 4 for every <code>n</code> that could physically be stored:</p>",
       "<span class=\"eq\">T(q) = &Theta;(q &middot; &alpha;(n)) &approx; &Theta;(q)</span>",
-      "<p>Naive parent-pointer without either optimisation is &Theta;(n) per find on a chain, so q finds are &Theta;(n q). Kruskal is sorting O(m log m) plus O(m &alpha;(n)) DSU, dominated by the sort.</p>"
+      "<p>Putting real numbers in: <code>q = 2&times;10&#8309;</code> operations land near <code>10&#8310;</code> array reads, which is a few milliseconds. Skip both accelerations and a chain makes each <code>find</code> cost <code>&Theta;(n)</code>, so the same input becomes <code>&Theta;(n q)</code>, about <code>4&times;10&#8309;&#8304;</code> steps. Inside Kruskal the sort at <code>O(m log m)</code> dominates and the <code>O(m &alpha;(n))</code> union-find work is effectively free.</p>"
     ],
     "compare": [
       [
@@ -2532,12 +2554,12 @@ pack({
     {
       "title": "Linking the original nodes instead of the roots",
       "bug": "<code>parent[a] = b</code> when a is already a child. The subtree of a is detached from its old root and the structure is no longer a forest of valid components.",
-      "fix": "Always <code>a = find(a); b = find(b);</code> first."
+      "fix": "Always resolve both ends first with <code>a = find(a); b = find(b);</code> and only then write a parent. To test it, union a chain of three and check that the element in the middle still reaches the same root."
     },
     {
       "title": "Skipping union by rank and path compression",
       "bug": "A sequence of unions that always hangs the old root under a new singleton builds a linked list. The next find is O(n) and q of them TLE.",
-      "fix": "Both accelerations, always. Rank (or size) plus recursive or two-pass compress."
+      "fix": "Keep both accelerations every single time: rank or size to decide which root gets hung, plus compression inside <code>find</code>. To test it, union <code>i</code> with <code>i+1</code> for a hundred thousand values in ascending order and time a find on the last element."
     },
     {
       "title": "Path compression on a DSU you need to roll back",
@@ -2552,7 +2574,7 @@ pack({
     {
       "title": "Using DSU on a directed graph",
       "bug": "\"Can I reach t from s\" is not \"are they in the same undirected component\". Union-find will happily merge both directions of an edge you only had one way.",
-      "fix": "DSU is undirected. Directed reachability is DFS / SCC / 2-SAT, not this page."
+      "fix": "Remember that this structure only ever models undirected connectivity. Directed reachability needs a DFS, strongly connected components or 2-SAT instead, so re-read the statement for the word \"directed\" before reaching for union-find."
     }
   ],
   "variants": [
@@ -2707,7 +2729,7 @@ pack({
       "body": "<p>Names are not unique. Build a map email &rarr; first account index that used it. For each later account that repeats an email, union the two account indices. Then group emails by find(account). Sort each group, prefix the name from any account in the component. The DSU lives on accounts, not on email strings.</p>"
     }
   ],
-  "dryIntro": "The four unions on n = 5. <code>ra, rb</code> are roots at the moment of union.",
+  "dryIntro": "Four unions arriving over five elements, in the order a solution would receive them. The columns <code>ra</code> and <code>rb</code> are the representatives that <code>find</code> returned at that moment, which is why they are often not the two numbers that were passed in.",
   "dryAfter": "<p>union(2, 3) was the only call that could have returned false later; a fifth union of any pair now returns false (redundant edge).</p>"
 })
 

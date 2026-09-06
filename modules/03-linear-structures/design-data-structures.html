@@ -22,11 +22,11 @@
   <p class="hero__tagline">Design rounds are two structures glued together: LRU is HashMap + doubly linked list, LFU is LRU buckets per frequency, and the randomized set is HashMap + ArrayList.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
-      <a href="../02-sorting-hashing-bits/hashing-patterns.html">Hashing Patterns</a>,
       <a href="linked-lists.html">Linked Lists</a>,
-      <a href="heaps-and-priority-queue.html">Heaps & Priority Queue</a>
+      <a href="heaps-and-priority-queue.html">Heaps & Priority Queue</a>,
+      <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
     </span>
     <span class="hero__tags">
       <span class="chip">design</span>
@@ -40,14 +40,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>"Design LRU cache" is the most-asked design question because it forces O(1) get and put under a capacity: a HashMap for lookup, a doubly linked list for recency. Miss either piece and you have O(n) eviction. LFU is the follow-up: buckets per frequency, each an LRU, plus a minFreq integer.</p>
-<p>The other classics are min-stack (store minSoFar with each push), insert-delete-getRandom O(1) (map + array, delete is swap-with-last), and all-O(1). Median-from-stream sits on the heaps page; a trie is a design problem too.</p>
-<p>The transferable sentence: name the operations, name the bottleneck, pick one structure per bottleneck, then write the glue that keeps them in sync on every mutation.</p>
+<p>You must implement <code>get</code> and <code>put</code> on a cache of capacity 2 so that every operation is constant time. After <code>put(1)</code>, <code>put(2)</code>, <code>put(3)</code> the oldest key 1 must already be gone, and a later <code>get(1)</code> must miss. Scanning a list of pairs is correct and costs a full walk per call. After <code>10&#8309;</code> operations on a cache of size <code>10&#8308;</code> that is about <code>10&#8313;</code> steps, and the judge asked for <code>O(1)</code> worst case, not amortised luck.</p>
+<p>"Design LRU cache" is the most-asked design question because it forces two bottlenecks at once: find a key instantly, and know which key is the least recently used without scanning. A <code>HashMap</code> solves lookup; a doubly linked list &mdash; each node points to both neighbours, so unlink is four pointer writes &mdash; solves recency if the newest node sits at the head. Miss either piece and eviction is linear. LFU is the follow-up: one LRU list per frequency, plus an integer <code>minFreq</code> so the victim is the least-recent key among the least-frequent ones.</p>
+<p>The other classics are the same recipe with a different pair of bottlenecks. A min-stack stores <code>minSoFar</code> beside each push so popping the current min does not lose the previous one. Insert-delete-getRandom in <code>O(1)</code> is a map plus an <code>ArrayList</code>, and delete is swap-with-last so the hole is not a linear shift. The transferable sentence is: name the operations, name the bottleneck, pick one structure per bottleneck, then write the glue that keeps them in sync on every mutation.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>O(1) lookup is a HashMap. O(1) recency is a DLL with dummy head/tail. O(1) random is an ArrayList. Eviction updates both sides in the same method.</p>
+    <p><code>O(1)</code> lookup is a HashMap. <code>O(1)</code> recency is a doubly linked list with dummy head and tail. <code>O(1)</code> random is an ArrayList. Eviction must update both sides in the same method, or the next get returns a key you already threw away.</p>
   </div>
 </aside>
 
@@ -119,18 +119,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Capacity up to 1e4, 1e5 operations, O(1) worst-case per op. Do not scan the list. Dummy nodes so head/tail deletes have no null cases.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Capacity up to <code>10&#8308;</code> and <code>10&#8309;</code> operations with an <code>O(1)</code> worst-case bound per call is the design-glue signature. Do not scan the list on get or evict. Dummy head and tail nodes make an empty list and a one-node list the same four pointer writes as a full one.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>LRU: Node(key, val) in a DLL, newest at head. HashMap key to node. get: map lookup, move node to head. put: update + move, or insert at head; if over capacity, unlink tail.prev and map.remove that key. Dummy head and tail so unlink is four pointer writes.</p>
-<p>LFU: each key has a freq. freqMap: freq to DLL of keys at that freq. On get/put, unlink from freq, insert into freq+1, and if the old bucket is empty and freq==minFreq, increment minFreq. New keys reset minFreq to 1. Randomized set: map key to index in ArrayList; delete swaps with the last element, fixes that key's index, then pops.</p>
+<p>LRU stores each entry as a <code>Node(key, val)</code> in a doubly linked list, newest just after a dummy head, oldest just before a dummy tail. A <code>HashMap</code> from key to that node makes lookup one hash. <code>get</code> finds the node, unlinks it, and inserts it at the head so it is now the most recent. <code>put</code> updates and moves an existing key the same way, or inserts a new node at the head; if the map is now over capacity, unlink <code>tail.prev</code> and <code>map.remove</code> that key in the same two lines. The dummies exist so unlink is always four pointer writes and never a null check.</p>
+<p>LFU adds a frequency to each key. <code>freqMap</code> takes a frequency to a doubly linked list of the keys currently at that frequency, each list itself an LRU. On get or put you unlink the key from its old bucket, insert it into frequency plus one, and if the old bucket is now empty and that frequency was <code>minFreq</code>, increment <code>minFreq</code> so the next eviction does not walk an empty list. A brand-new key resets <code>minFreq</code> to 1. Randomized set is the other pairing: a map from key to index in an <code>ArrayList</code>; delete swaps the victim with the last element, repairs that last key's index, then pops.</p>
+<p>Trace LRU of capacity 2. <code>put(1)</code> makes the list <code>1</code> and the map <code>{1}</code>. <code>put(2)</code> inserts at the head: list <code>2-1</code>. <code>put(3)</code> is over capacity, so evict the tail 1 from both the list and the map, leaving <code>3-2</code>. <code>get(1)</code> misses because 1 is gone. Had you <code>get(2)</code> instead, 2 would move to the head and the tail would become 3, so the next overflow would evict 3, not 2. Forgetting <code>map.remove(1)</code> on the eviction is the bug that makes capacity appear to grow.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After every get/put the map and the recency (and frequency) lists describe the same set of keys. The tail of the recency list is the LRU victim. minFreq is the smallest freq that still has a key.</p>
+    <p>After every get or put the map and the recency (and frequency) lists describe the same set of keys. The node just before the dummy tail is the LRU victim. <code>minFreq</code> is the smallest frequency that still has a key.</p><p>In plain words, if a key is in the hash map it is also on exactly one list, the oldest live key is always the one you would evict next, and a frequency counter never points at an empty bucket. If you ever unlink a node without removing its map entry, or bump a key out of the last <code>minFreq</code> slot without incrementing the counter, the next eviction will be wrong.</p>
   </div>
 </aside>
 
@@ -170,7 +171,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "LRU capacity 2. put(1). List: 1. Map {1}.",
+          "note": "LRU capacity 2. put(1) inserts the first node at the head; the map and the list both hold key 1.",
           "active": [
             0
           ],
@@ -188,7 +189,7 @@
           }
         },
         {
-          "note": "put(2). List: 2-1. Newest is 2.",
+          "note": "put(2) inserts at the head. The list is now 2-1, so 2 is newest and 1 is the eviction candidate.",
           "active": [
             1
           ],
@@ -208,7 +209,7 @@
           }
         },
         {
-          "note": "put(3). Over capacity. Evict tail 1. List: 3-2.",
+          "note": "put(3) is over capacity, so evict tail 1 from both the list and the map. The list is now 3-2.",
           "active": [
             2
           ],
@@ -227,7 +228,7 @@
           }
         },
         {
-          "note": "get(1) misses because 1 was evicted.",
+          "note": "get(1) misses because 1 was removed from the map when it left the tail, not only from the list.",
           "active": [
             3
           ],
@@ -242,7 +243,7 @@
           }
         },
         {
-          "note": "If we had get(2) instead: move 2 to head. List 2-3. Tail is 3.",
+          "note": "Had we get(2) instead, 2 would move to the head and 3 would become the tail, so the next overflow would evict 3.",
           "active": [
             1
           ],
@@ -257,7 +258,7 @@
           }
         },
         {
-          "note": "put(4) after 3-2: evict 2, list 4-3.",
+          "note": "put(4) after the list 3-2 evicts the tail 2 from both sides, leaving 4 at the head and 3 at the tail.",
           "active": [
             4
           ],
@@ -296,18 +297,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>List the operations and the required complexity.</strong></li>
-  <li><strong>Assign a structure</strong> to each bottleneck (hash, DLL, array, heap).</li>
-  <li><strong>Dummy head and tail</strong> for any DLL. Unlink is four assignments.</li>
-  <li><strong>LRU get/put:</strong> map, move-to-head; evict tail.prev and the map entry.</li>
-  <li><strong>LFU:</strong> bump freq, fix minFreq when a bucket dies.</li>
-  <li><strong>Random delete:</strong> swap-with-last, update the swapped key's index, pop.</li>
-  <li><strong>Keep them in sync</strong> in the same method; a missed map.remove is the usual bug.</li>
+  <li><strong>List the operations and the required complexity first</strong> so you do not pick a heap for a problem that demanded worst-case constant time. Write the verbs and the bounds on the whiteboard before any field.</li>
+  <li><strong>Assign one structure to each bottleneck</strong> &mdash; hash for lookup, a doubly linked list for recency, an array for random access, a heap only if the extreme is allowed to be logarithmic. One structure never covers two bottlenecks.</li>
+  <li><strong>Give every doubly linked list a dummy head and tail</strong> so unlink is four assignments and never a null check. Empty and one-node lists then share the same code path as a full cache.</li>
+  <li><strong>On LRU get and put, look up, then move to head.</strong> If the map is over capacity, unlink <code>tail.prev</code> and <code>map.remove</code> that key in the same two lines so a later get cannot resurrect an evicted node.</li>
+  <li><strong>On LFU, bump the frequency and fix minFreq</strong> the moment a bucket becomes empty. Leaving <code>minFreq</code> pointing at a dead list makes the next eviction walk nothing and drop the wrong key.</li>
+  <li><strong>On randomized delete, swap with the last element</strong>, write the swapped key's new index into the map, then pop. Skipping that index repair leaves the map pointing at a hole that <code>getRandom</code> will later read.</li>
+  <li><strong>Keep every structure in sync inside the same method.</strong> A missed <code>map.remove</code> is the usual bug: the list looks right, capacity appears to grow, and get of the evicted key returns a detached node.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Walk LRU of capacity 2 through put(1), put(2), put(3), get(1). Newest sits at the head; the tail is the victim; the map and the list must agree after every call.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -315,12 +316,12 @@ flowchart TD
       <tr><th>cap</th><th>head</th><th>tail</th><th>evict</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>2</td><td>1</td><td>1</td><td>—</td><td>LRU capacity 2. put(1). List: 1. Map {1}.</td></tr>
-      <tr><td>2</td><td>2</td><td>1</td><td>—</td><td>put(2). List: 2-1. Newest is 2.</td></tr>
-      <tr><td>2</td><td>3</td><td>2</td><td>1</td><td>put(3). Over capacity. Evict tail 1. List: 3-2.</td></tr>
-      <tr><td>2</td><td>3</td><td>2</td><td>miss 1</td><td>get(1) misses because 1 was evicted.</td></tr>
-      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>3</td><td>—</td><td>If we had get(2) instead: move 2 to head. List 2-3. Tail is 3.</td></tr>
-      <tr><td>2</td><td>4</td><td>3</td><td>2</td><td>put(4) after 3-2: evict 2, list 4-3.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>1</td><td>1</td><td>—</td><td>LRU capacity 2. put(1) inserts the first node at the head; the map and the list both hold key 1.</td></tr>
+      <tr><td>2</td><td>2</td><td>1</td><td>—</td><td>put(2) inserts at the head. The list is now 2-1, so 2 is newest and 1 is the eviction candidate.</td></tr>
+      <tr><td>2</td><td>3</td><td>2</td><td>1</td><td>put(3) is over capacity, so evict tail 1 from both the list and the map. The list is now 3-2.</td></tr>
+      <tr><td>2</td><td>3</td><td>2</td><td>miss 1</td><td>get(1) misses because 1 was removed from the map when it left the tail, not only from the list.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>3</td><td>—</td><td>Had we get(2) instead, 2 would move to the head and 3 would become the tail, so the next overflow would evict 3.</td></tr>
+      <tr><td>2</td><td>4</td><td>3</td><td>2</td><td>put(4) after the list 3-2 evicts the tail 2 from both sides, leaving 4 at the head and 3 at the tail.</td></tr>
     </tbody>
   </table>
 </div>
@@ -514,7 +515,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>HashMap and DLL pointer writes are O(1). Eviction is one unlink plus one map.remove. Randomized delete is O(1) because swap-with-last avoids a linear hole.</p>
+    <p>A HashMap get or put is expected constant time. Unlink and insert-at-head are four pointer writes each, so they are worst-case constant. Eviction is one unlink plus one <code>map.remove</code>, still constant:</p><span class="eq">T(get) = T(put) = Θ(1)</span>
+    <p>Randomized delete is constant because swap-with-last avoids shifting a linear hole down the array; only the swapped key's index is repaired. A scan of a list of size <code>cap</code> on every call would be <code>O(cap)</code> and, at <code>cap = 10&#8308;</code> with <code>10&#8309;</code> operations, about <code>10&#8313;</code> steps. The glue exists to stay off that scan.</p>
   </div>
 
   <table class="complexity__compare">
@@ -537,28 +539,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Evict from the list but not the map</span>
-    <div class="pitfalls__bug">get of the evicted key returns a detached node. Capacity appears to grow.</div>
-    <div class="pitfalls__fix">unlink and map.remove in the same two lines.</div>
+    <div class="pitfalls__bug">get of the evicted key returns a detached node, so capacity appears to grow. The list looks correct, which is why the missed map.remove hides until a later get.</div>
+    <div class="pitfalls__fix">unlink the victim and map.remove its key in the same two lines, before the method returns.</div>
   </li>
   <li>
     <span class="pitfalls__title">No dummy head/tail</span>
-    <div class="pitfalls__bug">Null checks on every unlink; empty-list and one-node cases fail.</div>
-    <div class="pitfalls__fix">Sentinel head and tail, always linked to each other when empty.</div>
+    <div class="pitfalls__bug">Every unlink needs a null check, and the empty-list and one-node cases fail in different ways. The three-node sample still works, so the bug waits for capacity 1.</div>
+    <div class="pitfalls__fix">Sentinel head and tail, always linked to each other when the cache is empty. Unlink is then four assignments.</div>
   </li>
   <li>
     <span class="pitfalls__title">Randomized delete without fixing the swapped index</span>
-    <div class="pitfalls__bug">You move last into i but leave map[last] pointing at the old last index.</div>
-    <div class="pitfalls__fix"><code>at.put(last, i)</code> before pop. If x is already last, the put is a no-op.</div>
+    <div class="pitfalls__bug">You move last into index i but leave map[last] pointing at the old last slot. The next remove of that key writes into a hole, and getRandom can return a stale value.</div>
+    <div class="pitfalls__fix"><code>at.put(last, i)</code> before you pop. If x is already last, the put overwrites the same index and is a no-op.</div>
   </li>
   <li>
     <span class="pitfalls__title">LFU: forgetting to bump minFreq</span>
-    <div class="pitfalls__bug">You empty the minFreq bucket and still evict from it.</div>
-    <div class="pitfalls__fix">If that bucket is empty after a bump, minFreq++. New keys set minFreq = 1.</div>
+    <div class="pitfalls__bug">You empty the minFreq bucket and still evict from it, so the victim is missing or you walk an empty list. It looks right until the last key at that frequency is accessed.</div>
+    <div class="pitfalls__fix">If that bucket is empty after a bump, increment minFreq. A brand-new key always sets minFreq back to 1.</div>
   </li>
   <li>
     <span class="pitfalls__title">Min-stack storing only the global min</span>
-    <div class="pitfalls__bug">After popping the current min you do not know the previous min.</div>
-    <div class="pitfalls__fix">Store minSoFar with every node, or a second stack of mins.</div>
+    <div class="pitfalls__bug">After popping the current min you do not know the previous min, so the next getMin is wrong. A single variable looks enough because it works until the first min is popped.</div>
+    <div class="pitfalls__fix">Store minSoFar with every pushed node, or keep a second stack of minima. Both restore the previous min on pop.</div>
   </li>
 </ul>
 
@@ -600,28 +602,28 @@ flowchart TD
   <details class="followup">
     <summary>Why not a heap of (time, key) for LRU?</summary>
     <div class="followup__body">
-      <p>Get would need decrease-key on that key's timestamp. PriorityQueue cannot. A DLL move-to-head is O(1) and is the decrease-key.</p>
+      <p>Get would need decrease-key on that key's timestamp so it becomes the newest, and <code>PriorityQueue</code> cannot decrease an arbitrary key in log time. A doubly linked list move-to-head is four pointer writes and is exactly that decrease-key. The heap also makes get <code>O(log n)</code>, which misses the asked constant bound.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is LinkedHashMap enough?</summary>
     <div class="followup__body">
-      <p>Yes for LRU: accessOrder=true and override removeEldestEntry. Say so, then write the DLL. They are testing the glue, not the library.</p>
+      <p>Yes for production LRU: construct with <code>accessOrder=true</code> and override <code>removeEldestEntry</code>. Say that out loud so they know you know the library, then write the HashMap plus doubly linked list anyway. They are testing the glue that keeps lookup and recency in sync, not whether you can import a class.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How does LFU break a tie?</summary>
     <div class="followup__body">
-      <p>Among keys with minFreq, evict the least recently used. That is why each freq bucket is itself an LRU list, not a bag.</p>
+      <p>Among keys that share <code>minFreq</code>, evict the least recently used of those, not an arbitrary one. That is why each frequency bucket is itself an LRU list with a dummy head and tail, not a bag or a heap. The tail of the <code>minFreq</code> list is the unique victim.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can getRandom be O(1) with deletes if you use a HashSet?</summary>
     <div class="followup__body">
-      <p>No. HashSet has no index. You need an array for random access and a map to find the hole in O(1).</p>
+      <p>No. A HashSet has no index, so picking a uniform random element means walking an iterator a random number of steps, which is linear. You need an array for random access and a map from key to index so the hole left by a delete can be filled in constant time by swap-with-last.</p>
     </div>
   </details>
 </div>

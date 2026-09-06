@@ -40,7 +40,7 @@
 <h2>Why this exists</h2>
 <p>Java is a perfectly good competitive language, but it punishes idioms that are normal in production code. <code>Scanner</code>, <code>ArrayList&lt;Integer&gt;</code>, <code>String</code> concatenation and <code>Arrays.sort</code> on primitives are all reasonable choices at work and all liabilities at <code>n = 10&#8310;</code>. The gap between a naive Java solution and a tuned one is routinely 10&ndash;30&times; wall clock, with no change in complexity class.</p>
 <p>This page is the fix list. It is short on language philosophy and long on the specific constructs you should reach for by reflex: a <code>DataInputStream</code>-based reader, a single <code>StringBuilder</code> for output, <code>int[]</code> instead of <code>List&lt;Integer&gt;</code>, and the handful of overflow and comparator rules that produce silent wrong answers rather than honest crashes.</p>
-<p>In interviews the emphasis shifts &mdash; nobody cares about your reader &mdash; but the same knowledge shows up as fluency: knowing that <code>ArrayDeque</code> is the right stack, that <code>TreeMap.floorKey</code> exists, that <code>Arrays.binarySearch</code> returns <code>-(insertionPoint) - 1</code>, and that <code>(lo + hi) / 2</code> overflows. That fluency is what lets you spend your thinking on the algorithm.</p>
+<p>In interviews the emphasis shifts &mdash; nobody cares about your reader &mdash; but the same knowledge shows up as fluency: knowing that <code>ArrayDeque</code> is the right stack, that <code>TreeMap.floorKey</code> exists, that <code>Arrays.binarySearch</code> returns <code>-(insertionPoint) - 1</code>, and that <code>(lo + hi) / 2</code> overflows. That fluency is what lets you spend your thinking on the algorithm. Treat this page as a paste-and-memorise toolkit: once the reader, the overflow rules and the container flowchart are automatic, Java stops being the thing that makes a correct idea fail. The Java tabs below are the paste-ready versions of those habits, not extra theory. Paste the reader once and never think about IO again.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -127,14 +127,14 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> budget about <code>10&#8312;</code> primitive operations per second. Boxed collections cost 5&ndash;20&times; more per element; <code>Scanner</code> reads roughly 10&#8310; tokens per second, a buffered byte reader roughly 10&#8311;&ndash;10&#8312;.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> budget about <code>10&#8312;</code> primitive operations per second. Boxed collections cost 5&ndash;20&times; more per element; <code>Scanner</code> reads roughly 10&#8310; tokens per second, a buffered byte reader roughly 10&#8311;&ndash;10&#8312;. At <code>n = 10&#8310;</code> that IO gap alone is the difference between passing and TLE.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: avoid boxing and avoid per-token IO</h2>
 <p>Every <code>Integer</code> in Java is a heap object with a header, so an <code>ArrayList&lt;Integer&gt;</code> of a million values is a million pointers to a million scattered objects. Traversing it thrashes the cache and creates garbage-collection pressure. The same data as <code>int[]</code> is one contiguous 4&nbsp;MB block that the hardware prefetcher loves. This one difference explains most "my algorithm is right but it is slow" reports.</p>
-<p>IO is the other half. <code>Scanner</code> uses regular expressions internally and synchronises; <code>System.out.println</code> can flush on every call. Replacing them with a byte-level reader and a single buffered write is mechanical, costs thirty lines you paste once, and often turns a timeout into a comfortable pass.</p>
-<p>Everything else on this page is a specific trap: <code>int</code> overflow in midpoints and products, comparators written with subtraction, <code>remove(Object)</code> versus <code>remove(int)</code> on a <code>List&lt;Integer&gt;</code>, and <code>Arrays.sort</code> having two completely different implementations depending on whether the array is primitive or boxed.</p>
+<p>IO is the other half. <code>Scanner</code> uses regular expressions internally and synchronises; <code>System.out.println</code> can flush on every call. Replacing them with a byte-level reader and a single buffered write is mechanical, costs thirty lines you paste once, and often turns a timeout into a comfortable pass. On a million integers the difference is typically several seconds, which is the entire time limit.</p>
+<p>Everything else on this page is a specific trap: <code>int</code> overflow in midpoints and products, comparators written with subtraction, <code>remove(Object)</code> versus <code>remove(int)</code> on a <code>List&lt;Integer&gt;</code>, and <code>Arrays.sort</code> having two completely different implementations depending on whether the array is primitive or boxed. Walk one overflow: <code>lo = 2&times;10&#8313;</code> and <code>hi = 2.1&times;10&#8313;</code> are both legal <code>int</code>s, but <code>(lo + hi) / 2</code> wraps negative and then becomes a broken binary-search index. The same walk on <code>a * a</code> is why the cast must sit on an operand, not on the result after it has already wrapped.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -473,7 +473,7 @@
           }
         },
         {
-          "note": "hi = 2.1e9, still just inside int.",
+          "note": "hi = 2.1e9, still just inside int, one below Integer.MAX_VALUE.",
           "active": [
             1
           ],
@@ -536,7 +536,7 @@
           }
         },
         {
-          "note": "Second case: a = 1e9, an int.",
+          "note": "Second case: a = 1e9, a legal int whose square will not fit in 32 bits.",
           "active": [
             3
           ],
@@ -655,15 +655,15 @@ flowchart TD
   <li><strong>Choose primitive storage.</strong> Decide up front whether each array is <code>int[]</code>, <code>long[]</code>, or genuinely needs objects.</li>
   <li><strong>Pick containers from the flowchart:</strong> ordered &rarr; <code>TreeMap</code>/<code>TreeSet</code>, extremes &rarr; heap, small integer keys &rarr; plain array, both ends &rarr; <code>ArrayDeque</code>.</li>
   <li><strong>Audit arithmetic.</strong> Every <code>+</code> and <code>*</code> whose operands can be large gets a <code>long</code> cast on an operand.</li>
-  <li><strong>Write comparators with <code>Integer.compare</code></strong> and chain with <code>Comparator.comparingInt(...).thenComparing(...)</code>.</li>
-  <li><strong>Shuffle before <code>Arrays.sort(int[])</code></strong> when the input is adversarial (any Codeforces problem).</li>
-  <li><strong>Buffer all output</strong> and print exactly once at the end.</li>
+  <li><strong>Write comparators with <code>Integer.compare</code></strong> and chain with <code>Comparator.comparingInt(...).thenComparing(...)</code>, never with subtraction, because <code>a - b</code> wraps when the values are large or negative.</li>
+  <li><strong>Shuffle before <code>Arrays.sort(int[])</code></strong> when the input is adversarial (any Codeforces problem), since dual-pivot quicksort can be forced into quadratic time.</li>
+  <li><strong>Buffer all output</strong> into one <code>StringBuilder</code> and print exactly once at the end, so you do not flush a million times.</li>
   <li><strong>Guard recursion depth.</strong> If it can exceed about <code>10&#8308;</code>, either convert to an explicit stack or launch the solver on a thread with a larger stack.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>The eight substitutions that matter most, in the order you should apply them when a solution is too slow.</p>
+<p>The eight substitutions that matter most, in the order you should apply them when a correct algorithm is still too slow. solution is too slow.</p>
 
 <div class="table-scroll">
   <table class="trace-table">

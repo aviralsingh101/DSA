@@ -39,14 +39,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Almost every binary-tree question is a traversal wearing a costume. Diameter, path sum, symmetry, serialisation, construction from two orders &mdash; each is "walk every node exactly once and combine the children's answers". If you cannot write the four walks without looking them up, the later pages in this module feel like magic.</p>
-<p>The recursive definition is the whole data structure: a node holds a value and two optional children. Height, size, and "is this a leaf" fall out of that definition in three lines. Interviewers ask for both recursive and iterative forms because a linked-list-shaped degenerate of n = 1e5 overflows the JVM stack.</p>
-<p>The four orders are not four algorithms. They are one DFS with the visit placed before, between, or after the two recursive calls, plus one BFS that swaps the implicit stack for an ArrayDeque.</p>
+<p>Imagine a comment thread stored the way a database would store it. Each comment is one record holding its text plus two references: one to the reply displayed above it and one to the reply displayed below it, where a reference of <code>null</code> means there is nothing on that side. You are handed exactly one thing, a reference to the top comment, and asked to print all 100000 comments. There is no array to loop over and no index to increment, so the only way to reach comment number 57000 is to follow references down from the top. Everything on this page is about how to follow them so that every record is reached exactly once and in an order you can reason about.</p>
+<p>Now change the task to "how many replies sit underneath each comment". The obvious method answers one comment at a time: stand on it, walk everything reachable below it, count what you saw, then move to the next comment and start again. That is correct and it is also quadratic, because a record sitting 40 levels deep gets counted once for each of its 40 ancestors. If the thread happens to be a straight chain of 100000 comments, the total work is 1 + 2 + ... + 100000, roughly <code>5&times;10&#8313;</code> reference hops &mdash; minutes of computation. One walk that visits each record once and hands its count back up to its parent finishes the same job in 100000 hops.</p>
+<p>That single walk is the whole subject, so here is the vocabulary for it. A <em>node</em> is one record; its two references are its <em>left child</em> and <em>right child</em>; a node with no children at all is a <em>leaf</em>; the <em>subtree</em> of a node is that node together with everything reachable below it; the topmost node, the one you were handed, is the <em>root</em>; the <em>depth</em> of a node is how many steps separate it from the root; and the <em>height</em> of the tree is the largest depth in it. The walk has exactly one shape &mdash; deal with the left subtree, deal with the right subtree &mdash; and the only decision left is when you record the node's own value: before both recursive calls (<em>preorder</em>), between them (<em>inorder</em>), or after them (<em>postorder</em>).</p>
+<p>In a problem statement the tell is that the input is described as a root pointer, or as a flat array with <code>null</code> holes, rather than as a list of edges &mdash; and that the limit reads something like <code>n &le; 10&#8309;</code> with no promise that the tree is balanced. The missing promise is the part that bites. A binary tree is legally allowed to be a straight chain, and a recursive walk down a chain of 100000 nodes keeps 100000 Java stack frames alive at once, while the default JVM stack runs out after a few thousand. That is why every walk here also gets an iterative spelling that keeps the pending nodes in an <code>ArrayDeque</code> on the heap instead.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Preorder / inorder / postorder are the same DFS with the visit moved. Level order is the same walk with a queue instead of a stack. Learn one walk, then move the visit.</p>
+    <p>There is only one traversal in this entire module and it is "handle the left subtree, handle the right subtree"; preorder, inorder and postorder are that same walk with the single line that records <code>node.val</code> moved before, between, or after the two recursive calls. Level order is the same visiting rule with the recursion's hidden stack swapped for an explicit queue, and that swap is the only thing separating depth-first from breadth-first.</p>
   </div>
 </aside>
 
@@ -113,18 +114,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5 is fine for an iterative walk. Recursive DFS on a skew tree of that size overflows the Java stack (typically a few thousand frames). Prefer iterative whenever the statement does not promise a balanced tree.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, with the tree handed to you as a root reference and no sentence promising it is balanced, is the everyday case, and it is comfortable for a walk that touches each node once. The trap here is memory rather than time: a chain-shaped tree of 100000 nodes needs 100000 nested calls, and the default JVM stack holds only a few thousand frames, so what you get is a <code>StackOverflowError</code> rather than a wrong answer. Prefer the iterative form whenever balance is not promised.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>A binary tree node is (val, left, right). The recursive walk is: optionally visit, walk left, optionally visit, walk right, optionally visit. Preorder visits first, inorder between the children, postorder last. Height = 1 + max(hL, hR) with null contributing 0 (nodes) or -1 (edges).</p>
-<p>Iterative preorder: stack, pop, visit, push right then left. Iterative inorder: walk cur left while pushing, then pop-visit and step right. Level order: queue, snapshot size to group by depth. Use ArrayDeque, never java.util.Stack.</p>
+<p>Fix the data first. A <code>Node</code> holds an <code>int val</code> plus two references <code>left</code> and <code>right</code>, either of which may be <code>null</code> to mean "no child on that side". The recursion has exactly one job: given a reference <code>n</code>, deal with the whole subtree rooted at <code>n</code>. Its first line is the base case <code>if (n == null) return;</code>, because an absent child is a subtree containing nothing and there is nothing to do for it. After that it calls itself on <code>n.left</code>, calls itself on <code>n.right</code>, and somewhere around those two calls it appends <code>n.val</code> to the output list <code>out</code>.</p>
+<p>Where you put <code>out.add(n.val)</code> is the entire difference between the three depth-first orders. Put it before both calls and a node is recorded the first time you arrive at it, which is preorder. Put it between them and a node is recorded only after its whole left subtree has finished, which is inorder. Put it after both and a node is recorded only once everything below it is done, which is postorder. Quantities that depend on the children have no choice and must be postorder: <code>height(n)</code> returns <code>1 + Math.max(height(n.left), height(n.right))</code>, and the size of a subtree is <code>1 + szL + szR</code>. Neither of those two numbers exists until both recursive calls have returned, so the combine has to happen last.</p>
+<p>Level order asks a different question &mdash; list every node at depth 0, then every node at depth 1, and so on &mdash; and recursion cannot answer it directly because recursion dives. Instead keep an explicit <code>ArrayDeque&lt;Node&gt; q</code> of nodes waiting to be handled. Take a node off the front, append its value, and push its non-null children onto the back; because a child always enters behind everything already waiting, the queue stays sorted by depth for free. To see where one depth ends, read <code>int sz = q.size()</code> at the top of each round and poll exactly that many nodes: those <code>sz</code> nodes are precisely the current level, since nothing enqueued during the round can share their depth.</p>
+<p>Run the sample tree to see all four at once: root <code>1</code> with children <code>2</code> and <code>3</code>, and <code>2</code> owning children <code>4</code> and <code>5</code>. Preorder writes <code>1</code> on arrival, dives left and writes <code>2</code>, dives left again and writes <code>4</code> whose two calls both return immediately, comes back up to <code>2</code> and writes <code>5</code>, then unwinds to <code>1</code> and writes <code>3</code>: <code>[1,2,4,5,3]</code>. The identical walk with the recording line between the two calls emits <code>[4,2,5,1,3]</code>, and after both calls it emits <code>[4,5,2,3,1]</code>. The queue version pulls <code>1</code>, then <code>2,3</code>, then <code>4,5</code>, giving <code>[[1],[2,3],[4,5]]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Every node is entered once and left once. The three DFS orders are the same walk; only the moment of recording node.val changes:</p><span class="eq">pre = visit, L, R &nbsp;|&nbsp; in = L, visit, R &nbsp;|&nbsp; post = L, R, visit</span><p>Interview sentence: <em>"I walk every node once; the order is where I put the visit."</em></p>
+    <p>Every node is entered exactly once and left exactly once, so all four walks do <code>&Theta;(n)</code> work; the only thing that differs between them is the moment at which <code>node.val</code> is recorded:</p><span class="eq">pre = visit, L, R &nbsp;|&nbsp; in = L, visit, R &nbsp;|&nbsp; post = L, R, visit</span><p>In plain words, the recursion chases exactly the same references in exactly the same physical order no matter which of the three orders you asked for; the output lists differ only because you chose a different instant to append. You can confirm that yourself on any tree by writing all three <code>add</code> lines into one function and watching a single walk fill three different lists.</p><p>Interview sentence: <em>"I walk every node once; the order is just where I put the visit."</em></p>
   </div>
 </aside>
 
@@ -156,7 +159,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Enter 1. Preorder writes on entry, slot 0 becomes 1. Next: left child 2.",
+          "note": "Arrive at the root, node 1. Preorder records a node the moment it is entered, so slot 0 becomes 1; now the walk recurses left into node 2.",
           "active": [
             0
           ],
@@ -173,7 +176,7 @@
           }
         },
         {
-          "note": "Enter 2. Write 2 at slot 1. Next: left child 4.",
+          "note": "Node 2 is entered and written into slot 1 before either of its own children is touched. The walk immediately dives left again, into node 4.",
           "active": [
             1
           ],
@@ -192,7 +195,7 @@
           }
         },
         {
-          "note": "Enter 4. Write 4. Both children null, subtree done.",
+          "note": "Node 4 is a leaf: both of its child references are null, so its two recursive calls return at once and slot 2 is all this branch writes.",
           "active": [
             2
           ],
@@ -211,7 +214,7 @@
           }
         },
         {
-          "note": "Back at 2, walk right child 5. Write 5 at slot 3.",
+          "note": "Control returns to node 2, which still owes work on its right child. Entering node 5 writes it into slot 3, and node 5 is also a leaf.",
           "active": [
             3
           ],
@@ -230,7 +233,7 @@
           }
         },
         {
-          "note": "Subtree of 2 finished. Back at 1, walk right child 3. Write 3.",
+          "note": "The subtree of node 2 is now completely finished, so the walk unwinds to node 1 and takes its right child. Node 3 lands in slot 4.",
           "active": [
             4
           ],
@@ -247,7 +250,7 @@
           }
         },
         {
-          "note": "Done. Preorder [1,2,4,5,3]. Inorder would be [4,2,5,1,3]; postorder [4,5,2,3,1]; level order [1,2,3,4,5].",
+          "note": "All five nodes were entered once, giving preorder [1,2,4,5,3]. Moving the recording line between the two calls yields [4,2,5,1,3], after both calls [4,5,2,3,1], and the queue version [1,2,3,4,5].",
           "best": [
             0,
             1,
@@ -284,17 +287,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Represent</strong> Node(val, left, right). Missing child is null.</li>
-  <li><strong>Recursive DFS:</strong> base-case on null, place out.add before, between, or after the two rec calls.</li>
-  <li><strong>Iterative preorder:</strong> stack starts with root; pop, visit, push right then left. ArrayDeque.</li>
-  <li><strong>Iterative inorder:</strong> walk cur left while pushing, pop-visit, cur = popped.right.</li>
-  <li><strong>Level order:</strong> queue root; drain sz = q.size() each layer.</li>
-  <li><strong>Height / size</strong> are postorder combines; if n can be a skew chain, prefer iterative.</li>
+  <li><strong>Represent the node.</strong> Store <code>val</code>, <code>left</code> and <code>right</code>, and treat a missing child as <code>null</code>, because that is the only signal the walk has that a branch has ended.</li>
+  <li><strong>Write the recursive walk first.</strong> Return immediately on <code>null</code>, then place <code>out.add(n.val)</code> before, between, or after the two recursive calls so the same chase of references produces preorder, inorder or postorder.</li>
+  <li><strong>Iterative preorder uses a stack.</strong> Start with the root, pop a node, record it, then push right before left so the left child is handled next, matching the recursive dive.</li>
+  <li><strong>Iterative inorder walks left first.</strong> Push every node while stepping <code>cur = cur.left</code>, then pop, record, and move to that node's right child, because inorder must finish the left subtree before the node itself.</li>
+  <li><strong>Level order uses a queue and a size snapshot.</strong> Read <code>sz = q.size()</code> at the start of each round and poll exactly that many nodes so children enqueued during the round cannot leak into the current depth.</li>
+  <li><strong>Combine children after both calls return.</strong> Height and subtree size do not exist until the two recursive results are known, and if the tree can be a chain of <code>10&#8309;</code> nodes, prefer the iterative spelling so the JVM stack is not the limit.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Preorder on the five-node sample 1 / 2 3 / 4 5, filling the output array one visit at a time so you can see where each value lands.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -302,12 +305,12 @@ graph TD
       <tr><th>node</th><th>phase</th><th>written</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>1</td><td>visit</td><td>1</td><td>Enter 1. Preorder writes on entry, slot 0 becomes 1. Next: left child 2.</td></tr>
-      <tr><td>2</td><td>visit</td><td>2</td><td>Enter 2. Write 2 at slot 1. Next: left child 4.</td></tr>
-      <tr><td>4</td><td>visit leaf</td><td>3</td><td>Enter 4. Write 4. Both children null, subtree done.</td></tr>
-      <tr><td>5</td><td>visit leaf</td><td>4</td><td>Back at 2, walk right child 5. Write 5 at slot 3.</td></tr>
-      <tr><td>3</td><td>visit leaf</td><td>5</td><td>Subtree of 2 finished. Back at 1, walk right child 3. Write 3.</td></tr>
-      <tr class="trace-table__row--change"><td>done</td><td>all four orders</td><td>5</td><td>Done. Preorder [1,2,4,5,3]. Inorder would be [4,2,5,1,3]; postorder [4,5,2,3,1]; level order [1,2,3,4,5].</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>visit</td><td>1</td><td>Arrive at the root, node 1. Preorder records a node the moment it is entered, so slot 0 becomes 1; now the walk recurses left into node 2.</td></tr>
+      <tr><td>2</td><td>visit</td><td>2</td><td>Node 2 is entered and written into slot 1 before either of its own children is touched. The walk immediately dives left again, into node 4.</td></tr>
+      <tr><td>4</td><td>visit leaf</td><td>3</td><td>Node 4 is a leaf: both of its child references are null, so its two recursive calls return at once and slot 2 is all this branch writes.</td></tr>
+      <tr><td>5</td><td>visit leaf</td><td>4</td><td>Control returns to node 2, which still owes work on its right child. Entering node 5 writes it into slot 3, and node 5 is also a leaf.</td></tr>
+      <tr><td>3</td><td>visit leaf</td><td>5</td><td>The subtree of node 2 is now completely finished, so the walk unwinds to node 1 and takes its right child. Node 3 lands in slot 4.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>all four orders</td><td>5</td><td>All five nodes were entered once, giving preorder [1,2,4,5,3]. Moving the recording line between the two calls yields [4,2,5,1,3], after both calls [4,5,2,3,1], and the queue version [1,2,3,4,5].</td></tr>
     </tbody>
   </table>
 </div>
@@ -446,9 +449,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each node is pushed and popped a constant number of times, so every walk is linear in the number of nodes.</p>
+    <p>Every walk enters each of the <code>n</code> nodes once and leaves it once. The recursive spelling does a constant amount of work around the two child calls, so the recurrence is <code>T(n) = T(n_L) + T(n_R) + &Theta;(1)</code>, which unfolds to <code>&Theta;(n)</code>. The iterative stack and the BFS queue each push and pop a node a constant number of times, so they are the same linear pass written with an explicit collection.</p>
     <p><span class="eq">T(n) = T(n_L) + T(n_R) + &Theta;(1) = &Theta;(n)</span></p>
-    <p>Auxiliary space is the height h (skew = n) or the BFS width w (complete last level = n/2).</p>
+    <p>At <code>n = 10&#8309;</code> that is 100000 visits, a few milliseconds. Extra memory is the height <code>h</code> for DFS (a right spine uses <code>n</code> frames) or the width <code>w</code> for BFS (a complete last level holds about <code>n/2</code> nodes). The time is never the problem; the stack is, which is why the iterative forms exist.</p>
   </div>
 
   <table class="complexity__compare">
@@ -470,28 +473,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using java.util.Stack</span>
-    <div class="pitfalls__bug">Synchronised Vector subclass, wrong methods, slower.</div>
-    <div class="pitfalls__fix">ArrayDeque: push/pop/peek for DFS, add/poll for BFS.</div>
+    <div class="pitfalls__bug"><code>java.util.Stack</code> looks like the named tool for DFS, so it compiles and even produces the right list on the sample, but it is a synchronised <code>Vector</code> with the wrong method names and a real cost per push.</div>
+    <div class="pitfalls__fix">Use <code>ArrayDeque</code>: <code>push</code>/<code>pop</code>/<code>peek</code> for DFS and <code>add</code>/<code>poll</code> for BFS. Test both walks on a three-node tree.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting the null base case</span>
-    <div class="pitfalls__bug">NPE on a missing child; only shows up on trees that are not perfectly full.</div>
-    <div class="pitfalls__fix">First line: if (node == null) return (or the identity of the combine).</div>
+    <div class="pitfalls__bug">Skipping <code>if (n == null) return</code> looks fine on a perfectly full tree where every child exists, then a missing child throws a <code>NullPointerException</code> the first time you read <code>n.val</code>.</div>
+    <div class="pitfalls__fix">Make the null check the first line, or return the identity of the combine (0 for size, -1 for edge-height). Test a root with only a left child.</div>
   </li>
   <li>
     <span class="pitfalls__title">Height off-by-one (nodes vs edges)</span>
-    <div class="pitfalls__bug">LC 104 wants 1 for a single node; LC 543 diameter is in edges.</div>
-    <div class="pitfalls__fix">State the convention in a comment. Edge-height: null returns -1.</div>
+    <div class="pitfalls__bug">Returning 1 for a single node matches LC 104 (height in nodes) and is wrong for LC 543, which counts edges, so the same helper silently fails the other problem.</div>
+    <div class="pitfalls__fix">Write the convention in a comment. For edge-height, a null child returns -1 so a leaf returns 0. Check a one-node tree against the statement.</div>
   </li>
   <li>
     <span class="pitfalls__title">Level-order without snapshotting queue size</span>
-    <div class="pitfalls__bug">Cannot tell where one level ends. Flat list is still correct; grouped list is not.</div>
-    <div class="pitfalls__fix">int sz = q.size(); then a for of that many polls.</div>
+    <div class="pitfalls__bug">Polling until the queue is empty still lists every node, so a flat walk looks correct, but children of the current depth leak into the same list and grouped levels come out wrong.</div>
+    <div class="pitfalls__fix">Capture <code>int sz = q.size()</code> and poll exactly that many times. Test that a three-level tree returns three inner lists, not one.</div>
   </li>
   <li>
     <span class="pitfalls__title">Recursive walk on a linked-list-shaped tree</span>
-    <div class="pitfalls__bug">n=1e5 right spine, StackOverflowError.</div>
-    <div class="pitfalls__fix">Write the iterative version.</div>
+    <div class="pitfalls__bug">A right spine of <code>n = 10&#8309;</code> is a legal binary tree, so the recursive walk is correct in theory and then dies with <code>StackOverflowError</code> after a few thousand frames.</div>
+    <div class="pitfalls__fix">Keep an iterative version on the heap whenever the statement does not promise a balanced tree. A chain of a few thousand nodes is the test.</div>
   </li>
 </ul>
 
@@ -533,28 +536,28 @@ graph TD
   <details class="followup">
     <summary>How do you reconstruct from preorder and inorder?</summary>
     <div class="followup__body">
-      <p>First preorder value is the root. Find it in inorder: left of it is the left subtree. Map values to indices for O(1) splits, total O(n). Preorder+postorder is ambiguous unless the tree is full.</p>
+      <p>The first preorder value is the root, because preorder records a node on arrival. Find that value in the inorder list: everything to its left belongs to the left subtree and everything to its right belongs to the right. A map from value to inorder index makes each split <code>O(1)</code>, so the whole rebuild is <code>O(n)</code>. Preorder plus postorder is ambiguous unless every node has zero or two children, because a single-child node can sit on either side.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why is inorder of a BST sorted?</summary>
     <div class="followup__body">
-      <p>Left &lt; root &lt; right, and inorder is L, root, R. See the BST page.</p>
+      <p>A BST promises that every key in the left subtree is smaller than the node and every key in the right subtree is larger. Inorder is exactly "whole left, then the node, then whole right", so the values come out in increasing order. That fact is load-bearing on the BST page; here it is just a reason to remember where the visit sits.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>O(1) extra space with parent pointers?</summary>
     <div class="followup__body">
-      <p>Walk to parent and decide whether you arrived from the left child. Same three-colour state machine as iterative postorder, stored in the current position.</p>
+      <p>From the current node you can walk to its parent and ask whether you arrived from the left child or the right. That is the same three-colour state machine as iterative postorder, stored in the current position instead of on a stack. You still visit every node a constant number of times; you just stopped allocating the deque.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What changes for an n-ary tree?</summary>
     <div class="followup__body">
-      <p>DFS becomes visit then loop children. Level order is unchanged except the enqueue loop. There is no unique inorder.</p>
+      <p>Depth-first becomes "record the node, then loop its children" instead of two named recursive calls, and there is no unique inorder because there is no unique place between "the left" and "the right". Level order barely changes: enqueue every child instead of two. Height is still one plus the maximum child height.</p>
     </div>
   </details>
 </div>

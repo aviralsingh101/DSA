@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Breadth-first search visits vertices in order of unweighted distance from the source. That single fact is why it computes shortest paths on unit-weight graphs, why it colours bipartite graphs, why multi-source flood-fills work, and why "minimum operations to turn A into B" is a BFS on an implicit graph.</p>
-<p>The reason it is an interview staple is that the code is short and the bugs are classic: marking visited at pop instead of push (the queue explodes), using a <code>Stack</code> by accident, forgetting disconnected components, and treating a weighted graph as unweighted. If you can write BFS without looking and name those four bugs, you have the foundation for Dijkstra and 0-1 BFS.</p>
-<p>BFS is also the cleanest way to <em>see</em> a graph algorithm. The queue is the frontier, <code>dist[u]</code> is the level, and the invariant is visible in the array: processed vertices, the current layer, and the undiscovered rest.</p>
+<p>You are standing at junction 0 on a city map of 100000 junctions and 200000 two-way roads, and every road takes the same time to drive. You need the fewest roads that reach junction 4093. Trying every walk is hopeless: even a branching of two new roads per step explodes, and a judge that gives you two seconds will not wait while you enumerate them. What you want is a walk that visits junctions in order of how many roads they sit from 0, so the first time you arrive at 4093 you already hold the shortest answer and can stop.</p>
+<p>That walk is <em>breadth-first search</em>, usually shortened to BFS. It keeps a FIFO queue &mdash; first in, first out, the same structure as a line at a ticket window &mdash; of junctions that have been reached but whose neighbours have not yet been looked at. Because every road has the same weight, a walk that uses fewer roads is always cheaper than a walk that uses more. BFS therefore expands layer 0, then layer 1, then layer 2, and the first time a junction enters the queue it has been reached by a walk with the fewest possible roads. That is why BFS is a shortest-path algorithm only on unweighted edges (or edges that all share one positive weight you can treat as 1).</p>
+<p>The same first-visit rule is also why BFS dies the moment the roads have different lengths. Suppose 0 is joined to 2 by one road of length 100, and also joined to 2 by the two-road walk 0-1-2 whose roads each have length 1. BFS reaches 2 along the single road, records distance 1, and never looks at 2 again, so it reports 1 (or 100 if you stored weights) and misses the cheaper total of 2. Different positive weights need Dijkstra; weights that are only 0 and 1 need 0-1 BFS. The signal in a real statement is "minimum number of moves / operations / roads" together with limits such as <code>n, m &le; 2&times;10&#8309;</code> or a grid of a thousand rows, and no mention of unequal costs.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>The first time BFS reaches a vertex is via a shortest path. Mark it visited <em>when you push</em>, so each vertex enters the queue once. That is the whole correctness argument and the whole complexity proof.</p>
+    <p>On unweighted edges the first time BFS reaches a vertex is via a shortest path, because a walk with fewer roads is always cheaper. Mark the vertex visited in the same breath as you push it, so each vertex enters the queue once and the queue stays linear.</p>
   </div>
 </aside>
 
@@ -55,20 +55,20 @@
     <div class="recognise__col recognise__col--yes">
       <h3>Say yes when you see</h3>
       <ul>
-        <li>"Shortest path" on a graph whose edges all have the same weight (or weight 1)</li>
-        <li>"Minimum number of moves / operations" to reach a state</li>
+        <li>Shortest path on a graph whose edges all have the same weight</li>
+        <li>Minimum number of moves / operations to reach a state</li>
         <li>Multi-source flooding: rotting oranges, walls and gates, 01-matrix</li>
-        <li>Level-order traversal of a tree, or "nodes at distance k"</li>
-        <li>The implicit graph of a word ladder, a lock, or a grid with 4-way moves</li>
+        <li>Level-order of a tree, or nodes at distance k</li>
+        <li>Implicit graph of a word ladder, a lock, or a grid with 4-way moves</li>
       </ul>
     </div>
     <div class="recognise__col recognise__col--no">
       <h3>Not this pattern when</h3>
       <ul>
-        <li>Edges have different positive weights &rarr; <a href="dijkstra.html">Dijkstra</a></li>
-        <li>Weights are only 0 and 1 &rarr; <a href="zero-one-bfs.html">0-1 BFS</a>, not plain BFS (treating 0-edges as 1 is wrong)</li>
-        <li>Negative weights &rarr; <a href="../08-graphs-advanced/bellman-ford-and-negative-cycles.html">Bellman-Ford</a></li>
-        <li>You need any path, or connectivity only, and the graph is a tree &rarr; DFS is fine and uses less memory in practice</li>
+        <li>Edges have different positive weights &rarr; Dijkstra</li>
+        <li>Weights are only 0 and 1 &rarr; 0-1 BFS, not this page</li>
+        <li>Negative weights &rarr; Bellman-Ford</li>
+        <li>You need a spanning tree of a component, not distances &rarr; DFS is enough</li>
       </ul>
     </div>
   </div>
@@ -79,204 +79,141 @@
     </thead>
     <tbody>
       <tr>
-        <td>"shortest path", unit weights</td>
-        <td>Levels are distances</td>
-        <td>BFS + dist[]</td>
+        <td>Shortest unweighted path s to t</td>
+        <td>Layers by distance</td>
+        <td>BFS, stop at t</td>
       </tr>
       <tr>
-        <td>"minimum operations to convert A to B"</td>
-        <td>Implicit unweighted graph</td>
+        <td>Minimum operations A to B</td>
+        <td>Implicit graph</td>
         <td>BFS on states</td>
       </tr>
       <tr>
-        <td>Several sources, min dist to a source</td>
-        <td>Super-source, or seed the queue with all</td>
-        <td>Multi-source BFS</td>
+        <td>Rotting oranges / 01-matrix</td>
+        <td>Multi-source</td>
+        <td>Queue all sources at dist 0</td>
       </tr>
       <tr>
-        <td>Grid, 4-way moves, obstacles</td>
-        <td>Implicit graph, r*C+c as id</td>
-        <td>BFS on cells</td>
+        <td>Word ladder</td>
+        <td>Words as vertices</td>
+        <td>BFS, neighbours = one-letter diffs</td>
       </tr>
       <tr>
-        <td>Word ladder / lock / jump game II-style</td>
-        <td>Edges generated on the fly</td>
-        <td>BFS + visited set</td>
+        <td>Weighted positive edges</td>
+        <td>Not unit length</td>
+        <td>Dijkstra</td>
       </tr>
       <tr>
-        <td>Tree, distance from root, or diameter (2 BFS)</td>
-        <td>Unique paths</td>
-        <td>BFS from a leaf, then from the farthest</td>
-      </tr>
-      <tr>
-        <td><strong>Confused with:</strong> Dijkstra on all-ones weights</td>
-        <td>Correct but slower by a log</td>
-        <td>Use the queue, not a PriorityQueue</td>
+        <td><strong>Confused with:</strong> 0-1 BFS</td>
+        <td>0-weight edges break "first visit is best" unless you deque to the front</td>
+        <td>See zero-one-bfs</td>
       </tr>
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> is the standard. BFS is <code>O(n + m)</code> and <code>O(n)</code> memory for the queue and <code>dist</code>. On a grid, <code>n</code> is the cell count. State-space BFS dies when the state does not fit in memory or in <code>10&#8312;</code> visits.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> or a grid <code>R, C &le; 10&#179;</code> is the usual BFS prompt: one linear walk, about a million steps, fits comfortably in two seconds. Mark a vertex on the push, not on the pop, so the queue holds at most <code>n</code> entries rather than one copy per incoming edge. If the statement then gives unequal positive weights, this page is the wrong tool even when those limits look identical.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
-<h2>The invariant and the push-when-seen rule</h2>
-<p>Start with a queue holding the source (or every source), <code>dist[s] = 0</code>, and every other <code>dist[u] = -1</code> meaning unseen. While the queue is not empty, pop <code>u</code> and relax every unseen neighbour <code>v</code>: set <code>dist[v] = dist[u] + 1</code> and push <code>v</code>. Because vertices leave the queue in non-decreasing <code>dist</code>, the first time you see <code>v</code> is the closest time.</p>
-<p>Visited-on-push is mandatory for correctness of the <code>O(n)</code> bound. If you mark at pop, two parents at the same level both push <code>v</code>, the queue can hold the same vertex many times, and a dense graph turns <code>O(n + m)</code> into something closer to <code>O(n &middot; m)</code>.</p>
-<p>Multi-source BFS is the same algorithm with several zeros in the queue at the start. Each cell's distance is then the distance to the <em>nearest</em> source, which is exactly rotting oranges and 01-matrix.</p>
+<h2>Core idea and the invariant</h2>
+<p>You need two structures. <code>dist[u]</code> holds the fewest edges from the source <code>s</code> to <code>u</code>, and it starts at <code>-1</code> everywhere, which is how you say "unseen". An <code>ArrayDeque</code> holds the vertices that have been reached but whose neighbours have not yet been scanned; this must be a FIFO queue, not a stack, because the order of the pops is the order of the distances. You set <code>dist[s] = 0</code>, push <code>s</code>, and then repeat: pop <code>u</code>, and for each neighbour <code>v</code> whose <code>dist[v]</code> is still <code>-1</code> write <code>dist[v] = dist[u] + 1</code> and push <code>v</code>. That write is the first place this module <em>relaxes an edge</em> &mdash; asking whether the walk that just reached <code>u</code>, plus the one edge <code>u &rarr; v</code>, is a cheaper way to <code>v</code> than anything recorded so far. On unit weights the answer is yes exactly once, the first time, and never again.</p>
+<p>Marking on the push is load-bearing. If you wait until you pop <code>v</code> to set <code>dist[v]</code>, every incoming edge can enqueue its own copy of <code>v</code>, and on a dense graph the queue grows toward <code>n&sup2;</code> entries. Setting <code>dist[v]</code> in the same breath as <code>q.add(v)</code> makes "already seen" and "already queued" the same test. Multi-source BFS is the same loop with a longer start: push every source at distance 0 before the loop, and the first time a vertex is reached it is the distance to the nearest source. A <code>parent[v] = u</code> write on that same relaxing push reconstructs the path by walking backwards from the target.</p>
+<p>Walk the five-node sample from 0. The edges are the same undirected triangle 0-1-2 with leaves 3 and 4. You start with <code>dist = [-1,-1,-1,-1,-1]</code>, set <code>dist[0] = 0</code>, and queue <code>[0]</code>. Pop 0, relax 0-1 and 0-2, and the queue becomes <code>[1, 2]</code> with both distances 1. Pop 1, relax 1-3 to distance 2, and skip 2 because it is already marked. Pop 2, relax 2-4 to distance 2. Pops of 3 and 4 find only marked neighbours. The finished array is <code>[0, 1, 1, 2, 2]</code>, and every first visit was a shortest unweighted path.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The invariant</span>
-    <p>At every moment the queue holds a contiguous range of distances, and every vertex already popped has its final shortest-path distance. Equivalently:</p><span class="eq">the first time v is pushed, dist[v] is the unweighted distance from s</span><p>Never overwrite <code>dist[v]</code> after that. There is no second, shorter path in an unweighted graph.</p>
-  </div>
-</aside>
-
-<aside class="callout callout--key">
-  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
-  <div class="callout__body">
-    <span class="callout__title">Parent pointers reconstruct the path</span>
-    <p>Keep <code>parent[v] = u</code> at the moment you push <code>v</code>. Walk from the target back to the source and reverse. The path is unique in a tree and <em>a</em> shortest path in a general graph. Do not store the whole path on the queue &mdash; that copies <code>O(n)</code> per vertex.</p>
+    <p>Vertices leave the queue in non-decreasing <code>dist</code> order. When <code>u</code> is popped, <code>dist[u]</code> is already the true unweighted distance from the source, and no later edge can improve it.</p><span class="eq">first push of v sets dist[v] = dist[u] + 1 = &delta;(s, v)</span><p>In plain words, the queue is a line of people standing in order of how far they live from the source, and you only ever add someone to the back of that line, so the person at the front is always the closest unfinished junction.</p>
   </div>
 </aside>
 
 <aside class="callout callout--warn">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">ArrayDeque, not Stack, not a linked list used as a stack</span>
-    <p>BFS is a queue: <code>offer</code> at the back, <code>poll</code> at the front. <code>java.util.Stack</code> is a vector with a misleading name; <code>ArrayDeque.pop</code> is LIFO and gives you DFS. Write <code>ArrayDeque&lt;Integer&gt; q</code> and only use <code>offer</code> / <code>poll</code>.</p>
+    <span class="callout__title">First visit is shortest only when every edge has the same weight</span>
+    <p>BFS counts hops. A one-hop road of weight 100 loses to a three-hop walk of weights 1+1+1, but BFS records the one-hop arrival and never reopens that vertex. Different positive weights are Dijkstra; weights in {0, 1} are 0-1 BFS on the next pages.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Relax means "try this edge as a cheaper way in"</span>
+    <p>To <em>relax</em> an edge <code>u &rarr; v</code> of weight <code>w</code> is to ask: is <code>dist[u] + w</code> smaller than the current <code>dist[v]</code>? If yes, overwrite <code>dist[v]</code>. On this page <code>w</code> is always 1 and the test succeeds only on the first visit.</p>
   </div>
 </aside>
 
 <!-- ============================================= 5. VISUAL WALKTHROUGH -->
 <h2>Visual walkthrough</h2>
 
-<h3>BFS layers on the running graph</h3>
+<h3>BFS from 0 on the 5-node sample</h3>
 
-<p>Source 0. Layer 1 is {1, 2}, layer 2 is {3}. Those layers <em>are</em> the distances.</p>
-
-<figure class="viz">
-  <div class="mermaid">
-graph TD
-  n0["0  dist 0"] --- n1["1  dist 1"]
-  n0 --- n2["2  dist 1"]
-  n1 --- n2
-  n1 --- n3["3  dist 2"]
-  n2 --- n3
-  </div>
-  <figcaption>Undirected unweighted graph. BFS from 0 visits 1 and 2 at distance 1, then 3 at distance 2 via either parent.</figcaption>
-</figure>
-
-<h3>Queue and dist[] through the run</h3>
-
-<p>The array is <code>dist</code>. <code>-1</code> means unseen. Watch the queue string in the variables: vertices enter once, in level order.</p>
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="bfsDist"></div>
-  <div class="viz-player" data-viz-target="bfsDist">
+  <div class="array-viz" data-viz-id="bfsViz"></div>
+  <div class="viz-player" data-viz-target="bfsViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "dist[u]  (-1 = unseen)",
       "array": [
-        -1,
-        -1,
-        -1,
-        -1
+        0,
+        1,
+        1,
+        2,
+        2
       ],
       "indexLabels": [
         "0",
         "1",
         "2",
-        "3"
+        "3",
+        "4"
       ],
       "vars": [
         "u",
         "queue",
-        "dist[u]"
+        "v",
+        "distV"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
-          "note": "Seed: push 0, dist[0] = 0. Queue = [0].",
-          "arr": [
-            0,
-            -1,
-            -1,
-            -1
-          ],
+          "note": "Source 0 is marked at distance 0 and sits alone in the queue; the other four vertices are still unseen at -1.",
           "active": [
             0
           ],
           "dim": [
             1,
             2,
-            3
-          ],
-          "values": {
-            "u": "seed",
-            "queue": "[0]",
-            "dist[u]": 0
-          }
-        },
-        {
-          "note": "Pop 0. Neighbours 1 and 2 are unseen. Push 1 with dist 1.",
-          "arr": [
-            0,
-            1,
-            -1,
-            -1
-          ],
-          "active": [
-            1
-          ],
-          "done": [
-            0
-          ],
-          "dim": [
-            2,
-            3
+            3,
+            4
           ],
           "values": {
             "u": 0,
-            "queue": "[1]",
-            "dist[u]": 0
+            "queue": "[0]",
+            "v": "—",
+            "distV": 0
           }
         },
         {
-          "note": "Still processing 0: push 2 with dist 1. Queue = [1, 2]. Layer 1 is complete.",
-          "arr": [
-            0,
-            1,
-            1,
-            -1
-          ],
+          "note": "Pop 0 and relax both unseen neighbours: 1 and 2 enter the queue at distance 1, marked on the push so neither will be enqueued again.",
           "active": [
+            1,
             2
           ],
           "done": [
             0
-          ],
-          "best": [
-            1
-          ],
-          "dim": [
-            3
           ],
           "values": {
             "u": 0,
             "queue": "[1, 2]",
-            "dist[u]": 0
+            "v": "1,2",
+            "distV": 1
           }
         },
         {
-          "note": "Pop 1. Neighbour 0 is seen. Neighbour 3 is unseen: dist[3] = 2, push 3.",
-          "arr": [
-            0,
-            1,
-            1,
-            2
-          ],
+          "note": "Pop 1. Neighbour 3 is unseen so it is pushed at distance 2; neighbour 2 is already marked and is skipped.",
           "active": [
             3
           ],
@@ -284,276 +221,229 @@ graph TD
             0,
             1
           ],
-          "best": [
-            2
-          ],
           "values": {
             "u": 1,
             "queue": "[2, 3]",
-            "dist[u]": 1
+            "v": 3,
+            "distV": 2
           }
         },
         {
-          "note": "Pop 2. Neighbours 0, 1, 3 are all already seen. No push.",
-          "arr": [
-            0,
-            1,
-            1,
-            2
+          "note": "Pop 2. Neighbour 4 is unseen so it is pushed at distance 2; 0 and 1 were marked earlier and are skipped.",
+          "active": [
+            4
           ],
           "done": [
             0,
             1,
             2
           ],
-          "active": [
-            3
-          ],
           "values": {
             "u": 2,
-            "queue": "[3]",
-            "dist[u]": 1
+            "queue": "[3, 4]",
+            "v": 4,
+            "distV": 2
           }
         },
         {
-          "note": "Pop 3. Neighbours 1 and 2 seen. Queue empty. Distances [0, 1, 1, 2] are final.",
-          "arr": [
-            0,
-            1,
-            1,
-            2
-          ],
+          "note": "Pop 3. Its only neighbour is 1, already marked, so the queue shrinks to the leftover vertex 4.",
           "done": [
             0,
             1,
             2,
             3
           ],
+          "active": [
+            4
+          ],
           "values": {
             "u": 3,
-            "queue": "[]",
-            "dist[u]": 2
+            "queue": "[4]",
+            "v": "—",
+            "distV": "—"
           }
         },
         {
-          "note": "Shortest path 0 to 3 has length 2. Either 0-1-3 or 0-2-3; parent[] would record whichever neighbour pushed 3 first.",
-          "arr": [
-            0,
-            1,
-            1,
-            2
-          ],
+          "note": "Pop 4 and the queue empties. The finished distances [0, 1, 1, 2, 2] are shortest because every edge had the same weight.",
           "best": [
             0,
-            3
-          ],
-          "done": [
             1,
-            2
+            2,
+            3,
+            4
           ],
           "values": {
-            "u": "ans",
+            "u": 4,
             "queue": "[]",
-            "dist[u]": 2
+            "v": "done",
+            "distV": 2
           }
         }
       ]
     }
     </script>
   </div>
-  <figcaption>First touch sets dist[v] forever. The queue never holds a vertex twice because we mark on push.</figcaption>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>BFS layers from source 0</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n0["0 dist=0"] --- n1["1 dist=1"]
+  n0 --- n2["2 dist=1"]
+  n1 --- n2
+  n1 --- n3["3 dist=2"]
+  n2 --- n4["4 dist=2"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
 </figure>
 
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>int[] dist</code></strong> of length <code>n</code>, fill with <code>-1</code> (or a separate <code>boolean[] seen</code>).</li>
-  <li><strong>Seed the queue</strong> with every source. Set <code>dist[s] = 0</code> and mark seen <em>before</em> the loop.</li>
-  <li><strong>While the queue is not empty</strong>, <code>u = q.poll()</code>.</li>
-  <li><strong>For each neighbour <code>v</code></strong> of <code>u</code>, skip if <code>dist[v] != -1</code>.</li>
-  <li><strong>Otherwise</strong> set <code>dist[v] = dist[u] + 1</code>, set <code>parent[v] = u</code> if you need the path, and <code>q.offer(v)</code>.</li>
-  <li><strong>After the loop</strong>, <code>dist[t] == -1</code> means unreachable; otherwise it is the shortest unweighted distance.</li>
-  <li><strong>If the graph may be disconnected</strong> and you need every component, wrap the above in <code>for (s = 0; s &lt; n; s++) if (dist[s] == -1) bfs(s)</code>.</li>
+  <li><strong>Fill dist with -1, set dist[s] = 0, and push s into an ArrayDeque.</strong> The -1 is the unseen sentinel, and a deque used with add/poll is a FIFO queue; addLast/pollLast would turn it into a stack and destroy the layer order.</li>
+  <li><strong>While the queue is nonempty, pop the front vertex u.</strong> Because the queue is FIFO, u is a closest unfinished vertex, so its distance is already final and you are ready to look at its neighbours.</li>
+  <li><strong>For each neighbour v still at -1, write dist[v] = dist[u] + 1 and push v.</strong> That is the relaxation of the unit-weight edge u &rarr; v: the first time it succeeds it is also the last, which is why BFS never reopens a vertex.</li>
+  <li><strong>Mark on the push, never on the pop.</strong> Setting dist[v] in the same breath as q.add(v) means "already queued" and "already seen" are one test, so a vertex with many incoming edges enters the queue once.</li>
+  <li><strong>For multi-source problems, push every source at distance 0 before the loop starts.</strong> The first time any other vertex is reached it is then the distance to the nearest source, which is why rotting oranges and 01-matrix are one BFS, not n of them.</li>
+  <li><strong>To reconstruct a path, store parent[v] = u on that same relaxing push, then walk from t back to s and reverse.</strong> The walk has length dist[t], and if dist[t] is still -1 the target was unreachable.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>BFS from vertex 0 on the four-node graph. Each row is a pop, plus the pushes it performs.</p>
+<p>Breadth-first search from vertex 0 on the running five-node graph. Each pop expands one layer, and a neighbour is marked in the same breath as it is pushed.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
     <thead>
-      <tr><th>u</th><th>dist[u]</th><th>queue before pop</th><th>pushes</th><th>queue after</th><th>Action / why</th></tr>
+      <tr><th>u</th><th>queue</th><th>v</th><th>distV</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr><td>—</td><td>0</td><td>[]</td><td>seed 0</td><td>[0]</td><td>Initialise.</td></tr>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>[0]</td><td>1, 2</td><td>[1, 2]</td><td>First layer discovered.</td></tr>
-      <tr><td>1</td><td>1</td><td>[1, 2]</td><td>3</td><td>[2, 3]</td><td>3 seen for the first time, dist = 2.</td></tr>
-      <tr><td>2</td><td>1</td><td>[2, 3]</td><td>none</td><td>[3]</td><td>3 already seen; skip.</td></tr>
-      <tr class="trace-table__row--change"><td>3</td><td>2</td><td>[3]</td><td>none</td><td>[]</td><td>Done. dist = [0, 1, 1, 2].</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>[0]</td><td>—</td><td>0</td><td>Source 0 is marked at distance 0 and sits alone in the queue; the other four vertices are still unseen at -1.</td></tr>
+      <tr><td>0</td><td>[1, 2]</td><td>1,2</td><td>1</td><td>Pop 0 and relax both unseen neighbours: 1 and 2 enter the queue at distance 1, marked on the push so neither will be enqueued again.</td></tr>
+      <tr><td>1</td><td>[2, 3]</td><td>3</td><td>2</td><td>Pop 1. Neighbour 3 is unseen so it is pushed at distance 2; neighbour 2 is already marked and is skipped.</td></tr>
+      <tr><td>2</td><td>[3, 4]</td><td>4</td><td>2</td><td>Pop 2. Neighbour 4 is unseen so it is pushed at distance 2; 0 and 1 were marked earlier and are skipped.</td></tr>
+      <tr><td>3</td><td>[4]</td><td>—</td><td>—</td><td>Pop 3. Its only neighbour is 1, already marked, so the queue shrinks to the leftover vertex 4.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>[]</td><td>done</td><td>2</td><td>Pop 4 and the queue empties. The finished distances [0, 1, 1, 2, 2] are shortest because every edge had the same weight.</td></tr>
     </tbody>
   </table>
 </div>
-
-<p>Vertex 3 was offered by 1, not by 2. A parent pointer would store <code>parent[3] = 1</code>, reconstructing path <code>0-1-3</code>.</p>
 
 <!-- ============================================ 8. JAVA IMPLEMENTATION -->
 <h2>Java implementation</h2>
 
 <div class="tabs">
   <div class="tabs__list" role="tablist" aria-label="Breadth-First Search implementations">
-    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute (DFS distances)</button>
-    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal BFS</button>
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
     <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
   </div>
 
   <div class="tabs__panel is-active" data-panel="Brute">
-    <p>Exploring every simple path and keeping the shortest works, and shows why BFS exists: this is exponential on a dense graph.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BfsBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayList;
-    import java.util.Arrays;
-    import java.util.List;
-    
-    public class BfsBrute {
-    
-        static void dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int d, int[] best, boolean[] on) {
-            if (d &gt;= best[u]) {
-                return;
-            }
-            best[u] = d;
-            on[u] = true;
-            for (int v : g.get(u)) {
-                if (!on[v]) {
-                    dfs(g, v, d + 1, best, on);
-                }
-            }
-            on[u] = false;
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">AllPathsMin.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class AllPathsMin {
+        static int best = Integer.MAX_VALUE;
+        static void dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int t, boolean[] seen, int d) {
+            if (u == t) { best = Math.min(best, d); return; }
+            seen[u] = true;
+            for (int v : g.get(u)) if (!seen[v]) dfs(g, v, t, seen, d + 1);
+            seen[u] = false;
         }
-    
         public static void main(String[] args) {
-            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
-            int[] best = new int[4];
-            Arrays.fill(best, Integer.MAX_VALUE);
-            dfs(g, 0, 0, best, new boolean[4]);
-            System.out.println(Arrays.toString(best));
+            List&lt;List&lt;Integer&gt;&gt; g = Adj.sample();
+            dfs(g, 0, 4, new boolean[5], 0);
+            System.out.println(best);
         }
-        // Input : same four-node graph, source 0
-        // Output: [0, 1, 1, 2]
+        // Input : sample graph, 0 to 4
+        // Output: 2
+        static class Adj {
+            static List&lt;List&lt;Integer&gt;&gt; sample() {
+                List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
+                for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+                int[][] e = {{0,1},{0,2},{1,2},{1,3},{2,4}};
+                for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+                return g;
+            }
+        }
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Optimal">
-    <p>Mark on push. Returns <code>dist</code>; <code>-1</code> means unreachable.</p>
-    <div class="code" data-highlight="16-20">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Bfs.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BFS.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.ArrayDeque;
     import java.util.ArrayList;
     import java.util.Arrays;
     import java.util.List;
     
-    public class Bfs {
-    
+    public class BFS {
         static int[] bfs(List&lt;List&lt;Integer&gt;&gt; g, int s) {
             int n = g.size();
             int[] dist = new int[n];
             Arrays.fill(dist, -1);
             ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
             dist[s] = 0;
-            q.offer(s);
+            q.add(s);
             while (!q.isEmpty()) {
                 int u = q.poll();
-                for (int v : g.get(u)) {
-                    if (dist[v] == -1) {
-                        dist[v] = dist[u] + 1;
-                        q.offer(v);
-                    }
+                for (int v : g.get(u)) if (dist[v] &lt; 0) {
+                    dist[v] = dist[u] + 1;
+                    q.add(v);
                 }
             }
             return dist;
         }
-    
         public static void main(String[] args) {
             List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{0,2},{1,2},{1,3},{2,4}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
             System.out.println(Arrays.toString(bfs(g, 0)));
         }
-        // Input : n=4, undirected edges as above, source 0
-        // Output: [0, 1, 1, 2]
+        // Input : sample undirected graph, source 0
+        // Output: [0, 1, 1, 2, 2]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Template">
-    <p>Multi-source plus parent pointers. Seed <code>sources</code> with every start cell; reconstruct with <code>parent</code>.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">BfsTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">GridBFS.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.ArrayDeque;
-    import java.util.ArrayList;
     import java.util.Arrays;
-    import java.util.List;
     
-    public class BfsTemplate {
-    
-        static int[] bfs(List&lt;List&lt;Integer&gt;&gt; g, int[] sources, int[] parent) {
-            int n = g.size();
-            int[] dist = new int[n];
-            Arrays.fill(dist, -1);
-            Arrays.fill(parent, -1);
-            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
-            for (int s : sources) {
-                if (dist[s] == -1) {
-                    dist[s] = 0;
-                    q.offer(s);
-                }
-            }
+    public class GridBFS {
+        static final int[] DR = {-1, 1, 0, 0}, DC = {0, 0, -1, 1};
+        static int[][] dist(int[][] grid) {
+            int R = grid.length, C = grid[0].length;
+            int[][] d = new int[R][C];
+            for (int[] row : d) Arrays.fill(row, -1);
+            ArrayDeque&lt;int[]&gt; q = new ArrayDeque&lt;&gt;();
+            for (int r = 0; r &lt; R; r++)
+                for (int c = 0; c &lt; C; c++)
+                    if (grid[r][c] == 0) { d[r][c] = 0; q.add(new int[]{r, c}); }
             while (!q.isEmpty()) {
-                int u = q.poll();
-                for (int v : g.get(u)) {
-                    if (dist[v] == -1) {
-                        dist[v] = dist[u] + 1;
-                        parent[v] = u;
-                        q.offer(v);
-                    }
+                int[] u = q.poll();
+                for (int k = 0; k &lt; 4; k++) {
+                    int nr = u[0] + DR[k], nc = u[1] + DC[k];
+                    if (nr &lt; 0 || nr &gt;= R || nc &lt; 0 || nc &gt;= C || d[nr][nc] &gt;= 0) continue;
+                    d[nr][nc] = d[u[0]][u[1]] + 1;
+                    q.add(new int[]{nr, nc});
                 }
             }
-            return dist;
+            return d;
         }
-    
         public static void main(String[] args) {
-            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
-            int[] parent = new int[4];
-            int[] dist = bfs(g, new int[] {0}, parent);
-            System.out.println(Arrays.toString(dist));
-            System.out.println("parent[3]=" + parent[3]);
+            int[][] g = {{0,1,1},{1,1,1},{1,1,1}};
+            System.out.println(dist(g)[2][2]);
         }
-        // Input : source 0
-        // Output: [0, 1, 1, 2]
-        //         parent[3]=1
+        // Input : 3x3 grid, source at (0,0)
+        // Output: 4
     }</code></pre>
     </div>
   </div>
@@ -565,13 +455,13 @@ graph TD
 <div class="complexity">
   <div class="complexity__badges">
     <span class="badge badge--time">Time O(n + m)</span>
-    <span class="badge badge--space">Space O(n) for queue, dist, parent</span>
+    <span class="badge badge--space">Space O(n)</span>
   </div>
 
   <div class="complexity__derivation">
-    <p>Each vertex is pushed at most once (visited-on-push). Each edge is examined at most twice (once from each end if undirected):</p>
-    <p><span class="eq">T = &Theta;(n) + &Theta;(m) = &Theta;(n + m)</span></p>
-    <p>The queue holds at most <code>n</code> integers. On a grid, replace <code>n</code> with cells and <code>m</code> with <code>4 &middot;</code> cells. On an implicit state graph, <code>n</code> is the number of reachable states &mdash; that is the number you must be able to store.</p>
+    <p>Each vertex is pushed at most once, because it is marked in the same breath as the push. Each undirected edge is then looked at from both ends, a constant amount of work per edge. The queue and the dist array each hold at most n integers.</p>
+    <p><span class="eq">T = &Theta;(n + m), S = queue + dist = O(n)</span></p>
+    <p>At n = 10&#8309; and m = 2&times;10&#8309; that is a few hundred thousand operations, well inside two seconds. Marking on pop instead would enqueue a vertex once per incoming edge and can grow the queue toward n&sup2; entries on a dense graph, about 10&#185;&#8304; integers at n = 10&#8309;, which both times out and runs out of memory.</p>
   </div>
 
   <table class="complexity__compare">
@@ -579,11 +469,10 @@ graph TD
       <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
     </thead>
     <tbody>
-      <tr><td>BFS, unit weights</td><td>O(n + m)</td><td>O(n)</td><td>Default shortest path</td></tr>
-      <tr><td>DFS distances</td><td>exponential</td><td>O(n)</td><td>Wrong tool; only for DAGs with memo</td></tr>
-      <tr><td>Dijkstra</td><td>O((n + m) log n)</td><td>O(n)</td><td>When weights differ and are non-negative</td></tr>
-      <tr><td>0-1 BFS</td><td>O(n + m)</td><td>O(n)</td><td>Weights in {0, 1} only</td></tr>
-      <tr><td>Multi-source BFS</td><td>O(n + m)</td><td>O(n)</td><td>Same code, several seeds</td></tr>
+      <tr><td>DFS path</td><td>O(n+m) but not shortest</td><td>O(n)</td><td>Components, not distances</td></tr>
+      <tr><td>BFS</td><td>O(n+m)</td><td>O(n)</td><td>Unit weights, first visit is best</td></tr>
+      <tr><td>0-1 BFS</td><td>O(n+m)</td><td>O(n)</td><td>Weights in {0,1}</td></tr>
+      <tr><td>Dijkstra</td><td>O(m log n)</td><td>O(n)</td><td>Non-negative weights</td></tr>
     </tbody>
   </table>
 </div>
@@ -593,34 +482,29 @@ graph TD
 
 <ul class="pitfalls">
   <li>
-    <span class="pitfalls__title">Marking visited when you pop</span>
-    <div class="pitfalls__bug">Two parents at distance d both push v. The queue grows with duplicates; on a complete graph this is catastrophic.</div>
-    <div class="pitfalls__fix">Set dist[v] (or seen[v] = true) at the moment you offer v. The test <code>if (dist[v] == -1)</code> is the mark.</div>
+    <span class="pitfalls__title">Marking visited at pop</span>
+    <div class="pitfalls__bug">Waiting until pop to set dist[v] looks like "I mark a vertex when I process it", but every incoming edge then enqueues its own copy of v and the queue can grow toward n&sup2; on a dense graph.</div>
+    <div class="pitfalls__fix">Set dist[v] (or seen[v]) in the same breath as q.add(v). A vertex whose dist is no longer -1 is already queued and must be skipped.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Using a stack</span>
-    <div class="pitfalls__bug"><code>ArrayDeque.push / pop</code> or <code>java.util.Stack</code> gives DFS order. Distances are then wrong on any graph that is not a tree with a lucky shape.</div>
-    <div class="pitfalls__fix">offer / poll only. If you need DFS, say so and use an explicit stack or recursion.</div>
+    <span class="pitfalls__title">Using Stack / DFS accidentally</span>
+    <div class="pitfalls__bug">ArrayDeque used with push/pop (or addLast/pollLast) is last-in first-out, so you visit a deep path first and the first arrival is no longer the fewest hops.</div>
+    <div class="pitfalls__fix">Use add and poll, which are FIFO. If you need a stack, say so and switch to DFS; do not let a deque silently become one.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Treating weighted edges as unit</span>
-    <div class="pitfalls__bug">Running BFS on a Dijkstra problem. The first path to v is the fewest-edges path, not the cheapest.</div>
-    <div class="pitfalls__fix">BFS is legal iff every edge you traverse costs the same. Otherwise Dijkstra or 0-1 BFS.</div>
+    <span class="pitfalls__title">Weighted edges treated as unit</span>
+    <div class="pitfalls__bug">A graph whose edges have weights 1 and 100 is fed to BFS, which reports the hop-shortest path. That looks correct on paper because the code matches the unweighted template, but a 3-hop walk of 1+1+1 beats a 1-hop of 100.</div>
+    <div class="pitfalls__fix">If weights differ and are non-negative, use Dijkstra. If they are only 0 and 1, use 0-1 BFS. Ordinary BFS is legal only when every edge has the same weight.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Disconnected graphs and forgotten sources</span>
-    <div class="pitfalls__bug">One BFS from vertex 0, then treating unvisited vertices as unreachable when the problem asked for components, or forgetting to seed every rotten orange.</div>
-    <div class="pitfalls__fix">Match the seed set to the question. Connectivity of the whole graph: loop over unvisited starts. Nearest source: put every source in the queue at distance 0.</div>
+    <span class="pitfalls__title">Disconnected source</span>
+    <div class="pitfalls__bug">dist[t] stays -1 and you print it as a length, or you run one BFS from vertex 0 and miss a component that never touches 0.</div>
+    <div class="pitfalls__fix">Treat -1 as unreachable and do not add it into an answer sum. For a property of every component, loop over unseen vertices and start a fresh BFS at each.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Storing the path on the queue</span>
-    <div class="pitfalls__bug"><code>Queue&lt;List&lt;Integer&gt;&gt;</code> copying the path at every step. Memory becomes O(n&sup2;) and Java's allocator dies before the algorithm does.</div>
-    <div class="pitfalls__fix">parent[v] = u, then walk back from the target. One integer per vertex.</div>
-  </li>
-  <li>
-    <span class="pitfalls__title">Integer overflow on dist + 1 in weird state spaces</span>
-    <div class="pitfalls__bug">Rare in plain graphs; common when dist is used as a map key mixed with other coordinates. Less often: using Integer.MAX_VALUE as unseen and adding 1.</div>
-    <div class="pitfalls__fix">Unseen = -1, never MAX_VALUE + 1. On grids pack coordinates as <code>r * cols + c</code> in an int; n*m fits if you checked.</div>
+    <span class="pitfalls__title">Grid without bounds checks</span>
+    <div class="pitfalls__bug">The four deltas walk nr or nc off the board, and the next index either throws or wraps to a cell that is not a real neighbour.</div>
+    <div class="pitfalls__fix">Reject nr &lt; 0 || nr &ge; R || nc &lt; 0 || nc &ge; C before you read the grid. The bounds test is cheaper than a try/catch and is part of the neighbour generation.</div>
   </li>
 </ul>
 
@@ -635,27 +519,21 @@ graph TD
     <tbody>
       <tr>
         <td>Multi-source</td>
-        <td>Seed every source at dist 0. Distances become distance-to-nearest-source.</td>
-        <td><code>for (int s : sources) { dist[s]=0; q.offer(s); }</code></td>
-        <td>LC 994, LC 542, LC 286</td>
+        <td>All sources in the queue at dist 0 before the loop.</td>
+        <td><code>for (s : sources) { dist[s]=0; q.add(s); }</code></td>
+        <td>Rotting oranges, 01-matrix</td>
       </tr>
       <tr>
-        <td>0-1 weights</td>
-        <td>Use a deque: 0-edges to the front, 1-edges to the back.</td>
-        <td><code>See the 0-1 BFS page; do not hack BFS with +0/+1 naively without a deque.</code></td>
-        <td><a href="zero-one-bfs.html">0-1 BFS</a></td>
-      </tr>
-      <tr>
-        <td>BFS on a tree for diameter</td>
-        <td>BFS from any node to a farthest u, then BFS from u. The second distance is the diameter.</td>
-        <td><code>int u = farthest(bfs(g, 0)); return max(bfs(g, u));</code></td>
-        <td>CSES Tree Diameter</td>
+        <td>0-1 BFS</td>
+        <td>Deque: weight 0 to front, weight 1 to back.</td>
+        <td><code>if (w==0) q.addFirst(v); else q.addLast(v);</code></td>
+        <td>Next page</td>
       </tr>
       <tr>
         <td>Bidirectional BFS</td>
-        <td>Two queues, from s and from t, meet in the middle. Helps huge implicit graphs (word ladder).</td>
-        <td><code>Alternate expanding the smaller frontier.</code></td>
-        <td>LC 127</td>
+        <td>Expand from s and t; meet in the middle.</td>
+        <td><code>alternate pop from qs and qt</code></td>
+        <td>Word ladder, large implicit graphs</td>
       </tr>
     </tbody>
   </table>
@@ -666,30 +544,30 @@ graph TD
 
 <div class="followups">
   <details class="followup">
-    <summary>Why is the first visit the shortest?</summary>
+    <summary>Why is the first visit optimal?</summary>
     <div class="followup__body">
-      <p>Edges cost 1. The queue is FIFO, so vertices leave in non-decreasing distance. When v is first reached it is from some u at distance d, and every unprocessed vertex has distance at least d. No later path can be shorter. This fails the moment edges can cost 0 or more than 1.</p>
+      <p>Only because every edge has the same weight. A walk that uses fewer edges is then always cheaper than a walk that uses more, and BFS expands in hop-count order, so the first arrival has the fewest hops. If one edge is heavier than another, a later walk with more hops can be cheaper, and BFS will already have frozen the worse first arrival. That is the whole reason this page is not Dijkstra.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>BFS vs DFS for connectivity?</summary>
+    <summary>How do you reconstruct the path?</summary>
     <div class="followup__body">
-      <p>Both are O(n + m) and both find components. BFS uses more memory on a long path (the queue holds a layer) and less on a star (the queue holds the leaves of one vertex). DFS risks StackOverflowError on a path of 10^5. Prefer BFS when you also want distances; prefer an explicit-stack DFS when you only want a component and depth can be huge.</p>
+      <p>When you first push v from u, write parent[v] = u. That edge is the last step of a shortest path to v. After the search, start at t and follow parent until you reach s, collecting vertices, then reverse the list. The length of that list minus one equals dist[t], which is a useful sanity check.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>How do I BFS a grid without building lists?</summary>
+    <summary>BFS on a tree?</summary>
     <div class="followup__body">
-      <p>Encode a cell as <code>id = r * cols + c</code>. From (r, c) try the four deltas, skip out-of-bounds and blocked cells, and treat the neighbour id as v. visited / dist is a 2D array or a flat array of length rows*cols.</p>
+      <p>The same code works, and because a tree has a unique path between any pair the distances are unique as well. Level order of a binary tree is exactly this queue. Two BFS runs find the diameter: start at any node, BFS to a farthest node, then BFS again from there; the second distance is the diameter. One DFS can do the same job if you only need the length.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>Can I early-exit when I pop the target?</summary>
+    <summary>When does BFS use more memory than DFS?</summary>
     <div class="followup__body">
-      <p>Yes. Because distances are final at pop (they were already final at push), the moment you poll t you may return dist[t]. Do not exit at push if you still need something else from the same layer; for a single target, exiting at push is also correct.</p>
+      <p>On a complete binary tree the last level holds n/2 nodes, so the BFS queue is &Theta;(n) while a DFS stack is only O(height) = O(log n). On a single path the situation reverses: BFS holds one vertex at a time and DFS recursion is depth n. Quote the worst case that matches the input shape, not a slogan that one is always leaner.</p>
     </div>
   </details>
 </div>
@@ -705,70 +583,60 @@ graph TD
     </thead>
     <tbody>
       <tr><td>1</td>
-        <td><a href="https://leetcode.com/problems/flood-fill/" target="_blank" rel="noopener">Flood Fill</a></td>
-        <td><span class="badge badge--lc">LC 733</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>BFS or DFS on a grid, recolour a component</td></tr>
+        <td><a href="https://leetcode.com/problems/binary-tree-level-order-traversal/" target="_blank" rel="noopener">Binary Tree Level Order Traversal</a></td>
+        <td><span class="badge badge--lc">LC 102</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Tree BFS</td></tr>
       <tr><td>2</td>
-        <td><a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener">Number of Islands</a></td>
+        <td><a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener">Number Of Islands</a></td>
         <td><span class="badge badge--lc">LC 200</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Component count; BFS from each unvisited land</td></tr>
+        <td>Grid flood; DFS also works</td></tr>
       <tr><td>3</td>
         <td><a href="https://leetcode.com/problems/01-matrix/" target="_blank" rel="noopener">01 Matrix</a></td>
         <td><span class="badge badge--lc">LC 542</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Multi-source BFS from every 0</td></tr>
+        <td>Multi-source BFS</td></tr>
       <tr><td>4</td>
         <td><a href="https://leetcode.com/problems/rotting-oranges/" target="_blank" rel="noopener">Rotting Oranges</a></td>
         <td><span class="badge badge--lc">LC 994</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Multi-source, answer is max dist</td></tr>
+        <td>Multi-source, minutes = max dist</td></tr>
       <tr><td>5</td>
-        <td><a href="https://leetcode.com/problems/shortest-path-in-binary-matrix/" target="_blank" rel="noopener">Shortest Path in Binary Matrix</a></td>
-        <td><span class="badge badge--lc">LC 1091</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>8-way BFS on a grid</td></tr>
-      <tr><td>6</td>
         <td><a href="https://leetcode.com/problems/word-ladder/" target="_blank" rel="noopener">Word Ladder</a></td>
         <td><span class="badge badge--lc">LC 127</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Implicit graph, bidirectional BFS</td></tr>
+        <td>Implicit BFS</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://leetcode.com/problems/shortest-path-in-binary-matrix/" target="_blank" rel="noopener">Shortest Path In Binary Matrix</a></td>
+        <td><span class="badge badge--lc">LC 1091</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>8-way grid BFS</td></tr>
       <tr><td>7</td>
-        <td><a href="https://cses.fi/problemset/task/1667" target="_blank" rel="noopener">Message Route</a></td>
-        <td><span class="badge badge--gfg">CSES</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Unweighted shortest path + reconstruct</td></tr>
+        <td><a href="https://codeforces.com/problemset/problem/1037/D" target="_blank" rel="noopener">Valid BFS?</a></td>
+        <td><span class="badge badge--cf">CF 1037D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Check a claimed BFS order</td></tr>
       <tr><td>8</td>
-        <td><a href="https://codeforces.com/problemset/problem/580/C" target="_blank" rel="noopener">Kefa and Park</a></td>
-        <td><span class="badge badge--cf">CF 580C</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>BFS/DFS on a tree with a running constraint</td></tr>
-      <tr><td>9</td>
-        <td><a href="https://www.geeksforgeeks.org/problems/bfs-traversal-of-graph/1" target="_blank" rel="noopener">BFS of graph</a></td>
-        <td><span class="badge badge--gfg">GfG</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Plain traversal order from node 0</td></tr>
-      <tr><td>10</td>
-        <td><a href="https://atcoder.jp/contests/abc007/tasks/abc007_3" target="_blank" rel="noopener">Maze Master</a></td>
-        <td><span class="badge badge--atc">ABC 007C</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Grid BFS, classic first problem</td></tr>
+        <td><a href="https://leetcode.com/problems/shortest-path-in-a-grid-with-obstacles-elimination/" target="_blank" rel="noopener">Shortest Path In A Grid With Obstacles Elimination</a></td>
+        <td><span class="badge badge--lc">LC 1293</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>State = (r,c,k)</td></tr>
     </tbody>
   </table>
 </div>
 
 <details class="spoiler">
-  <summary>Hint for LC 542 &mdash; multi-source, not per-cell BFS</summary>
+  <summary>Hint for the hardest practice problem</summary>
   <div class="spoiler__body">
-    <p>BFS from every 1 is O(n&sup2; m&sup2;). Put every 0 in the queue at distance 0 and run one BFS. Each 1 receives the distance to the nearest 0. Transferable: <em>"distance to the nearest X" is one multi-source BFS from all X.</em></p>
+    <p>Name the state / invariant first. The code is then mechanical.</p>
   </div>
 </details>
 
 <details class="spoiler">
-  <summary>Hint for LC 127 &mdash; generate neighbours without a full product</summary>
+  <summary>Hint for the second-hardest</summary>
   <div class="spoiler__body">
-    <p>From a word, change each position to each letter and test membership in a HashSet of remaining words. That is 26 * L, not N&sup2; L. Bidirectional BFS from beginWord and endWord cuts the branching. Remove a word from the set when you push it (visited-on-push).</p>
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
   </div>
 </details>
 
@@ -776,13 +644,13 @@ graph TD
 <div class="recap">
   <h2>Recap</h2>
   <ul>
-    <li><strong>Mark on push, poll from an ArrayDeque</strong>. First visit = shortest unweighted path.</li>
-    <li><strong>dist[v] = dist[u] + 1</strong> once; never relax again.</li>
-    <li><strong>Multi-source is the same loop</strong> with several zeros in the queue.</li>
-    <li><strong>parent[] reconstructs</strong>; do not store paths on the queue.</li>
-    <li><strong>Not for unequal weights</strong> &mdash; that is Dijkstra or 0-1 BFS.</li>
+    <li><strong>FIFO queue</strong>, ArrayDeque, mark on push.</li>
+    <li><strong>First visit is shortest</strong> on unit-weight graphs.</li>
+    <li><strong>Multi-source:</strong> all sources at dist 0 first.</li>
+    <li><strong>Grids stay implicit</strong> with dr/dc.</li>
+    <li><strong>Weighted &ne; BFS</strong> &mdash; Dijkstra or 0-1 BFS.</li>
   </ul>
-  <div class="recap__oneliner">ArrayDeque offer/poll | mark on push | dist[v]=dist[u]+1 | multi-source = many seeds</div>
+  <div class="recap__oneliner">dist=-1; dist[s]=0; q.add(s); while q: u=poll; for v unseen: dist[v]=dist[u]+1, push</div>
 </div>
 
 <div class="prevnext"></div>

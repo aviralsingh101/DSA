@@ -6,7 +6,7 @@ export const topics = [
 pack({
   id: "dp-foundations",
   difficulty: "Easy",
-  readTime: "24 min",
+  readTime: "32 min",
   tagline: "DP is not a list of named tricks &mdash; it is a pipeline: name the state, write the transition, fix the base, pick an order (or memoize), then shave the space.",
   tags: [ "DP", "state", "memoization", "P0" ],
   prereqs: [
@@ -14,11 +14,11 @@ pack({
     [ "Constraints → Complexity", "../00-foundations/constraints-to-complexity.html" ],
   ],
   why: [
-    "Most interview DP failures are not arithmetic. They are a missing definition of <em>what a state means</em>, a transition that does not cover every way to form that state, or a loop that reads a cell before it has been written. The named problems (knapsack, LIS, LCS, digit DP) are the same pipeline with different state shapes.",
-    "The reason the pipeline is worth drilling is that it is mechanical. Once you can write \"dp[i] = number of ways to climb i stairs\" and \"dp[i] = dp[i-1] + dp[i-2]\" without blinking, every later page on this module is a change of coordinates, not a new subject.",
-    "Climbing stairs / Fibonacci is the smallest complete example: overlapping subproblems, an optimal-substructure recurrence, a base case, a linear order, and a rolling-array space optimisation. We run that example to the ground so the later families can assume the vocabulary.",
+    "You are given a staircase of <code>n</code> stairs, and from any landing you may climb one stair or two. You must count how many different sequences of steps land exactly on the top. For <code>n = 3</code> the sequences are <code>1+1+1</code>, <code>1+2</code> and <code>2+1</code>, so the answer is 3. The same shape of question &mdash; how many ways, what is the cheapest way, can you reach &mdash; appears on knapsacks, grids, strings and subsets later in this module, and every one of them is this staircase with a different state.",
+    "The obvious approach is to recurse: from height <code>i</code>, try a step of 1 and a step of 2, and add the two answers. That tree of calls is correct, but it recomputes the same height over and over. The number of leaves grows like a Fibonacci number, roughly <code>1.6<sup>n</sup></code> &mdash; at <code>n = 40</code> you are already looking at more than a hundred million calls, and at <code>n = 45</code> the judge will cut you off. Storing the answer for each height the first time you compute it, then reading it back, collapses that tree into a single pass over <code>n</code> cells.",
+    "The signal in a real statement is a \"number of ways\" or \"minimum cost\" question sitting next to a size that would explode if you recursed naked, together with <code>n</code> small enough that a table of that size fits &mdash; typically <code>n &le; 10<sup>4</sup></code> for a 1-D table, or <code>n</code> around 40 when the state is a subset. Climbing stairs is the smallest complete example of the whole pipeline: overlapping subproblems, a recurrence that builds an answer from smaller ones, a base case, a left-to-right fill order, and a rolling pair of integers that replaces the array. Later pages change the coordinates of the state; they do not change the pipeline.",
   ],
-  insight: "A DP state is a question with a numeric answer. The transition is how that answer is assembled from strictly smaller questions. If you cannot say those two sentences out loud, you are not ready to code.",
+  insight: "A DP state is a smaller question with a numeric answer, and the transition is how that answer is assembled from strictly smaller questions. If you cannot say those two sentences out loud before you open an editor, you are not ready to code.",
   yes: [
     "\"Number of ways\" / \"minimum cost\" / \"can you reach\" on a structure with overlapping subproblems",
     "A recurrence that would be exponential if you recurse without storing answers",
@@ -52,10 +52,11 @@ pack({
   constraint: "A table of size S and a transition of cost T must have S &middot; T under about 10&#8312;. That single inequality is how you reject an over-large state before you write it. Answers that sum ways usually need <code>long</code> and a modulus.",
   coreHeading: "The five-line pipeline",
   core: [
-    "<strong>State.</strong> Write a sentence: <code>dp[i]</code> = number of ways to climb <code>i</code> stairs taking steps of 1 or 2. Until that sentence is unambiguous, do not open an editor.",
-    "<strong>Transition and base.</strong> The last step was 1 or 2, so <code>dp[i] = dp[i-1] + dp[i-2]</code>. Bases: <code>dp[0] = 1</code> (one way to stand still) and <code>dp[1] = 1</code>. Every index the transition reads must be defined. <strong>Order or memo, then space.</strong> Recurse + hashmap of seen states, or fill <code>i = 2 .. n</code> left to right. Only the last two cells are live, so a pair of integers replaces the array. That is the whole subject, at this scale.",
+    "Before any formula, say what the cell answers. <code>dp[i]</code> is the answer to this smaller question: how many sequences of 1-steps and 2-steps add up to exactly <code>i</code>? That is a complete question &mdash; it has a numeric answer, and once you know it you never need to remember which sequences produced it. Until you can write that sentence without hedging, you are not ready to write a recurrence, because a transition that does not know what it is computing will miss a case or double-count.",
+    "Every sequence that sums to <code>i</code> has a last step. That last step is either 1, in which case the prefix summed to <code>i-1</code>, or 2, in which case the prefix summed to <code>i-2</code>. Those are the only two legal last steps, so adding <code>dp[i-1]</code> and <code>dp[i-2]</code> covers every sequence exactly once: the transition is exhaustive because it partitions sequences by their last step, and no sequence is counted twice because a sequence has only one last step. The bases are <code>dp[0] = 1</code> (there is one empty sequence that sums to 0) and <code>dp[1] = 1</code> (a single step of 1). Every later read lands on a cell those two bases have already defined.",
+    "Walk <code>n = 6</code>. After the bases, <code>dp[2] = 1+1 = 2</code> (the sequences <code>1+1</code> and <code>2</code>). Then <code>dp[3] = 2+1 = 3</code>, <code>dp[4] = 3+2 = 5</code>, <code>dp[5] = 5+3 = 8</code>, and <code>dp[6] = 8+5 = 13</code>. You fill left to right because each cell only reads a smaller <code>i</code>, which is a topological order of the dependency DAG &mdash; a directed acyclic graph, meaning a set of arrows that never loop back. Memoized recursion discovers that order by calling smaller <code>i</code> first and caching; a loop of <code>i = 2 .. n</code> writes it by hand. Only the last two cells are live at any moment, so two integers can replace the array.",
   ],
-  invariant: "<p>DP = DAG of questions. An edge <code>A &larr; B</code> means \"A's answer uses B's answer\". A valid order is any topological order of that DAG. Memoized recursion discovers the order for you; tabulation requires you to write it.</p><span class=\"eq\">dp[i] = ways to climb i = dp[i-1] + dp[i-2]</span>",
+  invariant: "<p>Every cell answers a smaller question, and a valid fill order is any topological order of the dependency DAG:</p><span class=\"eq\">dp[i] = ways to climb i = dp[i-1] + dp[i-2]</span><p>In plain words, once you have stored how many ways there are to reach height <code>i-1</code> and height <code>i-2</code>, you already know how many ways there are to reach height <code>i</code>, because every climb ends with a last step of 1 or a last step of 2 and there is no third option. Memoized recursion discovers that order for you; a tabulated loop requires you to write it.</p>",
   extra: [
     {
       kind: "key",
@@ -76,7 +77,7 @@ pack({
   vars: [ "i", "from", "dp[i]" ],
   frames: [
     {
-      note: "Base: dp[0] = 1 (empty climb) and dp[1] = 1 (a single step of 1).",
+      note: "Write the two bases first: dp[0] = 1 is the empty climb, and dp[1] = 1 is a single step of 1.",
       cells: [
         {
           r: 0,
@@ -98,7 +99,7 @@ pack({
       },
     },
     {
-      note: "i = 2. Read dp[1] and dp[0], write 1+1 = 2.",
+      note: "At i = 2, read the two smaller answers dp[1] and dp[0], then write 1 + 1 = 2.",
       cells: [
         {
           r: 0,
@@ -126,7 +127,7 @@ pack({
       },
     },
     {
-      note: "i = 3. from dp[2] and dp[1]: 2+1 = 3.",
+      note: "At i = 3 the last step is 1 or 2, so add dp[2] and dp[1] to get 2 + 1 = 3.",
       cells: [
         {
           r: 0,
@@ -154,7 +155,7 @@ pack({
       },
     },
     {
-      note: "i = 4. 3+2 = 5.",
+      note: "At i = 4, add the already-written cells dp[3] and dp[2] to get 3 + 2 = 5.",
       cells: [
         {
           r: 0,
@@ -182,7 +183,7 @@ pack({
       },
     },
     {
-      note: "i = 5. 5+3 = 8.",
+      note: "At i = 5, add the already-written cells dp[4] and dp[3] to get 5 + 3 = 8.",
       cells: [
         {
           r: 0,
@@ -210,7 +211,7 @@ pack({
       },
     },
     {
-      note: "i = 6. 8+5 = 13. This is the answer for n = 6.",
+      note: "At i = 6, add dp[5] and dp[4] to get 8 + 5 = 13, which is the answer for n = 6.",
       cells: [
         {
           r: 0,
@@ -238,7 +239,7 @@ pack({
       },
     },
     {
-      note: "Only the last two cells were live at each step. Space-opt keeps prev2=8, prev1=13 and drops the array.",
+      note: "Only the last two cells were live at each step, so two integers can replace the whole array.",
       cells: [
         {
           r: 0,
@@ -267,16 +268,16 @@ pack({
   merTitle: "The pipeline you run on every later page",
   merCaption: "If a box fails, do not skip it. A wrong state cannot be saved by clever loops.",
   steps: [
-    "<strong>Write the state sentence</strong> with every argument named.",
-    "<strong>Write the transition</strong> as a formula that only reads strictly smaller states.",
-    "<strong>Write the bases</strong> and check the first recursive index against them.",
-    "<strong>Estimate S &times; T</strong> against the constraint. If it dies, shrink the state.",
-    "<strong>Implement memoized recursion</strong> first, on the dry-run sample.",
-    "<strong>Invert into a loop</strong> in a legal order (here, increasing i).",
-    "<strong>Roll the array</strong> if only a constant window is live.",
-    "<strong>Reconstruct</strong> if asked: store the argmax / parent of each transition.",
+    "<strong>Write the state sentence first.</strong> Name every argument and say out loud the smaller question that cell answers, because a formula written before that sentence is how missing cases sneak in.",
+    "<strong>Write the transition from strictly smaller states.</strong> Partition every way to form this state so the formula is exhaustive, and refuse any read that is not strictly smaller.",
+    "<strong>Write the bases and check the first recursive index.</strong> Every cell the first real transition reads must already be defined, otherwise the whole table collapses to zero or garbage.",
+    "<strong>Estimate S &times; T against the constraint.</strong> If the product sits above about 10<sup>8</sup> operations, shrink the state before you write a loop that cannot finish.",
+    "<strong>Implement memoized recursion first on the sample.</strong> A cache keyed by the arguments is the recurrence itself, so you can debug the meaning of the state before you invent a loop order.",
+    "<strong>Invert the recurrence into a loop in a legal order.</strong> Here that order is increasing <code>i</code>, because each cell only reads smaller heights, which is a topological order of the dependency DAG.",
+    "<strong>Roll the array if only a constant window is live.</strong> Climbing stairs only needs the last two answers, so two integers replace the whole table once you no longer need the earlier cells.",
+    "<strong>Reconstruct a sequence if the problem asks for one.</strong> Store the predecessor that won each transition and walk back from <code>n</code>, because the numeric table alone has already forgotten the choices.",
   ],
-  dryIntro: "Climb n = 6, steps 1 or 2. Each row writes one new cell.",
+  dryIntro: "Climb n = 6 using steps of 1 or 2. Each row writes one new cell from the two strictly smaller answers already stored.",
   dryCols: [ "i", "dp[i-2]", "dp[i-1]", "dp[i]", "meaning" ],
   dryRows: [
     {
@@ -336,9 +337,9 @@ pack({
     time: "O(n) memo / tab / roll; O(φ^n) naked recursion",
     space: "O(n) memo/tab; O(1) roll; O(n) recursion depth",
     derivation: [
-      "<p>There are n + 1 states. Each transition reads two earlier cells in O(1):</p>",
+      "<p>There are <code>n + 1</code> states, one for each height from 0 through <code>n</code>. Each transition reads two earlier cells and adds them, which is a constant amount of work per state, so the tabulated or memoized version is linear:</p>",
       "<span class=\"eq\">T = &Theta;(n) once each state is stored</span>",
-      "<p>Naked recursion is the Fibonacci tree, &Theta;(&phi;<sup>n</sup>). That gap is exactly what \"overlapping subproblems\" means, measured.</p>",
+      "<p>Naked recursion is the Fibonacci tree, about <code>&phi;<sup>n</sup></code> calls with <code>&phi; &asymp; 1.618</code>. At <code>n = 40</code> that is already more than a hundred million calls; at <code>n = 45</code> it is past a billion. Storing each height once turns those overlapping calls into a single pass of about 45 additions. Rolling the array does not change the time, only the extra memory, which drops from <code>n</code> cells to two integers.</p>",
     ],
     compare: [
       [ "Naked recursion", "O(φ^n)", "O(n) stack", "Only to derive the recurrence" ],
@@ -350,33 +351,33 @@ pack({
   pitfalls: [
     {
       title: "dp[0] = 0 for ways",
-      bug: "Zero ways to do nothing. Then every later cell is 0.",
-      fix: "Empty plan is one way for counting problems. Empty cost is 0 for min-cost.",
+      bug: "Setting the empty climb to zero looks tidy because \"doing nothing is not a way\", but then every later cell that adds from zero stays zero and the whole table dies.",
+      fix: "For counting problems the empty plan is one way, so <code>dp[0] = 1</code>. For min-cost problems the empty plan costs 0. Test both on <code>n = 0</code> and <code>n = 1</code>.",
     },
     {
       title: "Off-by-one on n vs n+1 allocation",
-      bug: "dp of length n, then write dp[n].",
-      fix: "If the state is \"first i\" or \"value i\", allocate n+1 and be explicit about whether i is 0-based size or 1-based value.",
+      bug: "Allocating <code>dp</code> of length <code>n</code> and then writing <code>dp[n]</code> looks right because the answer lives at height <code>n</code>, but the last index is <code>n-1</code> and the write throws.",
+      fix: "If the state is \"value i\" or \"first i items\", allocate <code>n+1</code> and be explicit about whether <code>i</code> is a 0-based size or a 1-based value.",
     },
     {
       title: "Reading a cell you have not written",
-      bug: "Looping i downwards when the transition reads i-1.",
-      fix: "Draw the dependency arrow; walk against it. Memo hides this; tabulation does not.",
+      bug: "Looping <code>i</code> downwards when the transition reads <code>i-1</code> looks like any other fill, but those smaller cells are still the initial zeros, so every write is garbage.",
+      fix: "Draw the dependency arrow and walk against it. Memoized recursion hides the order; a tabulated loop does not, so check the first live index by hand.",
     },
     {
       title: "int overflow on ways",
-      bug: "Climbing stairs is tiny; knapsack-style counts are not.",
-      fix: "long, and the modulus in the addition if the statement gives one.",
+      bug: "Climbing stairs fits in an <code>int</code>, so leaving every later counting DP in <code>int</code> looks consistent, until a knapsack-style ways array wraps to a negative number.",
+      fix: "Use <code>long</code>, and reduce modulo the given modulus on every addition. A single wrap anywhere poisons every cell that reads it.",
     },
     {
       title: "Forgetting the state still depends on a choice you discarded",
-      bug: "House-robber-style \"take or skip\" encoded as a 1D array that cannot tell whether i was taken.",
-      fix: "Either store two values (took / skipped) or define dp[i] as \"best on prefix i with i decided\" so the transition can refer to i-2.",
+      bug: "Encoding house-robber as a 1-D array that cannot tell whether house <code>i</code> was taken looks smaller, but then the transition cannot know whether taking <code>i</code> is legal.",
+      fix: "Either store two values (took / skipped) or define <code>dp[i]</code> as the best on prefix <code>i</code> with house <code>i</code> already decided, so the take branch can refer to <code>i-2</code>.",
     },
     {
       title: "Calling it DP when there is no overlap",
-      bug: "Memoizing a tree recursion whose every state is unique. You pay for a hashmap and gain nothing.",
-      fix: "If each state is hit once, it is just recursion (or a tree DP that still stores per-node answers, which <em>is</em> overlap across queries).",
+      bug: "Memoizing a tree recursion whose every state is unique looks like the pipeline, but you pay for a hashmap and gain nothing because no cell is ever asked twice.",
+      fix: "If each state is hit once, it is just recursion. A tree DP that stores a per-node answer is different: those answers overlap across later queries, so the store still earns its keep.",
     },
   ],
   variants: [
@@ -408,19 +409,19 @@ pack({
   followups: [
     [
       "Memo or tabulation, which do I write first?",
-      "<p>Memo. It is the recurrence plus a cache, and it only computes reachable states. Tabulation needs an order and fills everything. After the memo is correct, inverting it is mechanical and often faster by a constant (no call stack, better locality).</p>",
+      "<p>Write memo first. It is the recurrence plus a cache keyed by the arguments, and it only computes reachable states. Tabulation needs you to invent a fill order and it fills every cell, even unreachable ones. After the memo is correct on the sample, inverting it into loops is mechanical and often a constant faster because there is no call stack and the array has better locality.</p>",
     ],
     [
       "What if the dependency graph is not obvious?",
-      "<p>If every transition strictly decreases some rank (i, i+j, popcount, remaining capacity), an order exists. If you cannot name a rank, you probably have a cycle and the state is wrong (shortest-path-on-states, not DP).</p>",
+      "<p>If every transition strictly decreases some rank &mdash; the index <code>i</code>, the sum <code>i+j</code>, the number of bits set, the remaining capacity &mdash; then a topological order exists and the graph is a DAG. If you cannot name such a rank, you probably have a cycle and the state is wrong: that is a shortest-path-on-states problem, not DP, and you need a different tool.</p>",
     ],
     [
       "How do I know the state is complete?",
-      "<p>After writing the transition, ask: \"is there any information about the past that I still need and did not put in the args?\" If yes, add a parameter or change the meaning of the index. Completeness is the only hard part of DP.</p>",
+      "<p>After writing the transition, ask: is there any information about the past that I still need and did not put in the arguments? If the answer is yes, add a parameter or change what the index means. Completeness is the only hard part of DP; a missing flag is why house-robber and digit-DP keep growing extra dimensions.</p>",
     ],
     [
       "Why is climb-stairs Fibonacci and not 2^n?",
-      "<p>Sequences of 1s and 2s that sum to n, not every binary string. The recurrence counts compositions with parts in {1,2}, whose generating function is 1/(1-x-x^2), i.e. Fibonacci. 2^n would be if each stair independently had a yes/no decision.</p>",
+      "<p>You are counting sequences of 1s and 2s that sum to <code>n</code>, not every binary string of length <code>n</code>. The recurrence counts compositions whose parts lie in <code>{1,2}</code>, which is exactly the Fibonacci sequence. You would get <code>2<sup>n</sup></code> only if each stair independently had a yes-or-no decision, which is a different question.</p>",
     ],
   ],
   problems: [
@@ -528,18 +529,18 @@ pack({
 pack({
   id: "dp-1d",
   difficulty: "Easy",
-  readTime: "24 min",
+  readTime: "30 min",
   tagline: "One index, two choices &mdash; take it or skip it &mdash; is house robber, frog jumps, decode ways, and most \"best on a prefix\" problems.",
   tags: [ "1D DP", "house robber", "prefix", "P0" ],
   prereqs: [
     [ "DP Foundations", "dp-foundations.html" ],
   ],
   why: [
-    "Once the state is \"best / ways using the first i elements\", a surprising fraction of array DP collapses to one loop. The live question is only what the last decision was: did we take a[i], and what does that forbid?",
-    "House robber is the mascot: taking i forbids i-1, so <code>dp[i] = max(dp[i-1], dp[i-2] + a[i])</code>. Decode ways, delete-and-earn, and frog-jump costs are the same shape with a different combine. Learn the shape, not the story.",
-    "The space trick is automatic: two (or k) previous answers replace the array. That is why 1D DP is the first family after foundations &mdash; it is foundations with an array of weights attached.",
+    "You are given a line of houses, each holding a pile of cash, and you may rob any subset as long as you never hit two neighbours. You must return the most money you can take. On <code>[2, 7, 9, 3, 1]</code> the best plan is the first, third and last house, which sums to 12; taking 7 and 9 together is illegal because they sit next to each other. The same \"decide this index, and the decision forbids a neighbour\" shape is decode-ways, delete-and-earn, and the frog-jump costs.",
+    "Trying every subset is <code>2<sup>n</sup></code> plans. At <code>n = 40</code> that is more than a trillion subsets, and even at <code>n = 20</code> you are already past a million. Recursing \"take this house and skip the next, or skip this house\" is correct, but it recomputes the same suffix over and over and still dies around <code>n = 40</code>. Once you store the best answer for each prefix, the work collapses to one constant-time decision per house, which at <code>n = 10<sup>5</sup></code> is a hundred thousand additions and a handful of milliseconds.",
+    "The signal in a real statement is a best / ways / possibility question on a prefix of an array, plus a local constraint such as \"cannot pick two adjacent\" or \"jump at most k\", sitting next to <code>n &le; 10<sup>5</sup></code>. That combination rules out a nested loop and it rules out a second dimension of capacity. The space trick is automatic: two (or k) previous answers replace the array, which is why this family is the first one after foundations &mdash; it is the staircase with an array of weights attached.",
   ],
-  insight: "Define dp[i] as the answer for the prefix a[0..i]. The transition looks only at a constant number of earlier prefixes plus a[i] itself.",
+  insight: "Define <code>dp[i]</code> as the answer for the prefix <code>a[0..i]</code>. The transition looks only at a constant number of earlier prefixes plus <code>a[i]</code> itself, so one loop fills the whole table.",
   yes: [
     "Best / ways / possibility on a prefix of an array",
     "\"Cannot pick two adjacent\" / \"jump at most k\" / \"last decision is local\"",
@@ -573,10 +574,11 @@ pack({
   constraint: "<code>n &le; 10&#8309;</code> wants O(n) after you roll. Answers are <code>long</code> when values are 1e9. A window of k with a naive min is O(nk) and dies at k = n; then you need a monotonic deque (still 1D DP).",
   coreHeading: "Take or skip, written as a prefix",
   core: [
-    "Let <code>dp[i]</code> be the maximum money from houses <code>0..i</code>. If you skip i you already have <code>dp[i-1]</code>. If you take i you cannot have taken i-1, so you add <code>a[i]</code> to <code>dp[i-2]</code>. The max of those two is optimal, because every plan decides i one way or the other.",
-    "Bases: <code>dp[0] = a[0]</code>, <code>dp[1] = max(a[0], a[1])</code>. The loop runs i = 2 .. n-1. Rolling: keep <code>prev2, prev1</code> and write <code>cur = max(prev1, prev2 + a[i])</code>. Decode ways is the counting twin: a valid last digit uses ways[i-1], a valid last pair uses ways[i-2]. Same indices, <code>+</code> instead of <code>max</code>, and a validity predicate on the characters.",
+    "Before any formula, say what the cell answers. <code>dp[i]</code> is the answer to this smaller question: what is the most money you can take from houses <code>0</code> through <code>i</code> without robbing two neighbours? That sentence already names the prefix and the constraint. Until it is unambiguous you do not write a recurrence, because a cell that forgot whether house <code>i</code> was allowed would have to peek at a decision the state discarded.",
+    "Every legal plan for the prefix decides house <code>i</code> one of two ways. If you skip it, the best you can do is whatever you already stored for the shorter prefix, which is <code>dp[i-1]</code>. If you take it, house <code>i-1</code> is forbidden, so you add <code>a[i]</code> to the best plan on houses <code>0..i-2</code>, which is <code>dp[i-2] + a[i]</code>. There is no third option and the two branches are disjoint, so taking the max is exhaustive: every legal subset of <code>0..i</code> is either a legal subset of <code>0..i-1</code>, or a legal subset of <code>0..i-2</code> plus house <code>i</code>.",
+    "Bases: <code>dp[0] = a[0]</code> (only one house, take it) and <code>dp[1] = max(a[0], a[1])</code> (take the richer of the first two). The loop runs <code>i = 2 .. n-1</code>. On <code>[2, 7, 9, 3, 1]</code> that writes 2, then 7, then <code>max(7, 2+9) = 11</code>, then <code>max(11, 7+3) = 11</code>, then <code>max(11, 11+1) = 12</code>. Rolling keeps only <code>prev2</code> and <code>prev1</code> and writes <code>cur = max(prev1, prev2 + a[i])</code>. Decode ways is the counting twin: a valid last digit uses <code>ways[i-1]</code>, a valid last pair uses <code>ways[i-2]</code> &mdash; same indices, plus instead of max, and a validity check on the characters.",
   ],
-  invariant: "<p><code>dp[i]</code> is the best answer that is allowed to use any subset of <code>a[0..i]</code> obeying the local constraint (no two adjacent, jump limit, &hellip;). After i = n-1 you have the full-array answer.</p><span class=\"eq\">dp[i] = max(dp[i-1], dp[i-2] + a[i])</span>",
+  invariant: "<p><code>dp[i]</code> is the best answer that is allowed to use any subset of <code>a[0..i]</code> obeying the local constraint (no two adjacent, jump limit, and so on). After <code>i = n-1</code> you have the full-array answer.</p><span class=\"eq\">dp[i] = max(dp[i-1], dp[i-2] + a[i])</span><p>In plain words, once you know the best plan that stops just before this house and the best plan that stops two houses earlier, you already know the best plan that is allowed to use this house: skip it, or take it and add it to the plan that skipped its neighbour.</p>",
   extra: [
     {
       kind: "warn",
@@ -597,7 +599,7 @@ pack({
   vars: [ "i", "choice", "dp[i]" ],
   frames: [
     {
-      note: "a = [2, 7, 9, 3, 1]. Base dp[0] = 2.",
+      note: "The houses are [2, 7, 9, 3, 1]. The first base is dp[0] = 2, because the only plan is to take that house.",
       cells: [
         {
           r: 0,
@@ -638,7 +640,7 @@ pack({
       },
     },
     {
-      note: "dp[1] = max(2, 7) = 7. Better to take the second house alone.",
+      note: "dp[1] is the richer of the first two houses: max(2, 7) = 7, so take the second house alone.",
       cells: [
         {
           r: 1,
@@ -660,7 +662,7 @@ pack({
       },
     },
     {
-      note: "i=2. skip = dp[1]=7, take = dp[0]+9=11. Write 11.",
+      note: "At i = 2, skip keeps 7 and take adds 9 to dp[0], so write max(7, 11) = 11.",
       cells: [
         {
           r: 1,
@@ -688,7 +690,7 @@ pack({
       },
     },
     {
-      note: "i=3. skip=11, take=7+3=10. Skip wins: 11.",
+      note: "At i = 3, skip keeps 11 and take adds 3 to dp[1], so skip wins and we write 11.",
       cells: [
         {
           r: 1,
@@ -716,7 +718,7 @@ pack({
       },
     },
     {
-      note: "i=4. skip=11, take=11+1=12. Take the last house. Answer 12.",
+      note: "At i = 4, skip keeps 11 and take adds 1 to dp[2], so take wins and the answer is 12.",
       cells: [
         {
           r: 1,
@@ -744,7 +746,7 @@ pack({
       },
     },
     {
-      note: "Rolling view: only dp[i-1]=11 and dp[i-2]=11 were needed to write 12.",
+      note: "Rolling view: only the previous two answers, both 11, were needed to write the final 12.",
       cells: [
         {
           r: 1,
@@ -813,15 +815,15 @@ pack({
   merTitle: "Which 1D template?",
   merCaption: "Local constraint plus a prefix state. If the second index is a capacity, leave this page.",
   steps: [
-    "<strong>State:</strong> dp[i] = answer on prefix 0..i.",
-    "<strong>Decision at i:</strong> skip (read i-1) or take (read i-2, or a window).",
-    "<strong>Bases</strong> for i = 0 and i = 1, written out, not stuffed into the loop.",
-    "<strong>Loop i = 2 .. n-1</strong> and apply the formula.",
-    "<strong>Roll</strong> to two (or k) running values if you do not need the table.",
-    "<strong>Circular:</strong> run twice, drop the first house or the last.",
-    "<strong>Reconstruct</strong> by comparing which branch produced dp[i].",
+    "<strong>Write the state sentence first.</strong> <code>dp[i]</code> is the answer on prefix <code>0..i</code>, because every later formula only makes sense once that smaller question is named.",
+    "<strong>Decide house i as skip or take.</strong> Skip reads <code>dp[i-1]</code>; take reads <code>dp[i-2]</code> (or a window of k) and adds <code>a[i]</code>, which is exhaustive because every plan picks exactly one of those two.",
+    "<strong>Write the bases for i = 0 and i = 1 out loud.</strong> Stuffing them into the main loop hides the empty-prefix and single-house cases, which are exactly where off-by-ones start.",
+    "<strong>Loop i from 2 through n-1 and apply the formula.</strong> Each write only reads earlier prefixes, so left-to-right is a legal topological order of the dependency DAG.",
+    "<strong>Roll to two (or k) running values if you do not need the table.</strong> The numeric answer only depends on a constant window, so the extra array is optional once the sample is correct.",
+    "<strong>On a circle, run the linear DP twice.</strong> Drop the first house on one run and the last house on the other, then take the max, because the two ends are neighbours and cannot both be taken.",
+    "<strong>Reconstruct by comparing which branch produced dp[i].</strong> If the take branch matches, include house <code>i</code> and jump to <code>i-2</code>; otherwise skip to <code>i-1</code>. Rolling integers alone cannot do this.",
   ],
-  dryIntro: "House robber on [2, 7, 9, 3, 1].",
+  dryIntro: "House robber on [2, 7, 9, 3, 1]. Each row decides one house as skip or take and writes the best prefix answer so far.",
   dryCols: [ "i", "a[i]", "skip dp[i-1]", "take dp[i-2]+a[i]", "dp[i]" ],
   dryRows: [
     {
@@ -873,8 +875,9 @@ pack({
     time: "O(n)",
     space: "O(1) rolled; O(n) table",
     derivation: [
-      "<p>n states, O(1) transition (or O(k) for a naive window, O(1) with a deque):</p>",
+      "<p>There are <code>n</code> states, one per prefix. House robber and decode ways each spend a constant amount of work per state &mdash; two reads and a max or an add &mdash; so the whole pass is linear:</p>",
       "<span class=\"eq\">T = &Theta;(n)</span>",
+      "<p>At <code>n = 10<sup>5</sup></code> that is a hundred thousand comparisons, which is a millisecond. A jump of width <code>k</code> with a naive min over the window is <code>O(nk)</code>; when <code>k</code> is also <code>10<sup>5</sup></code> that product is <code>10<sup>10</sup></code> and the judge times out. A monotonic deque brings the window back to <code>O(1)</code> per index, so the family stays linear. Rolling the array does not change the time, only the extra memory, which drops from <code>n</code> cells to two (or <code>k</code>) integers.</p>",
     ],
     compare: [
       [ "House robber", "O(n)", "O(1)", "Take / skip adjacent" ],
@@ -887,33 +890,33 @@ pack({
   pitfalls: [
     {
       title: "Empty array / single house",
-      bug: "Reading dp[1] on n = 1.",
-      fix: "Guard n == 0 / n == 1 before the loop, or use the rolling form which starts at 0,0.",
+      bug: "Reading <code>dp[1]</code> when <code>n = 1</code> looks like the same loop you wrote for the sample, but the second base does not exist and the access throws or reads garbage.",
+      fix: "Guard <code>n == 0</code> and <code>n == 1</code> before the loop, or use the rolling form that starts from <code>prev2 = 0, prev1 = 0</code> and never indexes past the array.",
     },
     {
       title: "Circular without splitting",
-      bug: "Running linear DP on a ring. Taking both ends is legal in the table and illegal in the house.",
-      fix: "max(rob(0..n-2), rob(1..n-1)).",
+      bug: "Running the linear DP on a ring looks correct because the formula never mentions the ends, but taking both house 0 and house <code>n-1</code> is legal in that table and illegal in the street.",
+      fix: "Compute <code>max(rob(0..n-2), rob(1..n-1))</code>. The empty and single-house cases are the only extra bases those two runs need.",
     },
     {
       title: "Mixing Kadane's reset into house robber",
-      bug: "cur = max(a[i], cur + a[i]) drops the prefix and can pick two adjacent houses after a skip of thinking.",
-      fix: "House robber never resets to \"start here ignoring the constraint history\". It only skips or takes.",
+      bug: "Writing <code>cur = max(a[i], cur + a[i])</code> looks like the familiar running-max habit, but it drops the prefix constraint and can pick two adjacent houses after a skip of thinking.",
+      fix: "House robber never resets to \"start here and ignore history\". It only skips or takes. Test a short array such as <code>[2, 1, 1, 2]</code>, where the reset would steal the wrong 3.",
     },
     {
       title: "Delete-and-earn without compressing",
-      bug: "Treating indices as the line. Deleting a value deletes every copy and the neighbours' values.",
-      fix: "cnt[v], then house-robber on v = 1..maxA.",
+      bug: "Treating array indices as the number line looks like house robber, but deleting a value deletes every copy of it and also deletes the neighbouring values, not the neighbouring indices.",
+      fix: "Build <code>cnt[v]</code>, then run house robber on <code>v = 1 .. maxA</code> with take-value <code>v * cnt[v]</code>. The adjacency is on values, not positions.",
     },
     {
       title: "int when a[i] is 1e4 and n is 100",
-      bug: "Usually fine; on CF with 1e9 values it overflows.",
-      fix: "long running totals whenever the statement's product n * maxA can exceed 2e9.",
+      bug: "The LeetCode sample fits in an <code>int</code>, so leaving the running total in <code>int</code> looks safe, until a Codeforces statement with values of <code>10<sup>9</sup></code> wraps the sum to a negative.",
+      fix: "Use <code>long</code> whenever the product <code>n * maxA</code> can exceed about <code>2 * 10<sup>9</sup></code>. One wrap poisons every later max.",
     },
     {
       title: "Off-by-one in decode ways on leading zeros",
-      bug: "\"06\" is not a valid pair, \"0\" is not a valid single. Counting them inflates the answer.",
-      fix: "A single digit is valid iff it is 1..9. A pair is valid iff 10..26.",
+      bug: "Counting \"06\" as a valid pair and \"0\" as a valid single looks like any other one-or-two-digit split, but those strings are not in the code table and they inflate the answer.",
+      fix: "A single digit is valid only when it is 1 through 9. A pair is valid only when the number it forms sits in 10 through 26. Test \"10\", \"06\" and \"27\".",
     },
   ],
   variants: [
@@ -945,19 +948,19 @@ pack({
   followups: [
     [
       "How is this different from Kadane?",
-      "<p>Kadane's decision is \"extend the current subarray or start a new one at i\". House robber's decision is \"take i (and skip i-1) or skip i\". Both are 1D DP. The constraint is what changes the formula.</p>",
+      "<p>Kadane's decision is \"extend the current subarray or start a new one at i\". House robber's decision is \"take i (and therefore skip i-1) or skip i\". Both are 1D DP on a prefix, and both fill left to right in linear time. The constraint is what changes the formula: Kadane is allowed to drop the whole prefix and start fresh, house robber is not.</p>",
     ],
     [
       "Can I reconstruct the subset in O(1) space?",
-      "<p>Not from the two rolling integers alone. Keep the full dp[] (or a parent bit) if the subset is required. Rolling is for the value.</p>",
+      "<p>Not from the two rolling integers alone, because those integers have already forgotten which branch produced them. Keep the full <code>dp[]</code> array, or a parent bit per index, if the subset is required. Rolling is only for the numeric value. Walking backwards from <code>n-1</code> then takes linear time and recovers the houses.</p>",
     ],
     [
       "What if taking i forbids the previous k houses?",
-      "<p>dp[i] = max(dp[i-1], dp[i-k-1] + a[i]). Still O(n). The \"k\" sits in the index, not in a new dimension.</p>",
+      "<p>The state is still a prefix: <code>dp[i] = max(dp[i-1], dp[i-k-1] + a[i])</code>. The gap <code>k</code> sits in the index you read, not in a new dimension of the table, so the time stays <code>O(n)</code>. You still write the two bases out by hand so the first take does not walk off the left end of the array.</p>",
     ],
     [
       "Why does delete-and-earn become house robber?",
-      "<p>Once you decide to take value v you must take all copies and you cannot take v-1. Adjacent values on the number line behave exactly like adjacent houses.</p>",
+      "<p>Once you decide to take value <code>v</code> you must take every copy of <code>v</code> and you cannot take <code>v-1</code> or <code>v+1</code>. Adjacent values on the number line therefore behave exactly like adjacent houses. Compress the input to <code>cnt[v]</code> first, then run the same take-or-skip recurrence on the value axis with take-value <code>v * cnt[v]</code>.</p>",
     ],
   ],
   problems: [
@@ -1065,18 +1068,18 @@ pack({
 pack({
   id: "knapsack-family",
   difficulty: "Medium",
-  readTime: "26 min",
+  readTime: "34 min",
   tagline: "A second dimension that is a remaining budget &mdash; 0/1, unbounded, and bounded knapsack are the same table with three different loop directions.",
   tags: [ "knapsack", "0/1", "unbounded", "P0" ],
   prereqs: [
     [ "DP Foundations", "dp-foundations.html" ],
   ],
   why: [
-    "Knapsack is the first time a DP state needs two arguments: how many items you have considered, and how much capacity is left. That extra axis is the model for every \"budget / weight / sum / volume\" problem you will meet, including subset-sum, partition, coin change, and target-sum.",
-    "The family splits on whether each item may be used once (0/1), infinitely (unbounded), or up to c_i times (bounded). Those three are not three algorithms. They are three ways to iterate the same recurrence so that you do or do not reuse an item in one pass.",
-    "Pseudo-polynomial time O(nW) is the constraint tell. If W is 1e9 the table does not fit and you need meet-in-the-middle or a greedy/convex structure. If W is 1e4 and n is 100, this page is the intended solution.",
+    "You are given a bag that can hold at most <code>W</code> kilograms and a list of items, each with a weight and a value. You must pack a subset whose total weight stays under the limit and whose total value is as large as possible. With items of weights 1, 2, 3 and values 6, 10, 12 and a bag of 5 kg, the best pack is the second and third items (weight 5, value 22). The same extra axis &mdash; remaining budget &mdash; is subset-sum, partition, coin change, and target-sum.",
+    "Trying every subset is <code>2<sup>n</sup></code> packs. At <code>n = 40</code> that is more than a trillion, and even at <code>n = 30</code> you are past a billion. The family then splits on reuse: each item at most once (0/1), infinitely often (unbounded), or up to <code>c<sub>i</sub></code> times (bounded). Those three are not three algorithms. They are three ways to iterate the same recurrence so that you do or do not reuse an item inside one pass over the capacity axis.",
+    "The signal in a real statement is <code>n &le; 100</code> sitting next to a capacity <code>W &le; 10<sup>4</sup></code>, which is the textbook signature that an <code>n &times; W</code> table will finish. If <code>W</code> is <code>10<sup>9</sup></code> the table does not fit in memory and you need meet-in-the-middle or a greedy structure; if <code>W</code> is a few thousand and <code>n</code> is a hundred, this page is the intended solution. The time is called <em>pseudo-polynomial</em> because <code>W</code> is a numeric magnitude, not a count of input tokens.",
   ],
-  insight: "dp[i][w] = best value using a prefix of i items and capacity exactly (or at most) w. 0/1 walks w downwards in the rolled array; unbounded walks w upwards.",
+  insight: "<code>dp[i][w]</code> is the best value using a prefix of <code>i</code> items and capacity exactly (or at most) <code>w</code>. In the rolled one-dimensional array, 0/1 walks <code>w</code> downwards so an item cannot be reused; unbounded walks <code>w</code> upwards so it can.",
   yes: [
     "Items with a weight and a value, a capacity W, maximise value or test reachability",
     "Subset-sum / partition-equal-subset / last-stone-weight II",
@@ -1110,10 +1113,11 @@ pack({
   constraint: "<code>n &le; 100</code>, <code>W &le; 10&#8308;</code> is the textbook signature. O(nW) time and O(W) extra after rolling. Values and ways need <code>long</code>. W = 1e9 is a hard no.",
   coreHeading: "The 2D table and the roll direction",
   core: [
-    "0/1: <code>dp[i][w] = max(dp[i-1][w], dp[i-1][w-wt] + val)</code> if w &ge; wt, else skip. Item i is considered once, against a table that does not yet contain it.",
-    "Rolling to <code>long[] dp</code> of size W+1: iterate items outside, and <strong>w from W down to wt</strong> so that <code>dp[w-wt]</code> is still the previous item's row. Unbounded flips that: <strong>w from wt up to W</strong> so you <em>do</em> reuse the current item. Subset-sum is the boolean special case (val = 1 or just OR). Coin-change fewest is unbounded min. Coin-change combinations is unbounded += with the coin loop outside so that {1,2} is counted once, not as 1-then-2 and 2-then-1.",
+    "Before any formula, say what the cell answers. <code>dp[i][w]</code> is the answer to this smaller question: what is the best value you can make using only the first <code>i</code> items and at most <code>w</code> kilograms of capacity? The first index is how far you have walked through the list; the second is the remaining budget. Until that sentence is unambiguous you do not write a recurrence, because a cell that forgot which items were already considered would not know whether taking the current item is still legal.",
+    "Every pack that uses the first <code>i</code> items either leaves item <code>i</code> out, in which case the answer is whatever you already stored for the first <code>i-1</code> items and the same capacity, or it puts item <code>i</code> in, in which case you add its value to the best pack of the first <code>i-1</code> items that left <code>wt</code> kilograms free. Those are the only two legal decisions, so <code>max(dp[i-1][w], dp[i-1][w-wt] + val)</code> is exhaustive: every subset of the prefix is counted once, either with the item or without it. Both reads must come from row <code>i-1</code>, which is the previous item, never from a cell that already includes item <code>i</code>.",
+    "When you roll the table into one array <code>dp[w]</code>, that array is playing both rows at once, and the direction of the weight loop is what keeps the two roles honest. For 0/1 you walk <code>w</code> from <code>W</code> down to <code>wt</code>. At the moment you write <code>dp[w]</code>, the smaller cell <code>dp[w-wt]</code> has not been visited yet on this item, because you are moving from large capacities toward small ones, so it still holds the previous item's answer and taking uses the item at most once. Walking <code>w</code> upwards would update <code>dp[w-wt]</code> first, and then taking at <code>w</code> would add the item on top of a pack that already took it &mdash; 0/1 silently becomes unbounded. Unbounded wants that reuse, so it walks <code>w</code> from <code>wt</code> up to <code>W</code>. On the sample items (1, 6), (2, 10), (3, 12) with <code>W = 5</code>, the rolled 0/1 pass writes 22, which is items 2 and 3.",
   ],
-  invariant: "<p>After processing a prefix of items, <code>dp[w]</code> is the best value (or ways, or possibility) using capacity <code>w</code> and only those items, with the reuse rule of the family you chose.</p><span class=\"eq\">0/1: w ↓ &nbsp;&nbsp; unbounded: w ↑</span>",
+  invariant: "<p>After processing a prefix of items, <code>dp[w]</code> is the best value (or ways, or possibility) using capacity <code>w</code> and only those items, with the reuse rule of the family you chose.</p><span class=\"eq\">0/1: w descending &nbsp;&nbsp; unbounded: w ascending</span><p>In plain words, the one-dimensional array is the previous row and the current row sharing a body, and the direction of <code>w</code> decides whether <code>dp[w-wt]</code> is still \"before this item\" or already \"after this item\". Downwards keeps it before, which is 0/1; upwards makes it after, which is unbounded.</p>",
   extra: [
     {
       kind: "warn",
@@ -1134,7 +1138,7 @@ pack({
   vars: [ "i", "w", "dp" ],
   frames: [
     {
-      note: "Row 0: no items, every capacity is value 0.",
+      note: "Row 0 is the empty prefix: no items have been considered, so every capacity still has value 0.",
       cells: [
         {
           r: 0,
@@ -1174,7 +1178,7 @@ pack({
       },
     },
     {
-      note: "Item 1, w=1. skip=0, take=0+6. Write 6.",
+      note: "First item, capacity 1: skip stays 0 and take adds 6 to the empty pack, so write 6.",
       cells: [
         {
           r: 1,
@@ -1202,7 +1206,7 @@ pack({
       },
     },
     {
-      note: "Item 1 fills the row: any w>=1 can take it once, value 6.",
+      note: "The rest of row 1 fills the same way: any capacity of at least 1 can take this item once, value 6.",
       cells: [
         {
           r: 1,
@@ -1238,7 +1242,7 @@ pack({
       },
     },
     {
-      note: "Item 2 (wt=2, val=10), w=5. skip=6, take=dp[1][3]+10=16. Write 16.",
+      note: "Item 2 (weight 2, value 10) at capacity 5: skip keeps 6, take reads the previous row at 3 and writes 16.",
       cells: [
         {
           r: 2,
@@ -1266,7 +1270,7 @@ pack({
       },
     },
     {
-      note: "Row 2 complete: [0,6,10,16,16,16]. Taking item 2 is better than item 1 alone once w>=2.",
+      note: "Row 2 is now [0, 6, 10, 16, 16, 16]. Taking item 2 beats item 1 alone once the capacity is at least 2.",
       cells: [
         {
           r: 2,
@@ -1306,7 +1310,7 @@ pack({
       },
     },
     {
-      note: "Item 3 (wt=3, val=12), w=5. skip=16, take=dp[2][2]+12=22. Write 22.",
+      note: "Item 3 (weight 3, value 12) at capacity 5: skip keeps 16, take adds 12 to the previous row at 2, so write 22.",
       cells: [
         {
           r: 3,
@@ -1334,7 +1338,7 @@ pack({
       },
     },
     {
-      note: "Optimal 22 = items 2 and 3. Capacity 2+3=5. Item 1 is left out.",
+      note: "The optimal 22 is items 2 and 3, whose weights 2 + 3 fill the bag exactly, and item 1 is left out.",
       cells: [
         {
           r: 3,
@@ -1363,15 +1367,15 @@ pack({
   merTitle: "Which knapsack loop?",
   merCaption: "The reuse rule picks the walk direction. Getting this wrong is a silent WA, not a crash.",
   steps: [
-    "<strong>Identify the family:</strong> 0/1, unbounded, or bounded.",
-    "<strong>State:</strong> dp[w] = best / ways / possible with capacity w (rolled), after a prefix of items.",
-    "<strong>Allocate long[] (or boolean[]) of W+1.</strong> dp[0] = 0 (value) or 1 (ways) or true.",
-    "<strong>For each item</strong> walk w in the correct direction.",
-    "<strong>0/1:</strong> for w = W; w &gt;= wt; w-- : dp[w] = max(dp[w], dp[w-wt] + val).",
-    "<strong>Unbounded:</strong> the same line with w++ from wt.",
-    "<strong>Read dp[W]</strong> (or max over w, or dp[sum/2] for partition).",
+    "<strong>Identify the family first.</strong> Read whether each item may be used once (0/1), infinitely (unbounded), or up to a count (bounded), because that single word picks the walk direction of <code>w</code>.",
+    "<strong>Write the state sentence.</strong> <code>dp[w]</code> is the best value, number of ways, or possibility using capacity <code>w</code> after a prefix of items, which is the rolled form of <code>dp[i][w]</code>.",
+    "<strong>Allocate a long[] or boolean[] of length W+1.</strong> Set <code>dp[0]</code> to 0 for value, 1 for ways, or true for possibility, because the empty pack is the base every later take reads.",
+    "<strong>For each item, walk w in the direction the family demands.</strong> The direction is not a style choice: it is what keeps <code>dp[w-wt]</code> equal to the previous row or equal to the current one.",
+    "<strong>0/1 walks w from W down to wt.</strong> Write <code>dp[w] = max(dp[w], dp[w-wt] + val)</code> so the smaller cell is still the previous item and this item is taken at most once.",
+    "<strong>Unbounded walks w from wt up to W.</strong> The same assignment now reuses the current item on purpose, because <code>dp[w-wt]</code> has already been updated in this same pass.",
+    "<strong>Read dp[W], or the max over w, or dp[sum/2] for partition.</strong> If the sum is odd the partition is impossible and you return false before you allocate the table.",
   ],
-  dryIntro: "0/1 rolled array, items (1,6), (2,10), (3,12), W = 5. Each row is after one item.",
+  dryIntro: "0/1 knapsack rolled into one array, items (1,6), (2,10), (3,12), capacity W = 5. Each row is the array after one more item, with w walking downwards.",
   dryCols: [ "item", "w=0", "1", "2", "3", "4", "5" ],
   dryRows: [
     {
@@ -1420,8 +1424,9 @@ pack({
     time: "O(n W)",
     space: "O(W) rolled; O(n W) full table",
     derivation: [
-      "<p>n items, W + 1 capacities, O(1) work per cell:</p>",
-      "<span class=\"eq\">T = &Theta;(n W) &nbsp; (pseudo-polynomial in the numeric value W)</span>",
+      "<p>There are <code>n</code> items and <code>W + 1</code> capacities. Each pair spends a constant amount of work &mdash; a skip read and, when the item fits, a take read and a max &mdash; so the product is</p>",
+      "<span class=\"eq\">T = &Theta;(n W)</span>",
+      "<p>At the textbook pair <code>n = 100</code>, <code>W = 10<sup>4</sup></code> that is a million cells, a few milliseconds. At <code>W = 10<sup>9</sup></code> you cannot even allocate the array, let alone fill it. The time is called pseudo-polynomial because <code>W</code> is a numeric magnitude whose bit length is <code>log W</code>, so the same runtime is exponential in the size of the input token that stores <code>W</code>. Rolling to one row does not change the time, only the extra memory, which drops from <code>n(W+1)</code> cells to <code>W+1</code>.</p>",
     ],
     compare: [
       [ "0/1 rolled", "O(nW)", "O(W)", "w descending" ],
@@ -1434,33 +1439,33 @@ pack({
   pitfalls: [
     {
       title: "Ascending w on 0/1",
-      bug: "Item reused in one pass; knapsack becomes unbounded by accident.",
-      fix: "0/1: w--. Unbounded: w++. Say it out loud before the loop.",
+      bug: "Walking <code>w</code> upwards on a 0/1 problem looks like the same recurrence, but <code>dp[w-wt]</code> has already taken the current item, so one pass silently turns 0/1 into unbounded.",
+      fix: "Say the direction out loud before the loop: 0/1 is <code>w--</code> so the smaller cell is still the previous item; unbounded is <code>w++</code> so reuse is on purpose.",
     },
     {
       title: "Ways vs permutations of coins",
-      bug: "Sum loop outside, coin inside counts 1+2 and 2+1 as two ways.",
-      fix: "Combinations: for each coin, for each w. Permutations: the opposite (usually not wanted).",
+      bug: "Putting the sum loop outside and the coin loop inside looks symmetric, but it counts 1+2 and 2+1 as two different ways when the problem asked for combinations.",
+      fix: "Combinations: for each coin, then for each <code>w</code>. Permutations: the opposite nested order, which is usually not what the statement wants. Test coins <code>{1,2}</code> and amount 3.",
     },
     {
       title: "dp[0] = 0 for ways",
-      bug: "Zero ways to make 0. Every cell stays 0.",
-      fix: "ways[0] = 1. value[0] = 0. possible[0] = true.",
+      bug: "Setting zero ways to make amount 0 looks tidy, but then every later addition reads zero and the whole ways array stays zero.",
+      fix: "For counting, <code>ways[0] = 1</code> (one empty combination). For value, <code>value[0] = 0</code>. For possibility, <code>possible[0] = true</code>.",
     },
     {
       title: "W = 1e9",
-      bug: "Allocating dp of size 1e9. MLE before TLE.",
-      fix: "If n ≤ 40, meet-in-the-middle. Otherwise the problem is not knapsack-DP.",
+      bug: "Allocating <code>dp</code> of length <code>10<sup>9</sup></code> looks like the textbook table, but the array alone is several gigabytes and you run out of memory before the first loop starts.",
+      fix: "If <code>n &le; 40</code>, split the items and meet in the middle. Otherwise the problem is not knapsack DP and the state has to change.",
     },
     {
       title: "int overflow on value * n",
-      bug: "n = 100, val = 1e9, sum does not fit in int.",
-      fix: "long[] dp.",
+      bug: "Leaving <code>dp</code> as <code>int</code> looks fine on the sample, but <code>n = 100</code> and values of <code>10<sup>9</sup></code> make a sum that wraps to a negative and then every later max is wrong.",
+      fix: "Allocate <code>long[] dp</code> whenever <code>n * maxVal</code> can exceed about <code>2 * 10<sup>9</sup></code>. One wrap poisons the row.",
     },
     {
       title: "Partition with odd sum",
-      bug: "Looking at dp[sum/2] when sum is odd. Integer division hides the impossibility.",
-      fix: "If sum is odd return false before allocating.",
+      bug: "Looking at <code>dp[sum/2]</code> when the sum is odd looks like the usual half-target, but integer division hides the fact that no subset can add to a half that is not an integer.",
+      fix: "If the total sum is odd, return false before you allocate. Then run 0/1 subset-sum on target <code>sum/2</code>.",
     },
   ],
   variants: [
@@ -1492,19 +1497,19 @@ pack({
   followups: [
     [
       "Why is O(nW) called pseudo-polynomial?",
-      "<p>W is a numeric magnitude, not a count of input tokens. Its bit length is log W, so the runtime is exponential in the input size of W. That is why knapsack is NP-hard and still easy when W is 1e4.</p>",
+      "<p><code>W</code> is a numeric magnitude, not a count of input tokens. The bit length of that token is <code>log W</code>, so a runtime that is linear in <code>W</code> is exponential in the size of the input that stored <code>W</code>. That is why 0/1 knapsack is NP-hard in theory and still the intended solution when <code>W</code> is <code>10<sup>4</sup></code>: the table is small in wall-clock time even though it is not polynomial in the bit length.</p>",
     ],
     [
       "How do I reconstruct the items?",
-      "<p>Full table: if dp[i][w] &gt; dp[i-1][w] (or != for boolean after a take), item i was taken; set w -= wt[i-1] and i--. Otherwise i--. Rolling reconstruction needs an extra bit matrix or a second pass.</p>",
+      "<p>Keep the full two-dimensional table. If <code>dp[i][w]</code> is strictly larger than <code>dp[i-1][w]</code> (or differs, for a boolean after a take), item <code>i</code> was taken: subtract its weight from <code>w</code> and decrement <code>i</code>. Otherwise just decrement <code>i</code>. A rolled array has already forgotten those comparisons, so reconstruction then needs an extra bit matrix or a second pass over the items.</p>",
     ],
     [
       "Two constraints (weight and volume)?",
-      "<p>dp[w][v] or roll one axis. Time O(n W V). If both are large, it does not fit; look for a different state.</p>",
+      "<p>Add a second budget axis: <code>dp[w][v]</code> is the best value using at most <code>w</code> weight and <code>v</code> volume, or roll one of the two axes the same way you roll 0/1. Time becomes <code>O(n W V)</code>. If both budgets are large the table does not fit, and you have to change the state rather than add a third nested loop.</p>",
     ],
     [
       "Meet-in-the-middle, briefly?",
-      "<p>Split items into two halves, enumerate 2^{n/2} subsets each, store (weight, value) of the left, sort, and for each right subset binary-search the best left that still fits. n ≤ 40, W arbitrary.</p>",
+      "<p>Split the <code>n</code> items into two halves of about <code>n/2</code>. Enumerate every subset of each half, which is <code>2<sup>n/2</sup></code> packs, and store each left pack as a <code>(weight, value)</code> pair. Sort the left packs, and for every right pack binary-search the best left pack that still fits in the remaining capacity. That handles <code>n &le; 40</code> with an arbitrary <code>W</code>, which is exactly when the <code>W</code>-table is illegal.</p>",
     ],
   ],
   problems: [
@@ -1612,7 +1617,7 @@ pack({
 pack({
   id: "lis",
   difficulty: "Medium",
-  readTime: "24 min",
+  readTime: "32 min",
   tagline: "Longest increasing subsequence is O(n&sup2;) prefix DP or O(n log n) patience sorting &mdash; same answer, different constraint.",
   tags: [ "LIS", "patience", "n log n", "P0" ],
   prereqs: [
@@ -1620,11 +1625,11 @@ pack({
     [ "Binary Search Basics", "../01-arrays-and-windows/binary-search-basics.html" ],
   ],
   why: [
-    "LIS is the first 1D DP whose transition is not O(1). dp[i] = 1 + max dp[j] over j &lt; i with a[j] &lt; a[i], else 1. That is O(n&sup2;), fine at n = 2000, dead at n = 1e5.",
-    "The O(n log n) upgrade keeps tails[len] = the smallest tail of any increasing subsequence of that length. A new value either extends the longest (append) or lowers a tail (binary-search replace). The length of tails is the LIS length. The array tails is <em>not</em> itself an LIS.",
-    "Variants (LDS, longest bitonic, longest chain of pairs, Russian-doll envelopes) are this page after a sort or a sign flip. Reconstruction needs a parent pointer; the n log n length algorithm does not give the sequence for free.",
+    "You are given an array of numbers and you must pick the longest subsequence that is strictly increasing, meaning the values grow and the original left-to-right order is kept, but you may skip elements. On <code>[10, 9, 2, 5, 3, 7]</code> one such pick is <code>2, 5, 7</code>, length 3; <code>2, 3, 7</code> is another. This is not a contiguous run &mdash; a one-pass over adjacent pairs would miss every sequence that skips.",
+    "Trying every subsequence is <code>2<sup>n</sup></code> picks. The first DP that works scans, for each ending index, every earlier index that could precede it, which is about <code>n<sup>2</sup> / 2</code> pairs. At <code>n = 2000</code> that is two million comparisons and finishes; at <code>n = 10<sup>5</sup></code> it is five billion and the judge times out. The upgrade keeps one representative tail per length and binary-searches the first tail the new value can beat, which is <code>n log n</code> &mdash; about <code>1.7 &times; 10<sup>6</sup></code> steps at <code>n = 10<sup>5</sup></code>.",
+    "The signal in a real statement is \"longest increasing subsequence\" (not subarray) sitting next to either <code>n &le; 2000</code>, which lets you write the quadratic table and reconstruct easily, or <code>n &le; 10<sup>5</sup></code>, which forces the tails array. Variants such as longest decreasing, longest bitonic, pair chains and Russian-doll envelopes are this page after a sort or a sign flip. Reconstruction needs a parent pointer; the length-only tails algorithm does not give the sequence for free.",
   ],
-  insight: "dp[i] is the LIS <em>ending at i</em>. The global answer is the max of those. Patience tails answers only the length, in n log n, by keeping one representative per length.",
+  insight: "<code>dp[i]</code> is the longest increasing subsequence that <em>ends at index i</em>, and the global answer is the max of those cells. Patience tails answers only the length, in <code>n log n</code>, by keeping one smallest representative per length.",
   yes: [
     "Longest increasing / decreasing / non-decreasing subsequence (not subarray)",
     "n ≤ 2000 → n² DP; n ≤ 1e5 → n log n tails",
@@ -1651,13 +1656,14 @@ pack({
       "Use LIS directly; LCS-of-sorted is a slower equivalent for strict increase after unique",
     ],
   ],
-  constraint: "<code>n &le; 10&#8309;</code> forces O(n log n). <code>n &le; 2000</code> lets you write the n&sup2; DP and reconstruct easily. Values may need compression before a Fenwick-LIS.",
+  constraint: "<code>n &le; 10<sup>5</sup></code> forces the <code>n log n</code> tails array, because the quadratic double loop is about five billion comparisons and will time out. <code>n &le; 2000</code> lets you write the ending-at-<code>i</code> table and reconstruct with a parent pointer. Values may need compression before a Fenwick-tree LIS.",
   coreHeading: "Ending-at-i, then tails",
   core: [
-    "O(n&sup2;): for each i, scan j &lt; i, take the max dp[j] among a[j] &lt; a[i], then dp[i] = that max + 1 (or 1). Answer max(dp). parent[i] = the j that won, or -1.",
-    "O(n log n): tails starts empty. For each x, lower_bound the first tail &ge; x (strict LIS: first tail &ge; x, replace it; non-decreasing: first tail &gt; x). If x is larger than every tail, append. The length of tails is the answer. Why tails works: an increasing subsequence of length k can always be rewritten to end as small as possible without hurting future extensions. Replacing a tail is that rewrite. You lose the actual sequence unless you also store a predecessor per index.",
+    "Before any formula, say what the cell answers. <code>dp[i]</code> is the answer to this smaller question: what is the length of a longest strictly increasing subsequence that is allowed to use <code>a[i]</code> as its last element? The global LIS is then just the maximum over those <code>n</code> answers, because every increasing subsequence ends at some index. Until that sentence is unambiguous you do not write a loop, because a cell that meant \"LIS of the prefix <code>0..i</code>\" would mix sequences that do not end at <code>i</code> and the transition would double-count.",
+    "Every increasing subsequence that ends at <code>i</code> is either the singleton <code>[a[i]]</code>, or some increasing subsequence that ended at an earlier <code>j</code> with <code>a[j] &lt; a[i]</code>, plus <code>a[i]</code> glued on. Those are all the legal predecessors, so taking <code>1 + max dp[j]</code> over that set of <code>j</code> (or 1 if the set is empty) is exhaustive: every increasing subsequence ending at <code>i</code> is counted exactly once, from the predecessor that actually sat just before <code>a[i]</code>. The answer is <code>max(dp)</code>. Store <code>parent[i]</code> as the <code>j</code> that won, or <code>-1</code> for a singleton, if you need the sequence.",
+    "On <code>[10, 9, 2, 5, 3, 7]</code> the table writes 1, 1, 1, 2, 2, 3, and one LIS is indices 2, 3, 5. The faster algorithm keeps <code>tails[k]</code> equal to the smallest tail of any increasing subsequence of length <code>k+1</code>. For each new <code>x</code> you binary-search the first tail that is at least <code>x</code> and replace it (or append if <code>x</code> is larger than every tail). Replacing is legal because an increasing subsequence of a given length can always be rewritten to end as small as possible without hurting future extensions. The length of <code>tails</code> is the LIS length; the array itself is not an LIS, because replacements mix values from different subsequences.",
   ],
-  invariant: "<p><code>dp[i]</code> = length of a longest strictly increasing subsequence that <em>ends at i</em>.</p><span class=\"eq\">tails[k] = smallest tail of any IS of length k+1</span>",
+  invariant: "<p><code>dp[i]</code> is the length of a longest strictly increasing subsequence that ends at index <code>i</code>. The tails array keeps one representative per length:</p><span class=\"eq\">tails[k] = smallest tail of any increasing subsequence of length k+1</span><p>In plain words, once you know the best increasing sequence that ends at every earlier index, the best sequence that ends here is \"start fresh\" or \"glue this value onto the best earlier sequence whose last value is still smaller than mine\". The tails view says the same thing with one smallest representative per length, so a binary search can place the next value.</p>",
   extra: [
     {
       kind: "tip",
@@ -1678,7 +1684,7 @@ pack({
   vars: [ "i", "best j", "dp[i]" ],
   frames: [
     {
-      note: "a = [10, 9, 2, 5, 3, 7]. Each singleton starts at length 1.",
+      note: "The array is [10, 9, 2, 5, 3, 7]. Every singleton subsequence starts at length 1, so dp[0] is already 1.",
       cells: [
         {
           r: 0,
@@ -1724,7 +1730,7 @@ pack({
       },
     },
     {
-      note: "i=1, a=9. 10 is not < 9. dp[1]=1.",
+      note: "At i = 1 the value is 9. The earlier 10 is not smaller, so no predecessor exists and dp[1] stays 1.",
       cells: [
         {
           r: 1,
@@ -1746,7 +1752,7 @@ pack({
       },
     },
     {
-      note: "i=2, a=2. Nobody is smaller. dp[2]=1.",
+      note: "At i = 2 the value is 2. Nobody earlier is smaller, so this cell is also a singleton of length 1.",
       cells: [
         {
           r: 1,
@@ -1762,7 +1768,7 @@ pack({
       },
     },
     {
-      note: "i=3, a=5. j=2 (2<5) wins. dp[3]=2. Target 3, from 2.",
+      note: "At i = 3 the value is 5. Index 2 holds a smaller 2, so we write dp[3] = 2 and remember j = 2.",
       cells: [
         {
           r: 1,
@@ -1784,7 +1790,7 @@ pack({
       },
     },
     {
-      note: "i=4, a=3. j=2 (2<3) wins. dp[4]=2.",
+      note: "At i = 4 the value is 3. Index 2 is again the only smaller predecessor, so we write dp[4] = 2.",
       cells: [
         {
           r: 1,
@@ -1806,7 +1812,7 @@ pack({
       },
     },
     {
-      note: "i=5, a=7. j=3 (dp=2) and j=4 (dp=2) both legal. dp[5]=3.",
+      note: "At i = 5 the value is 7. Both j = 3 and j = 4 are legal predecessors of length 2, so we write dp[5] = 3.",
       cells: [
         {
           r: 1,
@@ -1834,7 +1840,7 @@ pack({
       },
     },
     {
-      note: "max dp = 3. One LIS: indices 2,3,5 = 2,5,7.",
+      note: "The maximum cell is 3. One longest increasing subsequence is indices 2, 3, 5, which is the values 2, 5, 7.",
       cells: [
         {
           r: 1,
@@ -1875,15 +1881,15 @@ pack({
   merTitle: "n² or n log n?",
   merCaption: "Need the sequence? Prefer n² or extra parent bookkeeping on tails.",
   steps: [
-    "<strong>Decide length-only vs sequence, and n vs 2000.</strong>",
-    "<strong>n&sup2;:</strong> dp[i]=1, for j &lt; i if a[j] &lt; a[i] and dp[j]+1 &gt; dp[i], update and set parent.",
-    "<strong>Answer</strong> is max(dp); reconstruct from the argmax via parent.",
-    "<strong>n log n:</strong> int[] tails, size t = 0.",
-    "<strong>For each x:</strong> lower_bound first index with tails[i] &ge; x (strict). Replace or append.",
-    "<strong>Return t.</strong> Do not print tails as the sequence.",
-    "<strong>Non-decreasing:</strong> lower_bound first tail &gt; x (upper bound).",
+    "<strong>Decide length-only versus the sequence, and n versus 2000.</strong> The quadratic table reconstructs for free with a parent pointer; the tails array at <code>n = 10<sup>5</sup></code> answers only the length unless you store extra predecessors.",
+    "<strong>Quadratic: write dp[i] = 1, then scan every earlier j.</strong> If <code>a[j] &lt; a[i]</code> and <code>dp[j]+1</code> is better, update <code>dp[i]</code> and set <code>parent[i] = j</code>, because that <code>j</code> is a legal predecessor of this ending.",
+    "<strong>The answer is max(dp).</strong> Reconstruct by walking <code>parent</code> backwards from the argmax index, because every increasing subsequence the table knows about ends at some cell.",
+    "<strong>For n log n, allocate an int[] tails with a live size t = 0.</strong> The prefix <code>tails[0..t)</code> stays sorted, which is what makes the binary search legal.",
+    "<strong>For each new value x, lower-bound the first tail that is at least x.</strong> Replace that tail, or append and grow <code>t</code> if <code>x</code> is larger than every tail. That is the whole update.",
+    "<strong>Return t, and do not print tails as the sequence.</strong> Replacements mix values from different subsequences, so the array is a set of representatives, not one real LIS.",
+    "<strong>For a non-decreasing subsequence, search the first tail that is strictly greater than x.</strong> Using the strict lower bound when equals are allowed makes an equal value replace a tail instead of extending the length.",
   ],
-  dryIntro: "Patience tails on [10, 9, 2, 5, 3, 7]. lower_bound on first tail ≥ x.",
+  dryIntro: "Patience tails on [10, 9, 2, 5, 3, 7]. Each step binary-searches the first tail that is at least the new value and then replaces or appends.",
   dryCols: [ "x", "tails before", "action", "tails after", "len" ],
   dryRows: [
     {
@@ -1935,10 +1941,11 @@ pack({
     time: "O(n²) or O(n log n)",
     space: "O(n)",
     derivation: [
-      "<p>Ending-at-i tries every pair (j, i):</p>",
-      "<span class=\"eq\">T = &Theta;(n&sup2;)</span>",
-      "<p>Each of n values does one binary search on a tails array of size at most n:</p>",
+      "<p>The ending-at-<code>i</code> table tries every pair <code>(j, i)</code> with <code>j &lt; i</code>, which is about <code>n<sup>2</sup> / 2</code> comparisons:</p>",
+      "<span class=\"eq\">T = &Theta;(n<sup>2</sup>)</span>",
+      "<p>At <code>n = 2000</code> that is two million comparisons and finishes; at <code>n = 10<sup>5</sup></code> it is five billion and times out. The tails algorithm does one binary search per value on an array of size at most <code>n</code>, so each of the <code>n</code> items costs about <code>log n</code> comparisons:</p>",
       "<span class=\"eq\">T = &Theta;(n log n)</span>",
+      "<p>At <code>n = 10<sup>5</sup></code> that is about <code>1.7 &times; 10<sup>6</sup></code> steps, a few milliseconds. A Fenwick tree on compressed values is the same <code>n log n</code> bound and makes reconstruction natural via a parent pointer.</p>",
     ],
     compare: [
       [ "n² ending-at-i", "O(n²)", "O(n)", "n≤2000, easy reconstruct" ],
@@ -1950,33 +1957,33 @@ pack({
   pitfalls: [
     {
       title: "Printing tails as the LIS",
-      bug: "Tails mixes values from different subsequences after replacements.",
-      fix: "parent / predecessor per index, walk from the last append that grew the length.",
+      bug: "Printing the tails array looks right because it is increasing and has the correct length, but replacements have mixed values from different subsequences and the printed list may not even be a subsequence of the input.",
+      fix: "Store a predecessor per index and walk back from the last index that grew the length. Test on <code>[1, 3, 2]</code>, where tails ends as <code>[1, 2]</code> but you must prove those two values really sit in that order in the array.",
     },
     {
       title: "Wrong bound for non-decreasing",
-      bug: "Using ≥ when equals are allowed. Equal values replace instead of extend.",
-      fix: "Strict: first tail ≥ x. Non-decreasing: first tail &gt; x.",
+      bug: "Using the first tail that is at least <code>x</code> when equals are allowed looks like the same binary search, but an equal value then replaces a tail instead of extending the length.",
+      fix: "Strict LIS: first tail <code>&ge; x</code>. Non-decreasing: first tail strictly greater than <code>x</code>. Test an array of all equals: the answers are 1 and <code>n</code> respectively.",
     },
     {
       title: "LIS vs subarray",
-      bug: "A one-pass \"longest run of increases\" on a problem that allows gaps.",
-      fix: "Subsequence may skip. If the problem says contiguous, it is not this page.",
+      bug: "A one-pass \"longest run of increases\" looks like the sample when the answer happens to be contiguous, but it refuses every legal subsequence that skips an element.",
+      fix: "A subsequence may skip. If the problem says contiguous, it is a longest increasing subarray and this page is the wrong tool. Test <code>[1, 3, 2, 4]</code>, whose LIS skips the 3 or the 2.",
     },
     {
       title: "n² at n = 1e5",
-      bug: "10^10 operations. TLE, not WA.",
-      fix: "Tails or a Fenwick of max dp by compressed value.",
+      bug: "Submitting the double loop at <code>n = 10<sup>5</sup></code> looks like the same DP that passed the sample, but it is about five billion comparisons and the verdict is TLE, not WA.",
+      fix: "Switch to tails, or to a Fenwick tree of max <code>dp</code> by compressed value. Both are <code>n log n</code> and finish in a few milliseconds.",
     },
     {
       title: "Envelopes without a tie-break sort",
-      bug: "Same-width envelopes nest in the LIS of heights. They should not.",
-      fix: "Sort width ascending, height descending on ties, then LIS on height.",
+      bug: "Sorting both axes ascending lets two envelopes of the same width nest in the LIS of heights, which looks legal in the table and is illegal in the physical stacking.",
+      fix: "Sort width ascending and height descending on ties, then run LIS on height. The descending tie-break stops equal widths from chaining.",
     },
     {
       title: "Empty array",
-      bug: "max of an empty dp, or tails length 0 vs 1.",
-      fix: "n == 0 → 0. n == 1 → 1.",
+      bug: "Taking the max of an empty <code>dp</code> or treating a tails length of 0 as 1 looks like the usual base, but <code>n = 0</code> has no sequence and <code>n = 1</code> always has length 1.",
+      fix: "Return 0 when <code>n == 0</code> and 1 when <code>n == 1</code> before you start the loops. Those two cases are the only extra bases.",
     },
   ],
   variants: [
@@ -2003,19 +2010,19 @@ pack({
   followups: [
     [
       "Why is tails increasing?",
-      "<p>If tails[k] &le; tails[k-1], the longer sequence would have a smaller-or-equal tail and would have replaced the shorter one. The construction maintains a strictly increasing tails.</p>",
+      "<p>If <code>tails[k]</code> were ever at most <code>tails[k-1]</code>, the longer sequence would already have a smaller-or-equal tail and would have replaced the shorter representative when it was written. The construction therefore maintains a strictly increasing <code>tails</code> array, which is exactly why a binary search can place the next value. If the array ever stops being sorted, the lower bound is looking at a lie.</p>",
     ],
     [
       "How do I reconstruct with tails?",
-      "<p>Store, for each index i, the length assigned and a predecessor index that had length-1 when you placed i. Then walk from any index that received the maximum length. Several extra arrays, still O(n log n).</p>",
+      "<p>Store, for each index <code>i</code>, the length it was assigned and a predecessor index that already had length one smaller when you placed <code>i</code>. Then walk backwards from any index that received the maximum length. That is a few extra arrays and still <code>n log n</code> time. Printing <code>tails</code> itself is not reconstruction, because replacements have mixed different subsequences.</p>",
     ],
     [
       "Fenwick LIS?",
-      "<p>Compress values. Fenwick stores max dp among values &lt; a[i]. Query, then update a[i] with that max+1. Same n log n, and reconstruction is natural via parent.</p>",
+      "<p>Compress the values so they sit in <code>1..n</code>. A Fenwick tree then stores, at each compressed value, the maximum <code>dp</code> among all smaller values seen so far. Query the prefix below <code>a[i]</code>, write that maximum plus one as <code>dp[i]</code>, and update the tree at <code>a[i]</code>. The bound is still <code>n log n</code>, and a parent pointer is natural because you already know which length you assigned.</p>",
     ],
     [
       "Does LCS(a, sort(a)) equal LIS?",
-      "<p>For strictly increasing, sort unique first or LCS can pick duplicates. It is O(n²) and a useful check, not an algorithm you submit at n = 1e5.</p>",
+      "<p>For a strictly increasing subsequence you must sort the unique values first, otherwise LCS can pick the same number twice and you have computed a longest non-decreasing subsequence instead. The construction is a useful check on a tiny sample and it is <code>O(n<sup>2</sup>)</code>, so it is not an algorithm you submit at <code>n = 10<sup>5</sup></code>.</p>",
     ],
   ],
   problems: [
@@ -2123,7 +2130,7 @@ pack({
 pack({
   id: "grid-dp",
   difficulty: "Easy",
-  readTime: "24 min",
+  readTime: "32 min",
   tagline: "A grid that only moves down and right is already a DAG &mdash; <code>dp[r][c]</code> reads the cell above and the cell to the left.",
   tags: [ "grid", "unique paths", "min path", "P0" ],
   prereqs: [
@@ -2134,11 +2141,11 @@ pack({
     ],
   ],
   why: [
-    "Unique paths, minimum path sum, dungeon game, falling path, and cherry pickup all share one picture: a cell's answer is a combine of a constant number of incoming cells. Because you cannot move up or left (or you process layers so that you never need to), the dependency is a DAG and a double loop in row-major order is a topo scan.",
-    "This is the most visual DP. The table is the grid. The from cells are the legal predecessors. If you can fill a 3&times;3 unique-paths table by hand, you can write every problem on this page.",
-    "Obstacles are just cells you skip (leave at 0 ways / +inf cost). Space-opt rolls the previous row into one array. The hard variants add a second robot or a third dimension (remaining health, remaining cherries) &mdash; same grid, thicker state.",
+    "You are given an <code>R</code> by <code>C</code> grid, and from any cell you may move only down or only right. You must count how many paths start at the top-left corner and finish at the bottom-right. On a 3 by 3 grid the answer is 6, which you can list by hand: RRDD, RDRD, RDDR, DRRD, DRDR, DDRR. Unique paths, minimum path sum, dungeon game, falling path and cherry pickup all share that picture: a cell's answer is a combine of a constant number of incoming neighbours.",
+    "Trying every path is a binomial number of walks. On a 20 by 20 empty grid that is already more than a hundred billion routes, so enumerating them is hopeless. Because you cannot move up or left, every path only goes forward and the cells form a DAG &mdash; a directed acyclic graph, meaning the arrows never loop back. A double loop in row-major order is then just a topological scan: when you sit on <code>(r, c)</code> the cell above and the cell to the left have already been written.",
+    "The signal in a real statement is a path-aggregate on a grid whose moves only go down and right, sitting next to <code>R, C &le; 200</code> so that <code>R &times; C</code> cells fit. Obstacles are cells you leave at 0 ways or at infinite cost. Rolling the previous row into one array drops the extra memory to a single row. The hard variants add a second robot or a third dimension such as remaining health &mdash; same grid, thicker state.",
   ],
-  insight: "dp[r][c] = combine(dp[r-1][c], dp[r][c-1]) plus whatever the cell itself contributes. Row-major (or diagonal) order writes every from-cell first.",
+  insight: "<code>dp[r][c]</code> combines the cell above and the cell to the left, plus whatever this cell itself contributes. A row-major (or diagonal) fill writes every predecessor first, which is why the double loop is already a topological order.",
   yes: [
     "Paths on a grid with only down/right (or 4-way with a decreasing rank)",
     "Unique paths, min/max path sum, dungeon game, falling path sum",
@@ -2165,13 +2172,14 @@ pack({
       "Grid DP is for path-aggregates on a DAG of moves",
     ],
   ],
-  constraint: "<code>R, C &le; 200</code> is the usual. O(RC) time, O(C) space after rolling. Extra dimensions (k, second robot) must still fit 1e7..1e8 cells. Ways need long / modulus.",
+  constraint: "<code>R, C &le; 200</code> is the usual signature: about forty thousand cells, each a constant combine, which finishes in a millisecond. Extra dimensions such as a second robot or a remaining-health axis must still keep the product under about <code>10<sup>8</sup></code> cells. Counting ways needs <code>long</code> or a modulus once the binomial no longer fits in an <code>int</code>.",
   coreHeading: "One cell, two parents",
   core: [
-    "Unique paths on an empty R&times;C grid: dp[0][*] = dp[*][0] = 1, then dp[r][c] = dp[r-1][c] + dp[r][c-1]. That is the dry run. With an obstacle, that cell is 0 and contributes nothing to its children.",
-    "Min path sum: dp[r][c] = a[r][c] + min(up, left), with the first row/col being prefix sums (only one parent). Dungeon game is the same DAG run backwards: you need enough health to enter a cell and still survive the later min-requirement. Rolling: dp[c] += dp[c-1] for unique paths (the old dp[c] is \"up\", dp[c-1] is \"left\" already updated). Order inside the row is left-to-right so left is new and up is old &mdash; the 0/1-knapsack direction trick in costume.",
+    "Before any formula, say what the cell answers. <code>dp[r][c]</code> is the answer to this smaller question: how many down-or-right paths start at <code>(0, 0)</code> and finish at cell <code>(r, c)</code>? For a min-path problem the same cell asks for the cheapest such path; for dungeon game it asks for the minimum health you still need from here to the exit. Until that sentence is unambiguous you do not write a loop, because a cell that forgot whether it counted paths or costs would add when it should have taken a min.",
+    "Every down-or-right path that arrives at <code>(r, c)</code> takes its last step either from the cell above or from the cell to the left. Those are the only two legal last steps, so adding <code>dp[r-1][c]</code> and <code>dp[r][c-1]</code> is exhaustive: every path is counted exactly once, from the neighbour it actually stepped out of. There is no third incoming direction, and a path cannot enter the same cell twice because the moves never go backwards. The first row and the first column have only one parent each, so they are a running 1 (or a prefix sum, for cost).",
+    "On a 3 by 3 empty grid the borders are all 1, the centre is <code>1+1 = 2</code>, and the exit is <code>3+3 = 6</code>. An obstacle is the same cell written as 0 (ways) or as infinity (cost) so it contributes nothing to its children. Rolling unique paths into one array of length <code>C</code> does <code>dp[c] += dp[c-1]</code> left to right: the old <code>dp[c]</code> is still \"up\", and the new <code>dp[c-1]</code> is already \"left\". That is the 0/1-knapsack direction trick in costume. Dungeon game runs the same DAG backwards from the exit, because the health you need here depends on the health you will need later, not on the sum so far.",
   ],
-  invariant: "<p>After processing (r, c), <code>dp[r][c]</code> is the aggregate (ways, min sum, min required health) over all legal paths from the start (or to the exit, if you ran backwards) that end at this cell.</p><span class=\"eq\">dp[r][c] = dp[r-1][c] + dp[r][c-1]</span>",
+  invariant: "<p>After processing <code>(r, c)</code>, <code>dp[r][c]</code> is the aggregate (ways, min sum, or min required health) over all legal paths from the start (or to the exit, if you ran backwards) that end at this cell.</p><span class=\"eq\">dp[r][c] = dp[r-1][c] + dp[r][c-1]</span><p>In plain words, once you know how many ways there are to reach the cell above and the cell to the left, you already know how many ways there are to reach here, because every surviving path takes exactly one of those two last steps.</p>",
   extra: [
     {
       kind: "tip",
@@ -2228,7 +2236,7 @@ pack({
       },
     },
     {
-      note: "(1,1): from up=1 and left=1. Write 2.",
+      note: "Interior cell (1, 1) adds the cell above and the cell to the left, both 1, and writes 2.",
       cells: [
         {
           r: 1,
@@ -2256,7 +2264,7 @@ pack({
       },
     },
     {
-      note: "(1,2): from up=1 and left=2. Write 3.",
+      note: "Cell (1, 2) adds up = 1 and left = 2, so this is the first time the table writes 3.",
       cells: [
         {
           r: 1,
@@ -2284,7 +2292,7 @@ pack({
       },
     },
     {
-      note: "(2,1): from up=2 and left=1. Write 3.",
+      note: "Cell (2, 1) adds up = 2 and left = 1, which is the matching 3 on the other side of the centre.",
       cells: [
         {
           r: 2,
@@ -2312,7 +2320,7 @@ pack({
       },
     },
     {
-      note: "(2,2): from up=3 and left=3. Write 6. That is the answer.",
+      note: "The exit (2, 2) adds the 3 above and the 3 to the left, so the number of paths is 6.",
       cells: [
         {
           r: 2,
@@ -2340,7 +2348,7 @@ pack({
       },
     },
     {
-      note: "Full table. Every interior cell is the sum of the two from-cells.",
+      note: "The full table is now filled. Every interior cell is the sum of its two incoming neighbours.",
       cells: [
         {
           r: 0,
@@ -2396,7 +2404,7 @@ pack({
       },
     },
     {
-      note: "Space-opt: one array [1,1,1] then [1,2,3] then [1,3,6]. Left-to-right, old value is up.",
+      note: "Rolling uses one array: [1, 1, 1], then [1, 2, 3], then [1, 3, 6], walking left to right so the old value is still up.",
       cells: [
         {
           r: 2,
@@ -2431,15 +2439,15 @@ pack({
   merTitle: "The DAG of a 2&times;2 grid",
   merCaption: "Every edge goes down or right. Row-major is a topo order. No mermaid node named end.",
   steps: [
-    "<strong>Confirm the move set is a DAG</strong> (down/right, or falling down a row).",
-    "<strong>Allocate dp[R][C]</strong> (or one row).",
-    "<strong>Base:</strong> start cell 1 (ways) or a[0][0] (cost). Fill first row and first col from their single parent.",
-    "<strong>For r = 1..R-1, for c = 1..C-1:</strong> combine up and left (and the cell).",
-    "<strong>Obstacles:</strong> write 0 / skip / +inf and do not feed children.",
-    "<strong>Roll</strong> into one array of length C if you do not need the table.",
-    "<strong>Read dp[R-1][C-1].</strong> Backwards problems (dungeon) start at the exit.",
+    "<strong>Confirm the move set is a DAG.</strong> Down and right, or falling down a row, never loop back, which is why a row-major double loop is already a topological order.",
+    "<strong>Allocate dp[R][C], or a single row of length C if you plan to roll.</strong> Each cell will hold the aggregate for paths that end there, so the shape of the table is the shape of the grid.",
+    "<strong>Write the start cell and the two borders.</strong> The start is 1 for ways or <code>a[0][0]</code> for cost; the first row walks only left and the first column walks only up, because each of those cells has a single parent.",
+    "<strong>Fill the interior in row-major order.</strong> For each <code>r, c</code> combine the cell above and the cell to the left (and add this cell's own cost if the problem asks for a sum).",
+    "<strong>Treat an obstacle as a dead cell.</strong> Write 0 ways, skip it, or store infinity for cost, and do not let it feed any child, because no legal path goes through a wall.",
+    "<strong>Roll into one array of length C if you do not need the table.</strong> Walk each row left to right so the old <code>dp[c]</code> is still up and the new <code>dp[c-1]</code> is already left.",
+    "<strong>Read dp[R-1][C-1].</strong> Backwards problems such as dungeon game start at the exit and walk toward the start, because the health you need here depends on the later requirement.",
   ],
-  dryIntro: "Unique paths, 3&times;3, no obstacles.",
+  dryIntro: "Unique paths on a 3 by 3 empty grid. Each row of the table writes one cell from the cell above and the cell to the left.",
   dryCols: [ "r,c", "up", "left", "dp", "note" ],
   dryRows: [
     {
@@ -2499,9 +2507,9 @@ pack({
     time: "O(R C)",
     space: "O(C) rolled; O(R C) table",
     derivation: [
-      "<p>One constant-time combine per cell:</p>",
+      "<p>There is one cell per grid square and each cell spends a constant amount of work &mdash; two reads and an add or a min &mdash; so the whole fill is</p>",
       "<span class=\"eq\">T = &Theta;(R C)</span>",
-      "<p>Unique paths without obstacles is also a binomial <code>C(R+C-2, R-1)</code>, computable in O(R) multiplications if you only need the empty-grid count.</p>",
+      "<p>At <code>R = C = 200</code> that is forty thousand combines, a millisecond. Rolling the previous row into one array of length <code>C</code> does not change the time, only the extra memory. Unique paths on an empty rectangle is also the binomial <code>C(R+C-2, R-1)</code>, which you can compute in <code>O(R)</code> multiplications if you only need the empty-grid count and want a check against the table. A third dimension for a second robot multiplies the time by another <code>R</code> or <code>C</code> and must still sit under about <code>10<sup>8</sup></code> cells.</p>",
     ],
     compare: [
       [ "Unique / min path", "O(RC)", "O(C)", "This page" ],
@@ -2513,33 +2521,33 @@ pack({
   pitfalls: [
     {
       title: "Not initialising the first row/col",
-      bug: "Interior formula reads 0 from an unfilled border and the whole table stays 0.",
-      fix: "Set the start, then walk the first row using only left, first col using only up.",
+      bug: "Applying the interior formula from the first cell looks uniform, but the border cells still hold the default zero, so every later add reads 0 and the whole table stays 0.",
+      fix: "Set the start, then walk the first row using only the left parent and the first column using only the up parent. Test a 1 by <code>n</code> grid, which is nothing but that border.",
     },
     {
       title: "Obstacle on the start or the exit",
-      bug: "Returning 1 or a[0][0] anyway.",
-      fix: "If either is blocked, ways = 0 / min-path is impossible.",
+      bug: "Returning 1 or <code>a[0][0]</code> anyway looks like the usual base, but a blocked start or exit means there is no legal path at all.",
+      fix: "If either corner is blocked, ways is 0 and a min-path is impossible. Check those two cells before you start the loops.",
     },
     {
       title: "Rolling right-to-left for unique paths",
-      bug: "dp[c-1] would be the old row's left, not the new left. You mix two rows wrong.",
-      fix: "Left-to-right: old dp[c] is up, new dp[c-1] is left.",
+      bug: "Walking a row right to left looks like the 0/1 knapsack habit, but then <code>dp[c-1]</code> is still the old row's left rather than the new left, and you mix two rows together.",
+      fix: "Walk left to right: the old <code>dp[c]</code> is still up, and the new <code>dp[c-1]</code> is already left. Test the 3 by 3 sample; a reversed walk writes the wrong 4 at the exit.",
     },
     {
       title: "int overflow on ways",
-      bug: "C(38, 18) already exceeds int. LC 62 is within int; CF often is not.",
-      fix: "long, or the modulus.",
+      bug: "Leaving ways in an <code>int</code> looks fine on the LeetCode 3 by 3, but the binomial <code>C(38, 18)</code> already exceeds <code>2<sup>31</sup></code> and later cells wrap to a negative.",
+      fix: "Use <code>long</code>, or reduce modulo the given modulus on every addition. One wrap poisons every child of that cell.",
     },
     {
       title: "Dungeon game run forwards",
-      bug: "Min health is not a min-sum. A deep negative late cell cannot be prepaid from an early surplus in the naive forwards rec.",
-      fix: "dp[r][c] = min health needed from here to the exit. Work from the exit backward.",
+      bug: "Treating min health as a min-sum looks like the usual path-cost recurrence, but a deep negative cell late in the grid cannot be prepaid from an early surplus, so the forwards number is not the health you needed at the start.",
+      fix: "Let <code>dp[r][c]</code> be the minimum health you still need from this cell to the exit, and fill from the exit backwards. The start cell is then the answer.",
     },
     {
       title: "Two independent min-path sums for two robots",
-      bug: "Shared cells counted twice.",
-      fix: "One state that holds both positions (or one position plus the step).",
+      bug: "Adding two independent path answers looks like two robots, but every cherry on a cell both visit is counted twice and the shared-cell constraint is forgotten.",
+      fix: "One state that holds both positions at once (or one position plus the step). The second column can often be dropped because both robots have taken the same number of steps.",
     },
   ],
   variants: [
@@ -2571,19 +2579,19 @@ pack({
   followups: [
     [
       "When is the binomial enough?",
-      "<p>Empty rectangle, only down/right, count of paths: C(R+C-2, R-1). Obstacles, min cost, or extra state kill the closed form. Use it as a check on the empty table.</p>",
+      "<p>On an empty rectangle with only down and right moves, the number of paths is the binomial <code>C(R+C-2, R-1)</code>, because you choose which of the <code>R+C-2</code> steps are the down ones. Obstacles, a min-cost objective, or any extra state kill that closed form. Use the binomial as a check against the empty table, not as a substitute for the DP when the grid is no longer empty.</p>",
     ],
     [
       "Can I grid-DP a 4-way maze?",
-      "<p>Only if you add a rank that strictly decreases (remaining health, remaining steps, a bitset of visited &mdash; the last is exponential). Plain 4-way shortest path is BFS/Dijkstra. A naive 4-way \"dp[r][c] = min of four neighbours\" is a cyclic system, not a DAG.</p>",
+      "<p>Only if you add a rank that strictly decreases &mdash; remaining health, remaining steps, or a bitset of visited cells, the last of which is exponential. A plain 4-way shortest path is BFS or Dijkstra. A naive <code>dp[r][c] = min of four neighbours</code> is a cyclic system, not a DAG, and a double loop will read cells that have not been finished.</p>",
     ],
     [
       "How does cherry pickup drop a coordinate?",
-      "<p>After t steps, r+c = t for each robot. So r1+c1 = r2+c2, and c2 = r1+c1-r2. The state (t, r1, r2) or (r1, c1, r2) is enough. That is what keeps it O(n^3).</p>",
+      "<p>After <code>t</code> steps each robot has <code>r + c = t</code>. The two robots have taken the same number of steps, so <code>r1 + c1 = r2 + c2</code> and the second column is determined: <code>c2 = r1 + c1 - r2</code>. The state <code>(t, r1, r2)</code> or <code>(r1, c1, r2)</code> is therefore enough, which is what keeps the time at <code>O(n<sup>3</sup>)</code> instead of <code>O(n<sup>4</sup>)</code>.</p>",
     ],
     [
       "Rolling two rows vs one?",
-      "<p>Falling path needs the previous row intact while you write the next (three parents in the same old row). Keep two rows, or write into a fresh array. Unique paths can overwrite in place left-to-right.</p>",
+      "<p>Falling path reads three parents in the previous row while you write the next row, so you must keep that previous row intact: use two rows, or write into a fresh array. Unique paths only needs up and left, so one array overwritten left to right is enough. If you reuse one array on a falling path you will read cells you have already replaced.</p>",
     ],
   ],
   problems: [
@@ -2691,18 +2699,18 @@ pack({
 pack({
   id: "string-dp",
   difficulty: "Medium",
-  readTime: "26 min",
+  readTime: "32 min",
   tagline: "Two indices into one or two strings: LCS, edit distance, palindrome partitions &mdash; the cell <code>(i, j)</code> is the answer for the two prefixes.",
   tags: [ "LCS", "edit distance", "palindrome", "P0" ],
   prereqs: [
     [ "Grid DP", "grid-dp.html" ],
   ],
   why: [
-    "String DP is grid DP on the prefixes of one or two strings. dp[i][j] answers a question about s[0..i) and t[0..j) (or about s[i..j] for palindromes). The alphabet never appears in the state: only whether two characters match, and the three standard moves (drop s, drop t, or consume both).",
-    "LCS and edit distance are the same table with a different combine. Palindrome subsequence is LCS(s, reverse(s)). Palindrome substring / min-cut is a different axis: intervals of one string, which is the bridge to the next page.",
-    "n, m ≤ 1000 is the signature: O(nm) time, O(min(n,m)) space after rolling. Reconstruction of the LCS or the alignment walks the table back from (n, m).",
+    "You are given two strings and you must find the longest sequence of characters that appears in both, in the same order, but not necessarily next to each other. On <code>s = \"abcde\"</code> and <code>t = \"ace\"</code> that common sequence is <code>\"ace\"</code>, length 3. The same table, with a different combine, is the edit distance: how many insertions, deletions and replacements turn one string into the other. The alphabet never appears in the state &mdash; only whether two characters match.",
+    "Trying every subsequence of <code>s</code> and asking whether it hides inside <code>t</code> is <code>2<sup>n</sup></code> checks. At <code>n = 40</code> that is more than a trillion. The DP instead asks a smaller question about every pair of prefixes, which is <code>n &times; m</code> cells. At <code>n = m = 1000</code> that is a million constant-time combines and finishes; at <code>n = m = 5000</code> it still fits if you roll the previous row and watch the constants.",
+    "The signal in a real statement is two strings of length up to about 1000 and a question about a common subsequence, an alignment, distinct subsequences, or a wildcard match. Palindrome subsequence is the same idea with the reverse of <code>s</code> as the second string. Palindrome substring and min-cut switch the axis to intervals of one string, which is the bridge to the next page. Reconstruction of the LCS or the alignment walks the table back from <code>(n, m)</code>.",
   ],
-  insight: "If s[i-1] == t[j-1], the pair is free (or worth +1). If not, you must drop one side or substitute. Those three neighbours are the only from-cells.",
+  insight: "If the two current characters match, the pair is free (or worth plus one). If they do not, you must drop one side or substitute. Those three neighbours &mdash; up, left, and diagonal &mdash; are the only cells the recurrence is allowed to read.",
   yes: [
     "Longest common subsequence / substring of two strings",
     "Edit / Levenshtein distance, insert-delete-replace",
@@ -2732,10 +2740,11 @@ pack({
   constraint: "<code>n, m &le; 1000</code> → O(nm) is the intended bound. <code>n = 5000</code> still fits if you roll and watch constants. Answers fit in int for lengths; ways need long / modulus.",
   coreHeading: "Prefixes (i, j) and three neighbours",
   core: [
-    "LCS: if s[i-1]==t[j-1] then dp[i][j] = dp[i-1][j-1]+1, else max(dp[i-1][j], dp[i][j-1]). First row and col are 0 (empty prefix). This is the dry-run table.",
-    "Edit distance: match copies the diagonal; otherwise 1 + min(insert = left, delete = up, replace = diagonal). First row is 0..m (insert all), first col is 0..n (delete all). Rolling: keep the previous row, or even two cells if you walk carefully. Reconstruction: from (n,m), if match follow diagonal, else follow the neighbour that produced the value, emitting the operation.",
+    "Before any formula, say what the cell answers. <code>dp[i][j]</code> is the answer to this smaller question: what is the LCS length of the prefix <code>s[0..i)</code> (the first <code>i</code> characters of <code>s</code>) and the prefix <code>t[0..j)</code>? For edit distance the same cell asks how many edits turn one of those prefixes into the other. The extra empty row and column exist so that <code>i = 0</code> really means \"no characters of <code>s</code>\". Until that sentence is unambiguous you do not compare characters, because <code>s.charAt(i)</code> against a table of size <code>n</code> is the classic off-by-one.",
+    "Every common subsequence of those two prefixes either uses the last character of both, or it drops at least one of them. If <code>s[i-1] == t[j-1]</code>, you can consume both and add one to the LCS of the two shorter prefixes, which is the diagonal. If they differ, a common subsequence cannot use both last characters, so you take the better of \"drop the last of <code>s</code>\" (up) and \"drop the last of <code>t</code>\" (left). Those are all the ways to form the pair of prefixes, so the transition is exhaustive: every common subsequence is counted from the last character it actually used, or from the side it dropped. The first row and column stay 0, because an empty prefix shares nothing.",
+    "On <code>\"abcde\"</code> versus <code>\"ace\"</code> the matches at <code>a</code>, <code>c</code> and <code>e</code> walk the diagonal and the table ends at 3. Edit distance uses the same neighbours with a different combine: a match copies the diagonal; a mismatch is <code>1 + min(insert = left, delete = up, replace = diagonal)</code>. The first row is <code>0..m</code> (insert every character of <code>t</code>) and the first column is <code>0..n</code> (delete every character of <code>s</code>). Reconstruction walks from <code>(n, m)</code>: on a match follow the diagonal and emit the character; on a mismatch follow the neighbour that produced the stored value.",
   ],
-  invariant: "<p><code>dp[i][j]</code> is the LCS length (or edit distance) of the prefixes <code>s[0..i)</code> and <code>t[0..j)</code>.</p><span class=\"eq\">match: diag + 1 &nbsp;&nbsp; mismatch: max(up, left)</span>",
+  invariant: "<p><code>dp[i][j]</code> is the LCS length (or the edit distance) of the prefixes <code>s[0..i)</code> and <code>t[0..j)</code>.</p><span class=\"eq\">match: diagonal + 1 &nbsp;&nbsp; mismatch: max(up, left)</span><p>In plain words, once you know the answers for every strictly shorter pair of prefixes, you already know this pair: either the two last characters agree and you take the diagonal, or they disagree and you drop one side. There is no fourth neighbour.</p>",
   extra: [
     {
       kind: "key",
@@ -2956,15 +2965,15 @@ pack({
   merTitle: "Which string table?",
   merCaption: "Two strings → LCS / edit / distinct. One string palindrome → LPS or interval.",
   steps: [
-    "<strong>Index prefixes as i = 0..n, j = 0..m</strong> with 0 = empty.",
-    "<strong>Base:</strong> first row and col (0 for LCS, 0..n / 0..m for edit).",
-    "<strong>For i = 1..n, j = 1..m:</strong> if s[i-1]==t[j-1] take the match branch, else the mismatch branch.",
-    "<strong>LCS mismatch:</strong> max(up, left). <strong>Edit mismatch:</strong> 1+min(up,left,diag).",
-    "<strong>Roll</strong> the previous row if you only need the number.",
-    "<strong>Reconstruct</strong> from (n,m) following the neighbour that matches the recurrence.",
-    "<strong>LPS:</strong> either LCS(s, reverse(s)) or interval dp on one string.",
+    "<strong>Index prefixes as i = 0..n and j = 0..m, with 0 meaning empty.</strong> The extra row and column exist so that <code>dp[i][j]</code> can read <code>s.charAt(i-1)</code> without walking off the string.",
+    "<strong>Write the first row and first column as the bases.</strong> They are 0 for LCS, because an empty prefix shares nothing, and they are <code>0..n</code> / <code>0..m</code> for edit distance, because you insert or delete every character.",
+    "<strong>Walk i from 1 to n and j from 1 to m.</strong> If the two current characters match, take the match branch (diagonal plus one for LCS, diagonal copied for edit); otherwise take the mismatch branch.",
+    "<strong>On a mismatch, LCS takes max(up, left) and edit takes 1 + min(up, left, diagonal).</strong> Those neighbours are exhaustive because every alignment either drops a character from one side or substitutes.",
+    "<strong>Roll the previous row if you only need the number.</strong> Stash the old <code>dp[j]</code> before you overwrite it, because that old value is the diagonal the next column will need.",
+    "<strong>Reconstruct from (n, m) by following the neighbour that matches the recurrence.</strong> On a match emit the character and walk the diagonal; on a mismatch walk up or left, whichever produced the stored value.",
+    "<strong>For a longest palindromic subsequence, run LCS of s against reverse(s), or switch to interval DP on one string.</strong> The two constructions give the same length; the interval form is the bridge to the next page.",
   ],
-  dryIntro: "LCS \"abcde\" vs \"ace\". Only the interesting cells.",
+  dryIntro: "LCS of \"abcde\" against \"ace\". Each interesting cell either walks the diagonal on a match or takes the better of up and left.",
   dryCols: [ "i,j", "s[i-1]", "t[j-1]", "match?", "dp[i][j]" ],
   dryRows: [
     {
@@ -3021,8 +3030,9 @@ pack({
     time: "O(n m)",
     space: "O(min(n, m)) rolled; O(n m) for reconstruction",
     derivation: [
-      "<p>A constant-time combine at every prefix pair:</p>",
+      "<p>There is one cell for every pair of prefixes, so the table has <code>(n+1)(m+1)</code> entries. Each entry reads two or three neighbours and does a constant amount of work:</p>",
       "<span class=\"eq\">T = &Theta;(n m)</span>",
+      "<p>At <code>n = m = 1000</code> that is a million combines, a few milliseconds. At <code>n = m = 5000</code> it is 25 million, which still finishes if you roll to one row and keep the inner loop tight. Reconstruction needs the full table, so the extra memory is then <code>n m</code> integers, about 4 MB at <code>n = m = 1000</code>. Hirschberg's algorithm recovers one LCS in linear extra memory at the same time bound if the table itself will not fit.</p>",
     ],
     compare: [
       [ "LCS / edit", "O(nm)", "O(min(n,m))", "This page" ],
@@ -3034,33 +3044,33 @@ pack({
   pitfalls: [
     {
       title: "Indexing charAt(i) against dp[i] without the empty row",
-      bug: "Off-by-one: s[i] vs prefix i+1. The table is n+1 by m+1 for a reason.",
-      fix: "dp[i][j] uses s.charAt(i-1) and t.charAt(j-1).",
+      bug: "Writing <code>s.charAt(i)</code> against a table of size <code>n</code> looks aligned, but then prefix <code>i</code> is using the wrong character and the last character of <code>s</code> is never compared.",
+      fix: "Allocate <code>n+1</code> by <code>m+1</code> and let <code>dp[i][j]</code> read <code>s.charAt(i-1)</code> and <code>t.charAt(j-1)</code>. The empty prefixes sit at index 0 on purpose.",
     },
     {
       title: "LCS recurrence for substring",
-      bug: "Keeping max(up,left) on a mismatch when the problem wants a contiguous block.",
-      fix: "Substring: mismatch → 0, answer = max over the table.",
+      bug: "Keeping <code>max(up, left)</code> on a mismatch looks like the usual LCS step, but a common substring cannot skip a character and the length should reset to 0.",
+      fix: "For substring, a mismatch writes 0 and the answer is the global max in the table, not <code>dp[n][m]</code>. Test <code>\"abc\"</code> versus <code>\"ac\"</code>: substring is 1, subsequence is 2.",
     },
     {
       title: "Rolling without saving the diagonal",
-      bug: "dp[j] is overwritten before you need it as dp[i-1][j-1].",
-      fix: "Stash prev = old dp[j] (which is up-right after you write, i.e. the old diagonal for the next j).",
+      bug: "Overwriting <code>dp[j]</code> in place looks like the unique-paths roll, but the old <code>dp[j]</code> is the diagonal the next column still needs, so the next match reads garbage.",
+      fix: "Stash <code>prev = old dp[j]</code> before you write. After the write, that stash is the diagonal for the next <code>j</code>. The space-opt tab in the template does exactly this.",
     },
     {
       title: "Edit distance first row = 0",
-      bug: "Inserting m characters into empty s costs m, not 0.",
-      fix: "dp[0][j] = j, dp[i][0] = i.",
+      bug: "Leaving the first row at 0 looks like LCS, but inserting every character of <code>t</code> into an empty <code>s</code> costs <code>m</code> edits, not zero, and every later cell is then too small.",
+      fix: "Set <code>dp[0][j] = j</code> and <code>dp[i][0] = i</code>. Test the empty-versus-nonempty pair: the distance must equal the length of the nonempty string.",
     },
     {
       title: "Modulo on LCS length",
-      bug: "Lengths do not wrap. Ways-of-LCS do.",
-      fix: "Only modulus counting problems. Lengths are int.",
+      bug: "Reducing an LCS length modulo a prime looks like every other counting DP, but lengths do not wrap and a modulus silently changes the answer.",
+      fix: "Lengths fit in an <code>int</code>. Apply a modulus only when the problem asks for the number of common subsequences, not their length.",
     },
     {
       title: "Wildcard '*' as a single char",
-      bug: "Treating '*' like '?' instead of \"empty or eat one and stay\".",
-      fix: "dp[i][j] |= dp[i][j-1] (eat empty) and dp[i-1][j] (eat s[i-1], star remains).",
+      bug: "Treating <code>'*'</code> like <code>'?'</code> looks like any other one-character match, but a star can eat the empty string or eat one character of <code>s</code> and stay in place.",
+      fix: "A star is two boolean options: <code>dp[i][j-1]</code> (eat empty) or <code>dp[i-1][j]</code> (eat <code>s[i-1]</code> and keep the star). Test <code>\"ab\"</code> against <code>\"a*\"</code>.",
     },
   ],
   variants: [

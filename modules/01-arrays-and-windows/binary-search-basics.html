@@ -37,7 +37,7 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Everyone knows binary search and almost everyone writes it wrong under pressure. The bugs are always the same three: an infinite loop from the wrong midpoint rounding, an off-by-one from <code>hi = mid</code> versus <code>hi = mid - 1</code>, and an overflow from <code>(lo + hi) / 2</code>. The cure is not care; it is committing to a single template and never deviating.</p>
+<p>Everyone knows binary search and almost everyone writes it wrong under pressure. The bugs are always the same three: an infinite loop from the wrong midpoint rounding, an off-by-one from <code>hi = mid</code> versus <code>hi = mid - 1</code>, and an overflow from <code>(lo + hi) / 2</code>. The cure is not care; it is committing to a single template and never deviating. At <code>n = 10&#8313;</code> a linear scan is impossible, but about thirty predicate evaluations finish the search, so the template has to be right the first time.</p>
 <p>That template is <strong>find the first index where a predicate is true</strong>. Every other search is a rewrite of it. Looking for an exact value is "first index where <code>a[i] &ge; target</code>, then check". Upper bound is "first index where <code>a[i] &gt; target</code>". Counting occurrences is the difference of two such searches. Once you accept that framing, the boundary reasoning happens once, in one place, and never again.</p>
 <p>The deeper point is that binary search is not about sorted arrays. It is about <strong>monotone predicates</strong>: any function from the index space to <code>{false, true}</code> that never goes back from true to false. Sortedness is just the most common way to get one. That reframing is what turns binary search into <a href="binary-search-on-answer.html">binary search on the answer</a>, which is one of the highest-value techniques in competitive programming.</p>
 
@@ -594,12 +594,12 @@ flowchart TD
 <ol class="stepper">
   <li><strong>Confirm monotonicity.</strong> State the predicate and check that it never goes from true back to false across the range.</li>
   <li><strong>Set the half-open interval:</strong> <code>lo = 0</code>, <code>hi = n</code>. Use <code>hi = n</code>, not <code>n - 1</code>, so "no answer" falls out naturally.</li>
-  <li><strong>Loop while <code>lo &lt; hi</code></strong> &mdash; strict inequality, never <code>&le;</code> with this template.</li>
-  <li><strong>Compute <code>mid = lo + (hi - lo) / 2</code></strong> to avoid overflow.</li>
+  <li><strong>Loop while <code>lo &lt; hi</code></strong> &mdash; use the strict inequality, never <code>&le;</code>, because this half-open template exits when <code>lo</code> equals <code>hi</code>.</li>
+  <li><strong>Compute <code>mid = lo + (hi - lo) / 2</code></strong> so the midpoint cannot overflow even when both bounds sit near <code>2&times;10&#8313;</code>.</li>
   <li><strong>If the predicate holds at <code>mid</code>, set <code>hi = mid</code></strong>; otherwise <code>lo = mid + 1</code>. Never <code>lo = mid</code>.</li>
-  <li><strong>Return <code>lo</code></strong>, which is the first true index or <code>n</code>.</li>
-  <li><strong>For an exact match, check afterwards:</strong> <code>lo &lt; n && a[lo] == target</code>.</li>
-  <li><strong>Test on the three boundary cases:</strong> target below everything, above everything, and equal to a duplicated value.</li>
+  <li><strong>Return <code>lo</code></strong>, which is the first true index, or <code>n</code> when the predicate is false everywhere on the range.</li>
+  <li><strong>For an exact match, check afterwards:</strong> <code>lo &lt; n && a[lo] == target</code>, because <code>lowerBound</code> returns an insertion point even on a miss.</li>
+  <li><strong>Test on the three boundary cases:</strong> a target below everything, a target above everything, and a target equal to a duplicated value.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Range updates become O(log n) by parking a tag on a canonical node and pushing it to the children only when you next have to split that node.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="segment-tree.html">Segment Tree</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A plain segment tree updates a <em>point</em> in O(log n). Updating a range of length k by walking k leaves is O(k log n) and dies at k = n. The observation is the same canonical cover used by queries: a range update touches O(log n) nodes that exactly partition the range. If you can apply the update to a whole node in O(1), you are done &mdash; provided you remember to tell the children later.</p>
-<p>That memory is a lazy tag. When a node is fully inside the update range you apply the update to t[p] immediately (so queries that stop here are correct) and add the update to lazy[p] instead of recursing. The next time a query or update needs to look at a child, you <em>push</em>: apply the tag to both children, clear it, then proceed. Tags sink only on demand, so the total work stays O(log n).</p>
-<p>This is the default contest structure for range add + range sum / min, range assign, and range XOR. It is also the first place people write a segment tree that is wrong on hidden tests: forgotten pushes, tags applied twice, or combining children before pushing. The invariant below is the whole topic.</p>
+<p>You are given the same array <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, but now the update itself is a range: add 2 to every index from 1 to 5, then report the sum (or the minimum) of some other range. A plain segment tree updates one leaf in <code>O(log n)</code>. Doing that for each of the k cells in the update is <code>O(k log n)</code>, and at k = n a hundred thousand such updates is two billion steps. The observation that saves you is the same canonical cover the query already uses: any range splits into O(log n) nodes that sit entirely inside it. If you can apply the update to a whole node in constant time, you never have to touch its leaves &mdash; provided you remember to tell the children later.</p>
+<p>That memory is a <em>pending tag</em>, stored in a second array <code>lazy[p]</code>. A pending tag on node p means: "the combine <code>t[p]</code> already includes this update, so any query that stops here is correct, but my children have not been told yet and their <code>t</code> values are stale." When a later operation needs to look at a child, you <em>push</em> the tag down: apply the same update to both children (which updates their <code>t</code> and their own lazy slots), then clear <code>lazy[p]</code> so you cannot apply it twice. Tags sink only on demand, which is why a range update stays O(log n) even though most of the array was logically changed.</p>
+<p>Push-down is safe for a precise reason. The update is <em>uniform</em> across p's segment: every leaf under p receives the same add (or the same assign). Applying that update to the left child and the right child, each scaled by its own length, is exactly what would have happened if you had walked every leaf. Clearing the parent tag afterwards is safe because the information has moved, not vanished: <code>t[p]</code> is still the true combine, and the children now carry the responsibility that p was holding. You must not push on a full-cover query, because you do not need the children; pushing there would turn the lazy tree back into an eager one.</p>
+<p>In a real statement the signal is mixed range updates and range queries at <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out walking leaves and is the default contest structure for range add plus range sum or min, for range assign, and for range XOR. It is also the first place a segment tree goes wrong on hidden tests: a forgotten push, a tag applied twice, or a parent recomputed from children that have not yet seen the tag.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Apply the update to a fully covered node in O(1), store a tag, and push that tag to the children only when you next split the node.</p>
+    <p>A pending tag means t[p] is already correct and the children are the ones who are behind. Apply on a fully covered node in constant time, store the tag, and push that tag down only when you next have to split the node. Pushing is safe because a uniform update on a parent is the same uniform update on each child.</p>
   </div>
 </aside>
 
@@ -116,19 +117,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with mixed range updates and range queries. Each operation must be O(log n), so you cannot walk the leaves. Tags must compose: applying v2 after v1 is one combined tag.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with mixed range updates and range queries is the signature. Each operation must stay O(log n), so you cannot walk the leaves of an update. Tags must compose: applying v2 after v1 has to collapse into a single combined tag, otherwise two pending updates on the same node would need a queue.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Keep t[p] always equal to the true combine of the segment, including updates that have been applied to p but not yet pushed. lazy[p] is the update that children have <em>not</em> received. apply(p, v) writes v into t[p] (for a range add: <code>t[p] += v * length</code>) and into lazy[p]. push(p) calls apply on both children with lazy[p], then zeros the tag.</p>
-<p>Range update: disjoint &rarr; return; complete cover &rarr; apply and return (do not recurse); otherwise push, recurse both children, recompute t[p] from children. Range query is the same three-way branch, with a push on the partial case so the children are up to date before you read them.</p>
-<p>Tags must compose. For range add, composition is addition: lazy += v. For range assign, a new assign overwrites the old tag (and you must still push first if a child might have a different pending tag). Mixing add and assign needs two tags or a single tagged union with a defined override rule.</p>
+<p>Keep two arrays. <code>t[p]</code> is always the true combine of p's segment, including every update that has been applied to p, even the ones not yet pushed to the children. <code>lazy[p]</code> is the pending tag: the update the children have not received. The helper <code>apply(p, v)</code> writes v into both places at once: for a range add it does <code>t[p] += v * (r - l + 1)</code> so the cached sum stays honest, and <code>lazy[p] += v</code> so a later push can repeat the same add on the children. The helper <code>push(p)</code> is the move: if the tag is non-zero and p is not a leaf, call apply on both children with <code>lazy[p]</code>, then zero the tag. After a push, p's children are as up to date as p was, and p is no longer responsible for telling them.</p>
+<p>A range update uses the same three-way branch as a query. If the node is disjoint, return. If the node sits entirely inside the update, apply and return without recursing: that is the whole point of the tag. If the node only partially overlaps, push first so the children see whatever p was holding, recurse into both children, then recompute <code>t[p]</code> from those (now updated) children. A range query is the same three-way branch, with the same push on the partial case, because you must not read a child that has not yet received its parent's tag. A full-cover query returns <code>t[p]</code> and does not push, because t[p] already includes the tag.</p>
+<p>Tags must compose, because two updates can land on the same node before either is pushed. For range add, composition is addition: <code>lazy[p] += v</code>. For range assign, a new assign overwrites the old tag, because "set everything to 7" cancels a previous "set everything to 3". Mixing add and assign needs two tags, or a single tagged union with a defined override rule (assign wins, then add). If the update cannot be summarised from <code>t[p]</code> and the segment length alone &mdash; integer division of every element is the usual counter-example &mdash; lazy propagation does not apply and you are on a different structure.</p>
+<p>Walk add 2 to indices [1, 5] on the sample whose whole-array sum is 31. The canonical cover of [1, 5] is the leaf [1, 1], the node [2, 3], and the node [4, 5]. Apply writes leaf t = 1+2 = 3 with lazy 2, node [2, 3] t = 5+4 = 9 with lazy 2, and node [4, 5] t = 14+4 = 18 with lazy 2. The ancestors recompute from those new child values to 13, 26 and 39, which is the old 31 plus 2 times 5. The leaves under [2, 3] still hold 4 and 1; they are stale, and that is fine. A later query of [2, 6] hits [2, 3] as a full cover, reads 9, and does not push. It does the same for [4, 5] (18) and takes the untouched leaf 2, for a total of 29, matching the new array [3, 3, 6, 3, 7, 11, 2, 6] on indices 2..6.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After every public operation:</p><span class="eq">t[p] is correct for p's segment;&nbsp; lazy[p] is the update children have not yet seen</span><p>Interview sentence: <em>"I apply on a full cover and I push before I split. I never read a child without pushing the parent first."</em></p>
+    <p>After every public operation, two facts hold at every node:</p><span class="eq">t[p] is the true combine of p's segment;&nbsp; lazy[p] is the update the children have not yet seen</span><p>In plain words, a pending tag is not a sticky note you might forget: it is a promise that this node's cached answer is already right and that the work of telling the children has been deferred. Push-down is safe because the update is the same at every leaf under p, so applying it to the two children (each scaled by its own length) is exactly the walk you skipped, and clearing the parent tag afterwards cannot lose information &mdash; the children now carry it. Reading a child without pushing first is the one thing that breaks the promise, because you would combine two stale halves and write the wrong number back into t[p].</p><p>Interview sentence: <em>"I apply on a full cover and I push before I split. I never read a child without pushing the parent first."</em></p>
   </div>
 </aside>
 
@@ -145,6 +147,14 @@
   <div class="callout__body">
     <span class="callout__title">Why t[p] += v * length</span>
     <p>A range add of v increases every one of the (r-l+1) leaves by v, so the sum increases by v times the length. For range min the length factor is absent: min += v. Applying the wrong formula is a silent off-by-factor.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why push-down cannot lose the update</span>
+    <p>The tag on p is a deferred copy of an update that t[p] already reflects. Pushing writes that same update into both children and then zeros lazy[p]. Nothing is discarded: t[p] stays correct, and the children now hold the promise p was keeping. Applying the tag twice would be the actual loss, which is why the zero after the push is load-bearing.</p>
   </div>
 </aside>
 
@@ -439,18 +449,18 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Store two arrays:</strong> <code>t[4n]</code> (current combine) and <code>lazy[4n]</code> (pending child update). Build t as in the plain tree; lazy starts at 0.</li>
-  <li><strong>apply(p, l, r, v):</strong> <code>t[p] += v * (r - l + 1)</code>, <code>lazy[p] += v</code>. This is O(1) and makes t[p] correct.</li>
-  <li><strong>push(p, l, r):</strong> if lazy[p] is non-zero and p is not a leaf, apply it to both children, then zero lazy[p].</li>
-  <li><strong>Range update:</strong> disjoint return; complete cover &rarr; apply and return; else push, recurse, recompute t[p] from children.</li>
-  <li><strong>Range query:</strong> the same three-way branch, with push on the partial case.</li>
-  <li><strong>Never recurse without pushing</strong> on a node that you are about to split.</li>
-  <li><strong>Compose tags.</strong> For add, +=. For assign, overwrite (after a push, or with an explicit override rule).</li>
+  <li><strong>Store two arrays, t and lazy.</strong> <code>t[4n]</code> holds the current combine of each segment; <code>lazy[4n]</code> holds the pending child update. Build t as in the plain tree; every lazy slot starts at 0, meaning "nothing pending".</li>
+  <li><strong>apply(p, l, r, v) updates t and the tag together.</strong> For a range add write <code>t[p] += v * (r - l + 1)</code> and <code>lazy[p] += v</code>. This is O(1) and is what makes t[p] correct even though the children have not been visited.</li>
+  <li><strong>push(p, l, r) moves the tag one level down.</strong> If lazy[p] is non-zero and p is not a leaf, apply that tag to both children, then zero lazy[p] so the same update cannot fire twice. Leaves have no children to tell.</li>
+  <li><strong>Range update is apply-and-stop on a full cover.</strong> Disjoint returns; complete cover calls apply and returns without recursing; otherwise push, recurse both children, then recompute t[p] from the children. Stopping on a full cover is what keeps the update O(log n).</li>
+  <li><strong>Range query uses the same three-way branch.</strong> The partial case must push first so the children are up to date before you read them. The full-cover case returns t[p] and does not push, because t[p] already includes the tag.</li>
+  <li><strong>Never recurse on a node you have not pushed.</strong> A child you read while a tag still sits on the parent is stale, and writing the combine of two stale children back into t[p] corrupts the only copy of the truth you had.</li>
+  <li><strong>Compose tags instead of queuing them.</strong> For add, <code>lazy += v</code>. For assign, overwrite the old tag (after a push, or with an explicit override rule). Two tags that cannot collapse into one will not fit in a single long.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Range add [1, 5] += 2 on the sample, then query [2, 6]. acc is the query accumulator.</p>
+<p>Range add [1, 5] += 2 on the sample, then a sum query on [2, 6]. Watch the tags park on the canonical cover and the query read those tagged nodes without pushing them.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -691,7 +701,7 @@ graph TD
   <li>
     <span class="pitfalls__title">Forgetting to push before splitting</span>
     <div class="pitfalls__bug">Partial-overlap update or query recurses into children that have not received the parent's tag. Combining those stale children then overwrites t[p] with a wrong value, and the tag is still sitting on p so a later push double-applies.</div>
-    <div class="pitfalls__fix">First line of the partial branch: <code>push(p, l, r);</code></div>
+    <div class="pitfalls__fix">The first line of the partial-overlap branch, in both update and query, is <code>push(p, l, r);</code> A query that hits a node you tagged on the previous update is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">apply uses the wrong length factor</span>
@@ -701,7 +711,7 @@ graph TD
   <li>
     <span class="pitfalls__title">Pushing a leaf</span>
     <div class="pitfalls__bug">apply on a leaf is fine; push on a leaf tries to write children that do not exist (or exist as garbage indices). AIOOB or silent corruption.</div>
-    <div class="pitfalls__fix"><code>if (lazy[p] == 0 || l == r) return;</code> at the top of push.</div>
+    <div class="pitfalls__fix"><code>if (lazy[p] == 0 || l == r) return;</code> at the top of push, so a leaf never indexes children that do not exist. A range update of a single cell is the leaf-push test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Recomputing t[p] without pushing</span>
@@ -774,7 +784,7 @@ graph TD
   <details class="followup">
     <summary>How does CF 52C handle the circular case?</summary>
     <div class="followup__body">
-      <p>A range that wraps (l &gt; r) is two linear updates [l, n] and [1, r]. Each is an ordinary lazy range add. Queries wrap the same way, combining two range mins. The tree itself stays linear; the circle is a client-side split.</p>
+      <p>A range that wraps (l &gt; r) is two linear updates [l, n] and [1, r]. Each is an ordinary lazy range add. Queries wrap the same way, combining two range mins. The tree itself stays linear; the circle is a client-side split of one circular request into two ordinary ones, which is why you do not need a special circular node type.</p>
     </div>
   </details>
 </div>

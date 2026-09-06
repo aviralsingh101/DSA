@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>DFS answers a different question from BFS. It does not find shortest paths. It finds a spanning tree of each component, a parenthetical structure of enter/exit times, and the connected pieces of an undirected graph. Those three facts unlock cycle detection, topological sort, bridges, SCCs and most "paint the component" interview problems.</p>
-<p>The practical reason to prefer DFS for components is that the code is a six-line recursion and the component id of every vertex is just "the start vertex of the DFS that first reached it". Number of islands, provinces, and "accounts merge" are this idea in costume.</p>
-<p>The cost is the call stack. On a path of <code>n = 10&#8309;</code>, default JVM stack size will throw. The cure is an explicit <code>ArrayDeque</code> stack, not a hope that the graph is shallow. Learn both forms.</p>
+<p>You are given 100000 user accounts and 200000 "these two accounts share an email" pairs, and you must report how many separate groups of people the pairs form. A pair is an undirected edge, a group is a <em>connected component</em> &mdash; a maximal set of vertices in which you can walk from any member to any other along the stored edges. Starting one search at account 0 paints everyone 0 can reach, but it says nothing about an account that never touches 0. If you forget the accounts you never started from, you report 1 on a graph that has 50 groups, and the judge marks it wrong.</p>
+<p>Depth-first search, DFS, is the recursive way to paint one group. From a vertex you mark it, then you immediately dive into the first unseen neighbour, and you only come back to the second neighbour after that dive returns. The vertices one such start touches are exactly one connected component, and the edges you recurse along form a spanning tree of that component. Number-of-islands and number-of-provinces are this idea wearing a grid or a matrix costume: land cells are vertices, 4-way adjacency is the edge set, and each fresh start of the recursion is one island.</p>
+<p>DFS is not a shortest-path algorithm. It can wander down a long corridor before it looks at a neighbour sitting one step away, so the first time it reaches a vertex is not a closest time. What it gives you instead is the component partition, plus enter and exit times that later pages use for cycles, topological sort, bridges and strongly connected components. The cost you must name out loud is the call stack. On a path of <code>n = 10&#8309;</code> the JVM's default stack is only a few thousand frames and the recursion throws. The contest default at that size is an explicit <code>ArrayDeque</code> used as a stack, or union-find if you only need the grouping.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>One DFS (or one explicit-stack walk) from an unvisited vertex paints exactly one connected component. Loop over vertices, start a new paint when you see a fresh one, and the number of paints is the number of components.</p>
+    <p>One DFS started at an unvisited vertex paints exactly one connected component. Loop over every vertex, start a new paint when you see a fresh one, and the number of paints is the number of components. Distances are BFS's job, not this one.</p>
   </div>
 </aside>
 
@@ -56,8 +56,8 @@
     <div class="recognise__col recognise__col--yes">
       <h3>Say yes when you see</h3>
       <ul>
-        <li>"How many connected groups / islands / provinces?"</li>
-        <li>"Colour / list every vertex in the same component as X"</li>
+        <li>How many connected groups / islands / provinces?</li>
+        <li>Colour / list every vertex in the same component as X</li>
         <li>You need enter/exit times, a preorder, or a parent in a spanning tree</li>
         <li>The next algorithm is cycle detection, topo sort, bridges or SCCs</li>
         <li>A grid of land/water and 4-way adjacency</li>
@@ -68,8 +68,8 @@
       <ul>
         <li>You need shortest unweighted distances &rarr; BFS</li>
         <li>You need shortest weighted distances &rarr; Dijkstra</li>
-        <li>Directed "components" that should collapse cycles &rarr; <a href="../08-graphs-advanced/scc-tarjan-kosaraju.html">SCC</a>, not undirected DFS</li>
-        <li>The graph is a collection of pairs to unify and you only need the grouping &rarr; <a href="../06-range-queries/dsu.html">DSU</a> is shorter</li>
+        <li>Directed groups that can all reach each other &rarr; SCC, not undirected DFS</li>
+        <li>Pairs to unify and you only need the grouping &rarr; DSU is shorter</li>
       </ul>
     </div>
   </div>
@@ -80,7 +80,7 @@
     </thead>
     <tbody>
       <tr>
-        <td>Count islands / provinces / friend circles</td>
+        <td>Count islands / provinces</td>
         <td>Undirected components</td>
         <td>DFS flood or DSU</td>
       </tr>
@@ -90,102 +90,71 @@
         <td>DFS/BFS flood fill</td>
       </tr>
       <tr>
-        <td>Preorder / timestamps / subtree size</td>
+        <td>tin[] / tout[] / subtree size</td>
         <td>DFS tree metrics</td>
-        <td>tin[], tout[], sz[]</td>
+        <td>Timestamps around rec calls</td>
       </tr>
       <tr>
-        <td>"Is the graph connected?"</td>
+        <td>Is the graph connected?</td>
         <td>One component or more</td>
         <td>One DFS, then scan visited</td>
       </tr>
       <tr>
-        <td>Directed, "can I reach t from s?"</td>
+        <td>Directed, can I reach t from s?</td>
         <td>Reachability, not components</td>
         <td>DFS/BFS from s</td>
       </tr>
       <tr>
-        <td>Directed, groups that can all reach each other</td>
-        <td>Strong connectivity</td>
-        <td>Tarjan / Kosaraju</td>
-      </tr>
-      <tr>
         <td><strong>Confused with:</strong> BFS components</td>
-        <td>Same answer, different tree</td>
-        <td>Use DFS when you want the recursion; BFS when you want distances</td>
+        <td>Same partition, different tree</td>
+        <td>DFS for recursion/timestamps; BFS for distances</td>
       </tr>
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Recursive DFS needs <code>-Xss</code> or an explicit stack at this size. Time is <code>O(n + m)</code> either way. A grid is <code>O(RC)</code>.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> is one linear walk, the same <code>O(n + m)</code> as BFS, and a grid is the same bound with <code>n = RC</code>. Recursive DFS at this size needs an explicit stack, because a path of a hundred thousand vertices overflows the Java call stack. If you only need the grouping and edges arrive online, union-find is shorter than a walk.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
-<h2>The recursion and the component loop</h2>
-<p>The recursive form is: mark <code>u</code> visited (and assign it the current component id), then for each unseen neighbour recurse. Because an undirected edge is stored both ways, the parent is already visited and is skipped; everything else you reach is in the same component.</p>
-<p>The outer loop is the part people forget. A single <code>dfs(0)</code> only paints the component of 0. To count components, iterate <code>s = 0 .. n-1</code> and start a new DFS (with a fresh id) whenever <code>s</code> is still unseen.</p>
-<p>Timestamps <code>tin[u]</code> / <code>tout[u]</code> are incremented around the recursive calls. They turn ancestry into an interval test (<code>tin[u] &le; tin[v] &le; tout[u]</code>) and are the substrate for bridges, HLD and Euler tours. Record them even when the current problem does not ask; they cost two integers.</p>
+<h2>Core idea and the invariant</h2>
+<p>You need one array <code>comp[u]</code> that starts at <code>-1</code> (unseen) and will hold the component id of <code>u</code>. The recursive step is four lines: write <code>comp[u] = id</code>, then for each neighbour <code>v</code> still at <code>-1</code> call <code>dfs(v, id)</code>. Because an undirected edge is stored both ways, the vertex you just came from is already painted and is skipped, which is how the recursion does not bounce forever across a two-way road. Everything else the recursion can still reach belongs to the same component, which is why one start paints exactly one group.</p>
+<p>The outer loop is the part people forget. A single <code>dfs(0, 0)</code> paints only the group that contains 0. You iterate <code>s</code> from 0 to <code>n-1</code> and, whenever <code>s</code> is still unseen, start a new DFS with a fresh id. The number of times you increment that id is the number of components. On a grid the same loop walks every cell, starts a flood when it sees unseen land, and recurses to the four in-bounds land neighbours. Two extra clocks, <code>tin[u]</code> and <code>tout[u]</code>, tick around the recursive calls and turn "is u an ancestor of v in this DFS tree?" into an interval test on those two numbers.</p>
+<p>Walk the sample with an isolated vertex 4 added. The edges 0-1, 0-2, 1-2, 1-3 join the first four vertices; 4 has no edge. All five <code>comp</code> slots start at <code>-1</code>. The outer loop starts <code>dfs(0, 0)</code>, which marks 0, dives to 1, then to 2 and 3, and returns with <code>comp = [0,0,0,0,-1]</code>. The loop then skips 1, 2 and 3 because they are painted, finds 4 unseen, and starts <code>dfs(4, 1)</code>. Vertex 4 has no neighbours, so it paints only itself. Two starts, two components, finished array <code>[0, 0, 0, 0, 1]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The invariant</span>
-    <p>During <code>dfs(u)</code>, every vertex already marked with the current id is reachable from the component's start, and when <code>dfs(u)</code> returns, every vertex reachable from <code>u</code> through unseen vertices has been marked.</p><span class="eq">one start of dfs on an unvisited vertex = one connected component</span>
+    <p>During <code>dfs(u)</code>, every vertex already marked with the current id is reachable from the vertex that started this paint, and when <code>dfs(u)</code> returns, every vertex reachable from <code>u</code> through still-unseen vertices has been marked with that same id.</p><span class="eq">one start of dfs on an unvisited vertex = one connected component</span><p>In plain words, diving as deep as you can from a fresh vertex is enough to collect everyone who can reach that vertex, and a vertex you never started a dive from is in a different group.</p>
   </div>
 </aside>
 
 <aside class="callout callout--warn">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">Recursion depth is space, and it can be n</span>
-    <p>A path graph is a legal undirected graph. Recursive DFS is then n frames. In Java that is a StackOverflowError around a few thousand to tens of thousands of frames. The explicit-stack version in the Template tab is the contest default for n = 1e5.</p>
-  </div>
-</aside>
-
-<aside class="callout callout--tip">
-  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
-  <div class="callout__body">
-    <span class="callout__title">Iterative DFS must simulate the neighbour iterator</span>
-    <p>Push (u, neighbour-index) pairs, not just u, or push neighbours in reverse and mark on push. A naive "push all neighbours" still works for components (you only need visited) but does not give correct tin/tout.</p>
+    <span class="callout__title">Recursive DFS on a path of n = 10^5 throws</span>
+    <p>The JVM default stack is a few thousand frames. Rewrite the walk with an explicit ArrayDeque used as a stack, marking on push the same way BFS marks on push, or switch to union-find if you only need the grouping.</p>
   </div>
 </aside>
 
 <!-- ============================================= 5. VISUAL WALKTHROUGH -->
 <h2>Visual walkthrough</h2>
 
-<h3>Two components</h3>
+<h3>Two components: paint {0,1,2,3} then isolated 4</h3>
 
-<p>Add a fifth isolated vertex 4 to the running graph. DFS from 0 paints {0,1,2,3}; a second start at 4 paints {4}.</p>
-
-<figure class="viz">
-  <div class="mermaid">
-graph LR
-  n0["0"] --- n1["1"]
-  n0 --- n2["2"]
-  n1 --- n2
-  n1 --- n3["3"]
-  n2 --- n3
-  n4["4 isolated"]
-  </div>
-  <figcaption>Undirected graph with two components. Component ids after the outer loop: [0, 0, 0, 0, 1].</figcaption>
-</figure>
-
-<h3>comp[] and the explicit stack as DFS runs</h3>
-
-<p>The array is the component id of each vertex, <code>-1</code> unseen. The queue-like variable is the explicit stack (LIFO), so you can see DFS order versus the BFS queue on the previous page.</p>
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="dfsComp"></div>
-  <div class="viz-player" data-viz-target="dfsComp">
+  <div class="array-viz" data-viz-id="dfs-and-componentsViz"></div>
+  <div class="viz-player" data-viz-target="dfs-and-componentsViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "comp[u]  (-1 = unseen)",
       "array": [
-        -1,
-        -1,
-        -1,
-        -1,
-        -1
+        0,
+        0,
+        0,
+        0,
+        1
       ],
       "indexLabels": [
         "0",
@@ -197,19 +166,13 @@ graph LR
       "vars": [
         "u",
         "stack",
-        "comp[u]"
+        "id",
+        "compU"
       ],
-      "speed": 900,
+      "speed": 1000,
       "frames": [
         {
-          "note": "Outer loop finds 0 unseen. Start component 0, push 0, mark comp[0] = 0.",
-          "arr": [
-            0,
-            -1,
-            -1,
-            -1,
-            -1
-          ],
+          "note": "Every component id starts at -1. The outer loop begins a dive at vertex 0 with paint id 0, and 4 sits unseen on the side.",
           "active": [
             0
           ],
@@ -222,115 +185,62 @@ graph LR
           "values": {
             "u": 0,
             "stack": "[0]",
-            "comp[u]": 0
+            "id": 0,
+            "compU": 0
           }
         },
         {
-          "note": "Pop 0, push unseen neighbours 2 then 1 (reverse of list [1,2] so 1 is processed first).",
-          "arr": [
-            0,
-            -1,
-            -1,
-            -1,
-            -1
-          ],
-          "active": [
-            0
-          ],
-          "dim": [
-            3,
-            4
-          ],
-          "values": {
-            "u": 0,
-            "stack": "[2, 1]",
-            "comp[u]": 0
-          }
-        },
-        {
-          "note": "Pop 1, mark if needed (already 0), push unseen neighbours 3 and 2. 2 may already sit on the stack; visited-on-push prevents a second mark.",
-          "arr": [
-            0,
-            0,
-            -1,
-            -1,
-            -1
-          ],
+          "note": "The recursion follows the first unseen neighbour into 1, still carrying paint id 0, so 0 and 1 now belong to the same group.",
           "active": [
             1
           ],
           "done": [
             0
-          ],
-          "dim": [
-            4
           ],
           "values": {
             "u": 1,
-            "stack": "[2, 3, 2]",
-            "comp[u]": 0
+            "stack": "[0,1]",
+            "id": 0,
+            "compU": 0
           }
         },
         {
-          "note": "Pop 2 (or 3 first). Mark 2 with id 0. Remaining unseen neighbour of the triangle is 3.",
-          "arr": [
-            0,
-            0,
-            0,
-            -1,
-            -1
-          ],
+          "note": "From 1 the dive reaches 2 and then 3. The triangle plus the leaf are all paint 0, and the first component is now fully marked.",
           "active": [
-            2
-          ],
-          "done": [
-            0,
-            1
-          ],
-          "dim": [
-            4
-          ],
-          "values": {
-            "u": 2,
-            "stack": "[3, ...]",
-            "comp[u]": 0
-          }
-        },
-        {
-          "note": "Mark 3 with id 0. Component 0 is fully painted: {0,1,2,3}. Stack drains.",
-          "arr": [
-            0,
-            0,
-            0,
-            0,
-            -1
-          ],
-          "active": [
+            2,
             3
           ],
           "done": [
             0,
+            1
+          ],
+          "values": {
+            "u": 2,
+            "stack": "[0,1,2]",
+            "id": 0,
+            "compU": 0
+          }
+        },
+        {
+          "note": "The first dive returns. The outer loop skips 1, 2 and 3 because they are painted, and it stops on unseen vertex 4.",
+          "done": [
+            0,
             1,
-            2
+            2,
+            3
           ],
           "dim": [
             4
           ],
           "values": {
-            "u": 3,
+            "u": "scan",
             "stack": "[]",
-            "comp[u]": 0
+            "id": 0,
+            "compU": "0 done"
           }
         },
         {
-          "note": "Outer loop finds 4 unseen. Start component 1, mark comp[4] = 1. No neighbours.",
-          "arr": [
-            0,
-            0,
-            0,
-            0,
-            1
-          ],
+          "note": "A second dive starts at 4 with a fresh paint id 1. Vertex 4 has no neighbours, so the new component is a single vertex.",
           "active": [
             4
           ],
@@ -343,17 +253,14 @@ graph LR
           "values": {
             "u": 4,
             "stack": "[4]",
-            "comp[u]": 1
+            "id": 1,
+            "compU": 1
           }
         },
         {
-          "note": "Two components. The answer is 2, and comp[] is the labelling you return when the problem asks which vertices belong together.",
-          "arr": [
-            0,
-            0,
-            0,
-            0,
-            1
+          "note": "Two dives were started, so the answer is 2 and the finished ids are [0, 0, 0, 0, 1].",
+          "best": [
+            4
           ],
           "done": [
             0,
@@ -361,51 +268,61 @@ graph LR
             2,
             3
           ],
-          "best": [
-            4
-          ],
           "values": {
             "u": "done",
             "stack": "[]",
-            "comp[u]": "2 comps"
+            "id": 1,
+            "compU": "2 comps"
           }
         }
       ]
     }
     </script>
   </div>
-  <figcaption>Vertices 0-3 receive id 0 in DFS finish-adjacent order. Vertex 4 starts a new component. Stack, not queue: children are explored before siblings.</figcaption>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Two components on five nodes</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n0["0"] --- n1["1"]
+  n0 --- n2["2"]
+  n1 --- n2
+  n1 --- n3["3"]
+  n4["4 isolated"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
 </figure>
 
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>int[] comp</code></strong> filled with <code>-1</code>, and a counter <code>cid = 0</code>.</li>
-  <li><strong>For <code>s = 0 .. n-1</code></strong>, skip if <code>comp[s] != -1</code>.</li>
-  <li><strong>Otherwise start a component:</strong> call <code>dfs(s, cid)</code>, then <code>cid++</code>.</li>
-  <li><strong>dfs(u, id):</strong> set <code>comp[u] = id</code>. For each neighbour <code>v</code> with <code>comp[v] == -1</code>, recurse (or push on an explicit stack).</li>
-  <li><strong>Do not recurse into the parent</strong> if you are also recording a DFS tree &mdash; pass <code>p</code> and skip <code>v == p</code>.</li>
-  <li><strong>Optional:</strong> record <code>tin[u]</code> before the loop and <code>tout[u]</code> after, incrementing a global timer.</li>
-  <li><strong>Answer</strong> is <code>cid</code> (count) and/or <code>comp[]</code> (labels).</li>
+  <li><strong>Fill comp with -1 and set a counter comps = 0.</strong> The -1 is the unseen sentinel, and the counter will become the number of groups once the outer loop finishes.</li>
+  <li><strong>Loop s from 0 to n-1 and, whenever s is still unseen, start dfs(s, comps++).</strong> A single start from 0 only paints the group of 0; the loop is what finds every other group.</li>
+  <li><strong>Inside dfs(u, id), write comp[u] = id, then recurse on every neighbour still at -1.</strong> Marking on entry is what stops the two-way undirected edge from bouncing forever, and everything the recursion can still reach shares this id.</li>
+  <li><strong>On a grid, the same loop walks every cell and recurses to the four in-bounds land neighbours of an unseen land cell.</strong> Each fresh start is one island, and water cells are simply never started from.</li>
+  <li><strong>If you need ancestry later, set tin[u] = timer++ before the child calls and tout[u] after they return.</strong> Then u is an ancestor of v in this DFS tree exactly when tin[v] sits inside [tin[u], tout[u]].</li>
+  <li><strong>If n can be a path of 10^5, rewrite the walk with an explicit stack of (u, next-neighbour-index).</strong> The JVM call stack will not hold a hundred thousand frames, and union-find is the shorter alternative when you only need the grouping.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Recursive DFS, adjacency order 0:[1,2], 1:[0,2,3], 2:[0,1,3], 3:[1,2], 4:[]. Parent is skipped.</p>
+<p>The running graph plus an isolated vertex 4. Watch the outer loop start a second paint when it finds 4 still unmarked after the first dive returns.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
     <thead>
-      <tr><th>call</th><th>comp after mark</th><th>next unseen neigh</th><th>action</th><th>Action / why</th></tr>
+      <tr><th>u</th><th>stack</th><th>id</th><th>compU</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>dfs(0,0)</td><td>[0,-1,-1,-1,-1]</td><td>1</td><td>start component 0</td><td>Outer loop, s = 0.</td></tr>
-      <tr><td>dfs(1,0)</td><td>[0,0,-1,-1,-1]</td><td>2</td><td>skip parent 0</td><td>First child of 0.</td></tr>
-      <tr><td>dfs(2,0)</td><td>[0,0,0,-1,-1]</td><td>3</td><td>skip 0 and 1</td><td>Triangle closes via DFS tree edge 1-2.</td></tr>
-      <tr><td>dfs(3,0)</td><td>[0,0,0,0,-1]</td><td>none</td><td>return</td><td>Leaf of this DFS tree.</td></tr>
-      <tr><td>returns</td><td>[0,0,0,0,-1]</td><td>—</td><td>component 0 done</td><td>Back to the outer loop.</td></tr>
-      <tr class="trace-table__row--change"><td>dfs(4,1)</td><td>[0,0,0,0,1]</td><td>none</td><td>start component 1</td><td>s = 4 was unseen.</td></tr>
-      <tr><td>done</td><td>[0,0,0,0,1]</td><td>—</td><td>cid = 2</td><td>Two components.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>[0]</td><td>0</td><td>0</td><td>Every component id starts at -1. The outer loop begins a dive at vertex 0 with paint id 0, and 4 sits unseen on the side.</td></tr>
+      <tr><td>1</td><td>[0,1]</td><td>0</td><td>0</td><td>The recursion follows the first unseen neighbour into 1, still carrying paint id 0, so 0 and 1 now belong to the same group.</td></tr>
+      <tr><td>2</td><td>[0,1,2]</td><td>0</td><td>0</td><td>From 1 the dive reaches 2 and then 3. The triangle plus the leaf are all paint 0, and the first component is now fully marked.</td></tr>
+      <tr><td>scan</td><td>[]</td><td>0</td><td>0 done</td><td>The first dive returns. The outer loop skips 1, 2 and 3 because they are painted, and it stops on unseen vertex 4.</td></tr>
+      <tr><td>4</td><td>[4]</td><td>1</td><td>1</td><td>A second dive starts at 4 with a fresh paint id 1. Vertex 4 has no neighbours, so the new component is a single vertex.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>[]</td><td>1</td><td>2 comps</td><td>Two dives were started, so the answer is 2 and the finished ids are [0, 0, 0, 0, 1].</td></tr>
     </tbody>
   </table>
 </div>
@@ -415,172 +332,104 @@ graph LR
 
 <div class="tabs">
   <div class="tabs__list" role="tablist" aria-label="DFS & Connected Components implementations">
-    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute (BFS per start)</button>
-    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal DFS</button>
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
     <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
   </div>
 
   <div class="tabs__panel is-active" data-panel="Brute">
-    <p>Components via BFS from every unvisited vertex. Same answer, useful as a check.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DfsBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayDeque;
-    import java.util.ArrayList;
-    import java.util.Arrays;
-    import java.util.List;
-    
-    public class DfsBrute {
-    
-        static int[] componentsBfs(List&lt;List&lt;Integer&gt;&gt; g) {
-            int n = g.size();
-            int[] comp = new int[n];
-            Arrays.fill(comp, -1);
-            int cid = 0;
-            for (int s = 0; s &lt; n; s++) {
-                if (comp[s] != -1) {
-                    continue;
-                }
-                ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
-                comp[s] = cid;
-                q.offer(s);
-                while (!q.isEmpty()) {
-                    int u = q.poll();
-                    for (int v : g.get(u)) {
-                        if (comp[v] == -1) {
-                            comp[v] = cid;
-                            q.offer(v);
-                        }
-                    }
-                }
-                cid++;
-            }
-            return comp;
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">FloodRecursive.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class FloodRecursive {
+        static void dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int[] comp, int id) {
+            comp[u] = id;
+            for (int v : g.get(u)) if (comp[v] &lt; 0) dfs(g, v, comp, id);
         }
-    
         public static void main(String[] args) {
-            List&lt;List&lt;Integer&gt;&gt; g = demo();
-            System.out.println(Arrays.toString(componentsBfs(g)));
-        }
-    
-        static List&lt;List&lt;Integer&gt;&gt; demo() {
             List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 5; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
-            return g;
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{0,2},{1,2},{1,3}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            int[] comp = new int[5];
+            Arrays.fill(comp, -1);
+            int id = 0;
+            for (int s = 0; s &lt; 5; s++) if (comp[s] &lt; 0) dfs(g, s, comp, id++);
+            System.out.println(id + " " + Arrays.toString(comp));
         }
-        // Input : components {0,1,2,3} and {4}
-        // Output: [0, 0, 0, 0, 1]
+        // Input : triangle 0-1-2 plus 1-3, isolated 4
+        // Output: 2 [0, 0, 0, 0, 1]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Optimal">
-    <p>Recursive flood. Fine when depth is small; switch to the template for n = 1e5.</p>
-    <div class="code" data-highlight="10-16">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DfsAndComponents.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayList;
+    <div class="code">
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Components.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.ArrayDeque;
+    import java.util.ArrayList;
     import java.util.Arrays;
     import java.util.List;
     
-    public class DfsAndComponents {
-    
-        static void dfs(List&lt;List&lt;Integer&gt;&gt; g, int u, int id, int[] comp) {
-            comp[u] = id;
-            for (int v : g.get(u)) {
-                if (comp[v] == -1) {
-                    dfs(g, v, id, comp);
-                }
-            }
-        }
-    
-        static int[] components(List&lt;List&lt;Integer&gt;&gt; g) {
+    public class Components {
+        static int[] iterative(List&lt;List&lt;Integer&gt;&gt; g) {
             int n = g.size();
             int[] comp = new int[n];
             Arrays.fill(comp, -1);
-            int cid = 0;
-            for (int s = 0; s &lt; n; s++) {
-                if (comp[s] == -1) {
-                    dfs(g, s, cid++, comp);
+            int id = 0;
+            ArrayDeque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+            for (int s = 0; s &lt; n; s++) if (comp[s] &lt; 0) {
+                comp[s] = id;
+                st.push(s);
+                while (!st.isEmpty()) {
+                    int u = st.pop();
+                    for (int v : g.get(u)) if (comp[v] &lt; 0) {
+                        comp[v] = id;
+                        st.push(v);
+                    }
                 }
+                id++;
             }
             return comp;
         }
-    
         public static void main(String[] args) {
             List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 5; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
-            System.out.println(Arrays.toString(components(g)));
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1},{0,2},{1,2},{1,3}};
+            for (int[] x : e) { g.get(x[0]).add(x[1]); g.get(x[1]).add(x[0]); }
+            System.out.println(Arrays.toString(iterative(g)));
         }
-        // Input : same graph as the dry run
+        // Input : same sample, isolated 4
         // Output: [0, 0, 0, 0, 1]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Template">
-    <p>Explicit stack, so a path of 1e5 cannot blow the JVM. Mark on push.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DfsTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayDeque;
-    import java.util.ArrayList;
-    import java.util.Arrays;
-    import java.util.List;
-    
-    public class DfsTemplate {
-    
-        static int[] components(List&lt;List&lt;Integer&gt;&gt; g) {
-            int n = g.size();
-            int[] comp = new int[n];
-            Arrays.fill(comp, -1);
-            int cid = 0;
-            ArrayDeque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
-            for (int s = 0; s &lt; n; s++) {
-                if (comp[s] != -1) {
-                    continue;
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">IslandDfs.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>public class IslandDfs {
+        static final int[] DR = {-1,1,0,0}, DC = {0,0,-1,1};
+        static int numIslands(char[][] g) {
+            int R = g.length, C = g[0].length, ans = 0;
+            for (int r = 0; r &lt; R; r++)
+                for (int c = 0; c &lt; C; c++) if (g[r][c] == '1') {
+                    ans++;
+                    dfs(g, r, c);
                 }
-                comp[s] = cid;
-                st.push(s);
-                while (!st.isEmpty()) {
-                    int u = st.pop();
-                    for (int v : g.get(u)) {
-                        if (comp[v] == -1) {
-                            comp[v] = cid;
-                            st.push(v);
-                        }
-                    }
-                }
-                cid++;
-            }
-            return comp;
+            return ans;
         }
-    
+        static void dfs(char[][] g, int r, int c) {
+            if (r &lt; 0 || r &gt;= g.length || c &lt; 0 || c &gt;= g[0].length || g[r][c] != '1') return;
+            g[r][c] = '0';
+            for (int k = 0; k &lt; 4; k++) dfs(g, r + DR[k], c + DC[k]);
+        }
         public static void main(String[] args) {
-            List&lt;List&lt;Integer&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 5; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}};
-            for (int[] x : e) {
-                g.get(x[0]).add(x[1]);
-                g.get(x[1]).add(x[0]);
-            }
-            System.out.println(Arrays.toString(components(g)));
+            char[][] g = {{'1','1','0'},{'1','0','0'},{'0','0','1'}};
+            System.out.println(numIslands(g));
         }
-        // Input : same graph
-        // Output: [0, 0, 0, 0, 1]
+        // Input : two islands in a 3x3 grid
+        // Output: 2
     }</code></pre>
     </div>
   </div>
@@ -592,13 +441,13 @@ graph LR
 <div class="complexity">
   <div class="complexity__badges">
     <span class="badge badge--time">Time O(n + m)</span>
-    <span class="badge badge--space">Space O(n) for comp[] and the stack / recursion</span>
+    <span class="badge badge--space">Space O(n) plus recursion / explicit stack</span>
   </div>
 
   <div class="complexity__derivation">
-    <p>Each vertex is marked once and then never re-entered. Each edge is examined a constant number of times from its endpoints:</p>
-    <p><span class="eq">T = &Theta;(n + m)</span></p>
-    <p>Recursive space is O(depth) extra, which is O(n) on a path. The explicit stack is the same bound but lives on the heap, which is what you want at n = 1e5.</p>
+    <p>Each vertex is marked once and never entered again, and each undirected edge is inspected from both ends, so the walk is the same linear scan as BFS: a constant amount of work per vertex and per edge.</p>
+    <p><span class="eq">T = &Theta;(n + m), S_stack = &Theta;(height) which can be n</span></p>
+    <p>At n = 10&#8309; and m = 2&times;10&#8309; the time is a few hundred thousand operations. The hidden cost is the stack: a path graph has height n, so recursive DFS needs n frames and the JVM throws. An explicit ArrayDeque of size n is a few hundred kilobytes and is the contest default at that size. A grid of R rows and C columns is the same bound with n = RC.</p>
   </div>
 
   <table class="complexity__compare">
@@ -606,11 +455,10 @@ graph LR
       <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
     </thead>
     <tbody>
-      <tr><td>Recursive DFS</td><td>O(n + m)</td><td>O(n) stack frames</td><td>Fine when depth is small</td></tr>
-      <tr><td>Explicit-stack DFS</td><td>O(n + m)</td><td>O(n) heap</td><td>Contest default for n = 1e5</td></tr>
-      <tr><td>BFS components</td><td>O(n + m)</td><td>O(n) queue</td><td>Same answer, also gives distances</td></tr>
-      <tr><td>DSU</td><td>O(m α(n))</td><td>O(n)</td><td>When the input is just pairs to unify</td></tr>
-      <tr><td>Directed SCCs</td><td>O(n + m)</td><td>O(n)</td><td>Different problem — Tarjan/Kosaraju</td></tr>
+      <tr><td>Recursive DFS</td><td>O(n+m)</td><td>O(n) stack</td><td>Small n, or guaranteed shallow</td></tr>
+      <tr><td>Iterative DFS</td><td>O(n+m)</td><td>O(n) heap</td><td>n=1e5 path graphs</td></tr>
+      <tr><td>BFS components</td><td>O(n+m)</td><td>O(n) queue</td><td>Same answer, distances as a bonus</td></tr>
+      <tr><td>DSU</td><td>O(m α(n))</td><td>O(n)</td><td>Online edges, Kruskal, no DFS tree</td></tr>
     </tbody>
   </table>
 </div>
@@ -620,34 +468,29 @@ graph LR
 
 <ul class="pitfalls">
   <li>
-    <span class="pitfalls__title">One DFS from vertex 0</span>
-    <div class="pitfalls__bug">Reporting a single component, or "the graph is connected", after dfs(0) on a graph whose other pieces were never started.</div>
-    <div class="pitfalls__fix">The outer loop over unvisited starts is part of the algorithm, not optional glue.</div>
+    <span class="pitfalls__title">dfs(0) only</span>
+    <div class="pitfalls__bug">A single start from vertex 0 paints one group and you report 1, which looks right on a connected sample but is wrong the moment the graph has an isolated vertex.</div>
+    <div class="pitfalls__fix">Loop over every vertex (or every grid cell) and start a new paint whenever the slot is still unseen. The number of starts is the answer.</div>
   </li>
   <li>
     <span class="pitfalls__title">StackOverflowError on a path</span>
-    <div class="pitfalls__bug">Recursive DFS at n = 1e5 on a linked list of vertices. The judge returns RE, not WA.</div>
-    <div class="pitfalls__fix">Explicit ArrayDeque stack, mark on push. Or raise -Xss if the platform allows it (most do not).</div>
+    <div class="pitfalls__bug">Recursive DFS follows a corridor of n vertices and the JVM default stack is only a few thousand frames, so a correct algorithm throws on the usual n = 10^5 path.</div>
+    <div class="pitfalls__fix">Rewrite with an explicit ArrayDeque used as a stack, or use union-find if you only need the grouping and not a DFS tree.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Treating directed reachability as undirected components</span>
-    <div class="pitfalls__bug">Running this page's algorithm on a directed graph and calling the paints "components". A cycle of directed edges is one SCC, but a one-way edge does not merge the two ends.</div>
-    <div class="pitfalls__fix">Undirected: this page. Directed mutual reachability: SCC. Directed one-way: just DFS/BFS from the source.</div>
+    <span class="pitfalls__title">Not marking the start before pushing neighbours</span>
+    <div class="pitfalls__bug">The iterative version pushes an unseen neighbour without painting it, so every incoming tree edge enqueues another copy and the stack holds the same vertex many times.</div>
+    <div class="pitfalls__fix">Mark on push, the same rule as BFS. For components you only need visited; for tin/tout you also keep a neighbour iterator on the stack.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Mutating the grid without a visited array, then failing to restore</span>
-    <div class="pitfalls__bug">Flood-fill that writes '0' over '1' is fine if you do not need the grid later. If you do, you have destroyed the input.</div>
-    <div class="pitfalls__fix">Either copy, or keep a parallel boolean[][] seen, and only write if the problem asked you to mutate.</div>
+    <span class="pitfalls__title">Directed "components"</span>
+    <div class="pitfalls__bug">You drop the directions, run undirected DFS, and report groups that can touch each other if edges are treated as two-way. Those are weakly connected pieces, not strongly connected components.</div>
+    <div class="pitfalls__fix">Undirected DFS answers undirected connectivity. "Can everyone reach everyone?" on a directed graph needs Kosaraju or Tarjan, a later page.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Skipping the parent incorrectly in an undirected graph</span>
-    <div class="pitfalls__bug">Using a visited[] and also skipping parent, then missing a multi-edge cycle, or the opposite: not skipping parent and treating the back-edge to parent as a cycle.</div>
-    <div class="pitfalls__fix">For components, visited is enough — parent is already visited. For cycle detection, skip the parent explicitly; see the next page.</div>
-  </li>
-  <li>
-    <span class="pitfalls__title">Sharing one visited[] across independent queries without resetting</span>
-    <div class="pitfalls__bug">Second query sees everything already painted.</div>
-    <div class="pitfalls__fix">Reset, or stamp with a query id integer so you can avoid Arrays.fill.</div>
+    <span class="pitfalls__title">Mutating the grid then needing it later</span>
+    <div class="pitfalls__bug">Painting land '1' to water '0' is a tidy in-place mark, but a later part of the problem still wants the original grid and now sees a blank sea.</div>
+    <div class="pitfalls__fix">Keep a separate seen[][] whenever the caller still needs the input. In-place painting is fine only when the grid is throwaway.</div>
   </li>
 </ul>
 
@@ -661,28 +504,22 @@ graph LR
     </thead>
     <tbody>
       <tr>
-        <td>Grid flood fill</td>
-        <td>Implicit 4-neighbour graph. DFS or BFS from each unvisited land cell.</td>
-        <td><code>if (in(nr,nc) &amp;&amp; grid[nr][nc]=='1' &amp;&amp; !seen[nr][nc]) dfs(nr,nc);</code></td>
-        <td>LC 200</td>
+        <td>Timestamps</td>
+        <td>tin before children, tout after. Ancestor iff tin[u]<=tin[v]<=tout[u].</td>
+        <td><code>tin[u]=timer++; /* rec */ tout[u]=timer;</code></td>
+        <td>Bridges, Euler tour, HLD</td>
       </tr>
       <tr>
-        <td>Timestamps and subtree sizes</td>
-        <td>tin before children, tout after, sz[u] = 1 + sum sz[v]. Ancestry is an interval test.</td>
-        <td><code>tin[u]=++timer; for (v) dfs(v); tout[u]=timer; sz[u]+=sz[v];</code></td>
-        <td>Euler tour, HLD prep</td>
+        <td>Explicit stack with iterator</td>
+        <td>Push (u, next-neighbour-index) for correct tin/tout.</td>
+        <td><code>st.push(new int[]{u, 0});</code></td>
+        <td>When you need the DFS tree, not just the paint</td>
       </tr>
       <tr>
-        <td>DSU instead of DFS</td>
-        <td>union(u,v) for every edge, then count roots. Same components, offline-friendly.</td>
-        <td><code>for (e : edges) dsu.union(e.u, e.v);</code></td>
-        <td><a href="../06-range-queries/dsu.html">DSU</a></td>
-      </tr>
-      <tr>
-        <td>Bipartite components</td>
-        <td>2-colour while you flood. A clash means that component is not bipartite.</td>
-        <td><code>See cycle-detection-and-bipartite.html</code></td>
-        <td>undefined</td>
+        <td>DSU instead</td>
+        <td>Union every edge, count roots.</td>
+        <td><code>if (dsu.union(u,v)) comps--;</code></td>
+        <td>Shorter when you do not need a walk</td>
       </tr>
     </tbody>
   </table>
@@ -693,30 +530,30 @@ graph LR
 
 <div class="followups">
   <details class="followup">
-    <summary>DFS or DSU for component count?</summary>
+    <summary>DFS vs BFS for islands?</summary>
     <div class="followup__body">
-      <p>If the graph is already a list and you also want to walk it, DFS/BFS is natural. If the input is an edge list and you only need the grouping (or you will add edges online), DSU is shorter and does not build lists. Both are O(n + m).</p>
+      <p>Both are O(RC) and both paint the same partition. Recursive DFS is fewer lines. BFS (or iterative DFS) avoids a StackOverflowError on a snake of land that is one cell wide and a hundred thousand long. Interviewers accept either; say out loud that you would switch to an explicit stack at contest size.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>How do I get the size of each component?</summary>
+    <summary>How do tin/tout test ancestry?</summary>
     <div class="followup__body">
-      <p>While painting id, increment cnt[id]. After the outer loop, cnt[comp[u]] is the size of u's piece. Alternatively return the size from recursive dfs as an int.</p>
+      <p>You increment a timer just before diving into the children of u, store that as tin[u], and store tout[u] when the dive returns. Then u is an ancestor of v in this DFS tree exactly when tin[v] lies inside the closed interval [tin[u], tout[u]]. That interval view is the Euler tour of the tree, and it is how later pages test ancestry without walking parent pointers.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>What does DFS order give me that BFS does not?</summary>
+    <summary>Connected vs strongly connected?</summary>
     <div class="followup__body">
-      <p>A parenthesis structure: every subtree is a contiguous segment of the Euler tour. That is why bridges, articulation points, SCCs (Tarjan), and subtree queries start from DFS, not BFS.</p>
+      <p>On an undirected graph, one DFS, one BFS or one union-find pass per unseen vertex gives the connected components. On a directed graph, "can everyone in the group reach everyone else?" is strong connectivity and needs Kosaraju or Tarjan. Treating the directed edges as two-way gives only weak connectivity, which is a different predicate.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>Can I DFS a directed graph to count "components"?</summary>
+    <summary>Why mark on push in iterative DFS?</summary>
     <div class="followup__body">
-      <p>You can count weakly connected components by ignoring direction (add both ways). Strongly connected components need a second pass or Tarjan's lowlink. Do not mix the two words in an interview.</p>
+      <p>The same reason as BFS: an unmarked vertex with several incoming tree edges would otherwise be pushed once per edge and sit on the stack many times. For a component paint you only need visited. If you also want tin/tout, the stack entry has to remember which neighbour you will try next, so you push a pair (u, next-index) rather than a bare vertex.</p>
     </div>
   </details>
 </div>
@@ -732,70 +569,60 @@ graph LR
     </thead>
     <tbody>
       <tr><td>1</td>
-        <td><a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener">Number of Islands</a></td>
+        <td><a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener">Number Of Islands</a></td>
         <td><span class="badge badge--lc">LC 200</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Grid flood, count starts</td></tr>
+        <td>Grid DFS</td></tr>
       <tr><td>2</td>
-        <td><a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener">Number of Provinces</a></td>
+        <td><a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener">Number Of Provinces</a></td>
         <td><span class="badge badge--lc">LC 547</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Matrix input, DFS or DSU</td></tr>
+        <td>Matrix as graph, DFS/DSU</td></tr>
       <tr><td>3</td>
-        <td><a href="https://leetcode.com/problems/max-area-of-island/" target="_blank" rel="noopener">Max Area of Island</a></td>
+        <td><a href="https://leetcode.com/problems/max-area-of-island/" target="_blank" rel="noopener">Max Area Of Island</a></td>
         <td><span class="badge badge--lc">LC 695</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Return size from dfs</td></tr>
+        <td>Component size</td></tr>
       <tr><td>4</td>
-        <td><a href="https://leetcode.com/problems/keys-and-rooms/" target="_blank" rel="noopener">Keys and Rooms</a></td>
+        <td><a href="https://leetcode.com/problems/flood-fill/" target="_blank" rel="noopener">Flood Fill</a></td>
+        <td><span class="badge badge--lc">LC 733</span></td>
+        <td><span class="pill pill--easy">Easy</span></td>
+        <td>DFS/BFS paint</td></tr>
+      <tr><td>5</td>
+        <td><a href="https://leetcode.com/problems/keys-and-rooms/" target="_blank" rel="noopener">Keys And Rooms</a></td>
         <td><span class="badge badge--lc">LC 841</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>One component reachable from 0?</td></tr>
-      <tr><td>5</td>
-        <td><a href="https://leetcode.com/problems/surrounded-regions/" target="_blank" rel="noopener">Surrounded Regions</a></td>
-        <td><span class="badge badge--lc">LC 130</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Flood from the border, not the interior</td></tr>
+        <td>Reachability DFS</td></tr>
       <tr><td>6</td>
-        <td><a href="https://leetcode.com/problems/accounts-merge/" target="_blank" rel="noopener">Accounts Merge</a></td>
-        <td><span class="badge badge--lc">LC 721</span></td>
+        <td><a href="https://codeforces.com/problemset/problem/977/E" target="_blank" rel="noopener">Cyclic Components</a></td>
+        <td><span class="badge badge--cf">CF 977E</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Emails as vertices, DFS or DSU</td></tr>
+        <td>Components that are single cycles</td></tr>
       <tr><td>7</td>
-        <td><a href="https://cses.fi/problemset/task/1666" target="_blank" rel="noopener">Building Roads</a></td>
-        <td><span class="badge badge--gfg">CSES</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Count components, connect roots</td></tr>
-      <tr><td>8</td>
-        <td><a href="https://codeforces.com/problemset/problem/1167/C" target="_blank" rel="noopener">News Distribution</a></td>
-        <td><span class="badge badge--cf">CF 1167C</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Friendship groups, size of each component</td></tr>
-      <tr><td>9</td>
-        <td><a href="https://www.geeksforgeeks.org/problems/depth-first-traversal-for-a-graph/1" target="_blank" rel="noopener">DFS of Graph</a></td>
-        <td><span class="badge badge--gfg">GfG</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Emit recursive order from 0</td></tr>
-      <tr><td>10</td>
-        <td><a href="https://atcoder.jp/contests/abc075/tasks/abc075_c" target="_blank" rel="noopener">ABC 075 C Bridges</a></td>
-        <td><span class="badge badge--atc">ABC 075C</span></td>
+        <td><a href="https://leetcode.com/problems/number-of-connected-components-in-an-undirected-graph/" target="_blank" rel="noopener">Number Of Connected Components In An Undirected Graph</a></td>
+        <td><span class="badge badge--lc">LC 323</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Drop each edge, recount components</td></tr>
+        <td>Paint or DSU</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/598/D" target="_blank" rel="noopener">Igor In the Museum</a></td>
+        <td><span class="badge badge--cf">CF 598D</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Component + extra payload</td></tr>
     </tbody>
   </table>
 </div>
 
 <details class="spoiler">
-  <summary>Hint for LC 130 &mdash; flood from the border</summary>
+  <summary>Hint for the hardest practice problem</summary>
   <div class="spoiler__body">
-    <p>O's that touch the border cannot be captured. DFS/BFS from every border O, mark those as safe, then flip every remaining O. Interior-first search is the trap: you cannot know if a region is closed until you have seen the border.</p>
+    <p>Name the state / invariant first. The code is then mechanical.</p>
   </div>
 </details>
 
 <details class="spoiler">
-  <summary>Hint for CF 1167C &mdash; groups are cliques, not just edges</summary>
+  <summary>Hint for the second-hardest</summary>
   <div class="spoiler__body">
-    <p>Each group of k friends is a clique. You do not need k choose 2 edges. Union everyone in the group to the first member (or DFS after adding those edges). The answer for i is the size of i's component.</p>
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
   </div>
 </details>
 
@@ -803,13 +630,13 @@ graph LR
 <div class="recap">
   <h2>Recap</h2>
   <ul>
-    <li><strong>One DFS from an unvisited vertex paints one component.</strong> Loop over starts.</li>
-    <li><strong>Recursive DFS dies on a path of 1e5</strong> &mdash; keep an explicit stack.</li>
-    <li><strong>Time is O(n + m)</strong>, same as BFS; the difference is the tree you build.</li>
-    <li><strong>Directed "components" are SCCs</strong>, a different algorithm.</li>
-    <li><strong>tin/tout turn ancestry into an interval</strong> and unlock every later DFS topic.</li>
+    <li><strong>One DFS start = one component</strong>; loop the vertices.</li>
+    <li><strong>Mark on entry / on push</strong>.</li>
+    <li><strong>Iterative stack</strong> when n can be a path.</li>
+    <li><strong>tin/tout</strong> turn ancestry into intervals.</li>
+    <li><strong>Directed strong connectivity</strong> is a later page (SCC).</li>
   </ul>
-  <div class="recap__oneliner">for s if unseen: dfs(s, cid++) | mark on enter | explicit stack at n=1e5</div>
+  <div class="recap__oneliner">for s unseen: dfs(s,id++); dfs: mark, rec unseen neighbours</div>
 </div>
 
 <div class="prevnext"></div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">A binary tree over the array: each node is an associative combine of a dyadic segment, so point updates and range queries are <code>O(log n)</code> for any combine, not just sums.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="fenwick-tree.html">Fenwick Tree</a>,
       <a href="sparse-table-and-rmq.html">Sparse Table & RMQ</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A Fenwick tree is perfect for prefix sums and a sparse table is perfect for static idempotent queries. Everything else &mdash; range minimum with updates, range gcd, range merge of two sorted lists, "number of brackets sequences in a segment" &mdash; needs a node that can store an arbitrary associative value. That node layout is a segment tree.</p>
-<p>The array is the leaves. Each internal node stores op(left, right) of a contiguous segment whose length is a power of two in the heap layout (or an arbitrary split in the recursive layout). A point update walks the O(log n) ancestors of a leaf. A range query is covered by O(log n) canonical nodes, never more than two per level.</p>
-<p>Once you can write build / update / query for a sum, swapping the combine for min, gcd, or a struct (CF 380C's bracket pair) is a one-line change. Lazy propagation, the next page, is what you add when the <em>update</em> is also a range.</p>
+<p>You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, and the questions mix two things a Fenwick tree and a sparse table each refuse: you need the minimum (or the gcd, or a little struct) of a range, <em>and</em> you also need to change a cell in between questions. A Fenwick tree wants an inverse so it can subtract prefixes, and minimum has none. A sparse table wants the array to stay still, and a point write invalidates a linear number of its blocks. Scanning the range per query is correct and dies at a hundred thousand by a hundred thousand.</p>
+<p>A segment tree stores the array at the leaves of a binary tree and, at every internal node, the combine of a contiguous segment of the array. The word <em>associative</em> here means only that <code>op(op(a, b), c) = op(a, op(b, c))</code>, so the order of grouping does not matter and a node is allowed to cache the combine of its two children. A point update walks the <code>O(log n)</code> ancestors of one leaf and recomputes each of them from its two children. A range query is answered by <code>O(log n)</code> <em>canonical</em> nodes &mdash; nodes whose segment sits entirely inside the query &mdash; and never more than two of those per level.</p>
+<p>Once you can write build, point-update and range-query for a sum, swapping the combine for minimum, gcd, XOR, or a struct (the open / close / already-matched triple of CF 380C) is a one-line change plus a new identity. Lazy propagation, the next page, is the extra machinery you add when the <em>update</em> itself is a range rather than a single cell.</p>
+<p>In a real statement the signal is point updates sitting next to a range query that is not a prefix of an invertible operation, at limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out Fenwick and the sparse table, and it is exactly what a segment tree is for. If the interviewer then says "now add v to every index in [l, r]", you are being walked onto the next page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Any associative op gets O(log n) point update and range query. The query touches O(log n) canonical nodes that exactly partition the range.</p>
+    <p>Any associative combine gets a point update and a range query in a handful of node visits. The query never reads a node that sticks out past the range; it stops at the O(log n) canonical nodes that sit entirely inside and partition it exactly.</p>
   </div>
 </aside>
 
@@ -117,19 +118,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code>. Allocate <code>4n</code> nodes for the recursive tree (or <code>2n</code> for the iterative one). Recursion depth is log n, safe. Combine must be associative; it need not be commutative or invertible.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with point updates and an associative range query is the signature. Allocate <code>4n</code> nodes for the recursive heap layout (or <code>2n</code> for the iterative one); a tight <code>2n</code> on the recursive tree walks off the end of the array. Recursion depth is <code>log n</code>, which is safe. The combine must be associative; it need not be commutative or invertible.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Recursive layout: node p covers [l, r]. If l == r it holds a[l]. Otherwise <code>m = l + (r - l) / 2</code>, the left child p<<1 covers [l, m], the right child p<<1|1 covers [m+1, r], and <code>t[p] = op(t[left], t[right])</code>. Build is a postorder fill. A point update at i walks to the leaf and recomputes on the way up.</p>
-<p>A query [ql, qr] at node [l, r] has three cases: no overlap (return identity), complete cover (return t[p]), partial overlap (recurse both children and combine). The identity is 0 for sum, +&infin; for min, 0 for XOR, 0 for gcd. Completely covered nodes are the canonical partition; there are O(log n) of them.</p>
-<p>Iterative layout packs the tree into <code>t[n..2n)</code> as leaves and parents at i>>1. It is faster and has no recursion, but the recursive form is what you want in an interview because the overlap cases are explicit and lazy tags later hang on the same nodes.</p>
+<p>Give every node an index p and a closed segment [l, r] that it is responsible for. If l equals r the node is a leaf and holds <code>a[l]</code>. Otherwise the midpoint is <code>m = l + (r - l) / 2</code> (never <code>(l + r) / 2</code>, which overflows on large indices), the left child <code>p &lt;&lt; 1</code> covers [l, m], the right child <code>p &lt;&lt; 1 | 1</code> covers [m+1, r], and <code>t[p] = op(t[left], t[right])</code>. Build fills the tree bottom-up: write the children first, then the parent. A point update at index i walks down to the unique leaf that holds i, writes the new value, and recomputes every ancestor from its two children on the way back up, so the path of <code>log n</code> nodes is the only thing that changes.</p>
+<p>A query asking for the combine of [ql, qr], sitting at a node whose segment is [l, r], has three cases. If the node is disjoint from the query you return the <em>identity</em> of the operation &mdash; the value that combining with anything leaves unchanged, so 0 for sum or XOR, <code>Integer.MAX_VALUE</code> for min, 0 for gcd. If the node sits entirely inside the query you return <code>t[p]</code> and stop, because that cached combine is already the answer for this piece. If the node only partially overlaps you recurse into both children and combine what they return. The nodes that took the "entirely inside" branch are the canonical partition of the query, and there are O(log n) of them.</p>
+<p>The iterative layout packs the same tree into <code>t[n .. 2n)</code> as leaves and parents at <code>i &gt;&gt; 1</code>. It is faster and has no recursion, which is why contests prefer it for a plain point-update tree. The recursive form is what you want in an interview, because the three overlap cases are written out as named branches and the lazy tags on the next page hang on exactly those same nodes.</p>
+<p>Walk a sum query on [2, 6] of the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, whose whole-array root holds 31. The root [0, 7] only partially overlaps [2, 6], so you split. The left half [0, 3] is still partial; inside it the node [2, 3] (values 4, 1, sum 5) sits fully inside the query and is taken whole. The right half [4, 7] splits again: [4, 5] (5+9=14) is fully inside, [6, 7] is partial, so you take the leaf 2 and reject the leaf 6. The three canonical pieces are [2, 3], [4, 5] and [6, 6], and 5+14+2 = 21, which is 4+1+5+9+2. A point write at index 3 then walks only the ancestors of that leaf and recomputes each from its two children.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Every node stores the combine of its segment. A query returns the combine of O(log n) canonical nodes that partition [ql, qr]:</p><span class="eq">t[p] = op(a[l], a[l+1], &hellip;, a[r])</span><p>Interview sentence: <em>"I recurse until a node is either disjoint or fully inside; the fully-inside nodes are the answer."</em></p>
+    <p>Every node stores the combine of its segment. A query returns the combine of O(log n) canonical nodes that partition [ql, qr]:</p><span class="eq">t[p] = op(a[l], a[l+1], &hellip;, a[r])</span><p>In plain words, you never add a node that sticks out past the query, and you never walk into a node that is already fully inside it. The nodes you stop at are a disjoint cover of exactly the indices you were asked about, so combining them is the combine of the range. That is also why a point update only repairs the ancestors of one leaf: every other node's segment does not contain that leaf, so its cached value is still right.</p><p>Interview sentence: <em>"I recurse until a node is either disjoint or fully inside; the fully-inside nodes are the answer."</em></p>
   </div>
 </aside>
 
@@ -231,7 +233,7 @@
           }
         },
         {
-          "note": "Root [0,7] partially overlaps. Recurse both children.",
+          "note": "Root [0, 7] only partially overlaps [2, 6], so it cannot return t[1]. Recurse into both children.",
           "active": [
             0
           ],
@@ -416,18 +418,18 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>t[4n]</code></strong> and pick the identity of the op (0 for sum).</li>
-  <li><strong>Build(p, l, r):</strong> leaf copies a[l]; otherwise split at <code>m = l + (r-l)/2</code>, build children, <code>t[p] = t[p<<1] + t[p<<1|1]</code>.</li>
-  <li><strong>Update(p, l, r, i, v):</strong> if leaf, store v. Else recurse into the child that contains i, then recompute t[p].</li>
-  <li><strong>Query(p, l, r, ql, qr):</strong> disjoint &rarr; identity; fully inside &rarr; t[p]; else combine the two recursive calls.</li>
-  <li><strong>Never add t[p] on a partial overlap.</strong> That would include indices outside the query.</li>
-  <li><strong>Use <code>long</code></strong> for sums. Use <code>m = l + (r - l) / 2</code>, never <code>(l+r)/2</code> on large indices.</li>
-  <li><strong>Swap the combine</strong> (and the identity) to get min, gcd, XOR, or a struct.</li>
+  <li><strong>Allocate <code>t[4n]</code> and pick the identity.</strong> Four times n is what the recursive heap indexing actually reaches on a non-power-of-two n. The identity is 0 for sum, <code>MAX_VALUE</code> for min, 0 for gcd; getting it wrong poisons every query that misses a child.</li>
+  <li><strong>Build(p, l, r) bottom-up.</strong> A leaf copies <code>a[l]</code>; otherwise split at <code>m = l + (r-l)/2</code>, build both children, then write <code>t[p] = op(t[p&lt;&lt;1], t[p&lt;&lt;1|1])</code> so the parent is defined only after the children exist.</li>
+  <li><strong>Update(p, l, r, i, v) repairs one path.</strong> If the node is a leaf, store v. Otherwise recurse into the unique child whose segment contains i, then recompute <code>t[p]</code> from the two children on the way back up. The rest of the tree is untouched.</li>
+  <li><strong>Query(p, l, r, ql, qr) is a three-way branch.</strong> Disjoint returns the identity; fully inside returns <code>t[p]</code>; otherwise combine the two recursive calls. Those three cases are the whole algorithm.</li>
+  <li><strong>Never return t[p] on a partial overlap.</strong> That cached value includes indices outside [ql, qr], so a query that only wanted the left half of a node would silently swallow the right half as well.</li>
+  <li><strong>Use <code>long</code> for sums, and split with <code>l + (r-l)/2</code>.</strong> An <code>int</code> prefix of <code>n = 10&#8309;</code> values of <code>10&#8313;</code> wraps, and <code>(l+r)/2</code> goes negative on large compressed coordinates.</li>
+  <li><strong>Swap the combine and the identity to change the operation.</strong> Min, gcd, XOR, or a struct node are the same recursion with a different <code>op</code> and a different "do nothing" value. The layout of the tree does not change.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Query sum[2, 6] walking the tree. Only the canonical (fully covered) nodes contribute to acc.</p>
+<p>A sum query on indices [2, 6] of the sample, walking the tree from the root. Only the canonical (fully covered) nodes add into acc; a partial node is split and a disjoint node returns 0.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -436,7 +438,7 @@ graph TD
     </thead>
     <tbody>
       <tr class="trace-table__row--change"><td>1</td><td>0-7</td><td>0</td><td>0</td><td>Built tree. t[1] = 31 is the whole array. Query sum[2, 6] = 4+1+5+9+2 = 21.</td></tr>
-      <tr><td>1</td><td>0-7 split</td><td>0</td><td>0</td><td>Root [0,7] partially overlaps. Recurse both children.</td></tr>
+      <tr><td>1</td><td>0-7 split</td><td>0</td><td>0</td><td>Root [0, 7] only partially overlaps [2, 6], so it cannot return t[1]. Recurse into both children.</td></tr>
       <tr class="trace-table__row--change"><td>5</td><td>2-3 full</td><td>5</td><td>5</td><td>Node 5 covers [2,3] and sits fully inside [2,6]. Add t[5] = 5. acc = 5.</td></tr>
       <tr class="trace-table__row--change"><td>6</td><td>4-5 full</td><td>14</td><td>19</td><td>Node 6 covers [4,5], fully inside. Add t[6] = 14. acc = 19.</td></tr>
       <tr class="trace-table__row--change"><td>14</td><td>6-6 full</td><td>2</td><td>21</td><td>Node 7 covers [6,7], partial (we need only index 6). Recurse. Leaf 14 covers [6,6], full. Add 2. acc = 21.</td></tr>
@@ -635,7 +637,7 @@ graph TD
   <li>
     <span class="pitfalls__title">Adding t[p] on a partial overlap</span>
     <div class="pitfalls__bug">Missing the complete-cover check and always combining children, or worse, returning t[p] whenever the node overlaps at all. The second includes indices outside [ql, qr].</div>
-    <div class="pitfalls__fix">Three-way branch: disjoint / complete / partial. Only complete returns t[p].</div>
+    <div class="pitfalls__fix">Three-way branch: disjoint / complete / partial. Only the complete-cover case returns t[p]. A query that stops one index short of a child is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Wrong identity</span>
@@ -644,18 +646,18 @@ graph TD
   </li>
   <li>
     <span class="pitfalls__title">Allocating 2n for the recursive heap</span>
-    <div class="pitfalls__bug">Indices run past 2n on non-power-of-two n (the right spine goes to about 4n). Silent corruption or AIOOB.</div>
-    <div class="pitfalls__fix"><code>new long[n * 4]</code>. Iterative trees may use 2n.</div>
+    <div class="pitfalls__bug">Indices run past 2n on non-power-of-two n (the right spine goes to about 4n). Silent corruption or AIOOB, and it looks fine on the power-of-two sample.</div>
+    <div class="pitfalls__fix">Allocate <code>new long[n * 4]</code> for the recursive tree. Iterative trees may use 2n because their layout is a packed complete tree.</div>
   </li>
   <li>
     <span class="pitfalls__title"><code>(l + r) / 2</code> overflow</span>
-    <div class="pitfalls__bug">On large index ranges (coordinate-compressed to 10&#8313; in a dynamic tree) l+r overflows int and the split goes negative.</div>
-    <div class="pitfalls__fix"><code>int m = l + (r - l) / 2;</code> everywhere, including lazy.</div>
+    <div class="pitfalls__bug">On large index ranges (coordinate-compressed to 10&#8313; in a dynamic tree) l+r overflows int and the split goes negative, so the recursion never hits the leaf you intended.</div>
+    <div class="pitfalls__fix">Write <code>int m = l + (r - l) / 2;</code> at every split, including the lazy tree on the next page. A query at index <code>10&#8313; - 1</code> is the overflow test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Updating t[p] before the recursive call returns</span>
     <div class="pitfalls__bug">Recompute from children that still hold the old value. The new leaf is written but ancestors stay stale, and later queries on large ranges miss the update.</div>
-    <div class="pitfalls__fix">Recurse first, then <code>t[p] = op(t[left], t[right])</code>.</div>
+    <div class="pitfalls__fix">Recurse into the child first, then write <code>t[p] = op(t[left], t[right])</code> on the way back up. An update followed by a query of the whole array is the staleness test.</div>
   </li>
 </ul>
 
@@ -704,7 +706,7 @@ graph TD
   <details class="followup">
     <summary>Can the combine be non-commutative?</summary>
     <div class="followup__body">
-      <p>Yes, as long as it is associative. Always combine left child then right child in that order. Matrix products on a path, or string concatenation, work. Do not swap children.</p>
+      <p>Yes, as long as it is associative. Always combine the left child and then the right child, in that order, so the grouping matches the array from left to right. Matrix products along a path, or string concatenation of a segment, both work. Swapping the two children would reverse the product and fail the first non-commutative test.</p>
     </div>
   </details>
 
@@ -718,7 +720,7 @@ graph TD
   <details class="followup">
     <summary>When is the iterative form worth it?</summary>
     <div class="followup__body">
-      <p>When you are tight on time in a contest and the tree is not lazy. In an interview the recursive form is clearer, and it is the one you will extend with lazy tags on the next page. Learn recursive first.</p>
+      <p>When you are tight on time in a contest and the tree is not lazy. The iterative form has no recursion, tighter constants, and a 2n array. In an interview the recursive form is clearer, the three overlap cases read as named branches, and it is the one you will extend with lazy tags on the next page. Learn recursive first and switch only when a clock is running.</p>
     </div>
   </details>
 </div>

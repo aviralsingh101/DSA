@@ -55,6 +55,15 @@
   in any language, and roughly a minute of CPU in Java. At <code>n = 2 &times; 10&#8309;</code> it is
   hopeless.
 </p>
+<p>
+  In a real statement the signal is the word <em>contiguous</em> (or <em>subarray</em>, as opposed
+  to <em>subsequence</em>) sitting next to a limit like <code>n &le; 10&#8309;</code> and a request
+  for a single maximum or minimum rather than the block itself. Contiguity is what makes the
+  problem tractable: it means the candidate blocks ending at neighbouring indices are related, so
+  the answer for index <code>i</code> can be built from the answer for <code>i-1</code>. Drop the
+  word contiguous and you have a different problem entirely &mdash; picking any elements you like,
+  which is solved by simply taking every positive number.
+</p>
 
 <div class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>

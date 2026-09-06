@@ -75,27 +75,47 @@ pack(F({
 
   why: {
     paras: [
-      "Every tree walk, every backtracking search, every divide-and-conquer sort, and every " +
-      "memoised DP you will write is the same mechanism: a function that solves a smaller " +
-      "instance of the same problem and a <strong>base case</strong> that stops the descent. " +
-      "If that model is fuzzy, the later pages in this module become folklore you copy. If it is " +
-      "sharp, they become one-line variations.",
-      "The reason people get recursion wrong in interviews is not the idea, it is the " +
-      "<em>machine</em>. Java allocates a stack frame per call. The frame holds the parameters, " +
-      "the locals, and the address to resume at. Depth is therefore space, and a path of length " +
-      "<code>10&#8309;</code> is a <code>StackOverflowError</code>, not a slow program. Java " +
-      "also does <strong>not</strong> rewrite tail calls into loops, so \"make it tail recursive\" " +
-      "does not save the stack the way it would in Scheme or Scala.",
-      "The transferable habit is to draw the <strong>recursion tree</strong> before writing a " +
-      "line: what is one call's work, how many children does it spawn, and when does a branch " +
-      "die? That drawing is the same artefact " +
-      "<a href=\"../00-foundations/recurrences-and-master-theorem.html\">the master theorem</a> " +
-      "asks you to account, and it is the same drawing " +
-      "<a href=\"subsets-permutations-combinations.html\">subset generation</a> walks.",
+      "Suppose somebody hands you the top folder of a project and asks how many bytes it holds " +
+      "in total. You cannot write three nested loops for that, because you do not know how deep " +
+      "the folders go &mdash; one branch might be two levels deep and another eleven. What you " +
+      "can say is much simpler: the size of a folder is the sum of the files sitting directly " +
+      "inside it, plus the total size of each folder sitting directly inside it. That sentence " +
+      "describes the answer for a big folder purely in terms of the answer for smaller folders, " +
+      "and a function written exactly like that sentence &mdash; one that calls itself on each " +
+      "sub-folder &mdash; is a <strong>recursive</strong> function.",
+      "The idea is the easy half. The half that trips people up is the machine underneath. When " +
+      "one method calls another, Java sets aside a small block of memory called a <strong>stack " +
+      "frame</strong>, holding that call's parameters, its local variables, and the address of " +
+      "the instruction to return to when the call finishes. Frames are stacked: the newest one " +
+      "sits on top and has to finish before the one below it can resume. A recursive function " +
+      "therefore pays memory for how deeply it nests, not for how much total work it does. The " +
+      "default HotSpot thread stack is roughly one megabyte and a frame costs tens to a few " +
+      "hundred bytes, so somewhere between a few thousand and about <code>10&#8308;</code> " +
+      "nested calls the program dies with a <code>StackOverflowError</code>.",
+      "Cost is the other half. Draw the calls as a tree: the first call is the root, every call " +
+      "it makes is a child, and calls that answer immediately without calling anything are the " +
+      "leaves. Running time is the number of nodes in that <strong>recursion tree</strong> times " +
+      "the work each node does on its own, while extra memory is the length of the longest " +
+      "root-to-leaf path, because a child always finishes and releases its frame before its " +
+      "sibling is even created. That distinction is worth real money. Naive " +
+      "<code>fib(50)</code>, which calls itself twice at every node, builds roughly " +
+      "<code>2.7&times;10&#185;&#8304;</code> nodes and runs for minutes, and yet its deepest " +
+      "path is only 50 frames deep.",
+      "Two facts are specific to Java and both show up in interviews. First, the JVM never turns " +
+      "a recursive call into a loop, not even when the call is the very last thing the function " +
+      "does &mdash; a shape called a <em>tail call</em> that Scheme and Scala do collapse. " +
+      "Writing <code>return fact(n-1, acc*n)</code> still costs one frame per level here, so " +
+      "\"make it tail recursive\" buys back no stack at all. Second, the constraint line of a " +
+      "problem tells you when plain recursion is simply illegal: a list of length " +
+      "<code>10&#8309;</code>, or a graph search over <code>2&times;10&#8309;</code> nodes that " +
+      "could degenerate into one long path, has to be rewritten with an explicit " +
+      "<code>ArrayDeque</code> before you submit it.",
     ],
-    insight: "A recursive function is a loop over a tree of stack frames. The base case is the " +
-      "loop's termination test. Auxiliary space is the longest root-to-leaf path, not the number " +
-      "of nodes.",
+    insight: "A recursive function is nothing more than a loop over a tree of stack frames: the " +
+      "<strong>base case</strong> &mdash; the input small enough to answer outright, with no " +
+      "further call &mdash; is that loop's stopping test, the number of nodes in the tree is " +
+      "your running time, and the longest root-to-leaf path, not the node count, is the memory " +
+      "the JVM must hold all at once.",
   },
 
   recognise: {
@@ -135,10 +155,14 @@ pack(F({
         "Depth is <code>log n</code> only when the argument is <em>divided</em>",
         "Check subtract vs divide before quoting space"],
     ],
-    constraint: "The HotSpot default thread stack is roughly 1&nbsp;MB. A frame is a few dozen " +
-      "to a few hundred bytes, so you overflow somewhere between a few thousand and about " +
-      "<code>10&#8308;</code> frames. Treat <code>n &ge; 10&#8308;</code> linear recursion as " +
-      "illegal in Java unless you have rewritten it as a loop.",
+    constraint: "The signal is any bound that lets the <em>depth</em> of the recursion grow " +
+      "with the input. The HotSpot default thread stack is roughly 1&nbsp;MB and one frame " +
+      "costs a few dozen to a few hundred bytes, so you overflow somewhere between a few " +
+      "thousand and about <code>10&#8308;</code> nested calls &mdash; long before you run out " +
+      "of time. Treat a linear recursion at <code>n &ge; 10&#8308;</code> as illegal in Java " +
+      "unless you have already rewritten it as a loop or an explicit stack. A halving " +
+      "recursion is safe at any bound you will meet, because <code>log&#8322;(10&#8313;)</code> " +
+      "is only thirty frames.",
   },
 
   core: {
@@ -146,9 +170,13 @@ pack(F({
     paras: [
       "When <code>f(n)</code> calls <code>f(n-1)</code>, the JVM pushes a frame for " +
       "<code>f(n)</code>, then a frame for <code>f(n-1)</code>, and so on, until a call hits " +
-      "the base case and returns a value. Each return pops one frame and resumes the caller. " +
-      "That last-in-first-out discipline <em>is</em> the call stack, and it is why a recursive " +
-      "in-order walk of a BST emits keys in sorted order without you managing a stack yourself.",
+      "the <strong>base case</strong> &mdash; the input small enough to answer with no further " +
+      "call &mdash; and returns a value. Each return pops one frame and resumes the caller at " +
+      "the instruction after the recursive call. That last-in-first-out discipline <em>is</em> " +
+      "the call stack, and the chain of resumes is the <strong>return path</strong>: " +
+      "<code>fact(5)</code> waits to multiply by 5 only after <code>fact(4)</code> comes back. " +
+      "That is why a recursive in-order walk of a BST emits keys in sorted order without you " +
+      "managing a stack yourself.",
       "A <strong>recursion tree</strong> is the same process drawn in two dimensions: the root " +
       "is the original call, each edge is a child call, and the leaves are base cases. Time is " +
       "the number of nodes (each does some work). Extra space is the longest path, because " +
@@ -223,7 +251,7 @@ pack(F({
           { note: "fact(2) resumes: 2 * 1 = 2. Its frame pops.",
             best: [3], done: [0, 1, 2], dim: [4],
             values: { n: 2, action: "pop", returning: 2 } },
-          { note: "fact(3) resumes: 3 * 2 = 6.",
+          { note: "fact(3) resumes: 3 * 2 = 6. Its frame then pops.",
             best: [2], done: [0, 1], dim: [3, 4],
             values: { n: 3, action: "pop", returning: 6 } },
           { note: "Unwinding finishes: 4*6=24, then 5*24=120. Five multiplies, five frames. The iterative version does the same multiplies with O(1) space.",
@@ -258,13 +286,13 @@ pack(F({
     "<strong>Assume the function works on every smaller input</strong> and write the current " +
       "answer in terms of those returns.",
     "<strong>Draw the tree</strong> for a 4-element example. Count nodes (time) and the longest " +
-      "path (space).",
+      "path (space), because those two numbers are the cost you will quote.",
     "<strong>Check the JVM stack.</strong> If depth can reach thousands, switch to an " +
       "<code>ArrayDeque</code> or a loop <em>now</em>.",
     "<strong>Do not rely on tail recursion</strong> to save space in Java. Rewrite tails as " +
       "<code>while</code> loops that update an accumulator.",
-    "<strong>If nodes repeat</strong>, you have overlapping subproblems: add a memo table or " +
-      "go to <a href=\"../10-dynamic-programming/dp-foundations.html\">DP</a>.",
+    "<strong>If the same nodes repeat</strong>, you have overlapping subproblems: add a memo " +
+      "table or go to <a href=\"../10-dynamic-programming/dp-foundations.html\">DP</a>.",
     "<strong>Trace one return path</strong> by hand so you know what the caller does with the " +
       "child's result (multiply, min, concat, void side-effect).",
   ],
@@ -451,7 +479,8 @@ public class RecursionTemplate {
         "recurrence mentions <code>n-2</code>." },
     { title: "Believing Java will optimise a tail call",
       bug: "Rewriting <code>return n * fact(n-1)</code> as <code>return fact(n-1, acc*n)</code> " +
-        "and claiming <code>O(1)</code> space.",
+        "and claiming <code>O(1)</code> space, because textbooks call that a tail call and " +
+        "other languages collapse it.",
       fix: "Say it out loud: HotSpot does not do TCO. Then write the loop. The tail form is " +
         "useful only as a stepping stone to the loop." },
     { title: "Quoting time as the depth",
@@ -460,8 +489,9 @@ public class RecursionTemplate {
       fix: "Draw the tree. Count nodes for time, the longest path for space. They are equal " +
         "only on a stick." },
     { title: "Recursing down a linked list of length 1e5",
-      bug: "Elegant <code>reverse(head.next)</code> that passes the sample and throws " +
-        "<code>StackOverflowError</code> on the hidden test.",
+      bug: "An elegant <code>reverse(head.next)</code> that passes the short sample and throws " +
+        "<code>StackOverflowError</code> on the hidden <code>n = 10&#8309;</code> list, because " +
+        "the recursive form looks like the textbook definition.",
       fix: "Interview lists are often short, contest lists are not. If " +
         "<code>n &le; 10&#8309;</code>, use three pointers or an <code>ArrayDeque</code>." },
     { title: "Making no progress",
@@ -495,19 +525,23 @@ public class RecursionTemplate {
       "<p>Because the tree recomputes <code>fib(k)</code> from scratch at every node that " +
       "needs it. There are only <code>n</code> distinct <em>values</em>, but " +
       "<code>&Theta;(&phi;&#8319;)</code> <em>calls</em>. A memo table of size <code>n</code> " +
-      "collapses the DAG back to <code>O(n)</code> work. That collapse is dynamic programming.</p>"],
+      "collapses the DAG back to <code>O(n)</code> work. That collapse of repeated calls into " +
+      "one stored answer is dynamic programming.</p>"],
     ["Is the space of a balanced binary-tree DFS <code>O(n)</code> or <code>O(log n)</code>?",
       "<p><code>O(height)</code>. On a perfectly balanced tree that is <code>O(log n)</code>. " +
       "On a skewed tree (which is a linked list) it is <code>O(n)</code>. Always quote height, " +
-      "then say what the worst-case tree looks like. Interviewers listen for that distinction.</p>"],
+      "then say what the worst-case tree looks like for this input. Interviewers always " +
+      "listen for that distinction.</p>"],
     ["Can I just raise <code>-Xss</code> and recurse?",
       "<p>In a local experiment, yes. In a judged solution or a production service, no: you " +
       "do not control the launcher, and a 100&nbsp;MB stack per thread is not a strategy. " +
-      "Rewrite the recursion. <code>-Xss</code> is a debugging aid, not a solution.</p>"],
+      "Rewrite the recursion as a loop or an explicit <code>ArrayDeque</code>. " +
+      "<code>-Xss</code> is a debugging aid, not a solution.</p>"],
     ["What should I say when they ask for a tail-recursive version in Java?",
       "<p>Write it, explain that it would be <code>O(1)</code> space in a TCO language, then " +
-      "write the equivalent loop and say that is the version you would commit. That answer " +
-      "scores both the concept and the platform knowledge.</p>"],
+      "write the equivalent loop and say that is the version you would actually commit in " +
+      "Java. That answer scores both the concept and the platform knowledge that HotSpot " +
+      "will not collapse the tail call.</p>"],
   ],
 
   problemsIntro: "These lock in the machine model. Trace the stack by hand on the first four " +
@@ -594,16 +628,23 @@ pack(F({
       "reason this page is long is <strong>duplicates</strong>: the same multiset can be " +
       "reached by many paths, and interviewers grade the skip rule, not the recursion.",
       "There are two mechanical implementations and they are not interchangeable. " +
-      "<strong>Include/exclude</strong> (or the equivalent bitmask loop) builds subsets. " +
-      "<strong>Swap / <code>used[]</code></strong> builds permutations. Combinations are " +
-      "subsets of a fixed size, generated with a <code>start</code> index so order does not " +
-      "explode into permutations. Combination-sum is the same tree with a remaining-target " +
-      "and a reuse policy.",
-      "Memorise the four skip predicates below as if they were an API. \"Sort, then skip " +
-      "equals\" is not a rule; it is four different rules that happen to start with a sort.",
+      "<strong>Include/exclude</strong> (or the equivalent bitmask loop) builds subsets: at " +
+      "index <code>i</code> you either take <code>a[i]</code> or you skip it. " +
+      "<strong>Swap / <code>used[]</code></strong> builds permutations: each unused value " +
+      "tries the next slot. Combinations are subsets of a fixed size, generated with a " +
+      "<code>start</code> index so order does not explode into permutations. Combination-sum " +
+      "is the same tree with a remaining-target and a reuse policy.",
+      "Take the array <code>[1, 2, 2]</code>. A naive include/exclude tree emits " +
+      "<code>[1, 2]</code> twice: once by taking the first 2 and skipping the second, and " +
+      "once by skipping the first 2 and taking the second. Those two paths sit at the same " +
+      "depth under the same parent, which is why the skip talks about siblings and not about " +
+      "the whole path. Memorise the four skip predicates below as if they were an API. " +
+      "\"Sort, then skip equals\" is not one rule; it is four different rules that happen " +
+      "to start with a sort.",
     ],
     insight: "Duplicates are equal values at the <em>same depth</em> of the tree. Skip the " +
-      "second equal when its previous copy was not taken in this path; never skip across depths.",
+      "second equal when its previous copy was not taken in this path; never skip an equal " +
+      "that sits at a deeper level.",
   },
 
   recognise: {
@@ -650,16 +691,22 @@ pack(F({
     paras: [
       "Include/exclude walks indices left to right. From index <code>i</code> you either skip " +
       "<code>a[i]</code> and go to <code>i+1</code>, or you append it, go to <code>i+1</code>, " +
-      "and pop on the way back. Every subset appears once. The bitmask form is the same tree " +
-      "flattened: bit <code>j</code> of mask <code>m</code> means \"include <code>a[j]</code>\".",
+      "and pop on the way back so the next sibling sees a clean path. On <code>[1, 2, 3]</code> " +
+      "that produces eight leaves, from <code>[]</code> to <code>[1, 2, 3]</code>, and every " +
+      "subset appears exactly once each. The bitmask form is the same tree flattened: bit " +
+      "<code>j</code> of mask <code>m</code> means \"include <code>a[j]</code>\".",
       "Permutations fill positions. The swap implementation puts every remaining index into " +
       "slot <code>i</code> by swapping <code>a[i]</code> with <code>a[j]</code> for " +
-      "<code>j &ge; i</code>, then recurses on <code>i+1</code>, then swaps back. The " +
-      "<code>used[]</code> implementation keeps the array intact and tracks which indices are " +
-      "already in the path. Both are <code>O(n &middot; n!)</code> including output copies.",
+      "<code>j &ge; i</code>, then recurses on <code>i+1</code>, then swaps back so the next " +
+      "<code>j</code> still sees the original suffix. The <code>used[]</code> implementation " +
+      "keeps the array intact and tracks which indices are already in the path. Both are " +
+      "<code>O(n &middot; n!)</code> including the copies you write into the answer list.",
       "Dedup is a predicate on <em>siblings</em>, not on the whole path. Sort first so equals " +
       "are adjacent. Then apply exactly one of the four rules below &mdash; mixing them is " +
-      "how you drop a valid subset or emit <code>[1,2]</code> twice.",
+      "how you drop a valid subset or emit <code>[1,2]</code> twice. On " +
+      "<code>[1, 2, 2]</code> the start-index skip kills the second 2 at the same " +
+      "<code>start</code>, so the six unique subsets appear once each and the extra " +
+      "<code>[1, 2]</code> never ships.",
     ],
     invariantTitle: "The four skip predicates (memorise these)",
     invariant: "<p>Always <code>Arrays.sort(a)</code> first when the input can contain " +
@@ -724,7 +771,7 @@ pack(F({
             x: [0, 1], dim: [2], values: { i: 2, path: "[]", decision: "exclude 2" } },
           { note: "Exclude 3. Leaf: record []. First of eight subsets.",
             x: [0, 1, 2], values: { i: 3, path: "[]", decision: "record empty" } },
-          { note: "Backtrack and include 3 instead. Record [3].",
+          { note: "Backtrack and include 3 instead. Record the subset [3].",
             x: [0, 1], best: [2], values: { i: 3, path: "[3]", decision: "include 3" } },
           { note: "Backtrack to i = 1, include 2. Path [2]. The next decisions about 3 produce [2] and [2,3].",
             x: [0], best: [1], dim: [2], values: { i: 2, path: "[2]", decision: "include 2" } },
@@ -757,17 +804,18 @@ pack(F({
   steps: [
     "<strong>Classify the tree.</strong> Subsets / combinations &rarr; start index. " +
       "Permutations &rarr; swap or <code>used[]</code>. Target sum &rarr; add a remaining.",
-    "<strong>Sort</strong> if the output must be unique and the input can contain duplicates.",
+    "<strong>Sort</strong> if the output must be unique and the input can contain duplicates, " +
+      "because every skip rule reads <code>a[i-1]</code> as the previous equal.",
     "<strong>Write the skip predicate</strong> for that tree before any other line. Do not " +
-      "improvise a third rule.",
+      "improvise a third rule that mixes the two trees.",
     "<strong>Record a copy of the path</strong> at the right moment: leaf for permutations " +
       "and combinations of size k; every node (or the leaf of include/exclude) for subsets.",
     "<strong>Push, recurse, pop.</strong> The pop is mandatory even on early returns; a " +
       "<code>finally</code>-shaped pair of lines, not a hope.",
     "<strong>For unlimited combination-sum</strong>, recurse with <code>start = i</code> and " +
       "subtract <code>a[i]</code>. Guard <code>remain &lt; 0</code> as a prune.",
-    "<strong>Prefer a bitmask loop</strong> when you need a numeric aggregate over subsets, " +
-      "not the lists themselves.",
+    "<strong>Prefer a bitmask loop</strong> when you need a numeric aggregate over subsets " +
+      "(sum, XOR, count), not the lists themselves.",
     "<strong>Price the output.</strong> If you emit <code>k</code> arrays of length " +
       "<code>n</code>, you have already paid <code>O(kn)</code>; the recursion is not the cost.",
   ],
@@ -983,27 +1031,32 @@ public class CombinationSum {
 
   pitfalls: [
     { title: "Storing the path by reference",
-      bug: "<code>ans.add(path)</code> then <code>path.add(x)</code>. Every stored list " +
-        "mutates. The judge shows n copies of the last path.",
-      fix: "<code>ans.add(new ArrayList&lt;&gt;(path))</code> at every record point." },
+      bug: "<code>ans.add(path)</code> then <code>path.add(x)</code>. Every stored list is " +
+        "the same object, so later mutations rewrite earlier answers. The judge shows n " +
+        "copies of the last path.",
+      fix: "<code>ans.add(new ArrayList&lt;&gt;(path))</code> at every record point, so each " +
+        "answer is a snapshot that later pops cannot touch." },
     { title: "The wrong skip predicate",
       bug: "Using <code>!used[i-1]</code> on a start-index tree, or " +
-        "<code>i &gt; start &amp;&amp; a[i]==a[i-1]</code> on a permutation tree.",
+        "<code>i &gt; start &amp;&amp; a[i]==a[i-1]</code> on a permutation tree. Each " +
+        "predicate looks locally correct and silently drops valid answers.",
       fix: "Subsets II / Comb Sum II: same-depth skip via <code>i &gt; start</code>. " +
         "Permutations II: previous equal must already be used. Do not mix." },
     { title: "Forgetting to sort before skipping",
       bug: "The skip looks at <code>a[i-1]</code>, which is only the previous equal after " +
         "a sort. Unsorted <code>[2,1,2]</code> will emit duplicate subsets.",
       fix: "<code>Arrays.sort(a)</code> is part of the contract of every unique-output " +
-        "generator except pure bitmask-on-unique-indices." },
+        "generator except a pure bitmask over unique indices. Sort first, then skip." },
     { title: "Reuse going backwards",
       bug: "Combination-sum with <code>start = 0</code> on every call, so " +
-        "<code>[2,3]</code> and <code>[3,2]</code> both appear.",
+        "<code>[2,3]</code> and <code>[3,2]</code> both appear. The reuse looks correct " +
+        "because you can pick 2 again, but the start index walked backwards.",
       fix: "Never decrease <code>start</code>. Unlimited reuse keeps <code>start = i</code>; " +
         "0/1 use advances to <code>i+1</code>." },
     { title: "Bitmask on duplicate values when uniqueness is required",
       bug: "Looping <code>0 .. 2^n-1</code> on <code>[1,2,2]</code> and dumping every mask. " +
-        "[1,2] appears twice.",
+        "The masks <code>011</code> and <code>101</code> are different index-sets, so " +
+        "<code>[1,2]</code> appears twice and looks like a complete power set.",
       fix: "Bitmasks identify index-sets. For unique value-subsets, use the start-index " +
         "tree. For unique index-sets, bitmask is correct and simpler." },
   ],
@@ -1035,17 +1088,18 @@ public class CombinationSum {
     ["Can I dedup by stuffing paths into a <code>Set&lt;List&gt;</code>?",
       "<p>Yes, and it is correct, and it is the wrong answer. It costs a hash of every " +
       "path and hides a broken generator. The skip rules remove the duplicates at the " +
-      "source in <code>O(1)</code> per sibling. Interviewers ask you to write the rule.</p>"],
+      "source in <code>O(1)</code> per sibling. Interviewers ask you to write the rule, " +
+      "not to paper over it with a set.</p>"],
     ["Swap or <code>used[]</code> for unique permutations?",
-      "<p>Swap. There is nothing to skip. <code>used[]</code> is extra memory and extra " +
-      "branches. Use swap until the input has duplicates, then switch &mdash; swap-plus-skip " +
-      "is easy to get wrong because the suffix is no longer a clean unused multiset after " +
-      "previous swaps.</p>"],
+      "<p>Swap, when the values are unique. There is nothing to skip. <code>used[]</code> " +
+      "is extra memory and extra branches. Use swap until the input has duplicates, then " +
+      "switch &mdash; swap-plus-skip is easy to get wrong because the suffix is no longer " +
+      "a clean unused multiset after previous swaps.</p>"],
     ["When does combination sum become DP?",
       "<p>The moment they ask for the <em>number</em> of combinations (order irrelevant) " +
-      "and <code>n</code> or the target is large. That is unbounded knapsack. If they want " +
-      "the lists, you are stuck with output-sensitive backtracking no matter how large " +
-      "the target is.</p>"],
+      "and <code>n</code> or the target is large. That is unbounded knapsack, and a " +
+      "<code>dp[remain]</code> loop beats the tree. If they want the lists, you are stuck " +
+      "with output-sensitive backtracking no matter how large the target is.</p>"],
   ],
 
   problemsIntro: "Do LC 78, LC 46, LC 90 and LC 47 in that order. Those four are the two trees " +
@@ -1123,19 +1177,25 @@ pack(F({
 
   why: {
     paras: [
-      "The previous page enumerates a Cartesian product. This page survives products that do " +
-      "not fit in memory by <strong>pruning</strong>: a constraint checked on the prefix that " +
-      "proves every completion is illegal. N-Queens without pruning is 16! board fillings; " +
-      "with column and diagonal bitmasks it is a few thousand leaves on n = 8 and a standard " +
-      "interview.",
+      "You are given an n-by-n chessboard and you must place n queens so that none share a " +
+      "row, column, or diagonal. The previous page enumerates a Cartesian product. This page " +
+      "survives products that do not fit in memory by <strong>pruning</strong>: a constraint " +
+      "checked on the prefix that proves every completion is illegal. N-Queens without " +
+      "pruning is 16! board fillings; with column and diagonal bitmasks it is a few thousand " +
+      "leaves on n = 8 and a standard interview.",
       "The same skeleton covers Sudoku (cell, row, column, box uniqueness), word search " +
       "(grid DFS that unmarks on the way back), and palindrome partitioning (only cut when " +
-      "the piece is already a palindrome). The skill is not the skeleton &mdash; you already " +
-      "have it &mdash; it is choosing a cheap, complete veto.",
+      "the piece is already a palindrome). You are given a partial assignment and you must " +
+      "extend it without violating a local rule. The skill is not the skeleton &mdash; you " +
+      "already have it &mdash; it is choosing a cheap, complete veto that you can check on " +
+      "the prefix alone, before you spend another recursive call.",
       "Bitmasks turn the N-Queens veto into a few bitwise operations and make n = 14 " +
-      "solvable. That encoding is the one piece of this page that transfers to " +
+      "solvable: each column and each diagonal is one bit, so a placement is a handful of " +
+      "shifts and ORs instead of an <code>O(n)</code> scan of the board. That encoding is " +
+      "the one piece of this page that transfers to " +
       "<a href=\"../10-dynamic-programming/bitmask-dp.html\">bitmask DP</a> and to several " +
-      "Codeforces constructive searches.",
+      "Codeforces constructive searches where the state is \"which columns or vertices are " +
+      "already taken\".",
     ],
     insight: "A prune is a proof that the current path is dead. If the check can wait until " +
       "the leaf, it is not a prune, it is a filter, and the tree will still explode.",
@@ -1185,16 +1245,21 @@ pack(F({
       "empty cell, next cut). Iterate the candidates. If a candidate fails the veto, skip " +
       "it. Otherwise apply it, recurse, then undo. The undo is the difference between " +
       "backtracking and \"just recurse\": the same <code>used</code> structure is shared " +
-      "across siblings, so it must be restored.",
+      "across siblings, so it must be restored after the child returns. If you place a queen " +
+      "in column 1 and never clear that bit, every later sibling still thinks column 1 is " +
+      "taken and the rest of the tree is silently empty.",
       "N-Queens bitmasks: row <code>r</code> tries every free bit of " +
       "<code>avail = all &amp; ~(cols | d1 | d2)</code>. Placing bit <code>b</code> updates " +
       "<code>cols | b</code>, <code>(d1 | b) &lt;&lt; 1</code>, <code>(d2 | b) &gt;&gt; 1</code>. " +
       "The shifts slide the diagonals as you move to the next row. No arrays, no " +
       "<code>O(n)</code> attack scan.",
       "Word search marks <code>board[r][c] = '#'</code> (or a <code>used[][]</code>) before " +
-      "the four recursive calls and restores the letter after. Palindrome partition " +
-      "precomputes <code>isPal[i][j]</code> in <code>O(n&sup2;)</code> so every cut is " +
-      "<code>O(1)</code> to validate; without that, you re-scan the piece at every node.",
+      "the four recursive calls and restores the letter after, so a later starting cell can " +
+      "reuse that square. Palindrome partition precomputes <code>isPal[i][j]</code> in " +
+      "<code>O(n&sup2;)</code> so every cut is <code>O(1)</code> to validate; without that, " +
+      "you re-scan the piece at every node. On <code>s = \"aab\"</code> the table says " +
+      "<code>aa</code> is already a palindrome, so the cut after index 1 is legal and the " +
+      "tree never builds <code>\"a\" + \"ab\"</code> as a candidate.",
     ],
     invariantTitle: "The interview sentence",
     invariant: "<p>A candidate is legal if and only if it does not violate a constraint with " +
@@ -1329,17 +1394,21 @@ pack(F({
       "yet, you do not have a prune.",
     "<strong>Encode the veto cheaply.</strong> Bitmasks for N-Queens; row/col/box bitsets for " +
       "Sudoku; a mark on the cell for word search; <code>isPal[i][j]</code> for partitions.",
-    "<strong>Apply, recurse, undo</strong> as three consecutive operations.",
+    "<strong>Apply, recurse, undo</strong> as three consecutive operations, because the " +
+      "shared board or bitmask must look unused again before the next sibling runs.",
     "<strong>For find-one</strong>, return a boolean and stop siblings on true. For find-all, " +
-      "collect and keep going.",
-    "<strong>Precompute what you can</strong> &mdash; palindrome table, remaining digit counts.",
-    "<strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or used vertices.",
-    "<strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune.",
+      "collect the leaf and keep going so later solutions are not skipped.",
+    "<strong>Precompute what you can</strong> &mdash; a palindrome table, remaining digit " +
+      "counts &mdash; so the veto is <code>O(1)</code> at every node.",
+    "<strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or " +
+      "used vertices, because an <code>int</code> already holds the whole set.",
+    "<strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune: " +
+      "the dead branch at row 2 never creates a row-3 frame.",
   ],
 
   dryRun: {
     intro: "N-Queens n = 4, first successful placement. Bitmasks in binary, bit 0 = column 0. " +
-      "Highlighted rows are prunes.",
+      "Highlighted rows are the prunes that kill a prefix.",
     cols: ["row", "place col", "cols", "avail next", "result"],
     rows: [
       { cells: ["0", "1", "0010", "row1: 1001", "try"],
@@ -1552,9 +1621,9 @@ public class BacktrackTemplate {
     time: "pruned product",
     space: "O(depth)",
     derivation: [
-      "<p>Without a prune, N-Queens is at most <code>n!</code>. The diagonal veto removes a " +
-      "large constant; the tree is still super-exponential, which is why interviews stop at " +
-      "n = 9 and contests stop at n = 14 with bitmasks.</p>",
+      "<p>Without a prune, N-Queens is at most <code>n!</code> column permutations. The " +
+      "diagonal veto removes a large constant; the tree is still super-exponential, which is " +
+      "why interviews stop at n = 9 and contests stop at n = 14 with bitmasks only.</p>",
       "<span class=\"eq\">word search: O(RC &middot; 4<sup>L</sup>) worst case</span>",
       "<p>Palindrome partition is <code>O(n &middot; 2&#8319;)</code> plus " +
       "<code>O(n&sup2;)</code> to build <code>isPal</code>. Sudoku is a 9<sup>81</sup> " +
@@ -1571,19 +1640,26 @@ public class BacktrackTemplate {
 
   pitfalls: [
     { title: "Checking the constraint only at the leaf",
-      bug: "Fill all n queens, then test the whole board. The tree is n^n, not n!.",
-      fix: "Veto as soon as a queen, digit or letter is placed." },
+      bug: "Fill all n queens, then test the whole board. That looks tidy because the " +
+        "checker is one function, but the tree is n^n placements, not n! permutations.",
+      fix: "Veto as soon as a queen, digit or letter is placed, before the recursive call." },
     { title: "Forgetting to unmark a cell",
-      bug: "Word search sets <code>board[r][c] = '#'</code> and returns without restoring.",
-      fix: "Restore after the four recursive calls, on every path." },
+      bug: "Word search sets <code>board[r][c] = '#'</code> and returns without restoring, " +
+        "because the early true-return looks like the search is done.",
+      fix: "Restore the letter after the four recursive calls, on every path, including " +
+        "the successful one." },
     { title: "Shifting diagonals the wrong way",
-      bug: "Illegal placements survive because attacks slide off the wrong side.",
+      bug: "Illegal placements survive because attacks slide off the wrong side, and the " +
+        "bitmask still looks like a clean occupancy set.",
       fix: "Draw one queen at (0,1) and write the next row's bits by hand. n = 4 (answer 2) is the unit test." },
     { title: "Substring allocations inside the cut loop",
-      bug: "Calling <code>s.substring</code> before you know the piece is a palindrome.",
-      fix: "Test <code>pal[start][end]</code> first. Only then allocate." },
+      bug: "Calling <code>s.substring</code> before you know the piece is a palindrome, " +
+        "because the cut loop looks like ordinary string splitting work.",
+      fix: "Test <code>pal[start][end]</code> first. Only then allocate the substring, so " +
+        "rejected cuts never pay for a new string." },
     { title: "Sudoku box index off by one",
-      bug: "<code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>.",
+      bug: "<code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>. The " +
+        "shorter formula looks like a box id and silently aliases three boxes together.",
       fix: "Box id is <code>(r / 3) * 3 + (c / 3)</code>. Print it on a solved board once." },
   ],
 
@@ -1609,15 +1685,20 @@ public class BacktrackTemplate {
       "is column 0. The other diagonal is constant <code>r + c</code> and slides the other " +
       "way. Bits that shift off the ends have left the board.</p>"],
     ["Is word search BFS or DFS?",
-      "<p>DFS with mark/unmark. BFS would need a used-set per path, and there is no " +
-      "shortest-path objective. LC 79 is existence, so backtracking DFS is the default.</p>"],
+      "<p>DFS with mark/unmark. BFS would need a used-set per path, because two different " +
+      "routes can visit the same cell, and there is no shortest-path objective. LC 79 is " +
+      "existence of any matching walk, so backtracking DFS is the default and the cheaper " +
+      "structure to write.</p>"],
     ["When do I switch from backtracking to bitmask DP?",
       "<p>When you need a count or an optimum over subsets of n &le; 20, and the same " +
-      "subset is reached by many orders. Filling under local constraints with n = 9 " +
-      "(Sudoku) stays backtracking.</p>"],
+      "subset is reached by many orders, so memoising the mask beats replaying every " +
+      "permutation. Filling under local constraints with n = 9 (Sudoku) stays backtracking, " +
+      "because the state is the board, not a subset of items.</p>"],
     ["Can I prune palindrome partition without the n^2 table?",
-      "<p>Yes: scan the piece at each node. It is correct and slower. The table is the " +
-      "expected interview extra.</p>"],
+      "<p>Yes: scan the piece at each node with two pointers. It is correct and slower, " +
+      "because the same substring is re-tested on many branches. The <code>O(n&sup2;)</code> " +
+      "table is the expected interview extra: build it once up front, then every later " +
+      "cut is a constant-time lookup.</p>"],
   ],
 
   problemsIntro: "LC 51, LC 37, LC 79 and LC 131 are the four vetoes on this page. The " +
@@ -1688,21 +1769,29 @@ pack(F({
 
   why: {
     paras: [
-      "Divide and conquer is the reason <code>O(n log n)</code> exists as a default target. " +
-      "Split the array in half, recurse, merge the two sorted runs in linear time. The tree " +
-      "has <code>log n</code> levels and each level touches every element once, so the total " +
-      "is <code>n log n</code>. That accounting is case 2 of " +
+      "You are given an array of n numbers and you must sort it, or count how many pairs " +
+      "are out of order, without writing a double loop. Divide and conquer is the reason " +
+      "<code>O(n log n)</code> exists as a default target. Split the array in half, recurse, " +
+      "merge the two sorted runs in linear time. The tree has <code>log n</code> levels and " +
+      "each level touches every element once, so the total is <code>n log n</code> &mdash; " +
+      "about <code>1.7 &times; 10&#8310;</code> operations at <code>n = 10&#8309;</code>. " +
+      "That accounting is case 2 of " +
       "<a href=\"../00-foundations/recurrences-and-master-theorem.html\">the master theorem</a>.",
       "The same split produces inversion counts (a merge that also counts split pairs), " +
       "majority without Boyer-Moore, and the <code>O(n log n)</code> closest-pair algorithm. " +
       "Quicksort is the same idea with an uneven, data-dependent split and a free combine " +
       "&mdash; which is why its worst case is quadratic and its expected case is " +
-      "<code>n log n</code>.",
+      "<code>n log n</code>. A reverse-sorted input with the first element as pivot is the " +
+      "picture that kills the naive version.",
       "The skill is the <strong>combine</strong>. The recursive calls are boilerplate. The " +
-      "interview is: what must each half return so the cross terms can be counted in linear time?",
+      "interview is: what must each half return so the cross terms can be counted in linear " +
+      "time? For inversions that return is a sorted run plus a count; for closest pair it is " +
+      "a y-sorted strip. If you cannot name the extra payload, you do not yet have a " +
+      "divide-and-conquer solution, only a recursive split.",
     ],
     insight: "If the cross-half contribution can be computed in linear time after the halves " +
-      "are sorted, the whole algorithm is <code>O(n log n)</code>.",
+      "are sorted, the whole algorithm is <code>O(n log n)</code>: <code>log n</code> levels, " +
+      "each touching every element once.",
   },
 
   recognise: {
@@ -1734,8 +1823,9 @@ pack(F({
         "<a href=\"../01-arrays-and-windows/binary-search-on-answer.html\">BS on answer</a>"],
     ],
     constraint: "<code>n &le; 10&#8309;</code> plus a pair-counting condition is the " +
-      "signature for mergesort-with-a-counter. Shuffle before a hand-rolled quicksort " +
-      "partition; contests will feed you the adversarial permutation.",
+      "signature for mergesort-with-a-counter: a double loop is <code>5 &times; 10&#8313;</code> " +
+      "and dies, while <code>n log n</code> fits in a second. Shuffle before a hand-rolled " +
+      "quicksort partition; contests will feed you the adversarial permutation.",
   },
 
   core: {
@@ -1743,20 +1833,28 @@ pack(F({
     paras: [
       "Mergesort: sort <code>a[lo..mid)</code> and <code>a[mid..hi)</code>, then merge into " +
       "a buffer. Two pointers walk two sorted runs; each step emits the smaller head. " +
-      "Stability comes from preferring the left head on a tie.",
+      "Stability comes from preferring the left head on a tie, so equal keys keep the order " +
+      "they had in the input. The buffer is the only extra linear memory; the recursion " +
+      "itself is only <code>O(log n)</code> frames because siblings do not coexist.",
       "Inversions: a pair (i, j) with i &lt; j and a[i] &gt; a[j] is both-left, both-right, " +
       "or split. The first two come from the recursive calls. A split inversion is counted " +
       "when the merge takes a head from the right: every unused left element is greater and " +
-      "to the left, so add <code>leftRemaining</code>.",
-      "Quicksort partitions around a pivot and recurses on both sides; combine is free. " +
-      "Random pivot makes the expected cost n log n. Majority-by-D&C: the majority of n " +
-      "votes, if it exists, is the majority of at least one half; count the two candidates " +
-      "in a linear pass to decide.",
+      "to the left, so add <code>leftRemaining</code>. On <code>[2, 5, 8] | [1, 3, 9]</code> " +
+      "taking 1 adds 3, taking 3 adds 2, and the five split inversions are the whole answer " +
+      "because each half was already sorted.",
+      "Quicksort partitions around a pivot and recurses on both sides; combine is free " +
+      "because the work already happened in the partition. A random pivot makes the expected " +
+      "cost <code>n log n</code>. Majority-by-D&amp;C: the majority of n votes, if it exists, " +
+      "is the majority of at least one half; count the two candidates in a linear pass to " +
+      "decide. Boyer-Moore is faster; this version is the proof you can recite.",
     ],
     invariantTitle: "The interview sentence",
     invariant: "<p>After both halves are solved, every pair inside one half is already " +
       "counted. The combine exists only to handle pairs that <em>cross the midpoint</em>, " +
-      "and it must do that in linear time.</p>",
+      "and it must do that in linear time. In plain words, the recursive calls finish all " +
+      "the local work, and the merge's only job is the pairs that have one foot on each " +
+      "side &mdash; leftover left values sitting above a right head &mdash; without scanning " +
+      "every pair again.</p>",
     extra: [
       { kind: "math", title: "The recurrence you quote",
         html: "<p><code>T(n) = 2T(n/2) + &Theta;(n) = &Theta;(n log n)</code>. Closest pair " +
@@ -1829,15 +1927,22 @@ pack(F({
   ],
 
   steps: [
-    "<strong>Write the base case:</strong> a run of length 0 or 1 is sorted and has 0 inversions.",
-    "<strong>Split at mid = lo + (hi-lo)/2</strong> with half-open ranges.",
-    "<strong>Recurse on both halves</strong> and keep their returned counts.",
+    "<strong>Write the base case:</strong> a run of length 0 or 1 is already sorted and " +
+      "contributes 0 inversions, so the recursion has somewhere to stop.",
+    "<strong>Split at mid = lo + (hi-lo)/2</strong> with half-open ranges so a two-element " +
+      "run cannot recurse forever on itself.",
+    "<strong>Recurse on both halves</strong> and keep their returned counts; those are the " +
+      "already finished in-left and in-right inversions.",
     "<strong>Combine in linear time.</strong> For inversions: merge and add <code>mid - i</code> " +
-      "on every right take.",
-    "<strong>Copy the buffer back</strong> into <code>a[lo..hi)</code>.",
-    "<strong>For quicksort:</strong> partition, recurse both sides. Shuffle or pick a random pivot.",
-    "<strong>For majority:</strong> recurse both halves, then count the two candidates in one pass.",
-    "<strong>Quote T(n) = 2T(n/2) + O(n)</strong> and name the combine.",
+      "on every right take, because those leftover left values sit above the right head.",
+    "<strong>Copy the buffer back</strong> into <code>a[lo..hi)</code> so the parent merge " +
+      "sees two sorted runs on the next level.",
+    "<strong>For quicksort:</strong> partition, recurse both sides. Shuffle or pick a random " +
+      "pivot so a sorted input cannot become a stick.",
+    "<strong>For majority:</strong> recurse both halves, then count the two candidates in one " +
+      "linear pass over the current range.",
+    "<strong>Quote T(n) = 2T(n/2) + O(n)</strong> and name the combine, because the linear " +
+      "merge is what buys the <code>n log n</code> bound.",
   ],
 
   dryRun: {
@@ -2007,11 +2112,16 @@ public class DivideConquerTemplate {
     time: "O(n log n)",
     space: "O(n) mergesort / O(log n) quicksort expected",
     derivation: [
-      "<p>Mergesort and inversion count share the same recurrence.</p>",
+      "<p>Mergesort and inversion count share the same recurrence: two half-size subproblems " +
+      "plus a linear scan of the current range. There are <code>log n</code> levels and each " +
+      "level touches every element once, so the total is <code>n log n</code> &mdash; about " +
+      "<code>1.7 &times; 10&#8310;</code> operations at <code>n = 10&#8309;</code>.</p>",
       "<span class=\"eq\">T(n) = 2T(n/2) + &Theta;(n) = &Theta;(n log n)</span>",
       "<p>Quicksort expected: a random pivot produces a uniform split and expected depth " +
-      "<code>O(log n)</code>. Worst case: <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>.</p>",
-      "<p>D&amp;C majority is <code>O(n log n)</code>, strictly worse than Boyer-Moore.</p>",
+      "<code>O(log n)</code>. Worst case: <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>, " +
+      "which is why you shuffle.</p>",
+      "<p>D&amp;C majority is <code>O(n log n)</code>, strictly worse than Boyer-Moore's " +
+      "single pass. Quote the linear algorithm unless they asked for the recursive proof.</p>",
     ],
     compare: [
       ["Double loop inversions", "O(n^2)", "O(1)", "Oracle / n <= 4000"],
@@ -2026,20 +2136,30 @@ public class DivideConquerTemplate {
   pitfalls: [
     { title: "Inclusive bounds that recurse forever",
       bug: "<code>go(lo, mid)</code> and <code>go(mid, hi)</code> with both ends inclusive " +
-        "and <code>mid == lo</code> on a two-element run.",
-      fix: "Half-open <code>[lo, hi)</code>, base <code>hi - lo &le; 1</code>." },
+        "and <code>mid == lo</code> on a two-element run. The split looks symmetric and the " +
+        "function never reaches a length-1 base case.",
+      fix: "Use half-open <code>[lo, hi)</code> and stop when <code>hi - lo &le; 1</code>, " +
+        "so a two-element run splits into 1+1." },
     { title: "Counting inversions with an int",
-      bug: "n = 1e5 reverse-sorted produces ~5e9 inversions. A signed 32-bit counter wraps.",
-      fix: "<code>long inv</code>. Same for reverse-pairs." },
+      bug: "n = 1e5 reverse-sorted produces ~5e9 inversions. A signed 32-bit counter wraps " +
+        "to a negative number that still looks like a plausible count.",
+      fix: "<code>long inv</code> from the first line. Same for reverse-pairs, where the " +
+        "product of two ints can overflow too." },
     { title: "Adding leftover on a left-take",
-      bug: "You add <code>hi - j</code> when taking from the left, which counts non-inversions.",
-      fix: "Add when the right head loses the comparison." },
+      bug: "You add <code>hi - j</code> when taking from the left, which counts " +
+        "non-inversions: those right leftovers are larger, so they are in order.",
+      fix: "Add leftover-left only when the right head loses the comparison and is emitted " +
+        "into the buffer." },
     { title: "Unstable merge",
-      bug: "On a tie, taking the right head. Interviews ask for stability.",
-      fix: "<code>if (a[j] &lt; a[i])</code> take right; on equal, take left." },
+      bug: "On a tie, taking the right head. The merge still sorts, so the output looks " +
+        "correct, and interviews then ask for stability.",
+      fix: "<code>if (a[j] &lt; a[i])</code> take right; on equal, take left so original " +
+        "order is kept." },
     { title: "Quicksort without shuffling",
-      bug: "Pivot = first element on a sorted array. Quadratic, plus a stack overflow.",
-      fix: "Swap a random index into the pivot slot." },
+      bug: "Pivot = first element on a sorted array. The partition produces a stick, so " +
+        "the tree is quadratic and the JVM stack overflows.",
+      fix: "Swap a random index into the pivot slot before every partition, or shuffle the " +
+        "array once." },
   ],
 
   variants: [
@@ -2061,18 +2181,25 @@ public class DivideConquerTemplate {
 
   followups: [
     ["Why is the closest-pair strip linear, not quadratic?",
-      "<p>Points closer than d cannot pack tightly in the strip. Walking the y-sorted strip " +
-      "and looking a constant number of steps ahead is enough. That constant is why the " +
-      "combine stays linear.</p>"],
+      "<p>Points closer than d cannot pack tightly in the strip: each point has only a " +
+      "constant number of neighbours that could beat the current best. Walking the y-sorted " +
+      "strip and looking a few steps ahead is enough. That constant (classically seven) is " +
+      "why the combine stays linear instead of becoming a double loop.</p>"],
     ["Mergesort or Fenwick for inversions?",
-      "<p>Same complexity. Mergesort is self-contained. Fenwick on compressed ranks also " +
-      "does online queries. If the problem is only inversions, merge.</p>"],
+      "<p>Same <code>O(n log n)</code> complexity. Mergesort is self-contained and needs no " +
+      "rank compression. Fenwick on compressed ranks also does online queries after each " +
+      "insert. If the problem is only a one-shot inversion count, write the merge; if later " +
+      "queries arrive, switch to a Fenwick tree.</p>"],
     ["Is Java's Arrays.sort a mergesort?",
-      "<p>Primitives: Dual-Pivot Quicksort. Objects: TimSort. Write inversion count yourself.</p>"],
+      "<p>Primitives: Dual-Pivot Quicksort, which is not stable and does not expose a merge " +
+      "hook. Objects: TimSort, a stable mergesort cousin. Neither lets you inject an " +
+      "inversion counter, so you write the merge yourself when the problem asks for the " +
+      "pairs rather than a sorted array.</p>"],
     ["How do I explain majority D&C in thirty seconds?",
       "<p>If a value owns more than half the range, it owns more than half of at least one " +
-      "half. The only two candidates are the majorities of the two halves. Count both and " +
-      "pick the winner.</p>"],
+      "half &mdash; otherwise both halves would be minority and the total could not be a " +
+      "majority. The only two candidates are therefore the majorities of the two halves. " +
+      "Count both on the current range and pick the winner, or report that neither qualifies.</p>"],
   ],
 
   problemsIntro: "Implement mergesort once; inversion count is a five-line edit. LC 315 and " +
@@ -2141,20 +2268,27 @@ pack(F({
 
   why: {
     paras: [
-      "Subset sum on n = 40 is the poster child. <code>2<sup>40</sup></code> is a trillion. " +
-      "<code>2<sup>20</sup></code> is a million. Split the array, enumerate every subset sum " +
-      "of each half, and ask whether a left sum plus a right sum hits the target. The ask is " +
-      "a sort plus a binary search, which is how 2<sup>n/2</sup> becomes the running time.",
+      "You are given n = 40 integers and a target, and you must decide whether some subset " +
+      "adds to that target. Subset sum on n = 40 is the poster child. " +
+      "<code>2<sup>40</sup></code> is a trillion. <code>2<sup>20</sup></code> is a million. " +
+      "Split the array, enumerate every subset sum of each half, and ask whether a left sum " +
+      "plus a right sum hits the target. The ask is a sort plus a binary search, which is " +
+      "how 2<sup>n/2</sup> becomes the running time.",
       "The same split turns 4-sum into two 2-sums: all pairwise sums of the first half of " +
-      "the variables versus all pairwise sums of the second. It also solves closest " +
-      "subsequence sum (LC 1755) and the Codeforces problems whose constraint line is " +
-      "n &le; 40.",
+      "the variables versus all pairwise sums of the second. You are given four arrays of " +
+      "length 400 and you must decide whether some a+b+c+d hits a target; n^3 is too slow, " +
+      "n^2 pairwise maps fit. It also solves closest subsequence sum (LC 1755) and the " +
+      "Codeforces problems whose constraint line is n &le; 40.",
       "Meet-in-the-middle is not a clever search. It is the observation that a Cartesian " +
       "product A &times; B can be enumerated from both sides when each factor is about the " +
-      "square root of a product you cannot afford.",
+      "square root of a product you cannot afford. Split, list every left sum, list every " +
+      "right sum, then ask whether some pair adds to the target. The listing is a bitmask " +
+      "loop you already know; the interview is the join, and forgetting the empty subset " +
+      "is the bug that hides a target sitting entirely in one half.",
     ],
     insight: "2<sup>n</sup> = 2<sup>n/2</sup> &times; 2<sup>n/2</sup>. Enumerate each factor, " +
-      "then join. The join, not the enumeration, is where the bugs live.",
+      "then join with a sort and a binary search. The join, not the enumeration, is where " +
+      "the bugs live.",
   },
 
   recognise: {
@@ -2193,13 +2327,21 @@ pack(F({
     paras: [
       "Split <code>a[0..n)</code> into <code>L = a[0..n/2)</code> and " +
       "<code>R = a[n/2..n)</code>. Enumerate every subset sum of L with a bitmask loop, " +
-      "same for R. Sort the left sums. For each right sum <code>y</code>, binary-search " +
-      "<code>target - y</code> (exact) or the closest values (closest-sum).",
+      "same for R, including mask 0 so the empty half is present. Sort the left sums. For " +
+      "each right sum <code>y</code>, binary-search <code>target - y</code> (exact) or the " +
+      "closest values (closest-sum). On <code>[2, 4, 5 | 1, 3, 7]</code> targeting 10, the " +
+      "right sum 10 pairs with left 0 and that is a real subset.",
       "4-sum over four arrays is the same picture with pairwise sums in place of subset " +
-      "sums. 4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool " +
-      "when you have four <em>independent</em> arrays of size n &asymp; 400.",
-      "Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB. " +
-      "Store witnesses only when the problem asks for the subset.",
+      "sums: build every <code>a[i]+b[j]</code>, then probe with <code>target-(c[k]+d[l])</code>. " +
+      "4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool when " +
+      "you have four <em>independent</em> arrays of size n &asymp; 400, where n^2 is a " +
+      "160 000-entry map and n^3 would be tens of millions.",
+      "Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB and " +
+      "fit comfortably; two arrays of boxed <code>Long</code> keys in a " +
+      "<code>HashMap</code> do not, because each entry carries object headers. Store " +
+      "witnesses (the mask next to the sum) only when the problem asks for the subset, and " +
+      "otherwise keep a sorted <code>long[]</code>. At n = 40 that array is a million " +
+      "entries, not a memory problem and not a reason to reach for a map.",
     ],
     invariantTitle: "The interview sentence",
     invariant: "<p>Every subset of the whole array is a subset of the left half plus a " +
@@ -2278,17 +2420,22 @@ pack(F({
   ],
 
   steps: [
-    "<strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible.",
-    "<strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine.",
-    "<strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0. Use " +
-      "<code>long</code> for sums.",
-    "<strong>Sort one side</strong>, usually the left sums.",
-    "<strong>Join.</strong> For each right sum y, search <code>target - y</code>.",
-    "<strong>Keep the empty-empty case.</strong> Target 0 is true because of it.",
+    "<strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible, " +
+      "because 2^40 is a trillion loop iterations.",
+    "<strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine: one extra bit is " +
+      "still only about a million masks.",
+    "<strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0 so a " +
+      "target that lives in one half is not lost. Use <code>long</code> for sums.",
+    "<strong>Sort one side</strong>, usually the left sums, so each right value is one " +
+      "binary search instead of a linear scan.",
+    "<strong>Join.</strong> For each right sum y, search <code>target - y</code> in the " +
+      "sorted left array and treat a non-negative index as a hit.",
+    "<strong>Keep the empty-empty case.</strong> Target 0 is true because both empty " +
+      "subsets sum to zero when taken together.",
     "<strong>If you need the subset</strong>, store the mask next to the sum, or re-enumerate " +
       "the winning half.",
     "<strong>Mind memory:</strong> 2^{n/2} longs plus a sort. Boxed HashMap keys are optional " +
-      "only at n &le; 36.",
+      "only at n &le; 36, where 2^18 entries still fit.",
   ],
 
   dryRun: {
@@ -2489,10 +2636,12 @@ public class MitmTemplate {
     derivation: [
       "<p>Each half has size n/2, so each bitmask loop is " +
       "<code>O(2^{n/2} &middot; n/2)</code> if you walk bits, or " +
-      "<code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds.</p>",
+      "<code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds. At n = 40 that " +
+      "is about a million masks per side, not a trillion.</p>",
       "<span class=\"eq\">sort 2^{n/2} sums + 2^{n/2} binary searches = O(2^{n/2} n)</span>",
       "<p>4-sum over four arrays of length m is <code>O(m&sup2;)</code> time and memory " +
-      "for the map of pairwise sums. That is why m &le; 400 is the usual constraint.</p>",
+      "for the map of pairwise sums. That is why m &le; 400 is the usual constraint: " +
+      "160 000 map entries fit, while a four-nested loop does not.</p>",
     ],
     compare: [
       ["Full 2^n bitmask", "O(n 2^n)", "O(1)", "n <= 22"],
@@ -2508,20 +2657,28 @@ public class MitmTemplate {
     { title: "Forgetting mask 0",
       bug: "Looping <code>mask = 1 .. 2^m-1</code>, so sum 0 is missing. Target that lives " +
         "in one half, or target 0, is reported absent.",
-      fix: "Start at 0. The empty subset is a legitimate half." },
+      fix: "Start the bitmask loop at 0. The empty subset is a legitimate half and sum 0 " +
+        "must stay in the array." },
     { title: "int sums on large values",
-      bug: "n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses.",
-      fix: "<code>long[]</code> sums, <code>long</code> target." },
+      bug: "n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses " +
+        "that look like ordinary absent targets.",
+      fix: "<code>long[]</code> sums and a <code>long</code> target from the first line, " +
+        "before any addition can wrap." },
     { title: "binarySearch confusion",
       bug: "Treating a negative <code>Arrays.binarySearch</code> return as a valid index, " +
-        "or using it as \"closest\" without decoding the insertion point.",
+        "or using it as \"closest\" without decoding the insertion point. A miss still " +
+        "returns a number, so the code compiles and looks like a hit.",
       fix: "Existence: <code>&gt;= 0</code> is a hit. Closest: write your own lower_bound " +
         "and inspect both neighbours." },
     { title: "HashMap of 2^{20} boxed Longs",
-      bug: "Memory and GC explode. An <code>long[]</code> plus a sort is smaller and faster.",
-      fix: "Prefer sorted arrays. Hash only the pairwise 4-sum side, where m^2 is ~1e5." },
+      bug: "A <code>HashMap&lt;Long, Integer&gt;</code> of 2^{20} keys makes memory and GC " +
+        "explode, even though the algorithm is otherwise right. A <code>long[]</code> plus " +
+        "a sort is smaller and faster.",
+      fix: "Prefer sorted primitive arrays. Hash only the pairwise 4-sum side, where m^2 " +
+        "is about 1e5 entries." },
     { title: "Splitting 4-sum on one array the MITM way without handling index reuse",
-      bug: "Pairwise sums from the same array can pick the same index twice.",
+      bug: "Pairwise sums from the same array can pick the same index twice, so a hit " +
+        "looks valid even though one element was spent on both halves.",
       fix: "Either use four independent arrays (LC 454), or generate pairs as (i, j) with " +
         "i &lt; j and reject overlapping index pairs at join time." },
   ],
@@ -2544,13 +2701,15 @@ public class MitmTemplate {
 
   followups: [
     ["Why not just knapsack DP?",
-      "<p>If the sums are bounded by S and nS fits, DP is simpler and often faster. MITM " +
-      "wins when S is 40 * 1e9 and n is 40: the value dimension is unusable, the index " +
-      "dimension splits cleanly.</p>"],
+      "<p>If the sums are bounded by S and nS fits in time and memory, knapsack DP is " +
+      "simpler and often faster. MITM wins when S is 40 * 1e9 and n is 40: the value " +
+      "dimension is unusable (a 4e10-long array), while the index dimension splits cleanly " +
+      "into two halves of twenty.</p>"],
     ["Can I recover the subset?",
       "<p>Store (sum, mask) pairs. On a hit, the two masks translate back to indices in " +
       "each half. Or, once you know the two sums, re-enumerate the half (2^{20}) to find " +
-      "a mask that produces them. The second uses no extra memory.</p>"],
+      "a mask that produces them. The second uses no extra memory and is the version you " +
+      "write when the judge only asked for existence first.</p>"],
     ["What is the 4-sum-over-halves trick on one array?",
       "<p>Generate all pair sums with i &lt; j from the left n/2 indices, all pair sums " +
       "from the right n/2 indices, and join. Pairs that need two left and two right " +
@@ -2558,7 +2717,9 @@ public class MitmTemplate {
       "that half. It is messier than four arrays, which is why LC 18 stays n^3.</p>"],
     ["Gray codes and incremental sums?",
       "<p>Walking masks in Gray-code order adds or removes one element per step, so each " +
-      "half is O(2^{n/2}) instead of O(n 2^{n/2}). Worth it at n = 42; unnecessary at n = 36.</p>"],
+      "half is O(2^{n/2}) additions instead of O(n 2^{n/2}) bit walks. That factor of n/2 " +
+      "matters at n = 42, where you are already near the time limit; it is unnecessary at " +
+      "n = 36, where a plain bitmask loop already finishes.</p>"],
   ],
 
   problemsIntro: "CSES Meet in the Middle and CF 888E are the two problems that teach the " +

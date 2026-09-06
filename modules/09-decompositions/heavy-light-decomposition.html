@@ -22,7 +22,7 @@
   <p class="hero__tagline">Split every root-path into <code>O(log n)</code> heavy chains so a segment tree on a flattened tree answers path queries in <code>O(log&sup2; n)</code>.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">28 min read</span>
+    <span class="hero__time">32 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../05-trees/lca-binary-lifting.html">Binary Lifting & LCA</a>,
       <a href="../06-range-queries/segment-tree.html">Segment Tree</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A path in a tree is not an array interval. Naive path-sum walks <code>O(n)</code> edges; a Fenwick tree on a DFS order answers subtree queries, not arbitrary paths. Heavy-light decomposition (HLD) is the standard way to turn a path into a handful of contiguous segments.</p>
-<p>The trick is structural: from each node, the edge into its heaviest child (largest subtree) is <em>heavy</em>; every other child edge is <em>light</em>. Light edges at most halve the remaining size, so any root-path crosses <code>O(log n)</code> light edges and therefore lives on <code>O(log n)</code> heavy chains.</p>
-<p>Lay each chain down as a contiguous segment of a global array (DFS that prefers the heavy child). A segment tree on that array answers a chain-range in <code>O(log n)</code>, so a full path is <code>O(log&sup2; n)</code>. Path updates with lazy propagation are the same skeleton.</p>
+<p>You are given a tree of people, each holding a number, and you must answer questions like "what is the sum of the numbers on the unique path from person 5 to person 7?". Walking parent pointers from both ends until they meet is correct, and it is also the first thing most people write. The trouble is the cost: a single walk can touch every node on a skinny tree, so one hundred thousand queries on one hundred thousand nodes is on the order of ten billion steps. The judge cuts you off long before that finishes.</p>
+<p>A Fenwick tree or segment tree on a depth-first listing of the nodes will answer a <em>subtree</em> in one interval, because a subtree occupies a contiguous block of that listing. A path is not a subtree. On the seven-node tree that hangs 2 and 3 under 1, then 4 and 5 under 2, then 6 and 7 under 3, the path from 5 to 7 visits 5, 2, 1, 3, 7 &mdash; five nodes that do not sit next to each other in any standard listing. Heavy-light decomposition is the standard way to cut that path into a handful of contiguous pieces a segment tree can eat.</p>
+<p>The cut is structural, and this is where the logarithm comes from. At every node, look at the sizes of the subtrees hanging off its children. The child with the largest subtree is the <em>heavy child</em>, and the edge down into it is a <em>heavy edge</em>; every other child edge is <em>light</em>. A light child <code>v</code> of <code>u</code> cannot own more than half of <code>u</code>'s subtree: if it did, it would be strictly larger than everything else under <code>u</code> put together, and it would have been declared heavy. Crossing a light edge toward the root therefore lands you in a subtree at least twice as big as the one you just left.</p>
+<p>Start at a leaf, whose subtree has size 1, and walk to the root, whose subtree has size <code>n</code>. Each light edge at least doubles the size you sit in, and a quantity that starts at 1 and doubles can reach <code>n</code> at most <code>log&#8322; n</code> times &mdash; about 17 doublings when <code>n = 10&#8309;</code>. A <em>heavy chain</em> is a maximal run of heavy edges, so you leave a chain only by taking a light edge. Any root-to-leaf path therefore lives on at most that many chains, plus the chain you started on. Lay each chain down as one contiguous segment of a global array, put a segment tree on that array, and a full path is a handful of range queries.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A light edge halves the subtree, so a root-path uses <code>O(log n)</code> chains. Prefer the heavy child in DFS so each chain occupies a contiguous interval.</p>
+    <p>A light edge at least halves the subtree you leave behind, so a walk toward the root can take only <code>log n</code> light edges before the subtree has grown to the whole tree. Prefer the heavy child in the second DFS so each heavy chain occupies one contiguous interval a segment tree can query.</p>
   </div>
 </aside>
 
@@ -112,18 +113,36 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> is the HLD signature. <code>O(log&sup2; n)</code> Java usually fits; drop the extra log with a Fenwick tree when the operation is prefix-friendly (sum, XOR) and you only need point updates.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> on a tree, with path aggregates or path updates, is the HLD signature. Walking to the LCA would cost about <code>4&times;10<sup>10</sup></code> steps and time out. <code>O(log&sup2; n)</code> per query is roughly three hundred segment-tree hops times two hundred thousand queries, which Java usually accepts. Drop the extra log with a Fenwick tree when the operation is prefix-friendly (sum, XOR) and you only need point updates.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Two DFS passes. First: compute <code>sz</code>, <code>par</code>, <code>depth</code>, and <code>heavy[u]</code> = child of maximum subtree. Second: assign each node a position <code>pos[u]</code> in a flat array, walking the heavy child first so a chain is contiguous. <code>head[u]</code> is the top of the chain containing <code>u</code>.</p>
-<p>A path query lifts the deeper head up one chain at a time: while <code>head[u] != head[v]</code>, query <code>[pos[head[u]], pos[u]]</code> and jump <code>u = par[head[u]]</code>. Finish with the remaining in-chain segment between <code>u</code> and <code>v</code>. Always query the deeper side first so the two pointers meet at the LCA chain.</p>
+<p>You need two depth-first searches and a handful of arrays. The first search fills <code>sz[u]</code> (how many nodes live in the subtree of <code>u</code>, including <code>u</code> itself), <code>par[u]</code> (the parent), <code>depth[u]</code> (distance from the root), and <code>heavy[u]</code> (the child whose subtree is largest, or <code>-1</code> if <code>u</code> is a leaf). That first pass does not assign positions yet; it only decides, at every node, which single outgoing edge is heavy. Ties can be broken by taking the first child you see.</p>
+<p>The second search assigns each node a position <code>pos[u]</code> in a flat array of length <code>n</code>, and records <code>head[u]</code> &mdash; the topmost node of the heavy chain that contains <code>u</code>. The rule that makes a chain one interval is this: when you leave <code>u</code>, recurse into <code>heavy[u]</code> first and pass the same <code>head</code> down. Only after that chain is laid out do you visit the light children, each of which starts a brand-new chain with itself as the head. Because a whole subtree is still visited together, the nodes of <code>u</code>'s subtree occupy the contiguous half-open interval <code>[pos[u], pos[u]+sz[u])</code>, which is why the same flattening answers subtree queries for free.</p>
+<p>A path query from <code>u</code> to <code>v</code> lifts the deeper chain-head up one chain at a time. While <code>head[u]</code> and <code>head[v]</code> differ, compare <code>depth[head[u]]</code> against <code>depth[head[v]]</code> (the heads, not the nodes), query the closed interval from the deeper head down to that pointer, then jump that pointer to <code>par[head[...]]</code>, which is one light edge above the chain you just finished. When the two pointers finally share a head they sit on the same chain, and you query the closed interval between their positions once. Always lift the deeper side first so the two pointers meet on the chain that contains their lowest common ancestor.</p>
+<p>Walk the seven-node sample. Subtree sizes are 7, 3, 3, 1, 1, 1, 1 at nodes 1 through 7. Node 1 ties between children of size 3, so say 2 is heavy; node 2 then picks 4 as heavy. The heavy-first listing is 1, 2, 4, then light child 5, then light child 3 and its heavy child 6, then light child 7 &mdash; four chains. Path 5 to 7 queries chain B (just 5), jumps to 2, queries 1-2 on chain A, jumps to 3, queries 3 on chain C, and finishes with 7 on chain D.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Every root-path crosses <code>O(log n)</code> light edges, hence lives on <code>O(log n)</code> heavy chains. After a heavy-first DFS, each chain is a contiguous <code>[pos[head], pos[node]]</code> interval of the segment tree.</p>
+    <p>Every root-to-node path crosses at most <code>log&#8322; n</code> light edges, and therefore lives on <code>O(log n)</code> heavy chains. After a heavy-first DFS, the nodes of the chain from <code>head[u]</code> down to <code>u</code> occupy the contiguous segment-tree interval <code>[pos[head[u]], pos[u]]</code>.</p><span class="eq"># light edges on a root-path &le; log&#8322; n</span><p>In plain words, you are not hoping the path is short &mdash; you are guaranteeing that it changes chains only when the remaining tree at least doubles, which cannot happen more than a logarithm of times. Interview sentence: <em>"I lift the deeper chain-head until both sides share a head, then I query the one leftover in-chain segment."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why a light edge really halves the tree</span>
+    <p>Write <code>sz[u]</code> for the number of nodes in <code>u</code>'s subtree. If <code>v</code> is a light child and <code>sz[v] &gt; sz[u]/2</code>, then the other children of <code>u</code> together hold fewer than <code>sz[u]/2</code> nodes, so <code>v</code> is strictly the unique heaviest child &mdash; contradicting the label "light". Therefore <code>sz[v] &le; sz[u]/2</code>. Walking toward the root, each light edge replaces a subtree of size <code>s</code> with one of size at least <code>2s</code>. From 1 to <code>n</code> that product of doublings is at most <code>log&#8322; n</code>. Heavy edges do not help the count and do not hurt it: they stay inside one chain.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Subtree queries come free</span>
+    <p>Heavy-first is still a valid DFS, so the subtree of <code>u</code> is exactly <code>[pos[u], pos[u]+sz[u])</code>. One segment-tree range, no chain walking. That is why statements that mix "sum on the path" with "sum in the subtree" are still HLD.</p>
   </div>
 </aside>
 
@@ -166,7 +185,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Tree: 1-2-4, 1-2-5, 1-3-6, 1-3-7. Subtree sizes: 7,3,3,1,1,1,1. Heavy child of 1 is 2 (tie broken by first).",
+          "note": "The tree is 1-2-4, 1-2-5, 1-3-6, 1-3-7. Subtree sizes read 7, 3, 3, 1, 1, 1, 1. Node 1 ties, so 2 is declared heavy.",
           "active": [
             0
           ],
@@ -177,7 +196,7 @@
           }
         },
         {
-          "note": "Chain A: 1-2-4 (heavy edges). pos = [1,2,4] get indices 0,1,2.",
+          "note": "Heavy edges 1-2 and 2-4 form chain A. The heavy-first listing writes nodes 1, 2, 4 into positions 0, 1, 2.",
           "active": [
             0,
             1,
@@ -190,7 +209,7 @@
           }
         },
         {
-          "note": "Node 5 is a light child of 2, so it starts a new chain B. pos[5] = 3.",
+          "note": "Node 5 is a light child of 2, so it starts a new chain B with itself as head, and takes the next position 3.",
           "active": [
             3
           ],
@@ -201,7 +220,7 @@
           }
         },
         {
-          "note": "Chain C: 3-6. 3 is a light child of 1. pos[3]=4, pos[6]=5.",
+          "note": "Node 3 is a light child of 1, so it starts chain C. Its heavy child 6 stays on C, taking positions 4 then 5.",
           "active": [
             4,
             5
@@ -213,7 +232,7 @@
           }
         },
         {
-          "note": "Node 7 starts chain D. Four chains cover seven nodes.",
+          "note": "Node 7 is a light child of 3 and starts the last chain D. Four chains now cover all seven nodes.",
           "active": [
             6
           ],
@@ -224,7 +243,7 @@
           }
         },
         {
-          "note": "Path 5 to 7: 5 (chain B) -> 2 (chain A) -> 1 (chain A) -> 3 (chain C) -> 7 (chain D). Three chain jumps.",
+          "note": "Path 5 to 7 walks chain B, jumps to 2 on chain A, continues through 1, jumps to 3 on chain C, then finishes on D.",
           "active": [
             3,
             1,
@@ -263,17 +282,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>DFS 1.</strong> Compute <code>sz</code>, <code>par</code>, <code>depth</code>, <code>heavy[u]</code>.</li>
-  <li><strong>DFS 2.</strong> Assign <code>pos</code> and <code>head</code>, always recursing into the heavy child first.</li>
-  <li><strong>Build</strong> a segment tree on the <code>pos</code>-ordered values.</li>
-  <li><strong>pathQuery(u, v):</strong> while heads differ, query the deeper chain and jump to <code>par[head]</code>.</li>
-  <li><strong>Same chain:</strong> query the closed interval between <code>pos[u]</code> and <code>pos[v]</code>.</li>
-  <li><strong>Updates</strong> are the same walk, writing instead of reading. Subtree query is one interval <code>[pos[u], pos[u]+sz[u])</code>.</li>
+  <li><strong>DFS 1 &mdash; measure the tree.</strong> Fill <code>sz</code>, <code>par</code>, <code>depth</code>, and <code>heavy[u]</code> (the child of maximum <code>sz</code>) so the second pass already knows which single edge at each node must stay on the current chain.</li>
+  <li><strong>DFS 2 &mdash; flatten heavy-first.</strong> Assign <code>pos[u]</code> and <code>head[u]</code>, always recursing into <code>heavy[u]</code> with the same head before any light child, so each chain occupies one contiguous block of the array.</li>
+  <li><strong>Build the range structure.</strong> Write every <code>val[u]</code> into a Fenwick or segment tree at index <code>pos[u]</code>, because from now on every path or subtree query talks to this flat array, not to the original tree.</li>
+  <li><strong>pathQuery(u, v) &mdash; lift the deeper head.</strong> While the heads differ, query <code>[pos[head[u]], pos[u]]</code> on the deeper side and jump <code>u = par[head[u]]</code>, which crosses the one light edge that ends that chain.</li>
+  <li><strong>Same chain &mdash; one closed interval.</strong> Once both pointers share a head they sit on the LCA's chain, so query the closed interval between <code>pos[u]</code> and <code>pos[v]</code> exactly once and do not add the LCA a second time.</li>
+  <li><strong>Updates and subtrees use the same addresses.</strong> A point update writes the cell at <code>pos[u]</code>; a subtree query is the single interval <code>[pos[u], pos[u]+sz[u])</code> because the second DFS still visits a whole subtree together.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>The seven-node tree hangs 2 and 3 under 1, then 4 and 5 under 2, then 6 and 7 under 3. Watch subtree sizes pick the heavy edges, then watch path 5-to-7 jump three chains.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -281,12 +300,12 @@ graph TD
       <tr><th>u</th><th>head</th><th>chain</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>1</td><td>1</td><td>start at root</td><td>Tree: 1-2-4, 1-2-5, 1-3-6, 1-3-7. Subtree sizes: 7,3,3,1,1,1,1. Heavy child of 1 is 2 (tie broken by first).</td></tr>
-      <tr><td>4</td><td>1</td><td>A = 1-2-4</td><td>Chain A: 1-2-4 (heavy edges). pos = [1,2,4] get indices 0,1,2.</td></tr>
-      <tr><td>5</td><td>5</td><td>B = 5</td><td>Node 5 is a light child of 2, so it starts a new chain B. pos[5] = 3.</td></tr>
-      <tr><td>6</td><td>3</td><td>C = 3-6</td><td>Chain C: 3-6. 3 is a light child of 1. pos[3]=4, pos[6]=5.</td></tr>
-      <tr><td>7</td><td>7</td><td>D = 7</td><td>Node 7 starts chain D. Four chains cover seven nodes.</td></tr>
-      <tr><td>5..7</td><td>B,A,C,D</td><td>3 jumps</td><td>Path 5 to 7: 5 (chain B) -> 2 (chain A) -> 1 (chain A) -> 3 (chain C) -> 7 (chain D). Three chain jumps.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>1</td><td>start at root</td><td>The tree is 1-2-4, 1-2-5, 1-3-6, 1-3-7. Subtree sizes read 7, 3, 3, 1, 1, 1, 1. Node 1 ties, so 2 is declared heavy.</td></tr>
+      <tr><td>4</td><td>1</td><td>A = 1-2-4</td><td>Heavy edges 1-2 and 2-4 form chain A. The heavy-first listing writes nodes 1, 2, 4 into positions 0, 1, 2.</td></tr>
+      <tr><td>5</td><td>5</td><td>B = 5</td><td>Node 5 is a light child of 2, so it starts a new chain B with itself as head, and takes the next position 3.</td></tr>
+      <tr><td>6</td><td>3</td><td>C = 3-6</td><td>Node 3 is a light child of 1, so it starts chain C. Its heavy child 6 stays on C, taking positions 4 then 5.</td></tr>
+      <tr><td>7</td><td>7</td><td>D = 7</td><td>Node 7 is a light child of 3 and starts the last chain D. Four chains now cover all seven nodes.</td></tr>
+      <tr><td>5..7</td><td>B,A,C,D</td><td>3 jumps</td><td>Path 5 to 7 walks chain B, jumps to 2 on chain A, continues through 1, jumps to 3 on chain C, then finishes on D.</td></tr>
     </tbody>
   </table>
 </div>
@@ -437,8 +456,10 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>A light edge at least halves subtree size, so a node has <code>O(log n)</code> light ancestors. The query walk therefore processes <code>O(log n)</code> chains, each a segment-tree range of <code>O(log n)</code>.</p>
+    <p>The logarithm is not a slogan. If <code>v</code> is a light child of <code>u</code> then <code>sz[v] &le; sz[u]/2</code>, because a larger child would have been the unique heavy child. Walking from any node toward the root, each light edge therefore at least doubles the subtree size you sit in. A size that starts at 1 and doubles can reach <code>n</code> at most <code>log&#8322; n</code> times, so a node has <code>O(log n)</code> light ancestors and a root-path uses <code>O(log n)</code> chains. A <code>u</code>&ndash;<code>v</code> path is two root-paths minus the shared prefix, still <code>O(log n)</code> chains.</p>
+    <p>Each chain is one contiguous interval, and a segment tree answers that interval in <code>O(log n)</code> hops. The product is the familiar extra log:</p>
     <p><span class="eq">T<sub>query</sub> = O(log n) chains &times; O(log n) = O(log&sup2; n)</span></p>
+    <p>Putting real numbers in: at <code>n = 2&times;10&#8309;</code> you have about 18 light edges on a worst-case root-path and about 18 hops per segment-tree range, so one query is a few hundred array reads. Two hundred thousand of them stay near <code>6&times;10<sup>7</sup></code> operations, which Java accepts. The preprocess is two linear DFS passes plus a linear segment-tree build, so it is lost in the noise. A Fenwick tree in place of the segment tree does not remove the chain-count log; it only makes the per-chain constant smaller.</p>
   </div>
 
   <table class="complexity__compare">
@@ -460,28 +481,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">DFS does not prefer the heavy child</span>
-    <div class="pitfalls__bug">Chains fragment; a "chain" is no longer a contiguous <code>pos</code> interval and every query is wrong.</div>
-    <div class="pitfalls__fix">In the second DFS, recurse into <code>heavy[u]</code> before any light child, and pass the same <code>head</code>.</div>
+    <div class="pitfalls__bug">Visiting children in input order looks like a normal DFS and still produces a valid Euler-style listing, so the code type-checks and subtree queries even look right. But a "chain" is no longer a contiguous <code>pos</code> interval, and every path query that assumes it is returns garbage.</div>
+    <div class="pitfalls__fix">In the second DFS, recurse into <code>heavy[u]</code> before any light child, and pass the same <code>head</code>. Test by printing <code>pos</code> along a known heavy path and checking the indices are consecutive.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to lift the deeper head</span>
-    <div class="pitfalls__bug">Jumping the shallower pointer first walks off the LCA and double-counts or infinite-loops.</div>
-    <div class="pitfalls__fix">Compare <code>depth[head[u]]</code> (not <code>depth[u]</code>) and always lift the deeper chain.</div>
+    <div class="pitfalls__bug">Comparing <code>depth[u]</code> instead of <code>depth[head[u]]</code> looks like the usual LCA lift, and it works on a path that is already a single chain. On two chains of different head-depths it walks off the LCA, double-counts a prefix, or loops.</div>
+    <div class="pitfalls__fix">Always compare <code>depth[head[u]]</code> against <code>depth[head[v]]</code> and lift the deeper chain. Test on a path whose two sides have different chain lengths.</div>
   </li>
   <li>
     <span class="pitfalls__title">Off-by-one on the in-chain segment</span>
-    <div class="pitfalls__bug"><code>[pos[u], pos[v])</code> drops the LCA node, or includes it twice if both sides add it.</div>
-    <div class="pitfalls__fix">After heads meet, query the closed interval between the two positions once.</div>
+    <div class="pitfalls__bug">Half-open <code>[pos[u], pos[v])</code> is what Fenwick range helpers often want, so dropping the last index looks consistent with the rest of the file. It silently drops the LCA node &mdash; or, if both sides add it before they meet, counts it twice.</div>
+    <div class="pitfalls__fix">After heads meet, query the closed interval between the two positions once. On a one-node path (<code>u == v</code>) the answer must be exactly <code>val[u]</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">1-index vs 0-index mix</span>
-    <div class="pitfalls__bug">Parent of the root becomes 0, Fenwick index 0 is unused, and <code>bitAdd(pos[root], x)</code> writes the wrong cell.</div>
-    <div class="pitfalls__fix">Pick one convention. Fenwick wants 1-based indices: <code>bitAdd(pos[u] + 1, x)</code> if <code>pos</code> is 0-based.</div>
+    <div class="pitfalls__bug">The root's parent is 0 or -1, Fenwick index 0 is unused, and <code>bitAdd(pos[root], x)</code> looks like it writes the root's cell. If <code>pos</code> is 0-based and the Fenwick is 1-based you write the wrong slot, and every query that includes the root is off by <code>val[root]</code>.</div>
+    <div class="pitfalls__fix">Pick one convention and convert at the boundary. If <code>pos</code> is 0-based, call <code>bitAdd(pos[u] + 1, x)</code>. Test a point update on the root and a path query that includes it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Updating values after HLD without writing the tree</span>
-    <div class="pitfalls__bug">You change <code>val[u]</code> but not the Fenwick / segment tree cell at <code>pos[u]</code>.</div>
-    <div class="pitfalls__fix">Point update is <code>tree.update(pos[u], newValue)</code>. The original array is only the build source.</div>
+    <div class="pitfalls__bug">Changing <code>val[u]</code> and then calling <code>pathQuery</code> looks correct because the brute-force walk reads <code>val</code>. After HLD the source of truth is the Fenwick or segment-tree cell at <code>pos[u]</code>; the original array is only the build source.</div>
+    <div class="pitfalls__fix">Point update is <code>tree.update(pos[u], newValue)</code>. Test by updating a leaf and querying a path that contains only that leaf.</div>
   </li>
 </ul>
 
@@ -523,28 +544,28 @@ graph TD
   <details class="followup">
     <summary>Why is the bound O(log n) chains, not O(n)?</summary>
     <div class="followup__body">
-      <p>Each light edge moves to a subtree of size at most half. A walk toward the root therefore meets at most <code>log n</code> light edges, and each light edge is the only place a chain can change.</p>
+      <p>A light child owns at most half its parent's subtree &mdash; otherwise it would have been the unique heavy child. Crossing a light edge toward the root therefore at least doubles the subtree you sit in. Starting from a leaf of size 1, you can double at most <code>log&#8322; n</code> times before you reach the whole tree, so a root-path meets at most that many light edges. A chain changes only at a light edge, which is why the chain count, not the path length, is logarithmic.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you get O(log n) instead of O(log^2 n)?</summary>
     <div class="followup__body">
-      <p>Yes for prefix-friendly operations (sum, XOR) with point updates: Fenwick on the HLD array is <code>O(log n)</code> per chain range, still <code>O(log^2 n)</code> total. True <code>O(log n)</code> path queries need a top tree or link-cut tree.</p>
+      <p>The extra log is the segment tree (or Fenwick) on each chain range, not the chain count. Prefix-friendly operations with point updates still pay <code>O(log n)</code> per chain, so the product stays <code>O(log&sup2; n)</code>. True <code>O(log n)</code> path queries need a heavier structure such as a top tree or a link-cut tree, which almost no contest problem expects you to write.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you handle edge weights?</summary>
     <div class="followup__body">
-      <p>Assign the edge <code>(p, u)</code> to node <code>u</code>. When the two pointers sit on the same chain, query <code>(pos[lca], pos[deeper]]</code> so the LCA node (which holds the parent edge) is excluded.</p>
+      <p>Assign the edge <code>(p, u)</code> to node <code>u</code>, so each node stores the weight of the edge into its parent. When the two pointers sit on the same chain, query the half-open interval <code>(pos[lca], pos[deeper]]</code> so the LCA node &mdash; which holds the parent edge, not an edge on this path &mdash; is excluded. Point updates then write the child endpoint.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>HLD versus centroid for "count pairs at distance k"?</summary>
     <div class="followup__body">
-      <p>HLD linearises paths; it does not enumerate pairs. Centroid decomposition solves through a separator in <code>O(n log n)</code>. Use the tool that matches the query shape.</p>
+      <p>HLD linearises paths so you can aggregate along one path; it does not enumerate pairs. Counting pairs that satisfy a numeric constraint needs a separator so you can join two independent sides, which is centroid decomposition in <code>O(n log n)</code>. Use the tool that matches the query shape: path aggregates are HLD, pair counts are centroid.</p>
     </div>
   </details>
 </div>

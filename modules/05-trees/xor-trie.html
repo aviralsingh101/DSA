@@ -22,7 +22,7 @@
   <p class="hero__tagline">A 2-child trie on bits, MSB first: to maximise XOR, greedily take the opposite bit whenever that child exists.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="trie.html">Trie</a>,
       <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Maximum XOR of two numbers in an array is not a sort+two-pointer problem in the usual way: XOR does not respect order. The greedy that works is bitwise, from bit 31 down: given a prefix of x, you want the other number to have the opposite bit. A binary trie of the inserted numbers tells you in O(1) whether that opposite child exists.</p>
-<p>The same structure answers max XOR with a query value, max XOR of a subarray (insert prefix XORs), and CF 706D Vasiliy's Multiset (insert/delete + max XOR with x). It is the bit analogue of a BST on the numeric order of the 32-bit strings.</p>
-<p>Insert is 32 steps of creating next[bit]. Query is 32 steps of preferring opposite. Counts on nodes support delete. Off-by-one on signed ints: treat bits as unsigned with &gt;&gt;&gt; or a mask, or work in 30 bits if values are 1e9.</p>
+<p>You are given 100000 integers and asked for the maximum XOR of any two of them. Sorting and walking two pointers, the usual trick for a maximum difference, does not apply: XOR does not respect numeric order, so the best pair need not sit near each other after a sort. Checking every pair is about <code>5&times;10&#8313;</code> XORs and will not finish. The greedy that does work is bitwise, from the highest bit down: given the bits of <code>x</code> you have already matched, you want the other number to have the opposite bit, because that bit of the XOR becomes 1.</p>
+<p>A <em>XOR trie</em> is a 2-child prefix tree on those bits, most-significant bit first. Each node is the set of inserted numbers that share one bit-prefix, and the two children are "this prefix plus a 0" and "this prefix plus a 1". Asking whether the opposite child exists is then a single pointer check, so a query is 30 or 31 steps. The same structure answers maximum XOR against a query value, maximum XOR of a subarray (you insert prefix XORs), and CF 706D (insert, delete, then max XOR with <code>x</code>). It is the bit analogue of a BST, ordered by the 30-bit strings rather than by numeric value.</p>
+<p>Insert is one walk that creates a child for each bit. Query is one walk that prefers the opposite bit and falls back to the same bit when it must. A count on each node is what makes delete safe. In a statement the tell is "maximum XOR" next to <code>n &le; 10&#8309;</code> and values up to <code>10&#8313;</code>, which is 30 bits. Java's sign bit is the usual trap: for non-negative values loop from bit 30 down to 0, and do not sign-extend with <code>&gt;&gt;</code> on a 32-bit walk of a negative.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>XOR is maximised by making each bit 1 from the MSB down, independently of lower bits in the greedy sense: at bit k, if the opposite child exists, take it. The trie is the existence oracle for those children.</p>
+    <p>XOR is maximised by setting each bit to 1 from the most-significant bit down: at bit <code>k</code>, take the opposite child if it exists. The trie is the oracle that tells you whether any stored number realises that opposite bit given the prefix already chosen.</p>
   </div>
 </aside>
 
@@ -111,18 +111,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5, values &le; 1e9 so 30 bits (or 31). O(n * BITS) time and nodes. Use cnt if you delete. Java ints: bit 31 is the sign; for non-neg values loop b=30..0.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> and values up to <code>10&#8313;</code> mean 30 bits, so time and memory are <code>O(n&times;30)</code>, about three million steps and at most that many new nodes. Use a <code>cnt</code> on every node if the statement deletes. Java <code>int</code> treats bit 31 as the sign; for non-negative values loop <code>b = 30; b &ge; 0; b--</code> and leave bit 31 alone.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Node { Node[] ch = new Node[2]; int cnt; }. insert(x): from b=30..0, bit=(x>>b)&1, create child, cur=child, cnt++. queryMax(x): from b=30..0, want=1-bit, if child want exists and cnt&gt;0 take it and set that bit in ans, else take bit.</p>
-<p>For max pair: insert a[0], for i=1..n-1 ans=max(ans, queryMax(a[i])), insert a[i]. For subarray: same on prefix XOR array. Delete: walk and cnt-- (optionally drop cnt==0).</p>
+<p>A node holds <code>Node[] ch = new Node[2]</code> and an integer <code>cnt</code> of numbers that pass through it. Insert starts at the root and walks <code>b = 30, 29, &hellip;, 0</code>. The bit is <code>(x &gt;&gt; b) &amp; 1</code>. Create <code>ch[bit]</code> if it is missing, step into it, increment <code>cnt</code>. Query-max walks the same bits of <code>x</code> but asks for the opposite child: <code>want = bit ^ 1</code>. If that child exists and its count is positive, take it and turn bit <code>b</code> of the answer on, because that bit of the XOR is now 1. Otherwise take the same-bit child, and that bit of the answer stays 0. The greedy is legal because bit <code>b</code> is worth <code>2<sup>b</sup></code>, more than all lower bits added together.</p>
+<p>Maximum pair XOR inserts the first number, then for each later <code>a[i]</code> queries the trie and inserts. Maximum subarray XOR is the same algorithm on the prefix-XOR array, because the XOR of <code>a[l..r]</code> is <code>pref[r] ^ pref[l-1]</code>, and you must insert 0 first so a prefix that starts at index 0 has a partner. Delete walks the bits of <code>x</code> and decrements <code>cnt</code>; a child whose count hits 0 is treated as missing, which is what keeps a shared prefix alive for the sibling that still uses it.</p>
+<p>Take the LC 421 sample <code>[3, 10, 5, 25, 2, 8]</code> with a 4-bit demo. Insert 3, which is <code>0011</code>, creating the path 0, 0, 1, 1. Query 10, which is <code>1010</code>: the highest bit of 10 wants a 1-child (opposite of 3's 0), none exists yet, so you take 0 and that XOR bit is 0; the remaining bits eventually produce <code>3 ^ 10 = 9</code>. Insert 10, then 5, then 25. Querying 25 against 5 prefers opposite bits all the way down and reports 28, which is <code>5 ^ 25</code> and the answer for the whole array. A later prefix-XOR version of the same trie would insert 0 first so a prefix that starts at the left edge is not missing its partner.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Each root-to-node path is a bit prefix of at least one stored number. queryMax walks a path that maximises XOR with x bit by bit.</p><span class="eq">at bit b: if opposite child exists, take it (that bit of XOR is 1)</span>
+    <p>Each root-to-node path is a bit prefix of at least one stored number. <code>queryMax(x)</code> walks a path that maximises the XOR with <code>x</code> one bit at a time:</p><span class="eq">at bit b: if the opposite child exists, take it (that XOR bit is 1)</span><p>In plain words, you never look at a pair of numbers; you ask, bit by bit, whether any stored number has the bit you want given the bits you have already committed to, and you always take yes when you can because a higher 1 outweighs every lower choice.</p><p>Interview sentence: <em>"MSB first, prefer the opposite child; the trie is the existence check."</em></p>
   </div>
 </aside>
 
@@ -156,7 +157,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Insert 3 = 0011. Trie path 0,0,1,1 (4 bits for the demo).",
+          "note": "Insert 3, written 0011 in four bits for the demo. The trie grows the path 0, 0, 1, 1, one node per bit from the high end.",
           "active": [
             0
           ],
@@ -168,7 +169,7 @@
           }
         },
         {
-          "note": "Query 10 = 1010. MSB want 1 (opposite of 0), no 1-child, take 0. XOR bit 0.",
+          "note": "Query 10, written 1010. The highest bit wants a 1-child, opposite of 3's 0; none exists, so you take 0 and that XOR bit stays 0.",
           "values": {
             "x": 10,
             "bit": 3,
@@ -177,7 +178,7 @@
           }
         },
         {
-          "note": "Next bits: eventually XOR 3^10=9. Insert 10.",
+          "note": "The remaining bits finish the walk and report 3 XOR 10, which is 9. Insert 10 so later queries can use its path as well.",
           "active": [
             1
           ],
@@ -189,7 +190,7 @@
           }
         },
         {
-          "note": "Insert 5, 25, ... LC 421 sample ends at 28 = 5 XOR 25.",
+          "note": "After 5 and 25 are inserted, a query of 25 against 5 prefers the opposite child at every bit and reports 28, the sample answer.",
           "active": [
             2,
             3
@@ -202,7 +203,7 @@
           }
         },
         {
-          "note": "Greedy opposite at each bit is optimal because a higher bit of XOR outweighs all lower bits combined.",
+          "note": "Taking the opposite child whenever it exists is safe: a 1 in a higher bit is worth more than every lower bit added together.",
           "best": [
             2,
             3
@@ -215,7 +216,7 @@
           }
         },
         {
-          "note": "Prefix-XOR trick: max subarray XOR = max over i<j of pref[j]^pref[i], same trie on prefixes.",
+          "note": "The same trie on prefix XORs answers maximum subarray XOR, because a subarray XOR is two prefixes combined, including the empty prefix 0.",
           "done": [
             0,
             1,
@@ -256,17 +257,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>BITS=30</strong> (or 31). Node with ch[2] and cnt.</li>
-  <li><strong>insert(x):</strong> for b=BITS-1..0, bit=(x>>b)&1, create, cur=ch[bit], cnt++.</li>
-  <li><strong>queryMax(x):</strong> want=bit^1; if ch[want]!=null take want and set ans|=(1<<b); else take bit.</li>
-  <li><strong>Max pair:</strong> insert as you go, or insert all then query all.</li>
-  <li><strong>Subarray:</strong> insert 0 first (empty prefix), then each prefix XOR.</li>
-  <li><strong>Delete:</strong> cnt-- along the path of x.</li>
+  <li><strong>Fix the bit width and the node.</strong> Use 30 bits for values up to <code>10&#8313;</code>, and give each node two children plus a <code>cnt</code>, because every later delete and empty-check reads that count.</li>
+  <li><strong>Insert from the high bit down.</strong> For each <code>b</code>, take <code>bit = (x &gt;&gt; b) &amp; 1</code>, create the child if needed, step into it and increment <code>cnt</code>, so a later query can ask whether that prefix still has anyone in it.</li>
+  <li><strong>Query-max prefers the opposite child.</strong> Set <code>want = bit ^ 1</code>; if that child exists, take it and turn on bit <code>b</code> of the answer, otherwise fall back to the same bit, which is also the rule for a minimum XOR.</li>
+  <li><strong>Maximum pair inserts as it goes, or inserts all then queries all.</strong> Either order is linear in <code>n&times;BITS</code>; the running insert lets you forbid <code>i == j</code> for free if the statement wants two distinct indices.</li>
+  <li><strong>Subarray XOR inserts the empty prefix 0 first.</strong> Then each running prefix XOR is queried and inserted, because a subarray starting at index 0 is the current prefix XOR 0 and would otherwise have no partner.</li>
+  <li><strong>Delete decrements counts along the path of x.</strong> Treat a child with <code>cnt == 0</code> as missing, so a shared prefix survives for the other numbers that still use it.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Insert 3 into a 4-bit XOR trie, query 10, then watch 5 XOR 25 become 28 once those two paths exist to prefer opposite bits.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -274,12 +275,12 @@ graph TD
       <tr><th>x</th><th>bit</th><th>want</th><th>best</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>3</td><td>0011</td><td>insert</td><td>0</td><td>Insert 3 = 0011. Trie path 0,0,1,1 (4 bits for the demo).</td></tr>
-      <tr><td>10</td><td>3</td><td>1</td><td>0</td><td>Query 10 = 1010. MSB want 1 (opposite of 0), no 1-child, take 0. XOR bit 0.</td></tr>
-      <tr><td>10</td><td>1010</td><td>done</td><td>9</td><td>Next bits: eventually XOR 3^10=9. Insert 10.</td></tr>
-      <tr><td>25</td><td>11001</td><td>vs 5</td><td>28</td><td>Insert 5, 25, ... LC 421 sample ends at 28 = 5 XOR 25.</td></tr>
-      <tr class="trace-table__row--change"><td>why</td><td>MSB first</td><td>greedy</td><td>28</td><td>Greedy opposite at each bit is optimal because a higher bit of XOR outweighs all lower bits combined.</td></tr>
-      <tr><td>pref</td><td>—</td><td>subarray</td><td>same query</td><td>Prefix-XOR trick: max subarray XOR = max over i<j of pref[j]^pref[i], same trie on prefixes.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>0011</td><td>insert</td><td>0</td><td>Insert 3, written 0011 in four bits for the demo. The trie grows the path 0, 0, 1, 1, one node per bit from the high end.</td></tr>
+      <tr><td>10</td><td>3</td><td>1</td><td>0</td><td>Query 10, written 1010. The highest bit wants a 1-child, opposite of 3's 0; none exists, so you take 0 and that XOR bit stays 0.</td></tr>
+      <tr><td>10</td><td>1010</td><td>done</td><td>9</td><td>The remaining bits finish the walk and report 3 XOR 10, which is 9. Insert 10 so later queries can use its path as well.</td></tr>
+      <tr><td>25</td><td>11001</td><td>vs 5</td><td>28</td><td>After 5 and 25 are inserted, a query of 25 against 5 prefers the opposite child at every bit and reports 28, the sample answer.</td></tr>
+      <tr class="trace-table__row--change"><td>why</td><td>MSB first</td><td>greedy</td><td>28</td><td>Taking the opposite child whenever it exists is safe: a 1 in a higher bit is worth more than every lower bit added together.</td></tr>
+      <tr><td>pref</td><td>—</td><td>subarray</td><td>same query</td><td>The same trie on prefix XORs answers maximum subarray XOR, because a subarray XOR is two prefixes combined, including the empty prefix 0.</td></tr>
     </tbody>
   </table>
 </div>
@@ -419,9 +420,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each insert/query walks BITS nodes, creating at most BITS new nodes. BITS=30, n=1e5 is 3e6 steps.</p>
+    <p>Each insert or query walks <code>BITS</code> nodes and creates at most <code>BITS</code> new ones. With <code>BITS = 30</code> and <code>n = 10&#8309;</code> that is about three million steps and at most three million nodes, a few tens of milliseconds. The all-pairs scan is <code>n(n-1)/2</code> XORs, about <code>5&times;10&#8313;</code>, which no judge will accept.</p>
     <p><span class="eq">T = O(n B), S = O(n B), B &asymp; 30</span></p>
-    <p>Brute pairs are O(n^2). Hashing does not help maximisation.</p>
+    <p>A hash set of the numbers, or of the prefix XORs, answers "is this exact XOR present?" and does not help you maximise. Minimum pair XOR is a different problem: after sorting by value the best pair is adjacent, which is <code>O(n log n)</code> and does not need this trie.</p>
   </div>
 
   <table class="complexity__compare">
@@ -443,28 +444,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Signed shift on negative numbers</span>
-    <div class="pitfalls__bug">>> sign-extends; bit 31 pollutes the walk if you use 32 bits on negatives.</div>
-    <div class="pitfalls__fix">Non-neg constraints: loop 30..0. Else >>> or store as long.</div>
+    <div class="pitfalls__bug"><code>&gt;&gt;</code> sign-extends, so a 32-bit walk of a negative fills the high end with 1s and the query follows a path that no inserted non-negative number ever created, then returns a number that looks like a XOR and is wrong.</div>
+    <div class="pitfalls__fix">For non-negative constraints loop from bit 30 down to 0. If negatives are legal, use <code>&gt;&gt;&gt;</code> or store the value as a <code>long</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Query on an empty trie</span>
-    <div class="pitfalls__bug">NPE walking null children, or XOR with 0 pretending a number exists.</div>
-    <div class="pitfalls__fix">cnt on root, or insert a dummy only when the problem allows 0.</div>
+    <div class="pitfalls__bug">Walking <code>ch[want]</code> on a trie with no numbers looks like the usual 30-step query, then a null child throws, or you pretend 0 is present and report <code>x ^ 0</code> when the array was empty.</div>
+    <div class="pitfalls__fix">Keep a <code>cnt</code> on the root and refuse to query when it is 0, or insert a dummy only when the statement allows 0 as a real value.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to insert 0 as empty prefix</span>
-    <div class="pitfalls__bug">Max subarray XOR misses prefixes that start at index 0 (XOR of a prefix with 0).</div>
-    <div class="pitfalls__fix">insert(0) before the loop.</div>
+    <div class="pitfalls__bug">Starting the subarray loop with an empty trie looks tidy, then every prefix that starts at index 0 has no partner and the answer misses <code>pref[r] ^ 0</code>, which is the prefix itself.</div>
+    <div class="pitfalls__fix">Insert 0 before the loop, then query and insert each running prefix. A one-element array whose answer is the element itself is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Delete without cnt</span>
-    <div class="pitfalls__bug">Removing a number that shared prefixes with another wipes the sibling's path.</div>
-    <div class="pitfalls__fix">cnt++ on insert, cnt-- on delete, treat cnt==0 as missing.</div>
+    <div class="pitfalls__bug">Nulling a child when one number is removed looks like a clean erase, then a sibling that shared the same high bits loses its path and later queries under-count.</div>
+    <div class="pitfalls__fix">Increment <code>cnt</code> on insert, decrement on delete, and treat <code>cnt == 0</code> as missing. Two inserts of the same value need two deletes.</div>
   </li>
   <li>
     <span class="pitfalls__title">Preferring the same bit for max XOR</span>
-    <div class="pitfalls__bug">You minimise that bit of the XOR. Answer too small.</div>
-    <div class="pitfalls__fix">want = bit ^ 1. Same bit is the fallback, and the rule for min XOR.</div>
+    <div class="pitfalls__bug">Taking <code>ch[bit]</code> first looks like "stay close to x" and actually minimises that bit of the XOR, so the answer comes out too small and the sample of a tiny array still happens to pass.</div>
+    <div class="pitfalls__fix">Set <code>want = bit ^ 1</code> for a maximum. The same-bit child is the fallback, and it is the first choice when you want a minimum XOR instead.</div>
   </li>
 </ul>
 
@@ -506,28 +507,28 @@ graph TD
   <details class="followup">
     <summary>Why is bit-greedy optimal?</summary>
     <div class="followup__body">
-      <p>Bit b is worth 2^b, more than 2^b-1+...+1. If you can set it, you always should, regardless of lower bits. The trie only tells you whether any stored number realises that opposite bit given the bits already chosen (which are a prefix constraint).</p>
+      <p>Bit <code>b</code> is worth <code>2<sup>b</sup></code>, which is strictly more than <code>2<sup>b</sup> - 1</code>, the sum of every lower bit. If you can set it, you always should, no matter what those lower bits do afterwards. The trie does not search pairs; it only answers whether any stored number realises the opposite bit given the prefix you have already committed to by earlier choices.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Max subarray XOR vs max pair XOR?</summary>
     <div class="followup__body">
-      <p>Subarray XOR is pref[r]^pref[l-1]. Insert prefix XORs into the trie, query the current prefix. That is max pair on the prefix array, including 0.</p>
+      <p>The XOR of a subarray <code>a[l..r]</code> is <code>pref[r] ^ pref[l-1]</code>. Insert the prefix XORs into the same trie and query the current prefix; that is maximum pair XOR on the prefix array. You must include 0 as <code>pref[-1]</code> so a prefix that starts at the left edge has a partner. Pair XOR on the original array is the same code without the prefix layer.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>CF 706D operations?</summary>
     <div class="followup__body">
-      <p>Insert x, delete x (cnt), query max XOR with x. Same trie, watch cnt so two equal inserts need two deletes.</p>
+      <p>The three operations are insert <code>x</code>, delete <code>x</code>, and query the maximum XOR with a given <code>x</code>. It is this trie plus <code>cnt</code>. Two inserts of the same value need two deletes; a count of 1 after the first delete must still answer queries as if the number is present.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Persistent XOR trie?</summary>
     <div class="followup__body">
-      <p>On insert, copy the O(BITS) nodes on the path. Version i is the trie of the first i numbers. Query a range of versions for [L,R] problems.</p>
+      <p>On insert, copy the <code>O(BITS)</code> nodes on the path you touch and leave the rest of the old version shared. Version <code>i</code> is then the trie of the first <code>i</code> numbers. A later query that wants the best XOR against a value using only indices in <code>[L, R]</code> walks version <code>R</code> while subtracting counts from version <code>L-1</code>, or walks two roots in lockstep.</p>
     </div>
   </details>
 </div>

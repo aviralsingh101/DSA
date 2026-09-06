@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>0-1 BFS &mdash; DSA Course</title>
-<meta name="description" content="When every edge costs 0 or 1, a deque replaces the heap: 0-edges go to the front, 1-edges to the back, and you recover BFS-linear shortest paths.">
+<meta name="description" content="When every edge weight is 0 or 1, a deque simulates Dijkstra in O(n + m): 0-edges to the front, 1-edges to the back.">
 <link rel="stylesheet" href="../../assets/css/theme.css">
 <link rel="stylesheet" href="../../assets/css/components.css">
 <link rel="stylesheet" href="../../assets/css/print.css" media="print">
@@ -19,7 +19,7 @@
 <section class="hero">
   <span class="hero__chip">Module 07 &middot; Graphs: Core</span>
   <h1>0-1 BFS</h1>
-  <p class="hero__tagline">When every edge costs 0 or 1, a deque replaces the heap: 0-edges go to the front, 1-edges to the back, and you recover BFS-linear shortest paths.</p>
+  <p class="hero__tagline">When every edge weight is 0 or 1, a deque simulates Dijkstra in <code>O(n + m)</code>: 0-edges to the front, 1-edges to the back.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
     <span class="hero__time">24 min read</span>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>0-1 BFS is the missing middle between BFS and Dijkstra. Edges cost only 0 or 1, so the next-closest vertex is either at the same distance (a 0-edge) or one further (a 1-edge). A deque maintains that: push-front on 0, push-back on 1. Distances come out sorted, and the whole run is O(n + m).</p>
-<p>The pattern shows up more often than the name. "You may change a grid arrow for cost 1 or follow it for free", "close a door / use a special road", "minimum walls to break to reach the exit" (if breaking costs 1 and walking is free) are all 0-1 BFS. Writing Dijkstra is correct and a log slower; writing plain BFS that treats 0-edges as 1 is wrong.</p>
-<p>P1 rather than P0 because you must see the reduction: invent the 0-edges and the 1-edges from the statement. The code afterwards is twenty lines you can reuse.</p>
+<p>You are in a 1000 by 1000 maze. Stepping onto an empty cell is free, and breaking a wall costs 1, and you want the fewest walls to break to reach the exit. Dijkstra with a heap solves it, but at a million cells the heap pays a log factor on every improvement, something like twenty extra operations per edge, and the idea itself is hidden inside a generic shortest-path hammer. Ordinary BFS is worse: it marks a cell the first time it is reached, so a later free step that would have cheapened that cell is refused. You need the freeze-closest rule of Dijkstra without paying for a heap.</p>
+<p>The observation is that every weight is 0 or 1, so a new candidate distance is either the same as the current vertex or one more. The unfinished vertices therefore sit in at most two consecutive layers. A <em>deque</em> &mdash; a double-ended queue, an <code>ArrayDeque</code> that you can add to either end &mdash; keeps those two layers in order: a 0-weight step goes on the front (same layer) and a 1-weight step goes on the back (next layer). Popping from the front then expands in non-decreasing distance, which is exactly Dijkstra's order, in linear time.</p>
+<p>The same observation is why you must not mark on first push. A vertex can be reached first along a 1-edge at distance <code>d+1</code>, then improved along a 0-edge to distance <code>d</code>. BFS would have frozen the worse first visit. The signal in a statement is "weights are 0 or 1", "follow the painted arrow for free, change it for 1", or "minimum walls to break", together with limits such as <code>n, m &le; 10&#8310;</code> where a heap still works but is the slower, less honest answer.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A 0-edge does not increase distance, so that neighbour belongs at the front of the frontier, just like the rest of the current BFS layer. A 1-edge is the next layer and belongs at the back.</p>
+    <p>A 0-weight edge goes to the front of the deque (same distance) and a 1-weight edge goes to the back (distance plus one). The deque stays sorted, so you get Dijkstra in linear time. Allow a second visit whenever the distance improves.</p>
   </div>
 </aside>
 
@@ -57,19 +57,19 @@
       <h3>Say yes when you see</h3>
       <ul>
         <li>Every edge weight is in {0, 1}</li>
-        <li>"Follow the suggested move for free, any other move costs 1"</li>
-        <li>Minimum number of walls / obstacles to remove to reach a cell</li>
-        <li>Two kinds of roads, free and toll-1, and you want the fewest tolls</li>
-        <li>A grid whose cells push you in a direction (cost 0) or you override (cost 1)</li>
+        <li>Grid: moving one way is free, turning or breaking a wall costs 1</li>
+        <li>Graph with 0-cost "portals" plus unit steps</li>
+        <li>Constraints n,m = 1e6 where m log n Dijkstra might scrape the limit</li>
+        <li>"Minimum walls to break to reach the exit" (0 = empty, 1 = wall)</li>
       </ul>
     </div>
     <div class="recognise__col recognise__col--no">
       <h3>Not this pattern when</h3>
       <ul>
-        <li>Weights outside {0, 1} &rarr; Dijkstra (or Dial's algorithm if weights are tiny)</li>
-        <li>All weights 1 &rarr; plain BFS, the deque is pointless</li>
-        <li>Negative edges &rarr; Bellman-Ford</li>
-        <li>You need the number of 0-edges on a path rather than the cost &mdash; still 0-1 BFS if that <em>is</em> the cost; otherwise a different DP</li>
+        <li>Weights in {0,1,2} or arbitrary &rarr; Dijkstra (or Dial if small integers)</li>
+        <li>All weights 1 &rarr; ordinary BFS, mark on push</li>
+        <li>Negative weights &rarr; Bellman-Ford</li>
+        <li>You need a heap for a second key (probability, lexicographic) &rarr; Dijkstra</li>
       </ul>
     </div>
   </div>
@@ -80,319 +80,251 @@
     </thead>
     <tbody>
       <tr>
-        <td>Weights in {0, 1} only</td>
-        <td>Deque shortest path</td>
-        <td>0-1 BFS</td>
+        <td>w in {0,1}</td>
+        <td>Deque Dijkstra</td>
+        <td>0 to front, 1 to back</td>
       </tr>
       <tr>
-        <td>"Stay on the arrow for free"</td>
-        <td>Implied 0-edge along the arrow</td>
-        <td>Grid 0-1 BFS</td>
+        <td>All w=1</td>
+        <td>Ordinary BFS</td>
+        <td>Mark on push, FIFO</td>
       </tr>
       <tr>
-        <td>Min walls to break</td>
-        <td>Break = 1, walk open = 0</td>
-        <td>0-1 BFS or 0-k BFS</td>
+        <td>Break k walls</td>
+        <td>State (cell, broken) or 0-1 on wall edges</td>
+        <td>0-1 BFS or BFS on layers</td>
       </tr>
       <tr>
-        <td>Two graphs overlaid, cheap and expensive</td>
-        <td>Cheap edges weight 0</td>
-        <td>0-1 BFS</td>
-      </tr>
-      <tr>
-        <td>Weights 0..W with W small</td>
-        <td>Dial: buckets, not a heap</td>
-        <td>Dial / 0-W BFS</td>
-      </tr>
-      <tr>
-        <td>General positive weights</td>
+        <td>Arbitrary non-neg</td>
         <td>Need a heap</td>
         <td>Dijkstra</td>
       </tr>
       <tr>
-        <td><strong>Confused with:</strong> BFS that ignores 0-edges</td>
-        <td>Treating a 0-edge as a layer boundary is wrong</td>
-        <td>Push-front, or you over-count</td>
+        <td>Small integer weights 0..K</td>
+        <td>Dial's buckets</td>
+        <td>Array of deques</td>
+      </tr>
+      <tr>
+        <td><strong>Confused with:</strong> mark-on-push BFS</td>
+        <td>A later 0-edge can improve a vertex already queued at dist+1</td>
+        <td>Relax like Dijkstra; allow improved second push</td>
       </tr>
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> like BFS. The deque holds each improving push; with visited-on-final-pop a vertex can enter twice (once via 1, then improved via 0). Still O(n + m). Distances fit in int when they count 1-edges.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 10&#8310;</code> is the reason this page exists: a linear deque walk of a few million steps fits, while Dijkstra's <code>O(m log m)</code> is the same idea with a slower hammer. Distances are small integers, so <code>int</code> is enough unless you mix in a second cost. Each vertex is pushed a constant number of times (once per useful improvement), which is still linear.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
-<h2>Deque + the 0-front / 1-back rule</h2>
-<p>dist[s] = 0, others inf. Offer s at the back. While the deque is not empty, poll from the front (u). For each edge u &rarr; v of weight w in {0, 1}: if dist[u] + w &lt; dist[v], write dist[v] and push v to the <em>front</em> if w == 0, else to the <em>back</em>.</p>
-<p>Why this works: the deque stays sorted by dist. A 0-relax produces the same key as u, so v belongs with the current layer (front). A 1-relax produces key + 1, the next layer (back). That is Dijkstra's "extract-min" with only two possible next keys, implemented as a deque instead of a heap.</p>
-<p>A vertex can be improved after it was first seen (first via a 1-edge, later via a 0-edge). That is why we compare distances rather than using a boolean visited-on-push. Each vertex is still improved O(1) times in a simple graph, so the bound stays linear.</p>
+<h2>Core idea and the invariant</h2>
+<p>You need a <code>dist</code> array filled with INF, <code>dist[s] = 0</code>, and an <code>ArrayDeque</code> that starts holding <code>s</code>. To <em>relax</em> an edge <code>u &rarr; v</code> of weight <code>w</code> in <code>{0, 1}</code> is the same question as on the Dijkstra page: is <code>dist[u] + w</code> smaller than the current <code>dist[v]</code>? If yes, overwrite <code>dist[v]</code>, then <code>addFirst(v)</code> when <code>w</code> is 0 (same layer) and <code>addLast(v)</code> when <code>w</code> is 1 (next layer). You pop from the front. If you store pairs <code>(d, u)</code>, skip a pop whose <code>d</code> no longer matches <code>dist[u]</code>, the same stale-pair rule as Dijkstra.</p>
+<p>Do not mark a vertex visited on first discovery. A 0-edge is a decrease-key: it can improve a vertex that is already sitting in the deque at a worse distance. Ordinary BFS is the special case with no 0-edges, which is why its mark-on-push rule is legal there and wrong here. Swapping the two ends of the deque &mdash; putting 1-edges on the front &mdash; destroys the two-layer order and you expand a farther vertex first. Weights outside <code>{0, 1}</code> also break the invariant: a +2 jump can overtake, and you need Dijkstra or Dial's buckets.</p>
+<p>Walk the five-node sample whose 0-edges are 0-2 and 2-1 and whose 1-edges are 0-1, 1-3 and 2-4. Start with <code>dist[0] = 0</code> and deque <code>[0]</code>. From 0 the 0-edge writes 2 at distance 0 and goes to the front; the 1-edge writes 1 at distance 1 and goes to the back, so the deque is <code>[2, 1]</code>. Pop 2 (still distance 0). The 0-edge 2-1 improves vertex 1 from 1 to 0 and is pushed to the front; the 1-edge 2-4 writes 4 at distance 1. Pop the improved 1 at distance 0, write 3 at distance 1, and skip the leftover stale copy of 1. The finished array is <code>[0, 0, 0, 1, 1]</code>. Vertex 1 was reached twice; the 0-edge was the improvement BFS would have missed.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The invariant</span>
-    <p>The deque holds vertices in non-decreasing <code>dist</code>, and the values present differ by at most 1. Therefore poll-first is extract-min, the same guarantee Dijkstra gets from a heap.</p><span class="eq">w = 0 → offerFirst(v);   w = 1 → offerLast(v)</span>
+    <p>The deque holds vertices at two consecutive distances <code>d</code> and <code>d+1</code>, with the <code>d</code> copies at the front. Popping the front therefore expands in non-decreasing order, which is the order Dijkstra needs.</p><span class="eq">w=0 &rarr; addFirst (dist stays); w=1 &rarr; addLast (dist+1)</span><p>In plain words, free steps stay in the current ticket line and paid steps join the line behind it, so you always serve the cheapest unfinished cell next.</p>
   </div>
 </aside>
 
 <aside class="callout callout--warn">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">Do not mark visited on the first see</span>
-    <p>A 1-edge can reach v first at distance d+1, then a 0-edge from a sibling reaches it at distance d. If you froze v on first see, you keep the worse distance. Always relax with a strict &lt; on dist[v].</p>
+    <span class="callout__title">Mark-on-push BFS is wrong the moment a 0-edge exists</span>
+    <p>A vertex can be queued first along a 1-edge and then improved along a 0-edge. Refusing the second push freezes the worse distance. Compare <code>nd</code> against <code>dist[v]</code> the way Dijkstra does.</p>
   </div>
 </aside>
 
-<aside class="callout callout--tip">
-  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">This is also how you see "min changes to follow the grid"</span>
-    <p>From (r, c) the cell's arrow is a 0-edge; the other three directions are 1-edges. That single modelling step is LC 1368. After it, the code is the template on this page.</p>
+    <span class="callout__title">Relax means the same thing as on the Dijkstra page</span>
+    <p>If <code>dist[u] + w</code> is smaller than <code>dist[v]</code>, overwrite and push. The only new rule is which end of the deque receives the push: front for weight 0, back for weight 1.</p>
   </div>
 </aside>
 
 <!-- ============================================= 5. VISUAL WALKTHROUGH -->
 <h2>Visual walkthrough</h2>
 
-<h3>0-edges dashed in the labels</h3>
+<h3>0-edges 0-2 and 2-1; 1-edges 0-1, 1-3, 2-4</h3>
 
-<p>Edges 0-1 weight 0, 0-2 weight 1, 1-3 weight 1, 2-3 weight 0. Shortest path 0 to 3 costs 1 (0-1-3 or 0-2-3).</p>
-
-<figure class="viz">
-  <div class="mermaid">
-graph LR
-  n0["0  dist 0"] --&gt;|"0"| n1["1  dist 0"]
-  n0 --&gt;|"1"| n2["2  dist 1"]
-  n1 --&gt;|"1"| n3["3  dist 1"]
-  n2 --&gt;|"0"| n3
-  </div>
-  <figcaption>0-edges do not increment dist. BFS that treated every edge as 1 would report distance 2 for vertex 3 via 0-1-3, which is wrong for the cost.</figcaption>
-</figure>
-
-<h3>dist[] and the deque</h3>
-
-<p>The array is dist. The variable tracks the deque (front on the left). 0-edges jump to the front; 1-edges append.</p>
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="zobDist"></div>
-  <div class="viz-player" data-viz-target="zobDist">
+  <div class="array-viz" data-viz-id="zero-one-bfsViz"></div>
+  <div class="viz-player" data-viz-target="zero-one-bfsViz">
     <script type="application/json" class="viz-frames">
     {
-      "label": "dist[u]  (99 = inf)",
+      "label": "dist[u] during 0-1 BFS from 0",
       "array": [
         0,
-        99,
-        99,
-        99
+        1,
+        0,
+        1,
+        1
       ],
       "indexLabels": [
         "0",
         "1",
         "2",
-        "3"
+        "3",
+        "4"
       ],
       "vars": [
         "u",
-        "deque",
-        "dist[u]"
+        "w",
+        "nd",
+        "deque"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
-          "note": "Seed dist[0]=0, deque = [0].",
-          "arr": [
-            0,
-            99,
-            99,
-            99
-          ],
+          "note": "Source 0 starts at distance 0 alone in the deque; the other four vertices still hold INF and have never been relaxed.",
           "active": [
             0
           ],
           "dim": [
             1,
             2,
-            3
-          ],
-          "values": {
-            "u": "seed",
-            "deque": "[0]",
-            "dist[u]": 0
-          }
-        },
-        {
-          "note": "Pop 0. 0-edge to 1: dist[1]=0, offerFirst. Deque = [1].",
-          "arr": [
-            0,
-            0,
-            99,
-            99
-          ],
-          "active": [
-            1
-          ],
-          "done": [
-            0
-          ],
-          "dim": [
-            2,
-            3
+            3,
+            4
           ],
           "values": {
             "u": 0,
-            "deque": "[1]",
-            "dist[u]": 0
+            "w": "—",
+            "nd": 0,
+            "deque": "[0]"
           }
         },
         {
-          "note": "Still from 0. 1-edge to 2: dist[2]=1, offerLast. Deque = [1, 2].",
-          "arr": [
-            0,
-            0,
-            1,
-            99
-          ],
+          "note": "From 0 the free edge writes 2 at distance 0 on the front, and the unit edge writes 1 at distance 1 on the back, so the deque is [2, 1].",
           "active": [
+            1,
             2
           ],
           "done": [
             0
           ],
-          "best": [
-            1
-          ],
-          "dim": [
-            3
-          ],
           "values": {
             "u": 0,
-            "deque": "[1, 2]",
-            "dist[u]": 0
+            "w": "0 then 1",
+            "nd": "2@0, 1@1",
+            "deque": "[2, 1]"
           }
         },
         {
-          "note": "Pop 1 (front). 1-edge to 3: dist[3]=1, offerLast. Deque = [2, 3].",
-          "arr": [
-            0,
-            0,
+          "note": "Pop 2 at distance 0. The free edge 2-1 improves vertex 1 from 1 to 0 and is pushed to the front; the unit edge writes 4 at distance 1.",
+          "active": [
             1,
-            1
+            4
           ],
+          "done": [
+            0,
+            2
+          ],
+          "values": {
+            "u": 2,
+            "w": "0 to 1",
+            "nd": "1 improved to 0",
+            "deque": "[1, 1stale, 4]"
+          }
+        },
+        {
+          "note": "Pop the improved copy of 1 at distance 0 and relax the unit edge to 3 at distance 1. The leftover stale copy of 1 will be skipped.",
           "active": [
             3
           ],
           "done": [
             0,
-            1
-          ],
-          "best": [
+            1,
             2
           ],
           "values": {
             "u": 1,
-            "deque": "[2, 3]",
-            "dist[u]": 0
+            "w": 1,
+            "nd": 1,
+            "deque": "[stale1, 4, 3]"
           }
         },
         {
-          "note": "Pop 2. 0-edge to 3: 1+0 is not < dist[3]=1. No change.",
-          "arr": [
-            0,
-            0,
-            1,
-            1
-          ],
-          "done": [
-            0,
-            1,
-            2
-          ],
-          "active": [
-            3
-          ],
-          "values": {
-            "u": 2,
-            "deque": "[3]",
-            "dist[u]": 1
-          }
-        },
-        {
-          "note": "Pop 3. No unused improving edges. Deque empty. dist = [0, 0, 1, 1].",
-          "arr": [
-            0,
-            0,
-            1,
-            1
-          ],
+          "note": "Skip the stale copy of 1, then pop 4 at distance 1 and pop 3 at distance 1. Both of those distances are already final.",
           "done": [
             0,
             1,
             2,
-            3
+            3,
+            4
           ],
           "values": {
-            "u": 3,
-            "deque": "[]",
-            "dist[u]": 1
+            "u": 4,
+            "w": "—",
+            "nd": 1,
+            "deque": "[3]"
           }
         },
         {
-          "note": "Cost 1 to reach 3. Plain BFS would have said 2. The 0-edge 0-1 is what made the difference.",
-          "arr": [
-            0,
-            0,
-            1,
-            1
-          ],
+          "note": "The finished distances are [0, 0, 0, 1, 1]. Vertex 1 was reached twice; the free edge was the improvement ordinary BFS would have missed.",
           "best": [
             0,
-            3
-          ],
-          "done": [
             1,
             2
           ],
           "values": {
-            "u": "ans",
-            "deque": "[]",
-            "dist[u]": 1
+            "u": "done",
+            "w": "—",
+            "nd": "—",
+            "deque": "[]"
           }
         }
       ]
     }
     </script>
   </div>
-  <figcaption>Vertex 1 is reached at cost 0 and processed before 2. Vertex 3 is first set to 1 via 1-3, then a 0-edge from 2 cannot improve it.</figcaption>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Mixed 0/1 weights on five nodes</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n0["0"] --&gt;|"1"| n1["1"]
+  n0 --&gt;|"0"| n2["2"]
+  n2 --&gt;|"0"| n1
+  n1 --&gt;|"1"| n3["3"]
+  n2 --&gt;|"1"| n4["4"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
 </figure>
 
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Model the 0-edges and the 1-edges</strong> from the statement. This is the actual problem.</li>
-  <li><strong>Allocate dist[]</strong> with inf, set dist[s] = 0, offerLast(s).</li>
-  <li><strong>While the deque is not empty</strong>, u = pollFirst().</li>
-  <li><strong>For each edge u &rarr; v of weight w in {0,1}:</strong> nd = dist[u] + w.</li>
-  <li><strong>If nd &lt; dist[v]</strong>, write dist[v] = nd.</li>
-  <li><strong>If w == 0</strong> offerFirst(v), else offerLast(v).</li>
-  <li><strong>Do not use a boolean visited-on-push</strong> unless you prove each vertex is improved only once (not true in general).</li>
-  <li><strong>Read dist[t]</strong>. Inf means unreachable.</li>
+  <li><strong>Fill dist with INF, set dist[s] = 0, and add s to an ArrayDeque.</strong> INF should be MAX/4, the same sentinel as Dijkstra, so INF + 1 cannot wrap and pretend to be an improvement.</li>
+  <li><strong>Pop from the front: that vertex is a closest unfinished vertex.</strong> The two-layer order is what makes the front safe to expand without a heap.</li>
+  <li><strong>If you stored a pair (d, u) and d no longer equals dist[u], skip it as stale.</strong> That leftover is an older, worse time, and re-expanding it would push more garbage the way an unfiltered Dijkstra heap does.</li>
+  <li><strong>On a 0-edge, if nd is smaller than dist[v], write it and addFirst(v).</strong> A free step stays in the current layer, which is why it goes to the front and can improve a vertex already queued at d+1.</li>
+  <li><strong>On a 1-edge, if nd is smaller than dist[v], write it and addLast(v).</strong> A paid step belongs on the next layer, behind every still-pending free step of the current layer.</li>
+  <li><strong>Do not mark a vertex visited on first discovery.</strong> A later 0-edge is a real improvement, and refusing the second push freezes the worse first visit the way ordinary BFS would.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>0-1 BFS from 0. Edges (u,v,w): (0,1,0), (0,2,1), (1,3,1), (2,3,0).</p>
+<p>0-1 BFS from 0 on mixed free and unit edges. Watch vertex 1 get queued at distance 1 and then improved to 0 by the free edge 2-1, the second visit BFS would refuse.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
     <thead>
-      <tr><th>u</th><th>edge</th><th>nd vs dist[v]</th><th>deque after</th><th>dist</th><th>Action / why</th></tr>
+      <tr><th>u</th><th>w</th><th>nd</th><th>deque</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr><td>seed</td><td>—</td><td>—</td><td>[0]</td><td>[0,inf,inf,inf]</td><td>Start.</td></tr>
-      <tr class="trace-table__row--change"><td>0</td><td>0-1 w=0</td><td>0 < inf, front</td><td>[1]</td><td>[0,0,inf,inf]</td><td>0-edge to the front.</td></tr>
-      <tr><td>0</td><td>0-2 w=1</td><td>1 < inf, back</td><td>[1, 2]</td><td>[0,0,1,inf]</td><td>1-edge to the back.</td></tr>
-      <tr><td>1</td><td>1-3 w=1</td><td>1 < inf, back</td><td>[2, 3]</td><td>[0,0,1,1]</td><td>3 first seen at cost 1.</td></tr>
-      <tr><td>2</td><td>2-3 w=0</td><td>1 == 1, skip</td><td>[3]</td><td>[0,0,1,1]</td><td>No improve.</td></tr>
-      <tr class="trace-table__row--change"><td>3</td><td>—</td><td>done</td><td>[]</td><td>[0,0,1,1]</td><td>Answer dist[3] = 1.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>—</td><td>0</td><td>[0]</td><td>Source 0 starts at distance 0 alone in the deque; the other four vertices still hold INF and have never been relaxed.</td></tr>
+      <tr><td>0</td><td>0 then 1</td><td>2@0, 1@1</td><td>[2, 1]</td><td>From 0 the free edge writes 2 at distance 0 on the front, and the unit edge writes 1 at distance 1 on the back, so the deque is [2, 1].</td></tr>
+      <tr><td>2</td><td>0 to 1</td><td>1 improved to 0</td><td>[1, 1stale, 4]</td><td>Pop 2 at distance 0. The free edge 2-1 improves vertex 1 from 1 to 0 and is pushed to the front; the unit edge writes 4 at distance 1.</td></tr>
+      <tr><td>1</td><td>1</td><td>1</td><td>[stale1, 4, 3]</td><td>Pop the improved copy of 1 at distance 0 and relax the unit edge to 3 at distance 1. The leftover stale copy of 1 will be skipped.</td></tr>
+      <tr><td>4</td><td>—</td><td>1</td><td>[3]</td><td>Skip the stale copy of 1, then pop 4 at distance 1 and pop 3 at distance 1. Both of those distances are already final.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>—</td><td>—</td><td>[]</td><td>The finished distances are [0, 0, 0, 1, 1]. Vertex 1 was reached twice; the free edge was the improvement ordinary BFS would have missed.</td></tr>
     </tbody>
   </table>
 </div>
@@ -402,65 +334,54 @@ graph LR
 
 <div class="tabs">
   <div class="tabs__list" role="tablist" aria-label="0-1 BFS implementations">
-    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute (Dijkstra)</button>
-    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal 0-1 BFS</button>
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
     <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
   </div>
 
   <div class="tabs__panel is-active" data-panel="Brute">
-    <p>Correct, a log slower. Use this only to check the deque version.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZobBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayList;
-    import java.util.Arrays;
-    import java.util.List;
-    import java.util.PriorityQueue;
-    
-    public class ZobBrute {
-    
-        static int[] dij(List&lt;List&lt;int[]&gt;&gt; g, int s) {
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">HeapOnZeroOne.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class HeapOnZeroOne {
+        static int[] dijkstra(List&lt;List&lt;int[]&gt;&gt; g, int s) {
             int n = g.size();
             int[] dist = new int[n];
             Arrays.fill(dist, Integer.MAX_VALUE / 4);
-            PriorityQueue&lt;int[]&gt; pq = new PriorityQueue&lt;&gt;((a, b) -&gt; Integer.compare(a[0], b[0]));
+            PriorityQueue&lt;int[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingInt(a -&gt; a[0]));
             dist[s] = 0;
-            pq.offer(new int[] {0, s});
+            pq.add(new int[]{0, s});
             while (!pq.isEmpty()) {
                 int[] cur = pq.poll();
-                if (cur[0] != dist[cur[1]]) {
-                    continue;
-                }
+                if (cur[0] != dist[cur[1]]) continue;
                 for (int[] e : g.get(cur[1])) {
                     int nd = cur[0] + e[1];
-                    if (nd &lt; dist[e[0]]) {
-                        dist[e[0]] = nd;
-                        pq.offer(new int[] {nd, e[0]});
-                    }
+                    if (nd &lt; dist[e[0]]) { dist[e[0]] = nd; pq.add(new int[]{nd, e[0]}); }
                 }
             }
             return dist;
         }
-    
         public static void main(String[] args) {
-            List&lt;List&lt;int[]&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            g.get(0).add(new int[] {1, 0});
-            g.get(0).add(new int[] {2, 1});
-            g.get(1).add(new int[] {3, 1});
-            g.get(2).add(new int[] {3, 0});
-            System.out.println(Arrays.toString(dij(g, 0)));
+            List&lt;List&lt;int[]&gt;&gt; g = Graph.sample();
+            System.out.println(Arrays.toString(dijkstra(g, 0)));
         }
-        // Input : 0-1:0, 0-2:1, 1-3:1, 2-3:0
-        // Output: [0, 0, 1, 1]
+        // Input : 0-1 sample
+        // Output: [0, 0, 0, 1, 1]
+        static class Graph {
+            static List&lt;List&lt;int[]&gt;&gt; sample() {
+                List&lt;List&lt;int[]&gt;&gt; g = new ArrayList&lt;&gt;();
+                for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+                int[][] e = {{0,1,1},{0,2,0},{2,1,0},{1,3,1},{2,4,1}};
+                for (int[] x : e) g.get(x[0]).add(new int[]{x[1], x[2]});
+                return g;
+            }
+        }
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Optimal">
-    <p>ArrayDeque as a deque. offerFirst on 0, offerLast on 1.</p>
-    <div class="code" data-highlight="20-26">
+    <div class="code">
       <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZeroOneBfs.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.ArrayDeque;
     import java.util.ArrayList;
@@ -468,99 +389,77 @@ graph LR
     import java.util.List;
     
     public class ZeroOneBfs {
-    
-        static int[] zeroOne(List&lt;List&lt;int[]&gt;&gt; g, int s) {
+        static int[] bfs01(List&lt;List&lt;int[]&gt;&gt; g, int s) {
             int n = g.size();
             int[] dist = new int[n];
             Arrays.fill(dist, Integer.MAX_VALUE / 4);
-            ArrayDeque&lt;Integer&gt; dq = new ArrayDeque&lt;&gt;();
+            ArrayDeque&lt;Integer&gt; q = new ArrayDeque&lt;&gt;();
             dist[s] = 0;
-            dq.offerLast(s);
-            while (!dq.isEmpty()) {
-                int u = dq.pollFirst();
+            q.add(s);
+            while (!q.isEmpty()) {
+                int u = q.pollFirst();
                 for (int[] e : g.get(u)) {
                     int v = e[0], w = e[1];
                     int nd = dist[u] + w;
                     if (nd &lt; dist[v]) {
                         dist[v] = nd;
-                        if (w == 0) {
-                            dq.offerFirst(v);
-                        } else {
-                            dq.offerLast(v);
-                        }
+                        if (w == 0) q.addFirst(v);
+                        else q.addLast(v);
                     }
                 }
             }
             return dist;
         }
-    
         public static void main(String[] args) {
             List&lt;List&lt;int[]&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            g.get(0).add(new int[] {1, 0});
-            g.get(0).add(new int[] {2, 1});
-            g.get(1).add(new int[] {3, 1});
-            g.get(2).add(new int[] {3, 0});
-            System.out.println(Arrays.toString(zeroOne(g, 0)));
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1,1},{0,2,0},{2,1,0},{1,3,1},{2,4,1}};
+            for (int[] x : e) g.get(x[0]).add(new int[]{x[1], x[2]});
+            System.out.println(Arrays.toString(bfs01(g, 0)));
         }
-        // Input : directed 0-1:0, 0-2:1, 1-3:1, 2-3:0
-        // Output: [0, 0, 1, 1]
+        // Input : 0-edges 0-2,2-1; 1-edges 0-1,1-3,2-4
+        // Output: [0, 0, 0, 1, 1]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Template">
-    <p>Grid form: from each cell the suggested direction is a 0-step, the others are 1.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">ZeroOneTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">WallGrid01.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.ArrayDeque;
     import java.util.Arrays;
     
-    public class ZeroOneTemplate {
-    
-        static final int[] DR = {0, 1, 0, -1};
-        static final int[] DC = {1, 0, -1, 0};
-    
-        /** grid[r][c] in {0,1,2,3} = suggested dir. Cost 0 to follow, 1 to override. */
-        static int minChanges(int[][] grid) {
-            int R = grid.length, C = grid[0].length;
+    public class WallGrid01 {
+        static final int[] DR = {-1,1,0,0}, DC = {0,0,-1,1};
+        static int minWalls(char[][] g) {
+            int R = g.length, C = g[0].length;
             int[][] dist = new int[R][C];
-            for (int[] row : dist) {
-                Arrays.fill(row, Integer.MAX_VALUE / 4);
-            }
-            ArrayDeque&lt;int[]&gt; dq = new ArrayDeque&lt;&gt;();
+            for (int[] row : dist) Arrays.fill(row, Integer.MAX_VALUE / 4);
+            ArrayDeque&lt;int[]&gt; q = new ArrayDeque&lt;&gt;();
             dist[0][0] = 0;
-            dq.offerLast(new int[] {0, 0});
-            while (!dq.isEmpty()) {
-                int[] p = dq.pollFirst();
-                int r = p[0], c = p[1];
+            q.add(new int[]{0, 0});
+            while (!q.isEmpty()) {
+                int[] u = q.pollFirst();
+                int r = u[0], c = u[1];
                 for (int k = 0; k &lt; 4; k++) {
                     int nr = r + DR[k], nc = c + DC[k];
-                    if (nr &lt; 0 || nr &gt;= R || nc &lt; 0 || nc &gt;= C) {
-                        continue;
-                    }
-                    int w = (k == grid[r][c]) ? 0 : 1;
+                    if (nr &lt; 0 || nr &gt;= R || nc &lt; 0 || nc &gt;= C) continue;
+                    int w = g[nr][nc] == '#' ? 1 : 0;
                     int nd = dist[r][c] + w;
                     if (nd &lt; dist[nr][nc]) {
                         dist[nr][nc] = nd;
-                        if (w == 0) {
-                            dq.offerFirst(new int[] {nr, nc});
-                        } else {
-                            dq.offerLast(new int[] {nr, nc});
-                        }
+                        if (w == 0) q.addFirst(new int[]{nr, nc});
+                        else q.addLast(new int[]{nr, nc});
                     }
                 }
             }
             return dist[R - 1][C - 1];
         }
-    
         public static void main(String[] args) {
-            int[][] grid = {{1, 1, 3}, {3, 2, 2}, {1, 1, 0}};
-            System.out.println(minChanges(grid));
+            char[][] g = {".#.".toCharArray(), "..#".toCharArray(), "#..".toCharArray()};
+            System.out.println(minWalls(g));
         }
-        // Input : 3x3 arrow grid (dirs 0=R,1=D,2=L,3=U)
+        // Input : 3x3 maze, '#' is a wall that costs 1 to break
         // Output: 0
     }</code></pre>
     </div>
@@ -577,9 +476,9 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Each improving relaxation pushes a vertex once more. In a simple 0-1 graph a vertex's distance takes at most two distinct values (first see, optional 0-improve), so pushes are O(n) and each edge is examined O(1) times:</p>
-    <p><span class="eq">T = &Theta;(n + m)</span></p>
-    <p>That is the same class as BFS and a log faster than Dijkstra, which is why you bother to notice that the weights are only 0 and 1.</p>
+    <p>Each successful relaxation pushes a vertex onto one end of the deque. Distances are non-negative integers and only decrease, and the deque is kept sorted by distance, so each edge is processed a constant number of times. That is a linear scan of the vertices and the edges, with no heap.</p>
+    <p><span class="eq">T = O(n + m)</span> versus Dijkstra's O(m log m).</p>
+    <p>At n = m = 10&#8310; the linear walk is a few million steps. Dijkstra on the same input pays an extra log, about twenty operations per edge, which is tens of millions of heap operations and the slower, less honest answer. Marking on first push does not make the algorithm faster; it makes it wrong, because a later 0-edge is a real improvement you just refused.</p>
   </div>
 
   <table class="complexity__compare">
@@ -587,11 +486,10 @@ graph LR
       <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
     </thead>
     <tbody>
-      <tr><td>0-1 BFS</td><td>O(n + m)</td><td>O(n)</td><td>Weights in {0,1}</td></tr>
-      <tr><td>BFS</td><td>O(n + m)</td><td>O(n)</td><td>All weights 1 (or all equal)</td></tr>
-      <tr><td>Dijkstra</td><td>O((n+m) log n)</td><td>O(n)</td><td>Correct here, unnecessary log</td></tr>
-      <tr><td>Dial 0..W</td><td>O(n + m + nW)</td><td>O(n + W)</td><td>Tiny integer weights</td></tr>
-      <tr><td>Bellman-Ford</td><td>O(n m)</td><td>O(n)</td><td>Overkill</td></tr>
+      <tr><td>BFS (all w=1)</td><td>O(n+m)</td><td>O(n)</td><td>Mark on push</td></tr>
+      <tr><td>0-1 BFS</td><td>O(n+m)</td><td>O(n)</td><td>w in {0,1}, relax like Dijkstra</td></tr>
+      <tr><td>Dial (w=0..K)</td><td>O(nK + m)</td><td>O(n+K)</td><td>Bucket queue</td></tr>
+      <tr><td>Heap Dijkstra</td><td>O(m log m)</td><td>O(n+m)</td><td>General non-neg weights</td></tr>
     </tbody>
   </table>
 </div>
@@ -601,34 +499,29 @@ graph LR
 
 <ul class="pitfalls">
   <li>
-    <span class="pitfalls__title">Pushing 0-edges to the back</span>
-    <div class="pitfalls__bug">The deque is then just a queue and 0-edges wait behind 1-edges. Distances can come out too large if you also freeze on first visit.</div>
-    <div class="pitfalls__fix">offerFirst for w == 0, offerLast for w == 1. Always.</div>
+    <span class="pitfalls__title">Marking visited on first discovery</span>
+    <div class="pitfalls__bug">A vertex is queued along a 1-edge and you mark it seen, so a later 0-edge that would have cheapened it is refused. The code looks like the BFS template, which is why the wrong answer is so common.</div>
+    <div class="pitfalls__fix">Only skip a neighbour when nd is not smaller than dist[v]. That is the same comparison as Dijkstra, and it is what allows the second push.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Visited-on-push like BFS</span>
-    <div class="pitfalls__bug">First path to v may be a 1-edge; a later 0-edge is shorter and is ignored.</div>
-    <div class="pitfalls__fix">Relax with nd < dist[v]. A vertex may enter the deque more than once.</div>
+    <span class="pitfalls__title">addFirst / addLast swapped</span>
+    <div class="pitfalls__bug">Putting 1-edges on the front (or 0-edges on the back) looks like a harmless swap, but the two-layer order dies and you expand a farther vertex before a closer one.</div>
+    <div class="pitfalls__fix">Weight 0 is always addFirst and weight 1 is always addLast. A three-edge path 0 -1-> a -0-> t versus 0 -0-> t is a good test of the ends.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Using a PriorityQueue "just in case"</span>
-    <div class="pitfalls__bug">Correct, slower, and you lose the point of the pattern. Reviewers will ask why.</div>
-    <div class="pitfalls__fix">If weights are only 0 and 1, write the deque. Mention Dijkstra as the fallback.</div>
+    <span class="pitfalls__title">Using this for weight 2</span>
+    <div class="pitfalls__bug">A +2 jump can overtake the next layer, so the deque is no longer sorted by distance and the algorithm silently returns a non-shortest walk.</div>
+    <div class="pitfalls__fix">Use Dijkstra for arbitrary non-negative weights, or Dial's bucket queue if the weights are small integers 0..K. This page needs a 0 that stays on the current layer.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Treating "free then pay" as two BFS passes</span>
-    <div class="pitfalls__bug">Running BFS on 0-edges then BFS on 1-edges in the wrong order misses mixed paths.</div>
-    <div class="pitfalls__fix">One deque interleaves them. That is the algorithm.</div>
+    <span class="pitfalls__title">pollLast instead of pollFirst</span>
+    <div class="pitfalls__bug">Popping from the back turns the deque into a stack, so distances are no longer monotone and the first expansion of a vertex is not the closest one.</div>
+    <div class="pitfalls__fix">Always pollFirst. The structure is a queue that you also unshift onto, not a stack, and addLast/pollLast would destroy the algorithm.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Weights that are 0, 1 and 2</span>
-    <div class="pitfalls__bug">The two-layer deque invariant dies. A 2-edge would need a third place to sit.</div>
-    <div class="pitfalls__fix">Dial's algorithm (an array of deques indexed by distance) or Dijkstra.</div>
-  </li>
-  <li>
-    <span class="pitfalls__title">pollLast by accident</span>
-    <div class="pitfalls__bug">ArrayDeque has pollFirst and pollLast. The wrong one is DFS-ish and breaks order.</div>
-    <div class="pitfalls__fix">Always pollFirst. The only choice is which end you offer onto.</div>
+    <span class="pitfalls__title">INT overflow INF+1</span>
+    <div class="pitfalls__bug">Integer.MAX_VALUE + 1 wraps negative, so every 1-edge out of an unreachable vertex looks cheaper than a real path and "improves" the whole graph.</div>
+    <div class="pitfalls__fix">Use INF = Integer.MAX_VALUE / 4, the same sentinel as Dijkstra. A real distance in a 0-1 graph is at most n and sits far below that.</div>
   </li>
 </ul>
 
@@ -642,28 +535,22 @@ graph LR
     </thead>
     <tbody>
       <tr>
-        <td>0-k BFS / Dial</td>
-        <td>Weights in 0..W. Keep an array of deques, or a circular buffer of size W+1.</td>
-        <td><code>buckets[(d + w) % (W+1)].offer(v);</code></td>
-        <td>When W is tiny (W ≤ 50)</td>
+        <td>Dial's algorithm</td>
+        <td>Weights 0..K: array of deques, cursor at current dist.</td>
+        <td><code>buckets[nd].add(v);</code></td>
+        <td>K up to a few thousand</td>
       </tr>
       <tr>
-        <td>Min walls to break</td>
-        <td>Open cell w=0, wall w=1. Want dist[exit] = walls broken.</td>
-        <td><code>Same template on a grid.</code></td>
-        <td>LC 2290 is 0-k with k up to 1e9 — different (deque of states by breaks)</td>
+        <td>0-K on a grid</td>
+        <td>Breaking a wall costs 1, empty 0 &mdash; this page.</td>
+        <td><code>w = cell==WALL ? 1 : 0;</code></td>
+        <td>CF labyrinths, LC 1368</td>
       </tr>
       <tr>
-        <td>Two overlaid graphs</td>
-        <td>Type-A roads weight 0, type-B weight 1. Build one list with the right weights.</td>
-        <td><code>g.get(u).add(new int[]{v, type});</code></td>
-        <td>CF 1473E is more general (need Dijkstra)</td>
-      </tr>
-      <tr>
-        <td>Product with a boolean "used the free edge"</td>
-        <td>Sometimes the 0-edge may be used only once. Then the state is (u, used) and edges out of used=1 are all 1s.</td>
-        <td><code>dist[u][0], dist[u][1]</code></td>
-        <td>One-free-flight patterns</td>
+        <td>Product with a tiny extra state</td>
+        <td>Still 0-1 if the extra step costs 0 or 1.</td>
+        <td><code>state = u * (k+1) + used;</code></td>
+        <td>Direction-change costs</td>
       </tr>
     </tbody>
   </table>
@@ -674,30 +561,30 @@ graph LR
 
 <div class="followups">
   <details class="followup">
-    <summary>Why is the deque sorted?</summary>
+    <summary>Why can a vertex be pushed twice?</summary>
     <div class="followup__body">
-      <p>Inductively it holds keys d and d+1 only, with all the d's at the front. A 0-push inserts another d at the front; a 1-push inserts a d+1 at the back. Polling the front always yields a smallest key. When the last d is gone the old d+1s become the new d.</p>
+      <p>It can be reached first along a 1-edge at distance d+1, then improved along a 0-edge (or a path of 0-edges) to distance d. That second write is a real cheaper walk, not a duplicate. Ordinary BFS forbids a second visit because on unit weights the first visit is already best. Here the 0-edge is a decrease-key, so the second visit must be allowed.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>Is 0-1 BFS just Dijkstra with a faster heap?</summary>
+    <summary>Is 0-1 BFS just Dijkstra?</summary>
     <div class="followup__body">
-      <p>Yes. Extract-min is O(1) because the next key is only d or d+1. That is why the complexity drops the log. The modelling work is identical to Dijkstra: define states and edge weights, then run the right extractor.</p>
+      <p>Yes. The deque is a specialised heap that only ever holds two consecutive keys, so you get the same freeze-closest order without paying a log. Saying that sentence is the interview-level understanding: you still expand in non-decreasing distance, you still relax an edge only when it improves dist[v], and you still skip stale leftover copies.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>Can I 0-1-BFS a graph with 0-cycles?</summary>
+    <summary>LC 1368 — why 0-1?</summary>
     <div class="followup__body">
-      <p>0-cycles do not change distances, but a careless implementation can loop forever if you push on &le; instead of &lt;. Strict improvement stops the walk. 0-cycles are otherwise harmless.</p>
+      <p>Each cell already has an arrow painted on it. Walking in the painted direction costs 0, because you did not change the grid. Walking in any other direction (or rewriting the arrow) costs 1. Those are exactly the two weights this page knows how to order, so the grid graph is a 0-1 instance and a heap is the slower way to say the same thing.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>How is this different from 0-1 knapsack?</summary>
+    <summary>What if weights are 1 and 2?</summary>
     <div class="followup__body">
-      <p>Only the name. 0-1 knapsack is a DP on items in-or-out. 0-1 BFS is a shortest-path algorithm on two weight values. Do not mix the phrases in an interview.</p>
+      <p>That is not 0-1. There is no free step that stays on the current layer, so a +2 jump can overtake and the two-layer deque invariant dies. You can still use Dial's algorithm with K = 2 buckets, or just run Dijkstra. The 0 is load-bearing: it is the edge that sits at the front.</p>
     </div>
   </details>
 </div>
@@ -713,80 +600,60 @@ graph LR
     </thead>
     <tbody>
       <tr><td>1</td>
-        <td><a href="https://leetcode.com/problems/minimum-cost-to-make-at-least-one-valid-path-in-a-grid/" target="_blank" rel="noopener">Minimum Cost to Make at Least One Valid Path</a></td>
+        <td><a href="https://leetcode.com/problems/minimum-cost-to-make-at-least-one-valid-path/" target="_blank" rel="noopener">Minimum Cost To Make At Least One Valid Path</a></td>
         <td><span class="badge badge--lc">LC 1368</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Arrow = 0, override = 1</td></tr>
+        <td>0-1 BFS on a grid</td></tr>
       <tr><td>2</td>
-        <td><a href="https://leetcode.com/problems/shortest-path-in-a-grid-with-obstacles-elimination/" target="_blank" rel="noopener">Shortest Path in a Grid with Obstacles Elimination</a></td>
-        <td><span class="badge badge--lc">LC 1293</span></td>
-        <td><span class="pill pill--hard">Hard</span></td>
-        <td>State (r,c,k); walking is 1, closer to BFS</td></tr>
-      <tr><td>3</td>
-        <td><a href="https://leetcode.com/problems/minimum-obstacle-removal-to-reach-corner/" target="_blank" rel="noopener">Minimum Obstacle Removal to Reach Corner</a></td>
+        <td><a href="https://leetcode.com/problems/minimum-obstacle-removal-to-reach-corner/" target="_blank" rel="noopener">Minimum Obstacle Removal To Reach Corner</a></td>
         <td><span class="badge badge--lc">LC 2290</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Open 0, obstacle 1: textbook 0-1 BFS</td></tr>
+        <td>0-1: empty 0, obstacle 1</td></tr>
+      <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/shortest-path-in-a-grid-with-obstacles-elimination/" target="_blank" rel="noopener">Shortest Path In A Grid With Obstacles Elimination</a></td>
+        <td><span class="badge badge--lc">LC 1293</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>BFS on (r,c,k); related</td></tr>
       <tr><td>4</td>
-        <td><a href="https://leetcode.com/problems/snakes-and-ladders/" target="_blank" rel="noopener">Snakes and Ladders</a></td>
-        <td><span class="badge badge--lc">LC 909</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Mostly BFS; snakes are 0-extra forced moves</td></tr>
-      <tr><td>5</td>
-        <td><a href="https://www.geeksforgeeks.org/0-1-bfs-shortest-path-binary-graph/" target="_blank" rel="noopener">0-1 BFS practice</a></td>
-        <td><span class="badge badge--gfg">GfG</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Binary graph tutorial + problems</td></tr>
-      <tr><td>6</td>
         <td><a href="https://codeforces.com/problemset/problem/1063/B" target="_blank" rel="noopener">Labyrinth</a></td>
         <td><span class="badge badge--cf">CF 1063B</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Up/down free, left/right cost 1: 0-1 BFS</td></tr>
-      <tr><td>7</td>
-        <td><a href="https://codeforces.com/problemset/problem/173/B" target="_blank" rel="noopener">Chamber of Secrets</a></td>
-        <td><span class="badge badge--cf">CF 173B</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Mirrors as 0/1 turns, classic 0-1 BFS</td></tr>
-      <tr><td>8</td>
-        <td><a href="https://codeforces.com/problemset/problem/590/C" target="_blank" rel="noopener">Three States</a></td>
-        <td><span class="badge badge--cf">CF 590C</span></td>
-        <td><span class="pill pill--hard">Hard</span></td>
-        <td>Multi-source 0-1 BFS between regions</td></tr>
-      <tr><td>9</td>
+        <td>Limited left/right, 0-1 / deque</td></tr>
+      <tr><td>5</td>
         <td><a href="https://codeforces.com/problemset/problem/1473/E" target="_blank" rel="noopener">Minimum Path</a></td>
         <td><span class="badge badge--cf">CF 1473E</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Cousin: extra 0/1 choices, then Dijkstra</td></tr>
-      <tr><td>10</td>
-        <td><a href="https://atcoder.jp/contests/abc218/tasks/abc218_f" target="_blank" rel="noopener">ABC 218 F</a></td>
-        <td><span class="badge badge--atc">ABC 218F</span></td>
-        <td><span class="pill pill--hard">Hard</span></td>
-        <td>Shortest path after deleting one edge</td></tr>
-      <tr><td>11</td>
-        <td><a href="https://cses.fi/problemset/task/1193" target="_blank" rel="noopener">Labyrinth</a></td>
-        <td><span class="badge badge--gfg">CSES</span></td>
-        <td><span class="pill pill--easy">Easy</span></td>
-        <td>Plain BFS baseline before 0-1 variants</td></tr>
-      <tr><td>12</td>
-        <td><a href="https://www.geeksforgeeks.org/problems/minimum-cost-path3833/1" target="_blank" rel="noopener">Minimum Knight moves ++</a></td>
-        <td><span class="badge badge--gfg">GfG</span></td>
+        <td>0/2 extras; Dijkstra, same family</td></tr>
+      <tr><td>6</td>
+        <td><a href="https://codeforces.com/problemset/problem/590/C" target="_blank" rel="noopener">Three States</a></td>
+        <td><span class="badge badge--cf">CF 590C</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Grid costs: Dijkstra, contrast with 0-1</td></tr>
+        <td>Multi-source 0-1 on a grid</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://leetcode.com/problems/shortest-path-to-get-all-keys/" target="_blank" rel="noopener">Shortest Path To Get All Keys</a></td>
+        <td><span class="badge badge--lc">LC 864</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>BFS on state, unit; contrast</td></tr>
+      <tr><td>8</td>
+        <td><a href="https://codeforces.com/problemset/problem/173/B" target="_blank" rel="noopener">Chamber of Secrets</a></td>
+        <td><span class="badge badge--cf">CF 173B</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>0-1 BFS on rows/cols</td></tr>
     </tbody>
   </table>
 </div>
 
 <details class="spoiler">
-  <summary>Hint for LC 2290 &mdash; the cost is the number of 1-cells you step on</summary>
+  <summary>Hint for the hardest practice problem</summary>
   <div class="spoiler__body">
-    <p>Moving into a 0-cell costs 0; moving into a 1-cell costs 1. That is exactly 0-1 BFS on the grid graph. dist[R-1][C-1] is the minimum obstacles removed (you "remove" an obstacle by paying 1 to step on it). Do not binary-search the number of removals unless you want a slower solution.</p>
+    <p>Name the state / invariant first. The code is then mechanical.</p>
   </div>
 </details>
 
 <details class="spoiler">
-  <summary>Hint for LC 1368 &mdash; the arrow is a 0-edge</summary>
+  <summary>Hint for the second-hardest</summary>
   <div class="spoiler__body">
-    <p>From (r, c) following grid[r][c] is weight 0; the other three directions are weight 1. Run the template. Dijkstra also passes; the intended solution is the deque. Start cell costs 0 even if you later leave it against its arrow.</p>
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
   </div>
 </details>
 
@@ -794,13 +661,13 @@ graph LR
 <div class="recap">
   <h2>Recap</h2>
   <ul>
-    <li><strong>Weights in {0, 1} only</strong> &mdash; otherwise Dijkstra or Dial.</li>
-    <li><strong>offerFirst on 0, offerLast on 1, pollFirst always.</strong></li>
-    <li><strong>Relax with nd &lt; dist[v]</strong>; do not freeze on first see.</li>
-    <li><strong>The deque stays sorted</strong> with keys d and d+1 only.</li>
-    <li><strong>Modelling is the hard part:</strong> name the 0-edges from the statement.</li>
+    <li><strong>0 to the front, 1 to the back</strong> of an ArrayDeque.</li>
+    <li><strong>Relax like Dijkstra</strong>; a later 0-edge may improve a queued vertex.</li>
+    <li><strong>Linear time</strong> vs heap Dijkstra.</li>
+    <li><strong>Not ordinary BFS</strong> &mdash; do not mark on first push.</li>
+    <li><strong>Only {0,1}</strong>; anything else is Dijkstra or Dial.</li>
   </ul>
-  <div class="recap__oneliner">deque: w==0 offerFirst else offerLast | pollFirst | relax nd&lt;dist[v] | O(n+m)</div>
+  <div class="recap__oneliner">if (w==0) q.addFirst(v); else q.addLast(v);  // only when nd &lt; dist[v]</div>
 </div>
 
 <div class="prevnext"></div>

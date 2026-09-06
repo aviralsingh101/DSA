@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The naive partner search is a nested loop. A map from value to index (or value to count) makes the inner loop a lookup. That is two-sum, group-anagrams (key = sorted letters or a 26-count), and "subarray sum equals k" (key = prefix). The data structure is the algorithm.</p>
-<p>The second skill is choosing the key. For anagrams it is a canonical signature. For consecutive sequence it is membership in a set, plus the rule "only start a run from a value whose predecessor is absent". For sliding-window uniqueness it is a map of last-seen indices. Wrong keys give wrong collisions, which look like random WA rather than an obvious off-by-one.</p>
-<p>Java's <code>HashMap</code> is expected O(1) and worst-case O(n) if keys collide. In interviews state expected linear. In contests, adversarial tests exist; for integer keys in a small range prefer an array, and for 64-bit keys consider a custom hash.</p>
+<p>You are given 100,000 numbers and asked for two of them that add to a target. The obvious nested loop tries every pair: about <code>100000 &times; 100000 / 2 = 5&times;10&#8313;</code> additions, which is an instant time-limit failure. Instead, walk the list once and, for each number x, ask a table "have I already seen target &minus; x?" That question is one hash lookup. A hundred thousand lookups finish in a few milliseconds, provided you store each value (or its index, or its count) as you go. The data structure is the algorithm.</p>
+<p>The second skill is choosing the key. For anagrams it is a <em>canonical signature</em> &mdash; a spelling of the letter bag that every rearrangement shares, such as the sorted letters or a 26-count. For consecutive sequence it is membership in a set, plus the rule "only start a run from a value whose predecessor is absent", so you do not restart the same run from 2, 3 and 4. For sliding-window uniqueness it is a map of last-seen indices. Wrong keys give wrong collisions, which look like random wrong answers rather than an obvious off-by-one.</p>
+<p>Java's <code>HashMap</code> answers each lookup in expected constant time, meaning the average over typical keys is one array hop, and in the worst case a single bucket can degrade to linear if every key collides. In interviews state expected linear. In contests, adversarial tests exist; for integer keys in a small range prefer a plain <code>int[]</code>, and for 64-bit keys consider a custom hash. The tell in a real statement is <code>n &le; 10&#8309;</code> plus "pair with given sum", "group anagrams", or "subarray sum equals k".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Store the thing you would have nested-looped for. The key is the partner: target-x, the anagram signature, the prefix that would complete sum k, or the predecessor that would extend a consecutive run.</p>
+    <p>Store the thing you would have nested-looped for. The key is the partner: target minus x, the anagram signature, the prefix that would complete sum k, or the predecessor that would extend a consecutive run.</p>
   </div>
 </aside>
 
@@ -123,13 +123,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Two-sum one pass: for each x, if <code>map.containsKey(target - x)</code> return the pair of indices; then <code>map.put(x, i)</code>. Putting after the lookup avoids using the same element twice. Consecutive sequence: dump everything into a HashSet, then for each x whose <code>x-1</code> is missing, walk x, x+1, … until the run breaks. Each number is visited twice at most, so expected linear.</p>
-<p>Prefix+map: running sum S, add <code>map[S-k]</code> to the answer, then increment <code>map[S]</code>. The empty prefix 0 must be in the map before the loop. Anagram keys: <code>char[]</code> sorted, or a frozen 26-int signature. Never use the raw string as a key unless you want grouping by identity, not by letter bag.</p>
+<p>Two-sum is one pass. For each value x at index i, ask whether <code>map</code> already holds <code>target - x</code>; if it does, those two indices are the answer. Then <code>map.put(x, i)</code>. Putting after the lookup is what stops an element being its own partner when the target is 2x. Consecutive sequence dumps everything into a HashSet, then for each x whose predecessor <code>x-1</code> is missing, walks x, x+1, &hellip; until the run breaks. Each number is visited twice at most (once as a membership test, once inside a run), so the whole scan is expected linear.</p>
+<p>Prefix-plus-map answers "how many subarrays sum to k". Keep a running sum S, add <code>map.get(S-k)</code> to the answer (that many earlier prefixes would complete sum k with the current prefix), then increment <code>map[S]</code>. The empty prefix 0 must sit in the map with count 1 before the loop, otherwise a subarray that starts at index 0 is never counted. Anagram keys are a sorted <code>char[]</code>, or a frozen 26-int signature. Never use the raw string as a key unless you want grouping by identity, not by letter bag.</p>
+<p>Walk two-sum on <code>[2, 7, 11, 15]</code> with target 9. The map starts empty. At index 0 the value is 2, the partner 7 is absent, so store 2 &rarr; 0. At index 1 the value is 7, the partner 2 is already in the map at index 0, and you return <code>(0, 1)</code> without ever looking at 11 or 15. The same table, seeded with prefix 0, is what counts four subarrays of sum 3 in <code>[1, 2, 1, 2, 1]</code>: every time the running sum hits a value whose complement S-3 was seen, you add that stored count.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After processing prefix <code>a[0..i]</code>, the map holds every partner that prefix could complete:</p><span class="eq">map[v] = how we would answer "have I seen v?" on a[0..i]</span><p>Interview sentence: <em>"I hash the partner, not the whole nested search."</em></p>
+    <p>After processing prefix <code>a[0..i]</code>, the map holds every partner that prefix could complete:</p><span class="eq">map[v] = how we would answer "have I seen v?" on a[0..i]</span><p>In plain words, the table is a notebook of leftovers: each leftover is the value, signature or prefix that a later item would need in order to finish a pair, a group or a subarray. Looking the partner up first, then writing the current item down, is what keeps the notebook honest.</p><p>Interview sentence: <em>"I hash the partner, not the whole nested search."</em></p>
   </div>
 </aside>
 
@@ -303,18 +304,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the partner</strong> you would have searched for in a nested loop.</li>
-  <li><strong>Choose the key:</strong> value, signature, prefix, or membership.</li>
-  <li><strong>One pass:</strong> look up first, then insert, so an element is not its own partner.</li>
-  <li><strong>Seed prefix maps with 0.</strong> For longest-subarray, store the earliest index.</li>
-  <li><strong>Consecutive:</strong> only expand a run from x where x-1 is absent.</li>
-  <li><strong>Tiny integer range:</strong> replace the map with <code>int[]</code>.</li>
-  <li><strong>State expected O(n)</strong> time, O(n) extra space.</li>
+  <li><strong>Name the partner you would have searched for in a nested loop.</strong> That partner &mdash; target minus x, a letter-bag signature, a prefix, a predecessor &mdash; is the only thing the map needs to store.</li>
+  <li><strong>Choose the key to match that partner.</strong> A value, a canonical signature, a prefix sum, or a membership test: the wrong key collides for the wrong reason and the failure looks random.</li>
+  <li><strong>Look up first, then insert.</strong> Putting the current item into the map before the lookup lets it pair with itself when the target is twice the value.</li>
+  <li><strong>Seed prefix maps with 0 mapped to count 1.</strong> Without that empty prefix, a subarray that starts at index 0 and sums to k is invisible. For longest-subarray, store the earliest index instead of a count.</li>
+  <li><strong>Start a consecutive run only at x where x-1 is absent.</strong> Restarting from every value inside the run revisits the same numbers and turns a linear scan into a quadratic one.</li>
+  <li><strong>Replace the map with <code>int[]</code> when the range is tiny.</strong> Indexing by the key itself removes hashing, boxing and the load-factor constant.</li>
+  <li><strong>Quote expected O(n) time and O(n) extra space.</strong> Interviews want the expected bound; mention the worst-case linear bucket only if they ask about adversarial hashes.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Two-sum on <code>[2, 7, 11, 15]</code> with target 9: look up the partner before inserting, then the same table idea on a consecutive run and a prefix-sum count.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -484,8 +485,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each of n items does a constant number of expected-O(1) map operations: <span class="eq">T(n) = Θ(n)</span> expected. Worst case is quadratic if every key collides; interviews want the expected bound.</p>
-    <p>Consecutive sequence visits each value at most twice (membership + walk). Anagram grouping sorts each string: <code>O(n L log L)</code>, or <code>O(n L)</code> with a 26-count key.</p>
+    <p>Each of n items does a constant number of expected-O(1) map operations: <span class="eq">T(n) = Θ(n)</span> expected. At <code>n = 10&#8309;</code> that is a few hundred thousand lookups, versus the <code>5&times;10&#8313;</code> pair checks of the nested loop. Worst case is quadratic if every key collides; interviews want the expected bound.</p>
+    <p>Consecutive sequence visits each value at most twice (one membership test, one step inside a run). Anagram grouping sorts each string of length L, which is <code>O(n L log L)</code>, or <code>O(n L)</code> if you build a 26-count key instead of sorting the letters.</p>
   </div>
 
   <table class="complexity__compare">
@@ -508,28 +509,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Inserting before looking up in two-sum</span>
-    <div class="pitfalls__bug">target = 2*x uses the same index twice when you put x first.</div>
-    <div class="pitfalls__fix">Lookup, then put. For two-sum II (sorted) use two pointers instead.</div>
+    <div class="pitfalls__bug">When the target is 2x, putting x into the map before the lookup lets the same index pair with itself and returns a pair that the statement forbade.</div>
+    <div class="pitfalls__fix">Lookup first, then put. For two-sum II on an already-sorted array, drop the map and use two pointers instead.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to seed prefix 0</span>
-    <div class="pitfalls__bug">A subarray that starts at index 0 and sums to k is never counted.</div>
-    <div class="pitfalls__fix"><code>map.put(0L, 1)</code> before the loop. Use long keys for sums.</div>
+    <div class="pitfalls__bug">A subarray that starts at index 0 and sums to k never finds a stored prefix, so the count stays zero even though that subarray is legal.</div>
+    <div class="pitfalls__fix"><code>map.put(0L, 1)</code> before the loop, and use long keys so the running sum cannot wrap.</div>
   </li>
   <li>
     <span class="pitfalls__title">Restarting a consecutive run at every value</span>
-    <div class="pitfalls__bug">Walking up from 2, 3, and 4 as well as 1 makes the algorithm quadratic.</div>
-    <div class="pitfalls__fix">Only start if <code>!set.contains(v-1)</code>.</div>
+    <div class="pitfalls__bug">Walking up from 2, 3 and 4 as well as from 1 looks correct on a short sample and becomes quadratic on a single long run of length n.</div>
+    <div class="pitfalls__fix">Only start a run when <code>!set.contains(v-1)</code>, so each number is expanded from its true left end exactly once.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using the string itself as an anagram key</span>
-    <div class="pitfalls__bug">"eat" and "tea" land in different buckets.</div>
-    <div class="pitfalls__fix">Sort the letters, or serialise a 26-count. Intern the key.</div>
+    <div class="pitfalls__bug">"eat" and "tea" land in different buckets because the raw strings are different objects, so the group-anagrams map never merges them.</div>
+    <div class="pitfalls__fix">Sort the letters, or serialise a 26-count with a delimiter, and use that canonical spelling as the key.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow on target - x</span>
-    <div class="pitfalls__bug">target = Integer.MIN_VALUE, x = 1, the need wraps.</div>
-    <div class="pitfalls__fix">Use long: <code>long need = (long) target - x;</code> or a Long-keyed map.</div>
+    <div class="pitfalls__bug">When target is <code>Integer.MIN_VALUE</code> and x is 1, the subtraction <code>target - x</code> wraps in 32 bits and looks up the wrong partner.</div>
+    <div class="pitfalls__fix">Compute <code>long need = (long) target - x</code>, or store keys in a <code>Map&lt;Long, Integer&gt;</code> so the difference cannot wrap.</div>
   </li>
 </ul>
 
@@ -578,21 +579,21 @@ flowchart TD
   <details class="followup">
     <summary>Two-sum if the array must not be mutated and you need all pairs?</summary>
     <div class="followup__body">
-      <p>Map value → list of indices. After building, walk keys x ≤ target-x to avoid listing a pair twice. Complexity is output-sensitive.</p>
+      <p>Build a map from value to the list of indices that hold it. After the map is complete, walk keys x that are at most target minus x so each unordered pair is listed once. The time is output-sensitive: if there are p pairs you will spend O(n + p) after the build, not O(1).</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Longest consecutive if values do not fit in a HashSet of ints?</summary>
     <div class="followup__body">
-      <p>They do: n ≤ 1e5, Integer caches aside, HashSet of n boxed ints is fine. If the range is 1..n, a boolean[] is simpler.</p>
+      <p>They do: at <code>n &le; 10&#8309;</code> a HashSet of n boxed ints is the intended extra memory, Integer cache aside. If the values happen to lie in 1..n, a <code>boolean[]</code> is simpler and removes hashing entirely. The range is not the problem here; n is.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When should the key be a list instead of a string?</summary>
     <div class="followup__body">
-      <p>A 26-count as a string with a delimiter is easy. Arrays.hashCode as a key is wrong because HashMap uses equals: two int[] with the same contents are not equal. Wrap in a string, or use a record/List.</p>
+      <p>A 26-count packed as a string with a delimiter is the easy interview spelling. <code>Arrays.hashCode</code> as a key is wrong because HashMap uses equals: two <code>int[]</code> with the same contents are not equal. Wrap the count in a string, or use a record or a List, so equality is by contents.</p>
     </div>
   </details>
 </div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">A centroid splits every remaining component to size at most <code>n/2</code>. Recurse, and every pair of nodes meets at exactly one centroid ancestor.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/dfs-and-components.html">DFS & Components</a>,
       <a href="../05-trees/lca-binary-lifting.html">Binary Lifting & LCA</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Many tree problems ask about <em>pairs</em>: how many pairs sit at distance <code>k</code>, what is the closest red node, what is the XOR of a path with a given property. Walking every pair is <code>O(n&sup2;)</code>. Layering a balanced separator over the tree drops that to <code>O(n log n)</code>.</p>
-<p>A centroid of a tree is a node whose removal leaves components of size at most <code>n/2</code>. Every tree has one (or two adjacent ones). After you solve "paths that go through this centroid", you mark it dead and recurse on each remaining component.</p>
-<p>The recursion depth is <code>O(log n)</code> because every piece halves. The centroid tree (parent = the centroid that decomposed you) is a balanced tree you can also query online: the answer for a node is an aggregate over its <code>O(log n)</code> centroid ancestors.</p>
+<p>You are given a tree and you must answer questions about <em>pairs</em> of nodes: how many pairs sit at distance <code>k</code>, what is the closest painted node to <code>u</code>, which paths have a given XOR. The honest approach is to start a search from every node, or to list every pair. On a hundred thousand nodes that is about ten billion pair-looks, and the judge will not wait. You need a way to count or optimise pairs without ever writing a nested loop over the whole tree.</p>
+<p>The way in is a balanced cut. A <em>centroid</em> of a tree is a node whose removal leaves every remaining piece of size at most half the original. Every tree has at least one (and at most two, adjacent). Once you have a centroid <code>c</code>, every pair of nodes falls into one of two buckets: the path between them goes through <code>c</code>, or both ends live in the same leftover piece. Solve the through-<code>c</code> bucket in linear time in the current piece, mark <code>c</code> dead so it never appears again, and recurse independently on each leftover piece.</p>
+<p>The logarithm lives in the recursion depth, not in a heap or a segment tree. After <code>c</code> dies, every remaining component has size at most half of what you just processed. A node that is still alive in the next recursive call therefore sits in a component of size at most <code>s/2</code>. Starting from the whole tree of size <code>n</code>, after <code>k</code> such cuts the component has size at most <code>n / 2<sup>k</sup></code>. The component becomes a single node once <code>k</code> reaches <code>log&#8322; n</code> &mdash; about 17 layers when <code>n = 10&#8309;</code>. Each node is visited in one linear scan per layer it belongs to, so the whole decomposition is <code>O(n log n)</code> work.</p>
+<p>The parent pointers of those cuts form the <em>centroid tree</em>: the parent of a later centroid is the centroid that split it off. That tree has height <code>O(log n)</code>, which is why the same construction also answers online questions. The answer for a node is an aggregate over its <code>O(log n)</code> centroid ancestors, each of which stores a summary of the layer it decomposed. In a real statement the signal is a pair-count or "paint this node, query the nearest painted" sitting next to <code>n &le; 10&#8309;</code>.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Every path crosses exactly one centroid at each layer of the decomposition. Solve through the centroid, mark it dead, recurse. Depth is <code>log n</code> because pieces halve.</p>
+    <p>Every pair of nodes has a unique deepest centroid that lies on the path between them. Solve the pairs that go through the current centroid, mark it dead, and recurse; the pieces at least halve, so the recursion is only <code>log n</code> layers deep.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a pair-count or online nearest-painted flavour. Each layer is linear in the live component, total <code>O(n log n)</code> (or <code>O(n log&sup2; n)</code> with maps).</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a pair-count or online nearest-painted flavour is the centroid signature. Each layer is linear in the live component, and because every cut halves the piece, a node is live in at most <code>log&#8322; n</code> layers, for a total of about two million node visits. Maps inside the through-centroid combine add an extra log and still usually pass.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>To find a centroid: compute subtree sizes in the <em>alive</em> component, then walk from any node toward a child whose live size is <code>&gt; n/2</code> until none exists. That node is a centroid. Do not use global sizes — dead nodes are invisible.</p>
-<p>Solve: DFS the alive component from the centroid, compute depths (or prefix XOR, etc.), and combine pairs that go through the centroid without combining two nodes from the same child (those paths do not go through the centroid). Then mark the centroid dead and recurse.</p>
+<p>Finding a centroid is a short walk, not a search over every node. First run a size-DFS on the <em>alive</em> component only &mdash; dead nodes are invisible, as if they had been deleted &mdash; and let <code>s</code> be the number of live nodes you just counted. Then start at any live node and walk toward a child whose live subtree is strictly larger than <code>s/2</code>. The walk has to end: a leaf has no such child, and each step moves to a strictly smaller remaining question. The node where you stop has no child bigger than half, and the leftover parent-side is also at most half (you only arrived here because this side was the one bigger than <code>s/2</code>). That node is a centroid. Do not reuse sizes from an earlier layer; they still count dead nodes and will point at a fake centre.</p>
+<p>Once you hold the centroid <code>c</code>, solve the pairs whose path goes through it. Depth-first-search the alive component from <code>c</code>, recording depths (or prefix XORs, weights, whatever the statement cares about) separately for each child. Combine a newly collected child against the children you have already seen, then merge it in. Two nodes from the <em>same</em> child do not go through <code>c</code> &mdash; their path stays inside that leftover piece and will be counted when that piece is decomposed. After the through-<code>c</code> work is done, set <code>dead[c] = true</code> and recurse on each remaining alive neighbour, each of which is now the seed of a component of size at most <code>s/2</code>.</p>
+<p>Walk the seven-node sample. The full tree has size 7; node 1 has two children of size 3, both <code>&le; 7/2</code>, so 1 is a centroid. Pairs that cross 1 (one end in {2, 4, 5}, the other in {3, 6, 7}) are counted here. Mark 1 dead. The left piece {2, 4, 5} has sizes 3, 1, 1, so 2 is its centroid; after 2 dies the two leaves are trivial. The right piece {3, 6, 7} is the same story with 3 in the middle. The centroid tree has 2 and 3 under 1, and the four leaves under those two &mdash; height 2, which is <code>log&#8322; 7</code> rounded up.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>In an alive component of size <code>s</code>, the centroid has every remaining piece of size <code>&le; s/2</code>. Recursion depth is therefore <code>O(log n)</code>, and every pair of nodes has a unique deepest centroid that lies on the path between them.</p>
+    <p>In an alive component of size <code>s</code>, the centroid is a node whose removal leaves every remaining piece of size <code>&le; s/2</code>. Recursion depth is therefore <code>O(log n)</code>, and every pair of nodes has a unique deepest centroid that lies on the path between them.</p><span class="eq">s<sub>next</sub> &le; s / 2 &nbsp;&rarr;&nbsp; depth &le; log&#8322; n</span><p>In plain words, you are allowed to do a linear amount of work on the current piece because you have paid for that work by guaranteeing the piece will never be this large again for any of those nodes. Interview sentence: <em>"I solve through the centroid, mark it dead, and recurse on pieces that are at most half as big."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the centroid recursion is only log n deep</span>
+    <p>Let <code>s</code> be the number of alive nodes in the current component. By definition of a centroid, every remaining piece has size <code>&le; s/2</code>. A node that survives into a recursive call is therefore inside a component of size at most half. Starting from <code>n</code>, the component containing a given node has size at most <code>n, n/2, n/4, &hellip;</code> until it is 1, which is at most <code>log&#8322; n</code> steps. Finding the centroid is a linear scan of the live component, so if you add up the scans that touch a particular node you get <code>O(log n)</code> visits per node and <code>O(n log n)</code> visits in total. The same halving is why the centroid tree has height <code>O(log n)</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Do not combine two nodes from the same child</span>
+    <p>Their path never touches the centroid. Those pairs belong to a deeper layer. Collect one child, query it against the map of previous children, then merge. Query-after-merge on the same child double-counts pairs a later centroid already owns.</p>
   </div>
 </aside>
 
@@ -166,7 +184,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Full tree size 7. Node 1 has children of size 3 and 3. Both <= 7/2, so 1 is a centroid.",
+          "note": "The full tree has size 7. Node 1 has two children of size 3, both at most 7/2, so 1 is a centroid of the whole tree.",
           "active": [
             0
           ],
@@ -177,7 +195,7 @@
           }
         },
         {
-          "note": "Solve through 1: distances into the left subtree {2,4,5} and right {3,6,7}. Pairs that cross 1 are counted here.",
+          "note": "Solve through 1: collect distances into the left piece {2, 4, 5} and the right piece {3, 6, 7}. Pairs that cross 1 are counted here.",
           "active": [
             0
           ],
@@ -188,7 +206,7 @@
           }
         },
         {
-          "note": "Mark 1 dead. Left component {2,4,5}: sizes 3,1,1. Node 2 is the centroid.",
+          "note": "Mark 1 dead so it is invisible. The left leftover {2, 4, 5} has live sizes 3, 1, 1, and node 2 is its centroid.",
           "active": [
             1
           ],
@@ -199,7 +217,7 @@
           }
         },
         {
-          "note": "Mark 2 dead. Leaves 4 and 5 are trivial centroids.",
+          "note": "Mark 2 dead. The two leftover leaves 4 and 5 are components of size 1, so each is a trivial centroid of itself.",
           "active": [
             3,
             4
@@ -211,7 +229,7 @@
           }
         },
         {
-          "note": "Right component {3,6,7}: centroid 3.",
+          "note": "The right leftover {3, 6, 7} is the mirror image: live sizes 3, 1, 1, so node 3 is the centroid of that piece.",
           "active": [
             2
           ],
@@ -222,7 +240,7 @@
           }
         },
         {
-          "note": "Centroid tree parents: 2 and 3 under 1; 4,5 under 2; 6,7 under 3. Height 2 = log 7.",
+          "note": "Centroid-tree parents: 2 and 3 hang under 1; 4 and 5 under 2; 6 and 7 under 3. Height 2 equals log of 7.",
           "active": [
             0,
             1,
@@ -259,17 +277,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Find centroid:</strong> size-DFS on alive nodes, then walk to a node with no child <code>&gt; s/2</code>.</li>
-  <li><strong>Solve through it</strong> — enumerate depths / prefixes per child, combine across children.</li>
-  <li><strong>Mark the centroid dead</strong> so later size-DFS skips it.</li>
-  <li><strong>Recurse</strong> on each remaining alive component.</li>
-  <li><strong>Online:</strong> store an aggregate at each centroid; a query walks the <code>O(log n)</code> ancestors.</li>
-  <li><strong>Distance</strong> from a node to a centroid ancestor = precomputed <code>dist(u)+dist(c)-2*dist[lca]</code> or a climb with stored depths.</li>
+  <li><strong>Find the centroid of the live piece.</strong> Size-DFS the alive nodes so you know <code>s</code>, then walk from any of them toward a child whose live size is <code>&gt; s/2</code> until no such child exists; that stop is a centroid.</li>
+  <li><strong>Solve the pairs that go through it.</strong> Collect depths or prefixes one child at a time, query each new child against the children already seen, then merge, so two nodes from the same child are never paired here.</li>
+  <li><strong>Mark the centroid dead immediately.</strong> Set <code>dead[c] = true</code> after the through-solve and before any recursive call, so the next size-DFS cannot walk back through <code>c</code> into a different leftover.</li>
+  <li><strong>Recurse on each leftover piece.</strong> Each alive neighbour of <code>c</code> seeds a component of size at most <code>s/2</code>, which is why the recursion depth stays logarithmic.</li>
+  <li><strong>Online queries walk the centroid tree.</strong> Store an aggregate at each centroid when you build, then a query at <code>u</code> walks the <code>O(log n)</code> centroid ancestors rather than climbing the original tree.</li>
+  <li><strong>Distances to those ancestors are precomputed.</strong> Use <code>dist(u)+dist(c)-2*dist[lca]</code> or store <code>dist(u, c)</code> while the layer is still live; a naive climb of the original tree makes an online query linear.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>The same seven-node tree as the HLD page. Watch node 1 split the tree in half, then watch each leftover piece of size 3 pick its own centroid.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -277,12 +295,12 @@ graph TD
       <tr><th>u</th><th>sz</th><th>centroid</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>1</td><td>7</td><td>1</td><td>Full tree size 7. Node 1 has children of size 3 and 3. Both <= 7/2, so 1 is a centroid.</td></tr>
-      <tr><td>1</td><td>7</td><td>solving</td><td>Solve through 1: distances into the left subtree {2,4,5} and right {3,6,7}. Pairs that cross 1 are counted here.</td></tr>
-      <tr><td>2</td><td>3</td><td>2</td><td>Mark 1 dead. Left component {2,4,5}: sizes 3,1,1. Node 2 is the centroid.</td></tr>
-      <tr><td>4,5</td><td>1</td><td>leaves</td><td>Mark 2 dead. Leaves 4 and 5 are trivial centroids.</td></tr>
-      <tr><td>3</td><td>3</td><td>3</td><td>Right component {3,6,7}: centroid 3.</td></tr>
-      <tr><td>tree</td><td>—</td><td>done</td><td>Centroid tree parents: 2 and 3 under 1; 4,5 under 2; 6,7 under 3. Height 2 = log 7.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>7</td><td>1</td><td>The full tree has size 7. Node 1 has two children of size 3, both at most 7/2, so 1 is a centroid of the whole tree.</td></tr>
+      <tr><td>1</td><td>7</td><td>solving</td><td>Solve through 1: collect distances into the left piece {2, 4, 5} and the right piece {3, 6, 7}. Pairs that cross 1 are counted here.</td></tr>
+      <tr><td>2</td><td>3</td><td>2</td><td>Mark 1 dead so it is invisible. The left leftover {2, 4, 5} has live sizes 3, 1, 1, and node 2 is its centroid.</td></tr>
+      <tr><td>4,5</td><td>1</td><td>leaves</td><td>Mark 2 dead. The two leftover leaves 4 and 5 are components of size 1, so each is a trivial centroid of itself.</td></tr>
+      <tr><td>3</td><td>3</td><td>3</td><td>The right leftover {3, 6, 7} is the mirror image: live sizes 3, 1, 1, so node 3 is the centroid of that piece.</td></tr>
+      <tr><td>tree</td><td>—</td><td>done</td><td>Centroid-tree parents: 2 and 3 hang under 1; 4 and 5 under 2; 6 and 7 under 3. Height 2 equals log of 7.</td></tr>
     </tbody>
   </table>
 </div>
@@ -433,7 +451,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Finding a centroid is linear in the live component. Each node is live in <code>O(log n)</code> layers because every split halves size. Total work is therefore <code>O(n log n)</code>, plus whatever the through-centroid combine costs (maps add a log).</p>
+    <p>Finding a centroid is a size-DFS plus a walk, both linear in the live component of size <code>s</code>. The through-centroid collect is another linear scan of the same <code>s</code> nodes. After the centroid dies, every leftover piece has size at most <code>s/2</code>, so a given node is still alive in a component that has at least halved. Starting from <code>n</code>, that node can be scanned at most <code>log&#8322; n</code> times before its component has size 1. Summing over all nodes, the size-DFS and collect work is <code>O(n log n)</code>.</p>
+    <p><span class="eq">T = O(n) per layer &times; O(log n) layers = O(n log n)</span></p>
+    <p>Putting real numbers in: at <code>n = 10&#8309;</code> each node is touched about 17 times, for roughly two million node visits, plus whatever the through-centroid combine costs. A hashmap of depths adds a log and lands near <code>3&times;10<sup>7</sup></code> operations, which Java accepts. Allocating a fresh <code>int[n]</code> frequency array at every centroid would instead cost <code>O(n)</code> per layer-node and blow up to <code>O(n&sup2;)</code>, about ten billion writes. Reuse one global array and roll it back, or store only the depths you actually saw.</p>
   </div>
 
   <table class="complexity__compare">
@@ -455,28 +475,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using global subtree sizes</span>
-    <div class="pitfalls__bug">After a centroid dies, sizes still include dead nodes and you pick a fake centroid in a tiny piece.</div>
-    <div class="pitfalls__fix">Recompute <code>sz</code> on alive nodes only, every time you search.</div>
+    <div class="pitfalls__bug">Reusing <code>sz</code> from the first layer looks free, because those numbers were correct when the whole tree was alive. After a centroid dies they still count dead nodes, so you walk toward a fake centre in a tiny leftover and the halving argument no longer holds.</div>
+    <div class="pitfalls__fix">Recompute <code>sz</code> on alive nodes only, every time you search for a centroid. Test by asserting that the size you just computed equals the number of nodes you later collect from that piece.</div>
   </li>
   <li>
     <span class="pitfalls__title">Combining two nodes from the same child</span>
-    <div class="pitfalls__bug">Their path does not go through the centroid, so you double-count paths that a deeper layer already owns.</div>
-    <div class="pitfalls__fix">Collect one child, query against the <em>previous</em> children, then merge.</div>
+    <div class="pitfalls__bug">Dumping every depth into one map and then pairing freely looks like "all pairs through <code>c</code>". Two nodes from the same child never go through <code>c</code>, so you double-count pairs that a deeper layer already owns and the sample comes out too large.</div>
+    <div class="pitfalls__fix">Collect one child, query it against the <em>previous</em> children, then merge. Test on a path that stays inside one subtree of the first centroid: it must not be counted at that layer.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to mark dead before recursing</span>
-    <div class="pitfalls__bug">The next size-DFS walks back through the centroid into other components.</div>
-    <div class="pitfalls__fix"><code>dead[c] = true</code> immediately after the through-solve, before the recursive calls.</div>
+    <div class="pitfalls__bug">Leaving <code>dead[c]</code> false until after the recursive calls looks harmless because you are "done with <code>c</code>". The next size-DFS walks back through <code>c</code> into other leftovers, sees the whole original tree, and the recursion never shrinks.</div>
+    <div class="pitfalls__fix">Set <code>dead[c] = true</code> immediately after the through-solve and before any recursive call. Test that a size-DFS started at a neighbour of <code>c</code> reports a size of at most half.</div>
   </li>
   <li>
     <span class="pitfalls__title">O(n) allocation inside the layer</span>
-    <div class="pitfalls__bug"><code>new int[n]</code> freq arrays per centroid blow memory and time to <code>O(n&sup2;)</code>.</div>
-    <div class="pitfalls__fix">Reuse a global freq array and roll back, or use a map of the depths you actually saw.</div>
+    <div class="pitfalls__bug"><code>new int[n]</code> at every centroid looks like a clean frequency array and is correct. It costs linear setup per centroid, and there are <code>n</code> centroids, so the hidden work is <code>O(n&sup2;)</code> and the solution TLEs on a line.</div>
+    <div class="pitfalls__fix">Reuse one global frequency array and roll back the depths you incremented, or use a map of the depths you actually saw. Test that peak extra memory stays linear in <code>n</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Distance to a centroid ancestor via naive walk</span>
-    <div class="pitfalls__bug">Online queries become <code>O(n)</code> if you climb the original tree.</div>
-    <div class="pitfalls__fix">Precompute LCA, or store <code>dist(u, centroid)</code> while building the centroid tree.</div>
+    <div class="pitfalls__bug">Climbing parent pointers in the original tree from <code>u</code> to a centroid ancestor looks like the usual distance formula and is correct. On a line it is <code>O(n)</code> per query, which destroys the <code>O(log n)</code> centroid-tree walk.</div>
+    <div class="pitfalls__fix">Precompute LCA on the original tree, or store <code>dist(u, c)</code> for every centroid ancestor while the layer is still live. Test an online query on a path graph of length <code>n</code>.</div>
   </li>
 </ul>
 
@@ -518,28 +538,28 @@ graph TD
   <details class="followup">
     <summary>Does every tree have a centroid?</summary>
     <div class="followup__body">
-      <p>Yes. Walk from any node toward a child of size <code>&gt; n/2</code>. The walk ends: a node with no such child exists, and that node is a centroid. At most two adjacent centroids exist.</p>
+      <p>Yes, and the walk finds one. Start at any live node and keep stepping toward a child whose live subtree is bigger than half the component. The walk cannot cycle, and it stops at a node with no such child. The parent-side of that node is also at most half, because you only arrived there by following the unique oversized side. At most two adjacent centroids exist; either one is fine for the decomposition.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why not use HLD for pair counts?</summary>
     <div class="followup__body">
-      <p>HLD gives you path <em>aggregates</em>, not an enumeration of pairs. Counting pairs that satisfy a numeric constraint needs a separator so you can join two independent sides.</p>
+      <p>HLD gives you an aggregate along one already-chosen path; it does not list or count pairs. Counting pairs that satisfy a numeric constraint needs a separator so you can join two independent sides in linear time, which is exactly what a centroid is for. If the statement asks for the sum of values on the path from <code>u</code> to <code>v</code>, that is HLD, not this page.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What if the "tree" has extra edges?</summary>
     <div class="followup__body">
-      <p>Build the block-cut or bridge-block tree first, then decompose that. Centroid decomposition is defined on trees.</p>
+      <p>Centroid decomposition is defined on trees, so a cycle breaks the size argument and the walk may never stop. Build the block-cut tree or the bridge-block tree of the original graph first, then decompose that tree. Pair queries that care about the original edges have to be translated onto the block tree before you start.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you roll back a frequency array?</summary>
     <div class="followup__body">
-      <p>Collect the list of depths you incremented and decrement them after the combine. Clearing <code>int[n]</code> each layer is <code>O(n&sup2;)</code>.</p>
+      <p>While you collect depths from a child, push each depth you increment onto a small list. After the through-centroid combine, walk that list and decrement. Clearing a fresh <code>int[n]</code> at every centroid is <code>O(n)</code> per node and becomes <code>O(n&sup2;)</code>. The rollback list has length equal to the piece you just scanned, so it is already paid for by the <code>O(n log n)</code> bound.</p>
     </div>
   </details>
 </div>

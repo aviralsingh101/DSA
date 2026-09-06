@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A graph that only grows (edges are added, never deleted) has a running question: "are u and v already connected?" DFS from scratch is O(n) per query. A disjoint-set union (union-find) stores each component as a rooted tree and answers the question by comparing two roots, in essentially constant time.</p>
-<p>The two standard accelerations are path compression (find flattens the path to the root, so the next find is a single hop) and union by rank or size (always hang the smaller tree under the larger, so height stays logarithmic even without compression). Together they are inverse-Ackermann, which for all n you will ever see is &le; 4.</p>
-<p>Interviews love DSU because the code is twenty lines and the applications are not obvious: redundant edges, equality equations, accounts merge, offline connectivity, Kruskal's MST, and "number of islands" on a grid. If the graph is static, a DFS is simpler; DSU is the tool for <em>incremental</em> connectivity.</p>
+<p>Picture a room of computers that starts with no cables plugged in at all. Cables get added one at a time, and in between installations somebody keeps asking: can machine 3 currently reach machine 7? You can answer any single question with a depth-first search, following wires from 3 until you either arrive at 7 or run out of cable to follow. That is perfectly correct, but it costs a fresh walk over the whole network every time you are asked. With a hundred thousand cables and a hundred thousand questions you are looking at something like ten billion steps, and the judge will cut you off long before you finish.</p>
+<p>The structure on this page removes the repeated walking by never touching the wires again. Every group of machines that can already reach each other elects one member as its <em>representative</em>, and every other member of the group stores a pointer to somebody nearer that representative. Those pointers form a tree for each group, and the whole collection of trees is called a forest &mdash; hence the name <em>disjoint-set union</em>, usually shortened to union-find. The question "can 3 reach 7?" now becomes "do 3 and 7 climb to the same representative?", which you answer by following pointers upwards from each of them and comparing where you land.</p>
+<p>Left completely alone, that idea can still be slow. If every merge happens to hang a tall tree underneath a short one, the pointers can end up forming a single chain of length <code>n</code>, and climbing that chain is exactly as slow as the search you were trying to avoid. Two small habits prevent it. <em>Union by size</em> always hangs the smaller group underneath the larger one, so a group can only get taller when it merges with something at least as big as itself. <em>Path compression</em> re-points every node you touched on the way up to aim straight at the representative, so the next question about any of them finishes in one hop.</p>
+<p>In a real problem statement the signal is the phrase "edges are added" (never removed) sitting next to limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out re-running a search per query, and it is exactly what union-find is for. The same twenty lines then cover a surprisingly wide spread of problems: rejecting the one cable that closes a loop, merging duplicate user accounts that share an email address, checking a batch of <code>a == b</code> and <code>a != b</code> claims for a contradiction, and Kruskal's minimum spanning tree, which is this structure plus a sort and nothing else.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>find is "who is the root"; union hangs one root under the other. Path compression plus union by rank makes both operations effectively constant.</p>
+    <p>Two elements belong to the same group exactly when they climb to the same representative, so <code>find</code> answers every question you will be asked and <code>union</code> only ever re-points one representative at another. Keep the trees short by hanging the smaller group underneath, flatten whatever you just walked over, and both operations end up costing about as much as a handful of array reads.</p>
   </div>
 </aside>
 
@@ -117,19 +118,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> incremental connectivity. Without the two accelerations, a skew chain is O(n) per find and you TLE. With them, q operations are comfortably linear-ish.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with edges only ever being added is the signature. Answering each of those queries with a fresh traversal would be roughly <code>4&times;10&#8309;&#8304;</code> steps, which no judge accepts, while union-find handles the entire batch in about <code>q</code> array operations. If the statement ever deletes an edge, this structure on its own is the wrong tool; and if you drop either of the two accelerations, a deliberately constructed chain pushes a single <code>find</code> back up to <code>O(n)</code>.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Each element x stores parent[x], initially itself. find(x) walks parent until parent[r] == r; that r is the representative. Path compression sets every node on the walk to r (recursive: <code>parent[x] = find(parent[x])</code>). After that, the tree is almost flat.</p>
-<p>union(a, b) finds both roots. If they match, the edge is redundant. Otherwise hang one root under the other. Union by rank: hang the lower rank under the higher, and increment rank only on a tie. Union by size: hang the smaller component under the larger and add the sizes. Either keeps height O(log n) even without compression.</p>
-<p>The inverse-Ackermann bound is the combination. You never need to quote Ackermann in an interview; say "effectively O(1) per operation with path compression and union by rank". For Kruskal, sort the edges first; DSU then tells you which ones are tree edges.</p>
+<p>You need two arrays. <code>parent[x]</code> holds the element that <code>x</code> currently points at, and it starts out as <code>x</code> itself, which is how you say "every element begins alone in a group that it represents". <code>size[x]</code> is only meaningful when <code>x</code> is a representative, where it counts how many elements that group contains, and it starts at 1. The operation <code>find(x)</code> is the climb: while <code>parent[x]</code> is not equal to <code>x</code>, move up to <code>parent[x]</code>. The element where the loop stops is the one pointing at itself, and that element is the representative of the group containing <code>x</code>.</p>
+<p><code>union(a, b)</code> starts by calling <code>find</code> on both arguments, because you must never re-point an ordinary member &mdash; only a representative. If the two roots come back equal, <code>a</code> and <code>b</code> were already in one group, the edge you were handed is redundant, and you report that without changing anything. If the roots differ, compare their sizes and make sure <code>ra</code> is the larger of the two, swapping the two variables if it is not. Then write <code>parent[rb] = ra</code> and add <code>size[rb]</code> into <code>size[ra]</code>. One group has absorbed the other with a single pointer write.</p>
+<p>Path compression is the second habit and it costs one extra line. While climbing inside <code>find</code>, once you know the representative <code>r</code>, set the parent of every node you passed to <code>r</code> directly. The usual recursive spelling does this implicitly, because <code>parent[x] = find(parent[x])</code> assigns the final answer on the way back out of the recursion. The trees therefore get flatter every time you query them, which is why the cost is quoted as <code>&alpha;(n)</code>, the inverse Ackermann function. You never need that function's definition: it stays below 5 for any <code>n</code> a computer can hold, so treat each operation as constant and say so out loud.</p>
+<p>Walk five elements through the whole thing. Everything points at itself, so there are five groups. <code>union(0, 1)</code> finds roots 0 and 1, the sizes tie, so 1 is hung under 0 and <code>size[0]</code> becomes 2. <code>union(2, 3)</code> does the same on the other side. Now <code>union(1, 2)</code> climbs from 1 up to root 0 and from 2 up to root 2, sees sizes 2 and 2, and hangs root 2 underneath root 0, so <code>size[0]</code> is 4. Finally asking <code>find(3)</code> climbs 3 to 2 to 0 and, thanks to compression, leaves both 3 and 2 pointing straight at 0.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>x and y are in the same component iff they have the same root:</p><span class="eq">connected(x, y) &hArr; find(x) = find(y)</span><p>Interview sentence: <em>"I hang roots, not arbitrary nodes, and I flatten paths on the way up."</em></p>
+    <p>Two elements are in the same component exactly when the climb from each one ends at the same place:</p><span class="eq">connected(x, y) &hArr; find(x) = find(y)</span><p>In plain words, the pointer you store is never a claim about the original graph &mdash; it is not "my neighbour", it is only "one step towards whoever currently speaks for my group". That is precisely why re-pointing a representative during <code>union</code>, or shortening a path during <code>find</code>, cannot change any answer: both of them shuffle pointers around inside a single group without ever moving an element from one group into another.</p><p>Interview sentence: <em>"I hang roots, not arbitrary nodes, and I flatten paths on the way up."</em></p>
   </div>
 </aside>
 
@@ -185,7 +187,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Start: five singleton components. parent[i] = i.",
+          "note": "Starting position: five separate groups of one element each, because every slot holds parent[i] = i and so represents itself.",
           "arr": [
             0,
             1,
@@ -208,7 +210,7 @@
           }
         },
         {
-          "note": "union(0,1): both rank 0, attach 1 under 0, rank[0] becomes 1.",
+          "note": "union(0,1): both are roots of rank 0, so the tie is broken arbitrarily. Element 1 is hung under 0 and rank[0] rises to 1.",
           "arr": [
             0,
             0,
@@ -228,7 +230,7 @@
           }
         },
         {
-          "note": "union(1,2): find(1)=0, find(2)=2. rank[0] > rank[2], attach 2 under 0.",
+          "note": "union(1,2): climbing from 1 lands on root 0, and 2 is already a root. Since rank[0] beats rank[2], the shorter tree at 2 is hung under 0.",
           "arr": [
             0,
             0,
@@ -251,7 +253,7 @@
           }
         },
         {
-          "note": "union(3,4): attach 4 under 3, rank[3] becomes 1. Two components remain.",
+          "note": "union(3,4): a separate merge on the far side of the array hangs 4 under 3 and lifts rank[3] to 1, leaving two groups in total.",
           "arr": [
             0,
             0,
@@ -276,7 +278,7 @@
           }
         },
         {
-          "note": "union(2,3): find(2)=0, find(3)=3. Ranks equal (1 and 1), attach 3 under 0, rank[0] becomes 2.",
+          "note": "union(2,3): the roots are 0 and 3 with equal rank 1, so one is picked and 3 is hung under 0; only a genuine tie increments the rank, so rank[0] becomes 2.",
           "arr": [
             0,
             0,
@@ -300,7 +302,7 @@
           }
         },
         {
-          "note": "find(4): parent[4] is 3, parent[3] is 0. Compress: parent[4] = 0. One hop next time.",
+          "note": "find(4) climbs from 4 to 3 and then to the root 0. Path compression now rewrites parent[4] = 0, so asking about element 4 again costs a single hop.",
           "arr": [
             0,
             0,
@@ -325,7 +327,7 @@
           }
         },
         {
-          "note": "connected(1, 4) is true: both find to 0. The last union was the one that merged the two remaining trees.",
+          "note": "connected(1, 4) reports true because both elements climb to representative 0. Everything now points directly at that root, which is compression paying off.",
           "arr": [
             0,
             0,
@@ -367,18 +369,19 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>parent[i] = i</strong>, <code>rank[i] = 0</code> (or <code>size[i] = 1</code>). Start with n components.</li>
-  <li><strong>find(x):</strong> if parent[x] != x, parent[x] = find(parent[x]). Return parent[x].</li>
-  <li><strong>union(a, b):</strong> a = find(a), b = find(b). If equal, return false (cycle / already connected).</li>
-  <li><strong>Hang by rank:</strong> if rank[a] &lt; rank[b] swap. parent[b] = a. If ranks were equal, rank[a]++.</li>
-  <li><strong>connected</strong> is find(a) == find(b). Count components by decrementing on a successful union.</li>
-  <li><strong>Do not parent[a] = b without find.</strong> Hang roots only.</li>
-  <li><strong>Iterative find</strong> if n can be 10&#8309; and the tree might be a chain (forgotten rank).</li>
+  <li><strong>Initialise the two arrays.</strong> Set <code>parent[i] = i</code> and <code>rank[i] = 0</code> (or <code>size[i] = 1</code>) for every element, which declares <code>n</code> separate groups of one member each, every member representing itself. Keep a counter <code>comps = n</code> if the problem asks how many groups survive.</li>
+  <li><strong>find(x): climb to the representative.</strong> Follow <code>parent</code> upwards until you reach the element that points at itself. Every membership question in the problem reduces to this one walk, so this is the operation worth making fast.</li>
+  <li><strong>Compress the path while you climb.</strong> Once the representative <code>r</code> is known, re-point every node you visited so it aims directly at <code>r</code>; the recursive line <code>parent[x] = find(parent[x])</code> does it for free on the way back out. Future queries on those nodes now take one hop.</li>
+  <li><strong>union(a, b): resolve both ends first.</strong> Compute <code>a = find(a)</code> and <code>b = find(b)</code> before touching anything. If the two are equal then these elements already share a group, the edge closes a cycle, and you return <code>false</code> having changed nothing.</li>
+  <li><strong>Hang the smaller tree under the larger.</strong> If <code>rank[a] &lt; rank[b]</code> swap the two roots so <code>a</code> is the taller one, then write <code>parent[b] = a</code>, and increment <code>rank[a]</code> only when the two ranks were equal. Merging the small side into the big side is what keeps every tree short.</li>
+  <li><strong>Answer the queries from the roots.</strong> <code>connected(a, b)</code> is simply <code>find(a) == find(b)</code>, and the number of groups falls by exactly one on every union that returned <code>true</code>, so decrement <code>comps</code> at that point and nowhere else.</li>
+  <li><strong>Never write parent[a] = b without calling find.</strong> Hanging a non-representative under something else detaches whatever was below it, silently splitting a group in half. Every pointer write in this structure targets a root.</li>
+  <li><strong>Prefer an iterative find when n reaches 10&#8309;.</strong> If you ever skip union by rank, a chain of depth <code>n</code> can appear and a recursive climb overflows the Java stack; walking to the root and then walking the path a second time to flatten it is stack-safe.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>The four unions on n = 5. <code>ra, rb</code> are roots at the moment of union.</p>
+<p>Four unions arriving over five elements, in the order a solution would receive them. The columns <code>ra</code> and <code>rb</code> are the representatives that <code>find</code> returned at that moment, which is why they are often not the two numbers that were passed in.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -386,13 +389,13 @@ graph TD
       <tr><th>op</th><th>ra</th><th>rb</th><th>comps</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>—</td><td>5</td><td>Start: five singleton components. parent[i] = i.</td></tr>
-      <tr><td>union 0-1</td><td>0</td><td>1</td><td>4</td><td>union(0,1): both rank 0, attach 1 under 0, rank[0] becomes 1.</td></tr>
-      <tr><td>union 1-2</td><td>0</td><td>2</td><td>3</td><td>union(1,2): find(1)=0, find(2)=2. rank[0] > rank[2], attach 2 under 0.</td></tr>
-      <tr><td>union 3-4</td><td>3</td><td>4</td><td>2</td><td>union(3,4): attach 4 under 3, rank[3] becomes 1. Two components remain.</td></tr>
-      <tr><td>union 2-3</td><td>0</td><td>3</td><td>1</td><td>union(2,3): find(2)=0, find(3)=3. Ranks equal (1 and 1), attach 3 under 0, rank[0] becomes 2.</td></tr>
-      <tr class="trace-table__row--change"><td>find 4</td><td>0</td><td>—</td><td>1</td><td>find(4): parent[4] is 3, parent[3] is 0. Compress: parent[4] = 0. One hop next time.</td></tr>
-      <tr class="trace-table__row--change"><td>same set</td><td>0</td><td>0</td><td>1</td><td>connected(1, 4) is true: both find to 0. The last union was the one that merged the two remaining trees.</td></tr>
+      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>—</td><td>5</td><td>Starting position: five separate groups of one element each, because every slot holds parent[i] = i and so represents itself.</td></tr>
+      <tr><td>union 0-1</td><td>0</td><td>1</td><td>4</td><td>union(0,1): both are roots of rank 0, so the tie is broken arbitrarily. Element 1 is hung under 0 and rank[0] rises to 1.</td></tr>
+      <tr><td>union 1-2</td><td>0</td><td>2</td><td>3</td><td>union(1,2): climbing from 1 lands on root 0, and 2 is already a root. Since rank[0] beats rank[2], the shorter tree at 2 is hung under 0.</td></tr>
+      <tr><td>union 3-4</td><td>3</td><td>4</td><td>2</td><td>union(3,4): a separate merge on the far side of the array hangs 4 under 3 and lifts rank[3] to 1, leaving two groups in total.</td></tr>
+      <tr><td>union 2-3</td><td>0</td><td>3</td><td>1</td><td>union(2,3): the roots are 0 and 3 with equal rank 1, so one is picked and 3 is hung under 0; only a genuine tie increments the rank, so rank[0] becomes 2.</td></tr>
+      <tr class="trace-table__row--change"><td>find 4</td><td>0</td><td>—</td><td>1</td><td>find(4) climbs from 4 to 3 and then to the root 0. Path compression now rewrites parent[4] = 0, so asking about element 4 again costs a single hop.</td></tr>
+      <tr class="trace-table__row--change"><td>same set</td><td>0</td><td>0</td><td>1</td><td>connected(1, 4) reports true because both elements climb to representative 0. Everything now points directly at that root, which is compression paying off.</td></tr>
     </tbody>
   </table>
 </div>
@@ -559,9 +562,10 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Union by rank alone makes every tree height O(log n), so find is O(log n). Path compression alone is amortised O(log n). Together they are amortised <code>&alpha;(n)</code>, the inverse Ackermann function, with <code>&alpha;(n) &le; 4</code> for n up to the number of atoms in the universe:</p>
+    <p>Take the two accelerations one at a time. Union by rank guarantees that a tree only gets taller when it merges with another tree of the same height, which means a tree of height <code>h</code> must contain at least <code>2&#8319;</code> elements, and therefore <code>h &le; log&#8322; n</code>. That alone caps one <code>find</code> at roughly 20 pointer steps when <code>n = 10&#8310;</code>. Path compression on its own, without any ranking, is also enough for an amortised <code>O(log n)</code>.</p>
+    <p>Used together the amortised cost per operation drops to <code>&alpha;(n)</code>, the inverse Ackermann function, which is at most 4 for every <code>n</code> that could physically be stored:</p>
     <p><span class="eq">T(q) = &Theta;(q &middot; &alpha;(n)) &approx; &Theta;(q)</span></p>
-    <p>Naive parent-pointer without either optimisation is &Theta;(n) per find on a chain, so q finds are &Theta;(n q). Kruskal is sorting O(m log m) plus O(m &alpha;(n)) DSU, dominated by the sort.</p>
+    <p>Putting real numbers in: <code>q = 2&times;10&#8309;</code> operations land near <code>10&#8310;</code> array reads, which is a few milliseconds. Skip both accelerations and a chain makes each <code>find</code> cost <code>&Theta;(n)</code>, so the same input becomes <code>&Theta;(n q)</code>, about <code>4&times;10&#8309;&#8304;</code> steps. Inside Kruskal the sort at <code>O(m log m)</code> dominates and the <code>O(m &alpha;(n))</code> union-find work is effectively free.</p>
   </div>
 
   <table class="complexity__compare">
@@ -584,12 +588,12 @@ graph TD
   <li>
     <span class="pitfalls__title">Linking the original nodes instead of the roots</span>
     <div class="pitfalls__bug"><code>parent[a] = b</code> when a is already a child. The subtree of a is detached from its old root and the structure is no longer a forest of valid components.</div>
-    <div class="pitfalls__fix">Always <code>a = find(a); b = find(b);</code> first.</div>
+    <div class="pitfalls__fix">Always resolve both ends first with <code>a = find(a); b = find(b);</code> and only then write a parent. To test it, union a chain of three and check that the element in the middle still reaches the same root.</div>
   </li>
   <li>
     <span class="pitfalls__title">Skipping union by rank and path compression</span>
     <div class="pitfalls__bug">A sequence of unions that always hangs the old root under a new singleton builds a linked list. The next find is O(n) and q of them TLE.</div>
-    <div class="pitfalls__fix">Both accelerations, always. Rank (or size) plus recursive or two-pass compress.</div>
+    <div class="pitfalls__fix">Keep both accelerations every single time: rank or size to decide which root gets hung, plus compression inside <code>find</code>. To test it, union <code>i</code> with <code>i+1</code> for a hundred thousand values in ascending order and time a find on the last element.</div>
   </li>
   <li>
     <span class="pitfalls__title">Path compression on a DSU you need to roll back</span>
@@ -604,7 +608,7 @@ graph TD
   <li>
     <span class="pitfalls__title">Using DSU on a directed graph</span>
     <div class="pitfalls__bug">"Can I reach t from s" is not "are they in the same undirected component". Union-find will happily merge both directions of an edge you only had one way.</div>
-    <div class="pitfalls__fix">DSU is undirected. Directed reachability is DFS / SCC / 2-SAT, not this page.</div>
+    <div class="pitfalls__fix">Remember that this structure only ever models undirected connectivity. Directed reachability needs a DFS, strongly connected components or 2-SAT instead, so re-read the statement for the word "directed" before reaching for union-find.</div>
   </li>
 </ul>
 

@@ -39,7 +39,7 @@
 <h2>Why this exists</h2>
 <p>Loop-counting stops working the moment the algorithm calls itself. There is no innermost loop to count, because the work is spread across a tree of calls whose shape depends on how the input is split. Merge sort, quicksort, binary search, divide-and-conquer on the answer, and every tree algorithm you will meet in <a href="../05-trees/tree-dp-and-rerooting.html">module 05</a> need a different tool.</p>
 <p>The tool is the <strong>recursion tree</strong>: draw the calls, compute the total work at each depth, and sum over depths. Almost every recurrence you meet in practice falls into one of three shapes &mdash; the root dominates, the leaves dominate, or every level costs the same &mdash; and knowing which shape you are in gives the answer immediately.</p>
-<p>The master theorem is a lookup table for exactly that classification. It is worth memorising because interviewers ask "why <code>n log n</code>?" and the strong answer is "there are <code>log n</code> levels and each costs <code>&Theta;(n)</code>", not "because merge sort is <code>n log n</code>".</p>
+<p>The master theorem is a lookup table for exactly that classification. It is worth memorising because interviewers ask "why <code>n log n</code>?" and the strong answer is "there are <code>log n</code> levels and each costs <code>&Theta;(n)</code>", not "because merge sort is <code>n log n</code>". Once you can draw the tree, the lookup table is just a shortcut for a sum you already know how to write by hand. The same three shapes also tell you the space story: a divide-style tree is only <code>log n</code> deep, so it is safe at <code>n = 10&#8313;</code>, while a peel-one-element recursion is <code>n</code> deep and overflows the Java stack long before the time limit is even the problem. That is why this page sits next to complexity analysis: counting loops prices iterative code, and drawing the recursion tree prices everything that calls itself.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -128,7 +128,7 @@
 <h2>Core idea: add up the levels</h2>
 <p>Write the recurrence as <code>T(n) = a &middot; T(n/b) + f(n)</code>. Here <code>a</code> is the branching factor, <code>b</code> is how much smaller each subproblem is, and <code>f(n)</code> is the non-recursive work done at this call &mdash; the split plus the combine. Merge sort is <code>a = 2, b = 2, f(n) = n</code>.</p>
 <p>Now account for the tree. At depth <code>k</code> there are <code>a<sup>k</sup></code> nodes, each of size <code>n / b<sup>k</sup></code>, so the total work at that depth is <code>a<sup>k</sup> &middot; f(n / b<sup>k</sup>)</code>. The tree bottoms out when <code>n / b<sup>k</sup> = 1</code>, that is at depth <code>k = log<sub>b</sub> n</code>, where there are <code>a<sup>log<sub>b</sub> n</sup> = n<sup>log<sub>b</sub> a</sup></code> leaves.</p>
-<p>That last expression, <code>n<sup>log<sub>b</sub> a</sup></code>, is the total cost of the leaves, and the whole master theorem is just a comparison between it and <code>f(n)</code>. If the leaves grow faster, the leaves pay for everything. If <code>f(n)</code> grows faster, the single root call pays for everything. If they tie, every level costs the same and you multiply by the number of levels.</p>
+<p>That last expression, <code>n<sup>log<sub>b</sub> a</sup></code>, is the total cost of the leaves, and the whole master theorem is just a comparison between it and <code>f(n)</code>. If the leaves grow faster, the leaves pay for everything. If <code>f(n)</code> grows faster, the single root call pays for everything. If they tie, every level costs the same and you multiply by the number of levels. Walk merge sort as a check: eight elements split into two fours, then four twos, then eight ones; each of those four depths spends eight units merging, so the total is <code>8 &times; 4 = 32 = n(log&#8322; n + 1)</code>. That flat-per-level picture is exactly case 2, and it is the picture you should draw out loud when someone asks why merge sort is <code>n log n</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -398,17 +398,17 @@ flowchart TD
 <ol class="stepper">
   <li><strong>Write the recurrence.</strong> Identify <code>a</code> (number of recursive calls), <code>b</code> (size divisor) and <code>f(n)</code> (work outside the calls).</li>
   <li><strong>Check divide versus subtract.</strong> If the size shrinks by subtraction, skip the master theorem and sum the series.</li>
-  <li><strong>Compute the leaf exponent</strong> <code>c = log<sub>b</sub> a</code>.</li>
-  <li><strong>Compare <code>f(n)</code> with <code>n<sup>c</sup></code></strong> to pick the case.</li>
-  <li><strong>Case 1 (<code>f</code> smaller):</strong> answer <code>&Theta;(n<sup>c</sup>)</code> &mdash; the leaves pay.</li>
+  <li><strong>Compute the leaf exponent</strong> <code>c = log<sub>b</sub> a</code>, which is exactly how many leaves the tree has written as a power of <code>n</code>.</li>
+  <li><strong>Compare <code>f(n)</code> with <code>n<sup>c</sup></code></strong> so you know whether the root, the leaves, or every level is paying for the work.</li>
+  <li><strong>Case 1 (<code>f</code> smaller):</strong> answer <code>&Theta;(n<sup>c</sup>)</code> &mdash; the leaves pay because the combine work shrinks as you go up.</li>
   <li><strong>Case 2 (equal up to log factors):</strong> answer <code>&Theta;(n<sup>c</sup> log<sup>k+1</sup> n)</code> &mdash; every level pays equally.</li>
-  <li><strong>Case 3 (<code>f</code> larger, and regular):</strong> answer <code>&Theta;(f(n))</code> &mdash; the root pays.</li>
-  <li><strong>Report space separately</strong> as <code>&Theta;(max depth)</code>, plus any auxiliary buffers the combine step allocates.</li>
+  <li><strong>Case 3 (<code>f</code> larger, and regular):</strong> answer <code>&Theta;(f(n))</code> &mdash; the single root call already costs more than everything below it.</li>
+  <li><strong>Report space separately</strong> as <code>&Theta;(max depth)</code>, plus any auxiliary buffers the combine step allocates, because only the live path uses memory.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Nine recurrences worked through the same procedure. Highlighted rows are the ones whose answers surprise people.</p>
+<p>Nine recurrences run through the same three questions: write a, b and f(n), compare the leaf exponent against f, then read the case. Highlighted rows are the ones whose answers surprise people.</p>
 
 <div class="table-scroll">
   <table class="trace-table">

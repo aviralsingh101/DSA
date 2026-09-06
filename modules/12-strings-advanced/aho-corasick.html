@@ -22,7 +22,7 @@
   <p class="hero__tagline">A trie of all patterns plus KMP-style failure links: feed the text once and report every pattern occurrence, overlapping included, in linear time.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">32 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="kmp-and-prefix-function.html">KMP & the Prefix Function</a>,
       <a href="../05-trees/trie.html">Trie</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>KMP matches one pattern. m patterns in a text of length n is O(n * sum |p|) naively, or m KMP automata. Aho-Corasick builds one automaton whose states are trie nodes and whose failure links jump to the longest proper suffix that is still a prefix of some pattern.</p>
-<p>BFS from the root fills failure links (the same queue idea as KMP's π, on a trie). Output links skip to the next terminal along the failure chain so you do not walk O(patterns) per character.</p>
-<p>Hidden as "virus detection", "count how many dictionaries words appear", and CF problems that DP on the automaton ("avoid these forbidden words").</p>
+<p>You are given a dictionary of patterns and one long text, and you must report every place any of those patterns sits inside the text, overlaps included. Running KMP once per pattern is correct, and it costs about <code>|t|</code> times the number of patterns plus the total length of the dictionary. At a million-character text and a thousand patterns that is a billion steps, which some judges will still accept and some will not; at a million patterns it is not a contest-legal runtime. The naive nested loop that calls <code>startsWith</code> at every text index is worse still.</p>
+<p>Aho-Corasick builds one automaton that knows the whole dictionary. The states are the nodes of a trie of every pattern. The extra ingredient is a <em>failure link</em> (also called a suffix link) on each node: from the string that node represents, jump to the longest proper suffix of that string that is still a prefix of some pattern in the dictionary. That is exactly KMP's <code>&pi;[q-1]</code>, just living on a tree of patterns instead of on one string. Feeding a text character is then: follow the trie edge if it exists, otherwise follow failure links until an edge exists, and never rewind the text pointer.</p>
+<p>Those failure links are filled by a breadth-first walk from the root, parent before child, which is the same "shorter borders first" order that lets KMP read <code>&pi;[q-1]</code> safely. Nested patterns such as <code>ab</code> sitting inside <code>xab</code> are easy to miss if you only look at the node you landed on; an <em>output link</em> (or an aggregated <code>out[u] += out[fail[u]]</code>) walks the failure chain and reports every dictionary word that ends here. The same automaton is the state space for "build a string that avoids these forbidden words".</p>
+<p>In a real statement the signal is many patterns against one text, or a DP whose state is "where am I in the dictionary after reading <code>i</code> characters", with <code>|t| + sum |p|</code> around <code>10<sup>6</sup></code>. One pattern is still KMP. A huge text and later "is this word in there?" questions is a suffix array or a suffix automaton of the text, not this page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Failure[u] is the KMP border of the string represented by u, inside the trie of all patterns. Feeding a character is: follow the edge, or fail until you can.</p>
+    <p>The failure link of a trie node is the KMP border of the string that node represents, taken inside the dictionary rather than inside one pattern: the longest proper suffix that is still a prefix of some word. Feeding a character follows an edge or walks those links, and because every surviving alignment is a suffix of a suffix you never skip a hit and never rewind the text.</p>
   </div>
 </aside>
 
@@ -112,18 +113,44 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>sum |p| + |t| &le; 10&#8310;</code>. Alphabet 26 is an array of 26; larger alphabets use maps and a slower fail. Output-link compression is mandatory if many patterns nest.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>sum |p| + |t| &le; 10<sup>6</sup></code> is the linear-automaton window. Alphabet 26 is a child array of 26 per node; a larger alphabet wants a map and a slower fail walk. If many patterns nest, compressing the failure chain into <code>out[u]</code> or an output link is mandatory: climbing <code>fail</code> raw at every text character can multiply the scan by the number of nested words.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Insert every pattern into a trie; store pattern ids on terminal nodes. BFS: for each node, for each char, if the child exists, fail[child] = next(fail[node], char); else next(node,char) = next(fail[node], char) (lazy or filled).</p>
-<p>Scan the text: state = next(state, c). Then walk output links from state and collect terminals. DP: edges of the automaton are the transitions.</p>
+<p>You need a trie of every pattern, an array <code>fail</code> of one integer per node, and a number <code>out[u]</code> (or a list of pattern ids) on terminals. Insert each word from the root, creating a child for each new character, and mark the node where the word ends. The root represents the empty string and is state 0. After the trie exists, a breadth-first queue fills the links. Push every direct child of the root first, with <code>fail = 0</code>: a single-character word has no proper suffix that is still a prefix, so it falls back to the empty string. Then, while the queue is not empty, pop a node <code>u</code> and look at each letter <code>c</code>. If <code>u</code> has a child <code>v</code> on <code>c</code>, the failure of <code>v</code> is wherever <code>fail[u]</code> itself goes on <code>c</code>, because that is the longest suffix of <code>u</code>'s string that can still accept <code>c</code>. If <code>u</code> has no child on <code>c</code>, you may fill <code>nxt[u][c] = nxt[fail[u]][c]</code> so the later scan is a single array read.</p>
+<p>Why that failure cannot lose a match is the same nested-border argument as <code>q = &pi;[q-1]</code>, just on a tree. After reading some prefix of the text you sit at the node <code>u</code> whose string is the longest suffix of that prefix that is a prefix of some pattern. The next text character is <code>c</code>. If <code>u</code> has an edge on <code>c</code>, you take it and you have grown that dictionary prefix by one. If it does not, every alignment that can still use some of the text you already matched must start later, which means it is a proper suffix of <code>u</code>'s string. The longest such suffix that is still a dictionary prefix is exactly <code>fail[u]</code>, so you retry <code>c</code> from there. If that also fails you walk to <code>fail[fail[u]]</code>, and so on down to the root. Every possible surviving alignment is a suffix of a suffix that the trie still knows about, so the chain visits them all and invents none. You never move the text pointer backwards.</p>
+<p>BFS order is what makes the definition computable. The string at <code>fail[u]</code> is always strictly shorter than the string at <code>u</code>, so it is a node of smaller depth. A queue that pushes children after their parent has already been processed therefore finds <code>fail[u]</code> already filled, and <code>nxt[fail[u]][c]</code> already filled if you are precomputing missing edges. A depth-first walk can ask for a failure that has not been written yet and then store a wrong link that silently drops hits. Root children are the base: they fail to the root, which is how the empty string plays the role of <code>&pi;[0] = 0</code>.</p>
+<p>Nested words need one more line. Landing on the node for <code>aba</code> should also report <code>ba</code> and <code>a</code> if those are in the dictionary, because they are suffixes of what you just read. During the same BFS, add <code>out[v] += out[fail[v]]</code> (or set <code>output[v]</code> to <code>v</code> if <code>v</code> is terminal and to <code>output[fail[v]]</code> otherwise). Then a scan that does <code>state = nxt[state][c]; ans += out[state]</code> counts every word that ends at this text index, including the ones that only live on the failure chain. Walk the dictionary <code>ab</code>, <code>ba</code>, <code>aba</code> against the text <code>abaca</code>. After <code>a</code> you sit at the first-letter node; after <code>ab</code> you sit at the <code>ab</code> terminal and report one hit; after the next <code>a</code> you sit at <code>aba</code> and the aggregated <code>out</code> reports that word (and would report <code>ba</code> if the failure chain carried it). The letter <code>c</code> has no edge, so you fail to the root; the final <code>a</code> returns to the first-letter node. The text produced two hits, which is the sample.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The string of fail[u] is the longest proper suffix of u's string that is a prefix of some pattern. After reading a prefix of the text, the current state is the longest suffix of that prefix that is a trie prefix.</p>
+    <p>After any prefix of the text, the current state is the longest suffix of that prefix that is still a trie prefix, and the failure chain lists every shorter leftover:</p><span class="eq">fail[u] = longest proper suffix of the string at u that is a prefix of some pattern,&nbsp; and out[u] counts every dictionary word that is a suffix of that string.</span><p>In plain words, you never rewind the text, you never skip a dictionary word that ends here, and a missing letter is the same fallback KMP would take on a one-pattern trie. Interview sentence: <em>"Failure is KMP's <code>&pi;[q-1]</code> on the dictionary trie; BFS fills it parent-first; <code>out[v] += out[fail[v]]</code> is what reports nested hits."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Forgetting out[v] += out[fail[v]] drops nested words</span>
+    <p>Looking only at the node you landed on looks correct, because that node is the longest dictionary prefix you currently hold. A shorter pattern that is a suffix of that prefix lives on the failure chain, not on this node. The word <code>ab</code> inside <code>xab</code> is the classic miss. Aggregate during BFS, or walk an output-link chain at query time.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Fill missing edges or keep the while, not both halfway</span>
+    <p>Pre-filling <code>nxt[u][c] = nxt[fail[u]][c]</code> makes the scan one array read per character and is the listing on this page. The other school is a <code>go(u, c)</code> that walks <code>fail</code> until an edge exists, which is the same idea as KMP's inner <code>while</code> and is also linear by the same potential. Mixing a half-filled table with a <code>while</code> that assumes missing means 0 is how you loop at the root.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the scan is linear even with a while-fail</span>
+    <p>If you do not pre-fill edges, each text character may walk several failure links. Those walks drop to a strictly shorter string each time, and a later successful edge grows the current depth by one. Across the whole text the drops cannot outnumber the grows, so the extra hops total at most <code>|t|</code> plus the dictionary depth. That is KMP's potential on <code>q</code>, lifted to a trie.</p>
   </div>
 </aside>
 
@@ -162,7 +189,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Patterns: ab, ba, aba. Trie: 0 -a-> 1 -b-> 2 (ab, and continue -a-> 4 aba). 0 -b-> 3 (ba).",
+          "note": "The dictionary is ab, ba, and aba. The trie grows 0 -a-> 1 -b-> 2 for ab, then 2 -a-> 4 for aba, and a separate 0 -b-> 3 for ba.",
           "active": [
             0
           ],
@@ -173,7 +200,7 @@
           }
         },
         {
-          "note": "fail[1]=0, fail[2]=3 (\"b\" of \"ab\"), fail[3]=0, fail[4]=1 (\"a\" of \"aba\").",
+          "note": "BFS writes the failure links: the node a falls to the root, ab falls to b, ba falls to the root, and aba falls back to a.",
           "active": [
             0
           ],
@@ -184,7 +211,7 @@
           }
         },
         {
-          "note": "Feed a: state 1. Feed b: state 2, hit \"ab\".",
+          "note": "Feeding a moves to state 1. Feeding b takes the trie edge to state 2, which is the terminal for ab, and that is the first hit.",
           "active": [
             0,
             1
@@ -196,7 +223,7 @@
           }
         },
         {
-          "note": "Feed a: state 4, hit \"aba\" and via fail also \"ba\"? fail[4]=1, output walk collects aba.",
+          "note": "Feeding the next a moves to state 4, the terminal for aba. The failure chain from here is what would also report a nested ba.",
           "active": [
             2
           ],
@@ -207,7 +234,7 @@
           }
         },
         {
-          "note": "Feed c: no edge, fail to 1 then 0. state 0.",
+          "note": "The letter c has no edge from aba, so the scan follows failure to a and then to the root, and the current state becomes 0.",
           "active": [
             3
           ],
@@ -218,7 +245,7 @@
           }
         },
         {
-          "note": "Feed a: state 1. Text abaca had hits at \"ab\" and \"aba\".",
+          "note": "The final a returns to state 1. The text abaca produced hits at ab and at aba, which is two occurrences in total.",
           "active": [
             4
           ],
@@ -254,17 +281,17 @@ flowchart LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Trie insert</strong> every pattern; mark terminals with ids.</li>
-  <li><strong>BFS from root:</strong> fail[root]=root (or 0). For each edge, set fail[child] using fail[parent].</li>
-  <li><strong>Fill missing transitions</strong> to next(fail, c) so the scan has no while-loop, or keep the while.</li>
-  <li><strong>output[u]</strong> = u if terminal, else output[fail[u]] (skip chain).</li>
-  <li><strong>Scan t:</strong> state = go(state, c); walk output links; record hits.</li>
-  <li><strong>DP variant:</strong> states of the automaton are DP indices.</li>
+  <li><strong>Insert every pattern into one trie.</strong> Start from the root for each word, create a child when the letter is new, and mark the terminal with a count or a pattern id. The trie nodes are the states of the automaton you are about to finish.</li>
+  <li><strong>BFS from the root to fill failure links.</strong> Push every child of the root with <code>fail = 0</code>. For each later child <code>v</code> reached by letter <code>c</code> from parent <code>u</code>, set <code>fail[v] = nxt[fail[u]][c]</code>. Parent-first order is what makes that read defined.</li>
+  <li><strong>Fill missing transitions, or keep an explicit while.</strong> On a missing letter, store <code>nxt[u][c] = nxt[fail[u]][c]</code> so the later scan is one array read. The other school is a <code>go</code> that walks <code>fail</code> until an edge exists, which is KMP's inner loop on the trie.</li>
+  <li><strong>Aggregate nested hits along the failure chain.</strong> During the same BFS write <code>out[v] += out[fail[v]]</code>, or set an output link to the next terminal on that chain. Without this step a nested pattern that is only a suffix of the current node is silently dropped.</li>
+  <li><strong>Scan the text with one transition per character.</strong> Start at the root and do <code>state = nxt[state][c]</code> for each letter, then add <code>out[state]</code> (or walk output links) to record every dictionary word that ends here, overlaps included.</li>
+  <li><strong>Reuse the same states when the problem is a DP.</strong> "Build a string that avoids these words" is <code>dp[i][state]</code>, taking automaton edges as transitions and treating terminals as forbidden (or as a sink). The automaton you just built is the state space.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Building the trie of ab, ba, and aba, filling failure links parent-first, then feeding the text abaca one character at a time and watching hits appear.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -272,12 +299,12 @@ flowchart LR
       <tr><th>ch</th><th>state</th><th>hit</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>build</td><td>0</td><td>none</td><td>Patterns: ab, ba, aba. Trie: 0 -a-> 1 -b-> 2 (ab, and continue -a-> 4 aba). 0 -b-> 3 (ba).</td></tr>
-      <tr><td>fail</td><td>links</td><td>—</td><td>fail[1]=0, fail[2]=3 ("b" of "ab"), fail[3]=0, fail[4]=1 ("a" of "aba").</td></tr>
-      <tr><td>ab</td><td>2</td><td>ab</td><td>Feed a: state 1. Feed b: state 2, hit "ab".</td></tr>
-      <tr><td>aba</td><td>4</td><td>aba</td><td>Feed a: state 4, hit "aba" and via fail also "ba"? fail[4]=1, output walk collects aba.</td></tr>
-      <tr><td>c</td><td>0</td><td>none</td><td>Feed c: no edge, fail to 1 then 0. state 0.</td></tr>
-      <tr><td>a</td><td>1</td><td>done</td><td>Feed a: state 1. Text abaca had hits at "ab" and "aba".</td></tr>
+      <tr class="trace-table__row--change"><td>build</td><td>0</td><td>none</td><td>The dictionary is ab, ba, and aba. The trie grows 0 -a-> 1 -b-> 2 for ab, then 2 -a-> 4 for aba, and a separate 0 -b-> 3 for ba.</td></tr>
+      <tr><td>fail</td><td>links</td><td>—</td><td>BFS writes the failure links: the node a falls to the root, ab falls to b, ba falls to the root, and aba falls back to a.</td></tr>
+      <tr><td>ab</td><td>2</td><td>ab</td><td>Feeding a moves to state 1. Feeding b takes the trie edge to state 2, which is the terminal for ab, and that is the first hit.</td></tr>
+      <tr><td>aba</td><td>4</td><td>aba</td><td>Feeding the next a moves to state 4, the terminal for aba. The failure chain from here is what would also report a nested ba.</td></tr>
+      <tr><td>c</td><td>0</td><td>none</td><td>The letter c has no edge from aba, so the scan follows failure to a and then to the root, and the current state becomes 0.</td></tr>
+      <tr><td>a</td><td>1</td><td>done</td><td>The final a returns to state 1. The text abaca produced hits at ab and at aba, which is two occurrences in total.</td></tr>
     </tbody>
   </table>
 </div>
@@ -410,7 +437,8 @@ flowchart LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Trie size is O(sum |p|). BFS visits each node and each edge once. Scanning the text follows one transition per character; output-link walks are O(hits) if compressed, or can be O(n * patterns) if you naively climb fail every time — store aggregated out[u] += out[fail[u]].</p>
+    <p>The trie has one new node per character of the dictionary in the worst case, so it holds <code>O(sum |p|)</code> nodes. The BFS visits each node and each of its <code>&sigma;</code> letters once, which is <code>O(sum |p| &middot; &sigma;)</code> with filled transitions, or amortised linear in the dictionary size if you keep a <code>while</code>-fail instead. The text scan is then one transition per character. Aggregating <code>out[u] += out[fail[u]]</code> during BFS makes each text character cost a constant, not a walk down the failure chain.</p>
+    <p>Putting real numbers in: a million-character dictionary plus a million-character text, alphabet 26, is a few tens of millions of array writes to build and a million reads to scan, which is a few tens of milliseconds. Climbing <code>fail</code> raw at every character when many words nest can multiply that scan by the nesting depth and miss the limit. Running a separate KMP per pattern at <code>m = 10<sup>3</sup></code> patterns is about a billion steps, which is the runtime this one automaton is designed to avoid.</p>
   </div>
 
   <table class="complexity__compare">
@@ -432,28 +460,28 @@ flowchart LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Not copying out along fail</span>
-    <div class="pitfalls__bug">A nested pattern ("ab" inside "xab") is missed because you only look at the current node.</div>
-    <div class="pitfalls__fix"><code>out[v] += out[fail[v]]</code> in BFS, or an output link you walk.</div>
+    <div class="pitfalls__bug">Reporting only the terminal you landed on looks complete, because that node is the longest dictionary prefix of the text so far. A shorter pattern that is a suffix of that prefix lives on the failure chain, so <code>ab</code> inside <code>xab</code> is never counted.</div>
+    <div class="pitfalls__fix">During BFS write <code>out[v] += out[fail[v]]</code>, or store an output link to the next terminal on the chain and walk it at query time. Test a dictionary where one word is a suffix of another.</div>
   </li>
   <li>
     <span class="pitfalls__title">fail[child] using an unfilled parent fail</span>
-    <div class="pitfalls__bug">BFS order is mandatory: a node's fail is known before its children are processed? Actually fail[v] uses fail[u] and nxt[fail[u]][c], so parent must already be dequeued. Root's children fail to root.</div>
-    <div class="pitfalls__fix">Queue: push root's children first, fail=0.</div>
+    <div class="pitfalls__bug">A depth-first walk of the trie looks like it should fill links, because children are suffixes of their parents. Failure does not walk the trie parent; it walks a shorter string that may sit in a different branch, and a DFS can read <code>fail[u]</code> before BFS would have written it.</div>
+    <div class="pitfalls__fix">Use a queue. Push the root's children first with <code>fail = 0</code>, and only process a node after its parent has been dequeued. That is the order that makes <code>nxt[fail[u]][c]</code> already defined.</div>
   </li>
   <li>
     <span class="pitfalls__title">nxt[0][c]==0 meaning missing vs meaning root</span>
-    <div class="pitfalls__bug">Using 0 as both "no edge" and "root". Filling missing edges of root to 0 is correct; using 0 as a real child is not.</div>
-    <div class="pitfalls__fix">Nodes numbered from 0 = root; missing stored as 0 on non-root is "follow fail". Root missing stays 0.</div>
+    <div class="pitfalls__bug">Storing 0 for both "no child" and "the root" looks like a tidy default, and filling missing edges of the root to 0 is actually correct. Using 0 as a real child's index is not: you can no longer tell a missing edge from an edge back to the empty string, and the fail walk loops.</div>
+    <div class="pitfalls__fix">Number nodes from 0 as the root. On a non-root, a stored 0 means "follow fail". On the root, a stored 0 means "stay", which is the empty-string self-loop for a letter the dictionary does not start with.</div>
   </li>
   <li>
     <span class="pitfalls__title">Alphabet not 'a'-'z'</span>
-    <div class="pitfalls__bug">char - 'a' negative; crash.</div>
-    <div class="pitfalls__fix">Map to 0..sigma-1, or a HashMap per node (slower fail).</div>
+    <div class="pitfalls__bug">Subtracting <code>'a'</code> from an uppercase letter, a digit, or a punctuation mark looks like the usual 26-way index. The result is negative or larger than 25, and the next array access throws.</div>
+    <div class="pitfalls__fix">Map the real alphabet onto <code>0..sigma-1</code> at the input boundary, or store a <code>HashMap</code> per node if <code>sigma</code> is huge. The fail-fill is the same; only the child lookup changes.</div>
   </li>
   <li>
     <span class="pitfalls__title">Growing nxt incorrectly</span>
-    <div class="pitfalls__bug">new int[sz][A] every insert is O(n^2) memory copies.</div>
-    <div class="pitfalls__fix">Preallocate a generous cap, or ArrayList of nodes.</div>
+    <div class="pitfalls__bug">Allocating <code>new int[sz+1][A]</code> and copying the old table on every inserted character looks like the safe way to grow. Each copy walks the whole trie again, so a dictionary of length <code>n</code> costs <code>O(n<sup>2</sup>)</code> memory traffic before you even start the BFS.</div>
+    <div class="pitfalls__fix">Preallocate a generous cap, or store nodes in an <code>ArrayList</code> and grow by doubling. The listing's <code>grow()</code> copies one row, not the whole table, which is the cheaper of the two honest options.</div>
   </li>
 </ul>
 
@@ -495,28 +523,28 @@ flowchart LR
   <details class="followup">
     <summary>Why BFS not DFS for failure links?</summary>
     <div class="followup__body">
-      <p>fail[u] points at a strictly shorter string, which is an ancestor in the failure tree, not necessarily in the trie. BFS by string length (which is trie depth) guarantees that shorter states are ready. Depth BFS on the trie is enough because |fail[u]| &lt; |u|.</p>
+      <p>The node <code>fail[u]</code> represents a strictly shorter string than <code>u</code>, so it is an ancestor in the failure tree, not necessarily a trie-ancestor. A breadth-first walk by string length (which is trie depth) therefore finds every shorter state already filled, including <code>nxt[fail[u]][c]</code> if you pre-fill missing edges. A depth-first walk can ask for a failure in another branch that has not been written yet. The same reason KMP fills <code>&pi;</code> from left to right: you only read borders of prefixes you have finished.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Aho vs suffix automaton?</summary>
     <div class="followup__body">
-      <p>AC is a dictionary matcher. SAM represents all substrings of one text. If the text is huge and patterns are queries, SAM or SA of the text. If patterns are the dictionary and the text is a stream, AC.</p>
+      <p>Aho-Corasick is a dictionary matcher: the patterns are known up front and the text is a stream. A suffix automaton represents every slice of one text, and later "is this word in there?" questions walk that automaton. If the text is huge and the patterns arrive as queries, build a suffix automaton or a suffix array of the text. If the patterns are the dictionary and the text arrives online, build Aho-Corasick. They solve opposite sides of the same "many strings, one scan" feeling.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you reconstruct positions, not just counts?</summary>
     <div class="followup__body">
-      <p>Store pattern ids on terminals. On a hit at text index i, the pattern of length L ends at i, starts at i-L+1. Walk output links for nested hits.</p>
+      <p>Store pattern ids on terminals instead of (or as well as) a count. When the scan sits at text index <code>i</code> and the output chain reports a word of length <code>L</code>, that word ends at <code>i</code> and starts at <code>i-L+1</code>. Walk the output links for nested hits so a landing on <code>aba</code> also emits <code>ba</code> and <code>a</code> if those ids live on the chain. Aggregated <code>out[u]</code> is enough only when the statement asks for a total.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What is the output link?</summary>
     <div class="followup__body">
-      <p>The nearest terminal on the failure chain. Jumping output[u] → output[output[u]] skips non-terminal fails. Aggregating counts into out[u] is even cheaper when you only need totals.</p>
+      <p>It is the nearest terminal on the failure chain: from <code>u</code>, skip every non-terminal failure in one hop, then jump <code>output[u] &rarr; output[output[u]]</code> to visit the rest. That is the same information as walking <code>fail</code>, just without stopping at useless nodes. When you only need totals, folding those terminals into <code>out[u] += out[fail[u]]</code> during BFS is cheaper still, because the scan then never walks the chain at all.</p>
     </div>
   </details>
 </div>

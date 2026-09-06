@@ -40,7 +40,7 @@
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
 <p>"Longest substring without repeating characters", "minimum window substring", "subarrays with at most K distinct", "count nice subarrays" &mdash; these are among the most frequently asked interview questions in existence, and they are all the same algorithm. A right pointer extends the segment, a left pointer repairs it when it becomes invalid, and a small amount of incrementally maintained state (a count array, a distinct counter, a running sum) tells you which case you are in.</p>
-<p>The reason it works is monotonicity of validity: for a fixed right endpoint, there is a threshold left endpoint such that every window starting at or after it is valid and every window starting before it is invalid. That threshold never moves backwards as the right endpoint advances, so the left pointer only ever goes forward and the whole scan is <code>O(n)</code>.</p>
+<p>The reason it works is monotonicity of validity: for a fixed right endpoint, there is a threshold left endpoint such that every window starting at or after it is valid and every window starting before it is invalid. That threshold never moves backwards as the right endpoint advances, so the left pointer only ever goes forward and the whole scan is <code>O(n)</code>. On <code>n = 10&#8309;</code> that is at most two pointer movements per element, about <code>2&times;10&#8309;</code> updates, versus a nested scan of every pair of endpoints, which is about <code>5&times;10&#8313;</code> windows and a timeout.</p>
 <p>Two things separate people who solve these reliably. First, knowing the three templates (fixed size, longest-valid, shortest-valid) and which one a question maps to. Second, knowing the <strong>exactly-K trick</strong>: "exactly K" is not directly window-able, but <code>atMost(K) - atMost(K-1)</code> is, and that single identity unlocks an entire family of counting problems that otherwise look intractable.</p>
 
 <aside class="callout callout--idea">
@@ -727,14 +727,14 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Confirm the window is legal:</strong> contiguous segment, and non-negative values if the condition involves sums.</li>
-  <li><strong>Pick the template</strong> from the flowchart: fixed size, longest valid, shortest valid, or a counting variant.</li>
+  <li><strong>Confirm the window is legal:</strong> the answer must be a contiguous segment, and values must be non-negative if the condition involves sums.</li>
+  <li><strong>Pick the template</strong> from the flowchart: fixed size, longest valid, shortest valid, or a counting variant, before writing any loop.</li>
   <li><strong>Design the <code>O(1)</code>-updatable state.</strong> Usually a count array plus one scalar summary (<code>distinct</code>, <code>satisfied</code>, <code>sum</code>).</li>
-  <li><strong>Write the add step</strong> for <code>a[r]</code>, updating both the counts and the scalar.</li>
+  <li><strong>Write the add step</strong> for <code>a[r]</code> first, updating both the count array and the scalar summary in one place.</li>
   <li><strong>Write the remove step</strong> for <code>a[l]</code> as the exact mirror image. Asymmetry here is the most common bug.</li>
-  <li><strong>Place the answer update correctly:</strong> after the repair loop for longest, inside the shrink loop for shortest.</li>
-  <li><strong>For counting, accumulate <code>r - l + 1</code></strong> instead of taking a maximum.</li>
-  <li><strong>For "exactly K", call the at-most helper twice</strong> and subtract.</li>
+  <li><strong>Place the answer update correctly:</strong> after the repair loop for longest-valid, and inside the shrink loop for shortest-valid.</li>
+  <li><strong>For counting, accumulate <code>r - l + 1</code></strong> at each right endpoint instead of taking a running maximum.</li>
+  <li><strong>For "exactly K", call the at-most helper twice</strong> and subtract, because exactly-K is not itself a monotone window.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->

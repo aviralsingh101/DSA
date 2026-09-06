@@ -22,7 +22,7 @@
   <p class="hero__tagline">Pointer surgery under a fixed extra-space budget: reverse a range, detect a cycle and its entry, merge two ordered lists, and clone a graph that happens to look like a list.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
     </span>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Linked-list questions are almost never about the node type. They are about rewriting pointers without losing the rest of the list, in O(1) extra memory, on a structure you cannot index into. Reverse, reverse k-group, Floyd cycle+entry, merge, copy-random: five problems, three moves &mdash; save the next, rewire, advance.</p>
-<p>They keep being asked at SDE-2 because they punish sketchy pointer handling the way arrays punish off-by-ones. A missed prev drops a suffix. A cycle detector that returns the meeting point instead of the entry looks like it works on the sample. A k-group reverse that does not check k nodes remain corrupts the tail.</p>
-<p>Floyd is the one piece of theory: 1&times; and 2&times; pointers meet inside a cycle; reset one to the head and walk both at 1&times; to land on the entry. Copy-random is the other classic: HashMap is O(n) space; the weave (clone between originals, wire randoms, unweave) is the O(1)-space follow-up.</p>
+<p>You are given the list <code>1 &rarr; 2 &rarr; 3 &rarr; 4 &rarr; 5</code> and asked to reverse it in place, returning the new head 5. You cannot jump to index 3 the way you would in an array; you can only follow a <code>next</code> pointer, and the moment you overwrite <code>curr.next</code> the rest of the list is gone unless you saved it. The whole family of interview questions is that constraint: rewrite pointers in <code>O(1)</code> extra memory on a structure you cannot index into.</p>
+<p>They keep being asked because they punish sketchy pointer handling the way arrays punish off-by-ones, and the wrong version often looks correct on the sample. A missed save of <code>curr.next</code> drops the suffix and still reverses a one-node list. A cycle detector that returns the meeting point instead of the entry works whenever the stem length is a multiple of the cycle. A k-group reverse that does not first check that <code>k</code> nodes remain corrupts the leftover tail. On <code>n = 10&#8309;</code> you also cannot recurse: a Java stack frame per node blows up around <code>n = 10&#8308;</code>.</p>
+<p>Five famous problems share three moves &mdash; save the next, rewire, advance &mdash; plus one dummy node so replacing the head is the same code path as every other splice. Floyd's cycle algorithm is the one piece of theory: a pointer that walks one step and a pointer that walks two steps meet inside a cycle; reset one to the head and walk both at one step to land on the entry. Copy-list-with-random is the other classic: a <code>HashMap</code> is <code>O(n)</code> space; weaving a clone between each original, wiring randoms, then unweaving is the <code>O(1)</code>-space follow-up.</p>
+<p>In a real statement the signal is a singly-linked input plus an in-place rearrangement, a cycle question, or a merge of ordered lists, usually with <code>n &le; 10&#8309;</code> and a constant extra-space budget. If you need random access by index, copy to an array. If you are merging <code>k</code> lists and <code>k</code> is large, that is a heap problem, not more pointer surgery.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Before you rewire curr.next, save it. After you rewire, the old successor is gone unless you held it. Every in-place list algorithm is that sentence plus a dummy node to delete the head-special-case.</p>
+    <p>Before you rewire <code>curr.next</code>, save it. After you rewire, the old successor is gone unless you held it. Every in-place list algorithm is that sentence plus a dummy node so replacing the head is not a special case.</p>
   </div>
 </aside>
 
@@ -123,18 +124,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with O(1) extra space is the usual tell. Recursion n frames deep blows the Java stack around n = 10&#8308;; prefer iterative reverse.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with an <code>O(1)</code> extra-space budget is the usual tell: you must rearrange pointers, not copy the list into an array. Recursion <code>n</code> frames deep blows the Java stack around <code>n = 10&#8308;</code>, so prefer the iterative reverse even when the recursive one looks shorter.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Iterative reverse: prev = null, curr = head. Each step saves nxt = curr.next, sets curr.next = prev, then advances prev = curr, curr = nxt. When curr is null, prev is the new head. k-group is reverse applied to successive slices, with a dummy so the first group is not special. Walk k steps first; if you run out, leave the tail alone.</p>
-<p>Floyd: slow and fast start at head. If there is a cycle they meet at some node on the cycle, not necessarily the entry. Set slow back to head and walk both one step at a time; they meet at the entry. Merge: dummy + tail, attach the smaller head. Copy-random: HashMap first; weave if they forbid extra space.</p>
+<p>Iterative reverse uses three pointers. <code>prev</code> starts at <code>null</code> and will become the new head; <code>curr</code> starts at <code>head</code> and walks the still-untouched suffix. Each step first saves <code>nxt = curr.next</code>, then sets <code>curr.next = prev</code>, then advances <code>prev = curr</code> and <code>curr = nxt</code>. When <code>curr</code> is null, <code>prev</code> is the new head. Reverse-in-k-group is that same walk applied to successive slices, with a dummy node in front so the first group is not a special case. Walk <code>k</code> steps from the node before the group first; if you run out, leave the leftover tail in original order.</p>
+<p>Floyd starts two pointers at the head. <code>slow</code> walks one step, <code>fast</code> walks two. If there is a cycle they eventually share a node, but that meeting point is somewhere on the cycle, not necessarily the entry. Set <code>slow</code> back to the head and walk both one step at a time; they meet at the entry because the stem length equals the remaining distance around the cycle. Merge of two sorted lists is a dummy plus a tail that always attaches the smaller current head. Copy-list-with-random is a <code>HashMap</code> from old node to new node first; weave a clone after each original only if they forbid the extra space.</p>
+<p>Trace reverse on <code>1 &rarr; 2 &rarr; 3</code>. Start with <code>prev = null</code> and <code>curr</code> on 1. Save <code>nxt = 2</code>, point 1 at null, then slide: <code>prev</code> is 1 and <code>curr</code> is 2. Save <code>nxt = 3</code>, point 2 at 1, slide onto 3. Save <code>nxt = null</code>, point 3 at 2, slide onto null. Return <code>prev</code>, which is 3, and the list is <code>3 &rarr; 2 &rarr; 1</code>. Losing <code>nxt</code> on any of those three steps would have dropped the suffix forever.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p><strong>Reverse:</strong> the chain from prev backwards is the reversed prefix; from curr forwards is untouched.</p><p><strong>Floyd:</strong> after the first meeting, distance(head, entry) equals distance(meeting, entry) along the cycle. Walking both at speed 1 from those two starts collides at the entry.</p><p>A dummy whose next is the real head makes "what if we replace the head?" the same code path as every other splice.</p>
+    <p><strong>Reverse:</strong> the chain from <code>prev</code> backwards is the already-reversed prefix; the chain from <code>curr</code> forwards is still untouched.</p><p><strong>Floyd:</strong> after the first meeting, distance(head, entry) equals distance(meeting, entry) along the cycle. Walking both at speed 1 from those two starts collides at the entry.</p><p>In plain words, you have flipped every arrow you have already walked past, you have not yet touched anything still ahead of <code>curr</code>, and a dummy whose <code>next</code> is the real head makes "what if we replace the head?" the same four pointer writes as every other splice. If a reverse step ever overwrites <code>curr.next</code> without a saved <code>nxt</code>, the suffix is gone and the invariant is broken.</p>
   </div>
 </aside>
 
@@ -174,7 +176,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Start: prev = null, curr = head (1).",
+          "note": "Start with prev null and curr on the head 1, so the whole list is still untouched.",
           "active": [
             0
           ],
@@ -191,7 +193,7 @@
           }
         },
         {
-          "note": "Save nxt=2, rewire 1.next=null. Advance: prev=1, curr=2.",
+          "note": "Save nxt as 2 first, point 1 at null, then slide prev onto 1 and curr onto 2.",
           "active": [
             1
           ],
@@ -210,7 +212,7 @@
           }
         },
         {
-          "note": "Save nxt=3, rewire 2.next=1. Advance: prev=2, curr=3.",
+          "note": "Save nxt as 3 first, point 2 back at 1, then slide prev onto 2 and curr onto 3.",
           "active": [
             2
           ],
@@ -229,7 +231,7 @@
           }
         },
         {
-          "note": "Save nxt=4, rewire 3.next=2. Advance: prev=3, curr=4.",
+          "note": "Save nxt as 4 first, point 3 back at 2, then slide prev onto 3 and curr onto 4.",
           "active": [
             3
           ],
@@ -248,7 +250,7 @@
           }
         },
         {
-          "note": "Save nxt=5, rewire 4.next=3. Advance: prev=4, curr=5.",
+          "note": "Save nxt as 5 first, point 4 back at 3, then slide prev onto 4 and curr onto 5.",
           "active": [
             4
           ],
@@ -265,7 +267,7 @@
           }
         },
         {
-          "note": "Save nxt=null, rewire 5.next=4. curr=null. Return prev=5. List is 5→4→3→2→1.",
+          "note": "Save nxt as null, point 5 back at 4, then curr becomes null. Return prev, the new head 5.",
           "best": [
             4
           ],
@@ -310,18 +312,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Draw the nodes and next pointers</strong>, including a dummy if the head might change.</li>
-  <li><strong>Reverse:</strong> save nxt, rewire curr.next = prev, advance prev, curr. Return prev.</li>
-  <li><strong>k-group:</strong> from groupPrev walk k nodes. If fewer remain, stop. Reverse that slice and stitch.</li>
-  <li><strong>Floyd detect:</strong> while (fast != null && fast.next != null), slow+1, fast+2.</li>
-  <li><strong>Floyd entry:</strong> after they meet, slow = head, both at 1&times; until they meet again.</li>
-  <li><strong>Merge:</strong> dummy + tail; attach the smaller of the two heads; drain the rest.</li>
-  <li><strong>Copy random:</strong> HashMap old→new in two passes, or weave / unweave.</li>
+  <li><strong>Draw the nodes and every next pointer</strong>, and put a dummy in front whenever the head might change. Without the picture, a splice that looks local silently drops a suffix.</li>
+  <li><strong>Reverse with three pointers</strong>: save <code>nxt</code> first, then point <code>curr.next</code> at <code>prev</code>, then slide both pointers forward. Return <code>prev</code> because that is the new head once <code>curr</code> walks off the end.</li>
+  <li><strong>For k-group, walk k nodes from groupPrev first.</strong> If you hit null, stop and leave the leftover tail alone; only then reverse that slice and stitch it back so the previous group still points at the new head.</li>
+  <li><strong>Detect a cycle with different speeds</strong>: while fast and fast.next are non-null, move slow one step and fast two. They meet inside the cycle if one exists, and the null guard is what proves the list is finite.</li>
+  <li><strong>Find the entry by resetting slow to the head</strong> after the first meeting, then walk both at one step. Returning the meeting point itself is only correct when the stem length happens to be a multiple of the cycle.</li>
+  <li><strong>Merge with a dummy and a tail</strong> so attaching the smaller current head is one assignment. When one list runs out, hang the rest on the tail and return <code>dummy.next</code>, not the old head.</li>
+  <li><strong>Copy random with a HashMap first</strong>, old node to new node, in two obvious passes. Mention the weave as the <code>O(1)</code>-space follow-up and write it only if they ask.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Reverse k-group, k=2, on 1→2→3→4→5. groupPrev is the node before the group.</p>
+<p>Reverse groups of <code>k = 2</code> on <code>1 &rarr; 2 &rarr; 3 &rarr; 4 &rarr; 5</code>. <code>groupPrev</code> is the node sitting just before the group about to flip, starting at the dummy.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -574,8 +576,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Reverse and k-group visit each node a constant number of times. Floyd: fast walks at most twice the stem plus cycle, then both walk the stem:</p><span class="eq">T(n) = Θ(n) pointer assignments</span>
-    <p>Merge of two lists is Θ(n+m). Merge of k lists by a heap is O(n log k) on the heaps page. Copy-random is two or three linear passes.</p>
+    <p>Reverse and k-group visit each node a constant number of times &mdash; save, rewire, advance, and at most one extra walk of <code>k</code> to test the group. Floyd: fast walks at most twice the stem plus one extra lap of the cycle, then both walk the stem:</p><span class="eq">T(n) = Θ(n) pointer assignments</span>
+    <p>Merge of two lists is <code>&Theta;(n+m)</code> splices. Merge of <code>k</code> lists by a heap is <code>O(n log k)</code> on the heaps page. Copy-random is two or three linear passes. At <code>n = 10&#8309;</code> that is a few hundred thousand pointer writes, not a recursive stack of a hundred thousand frames.</p>
   </div>
 
   <table class="complexity__compare">
@@ -600,33 +602,33 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Rewiring curr.next before saving it</span>
-    <div class="pitfalls__bug">The suffix becomes unreachable. Works on one node, fails on everything else.</div>
-    <div class="pitfalls__fix">ListNode nxt = curr.next as the first line. Save, rewire, advance.</div>
+    <div class="pitfalls__bug">The suffix becomes unreachable the instant you overwrite curr.next. It still reverses a one-node list, which is why the sample can pass and everything longer fails.</div>
+    <div class="pitfalls__fix">ListNode nxt = curr.next as the first line of the loop. Save, then rewire, then advance.</div>
   </li>
   <li>
     <span class="pitfalls__title">Returning Floyd's meeting point as the cycle entry</span>
-    <div class="pitfalls__bug">LC 141 is done, LC 142 is not. Meeting point equals the entry only when stem length is a multiple of the cycle.</div>
-    <div class="pitfalls__fix">Reset slow to head, walk both at 1×, return the second meeting.</div>
+    <div class="pitfalls__bug">LC 141 is done, LC 142 is not. The meeting point equals the entry only when the stem length happens to be a multiple of the cycle, so many samples look correct.</div>
+    <div class="pitfalls__fix">Reset slow to head after they meet, walk both at one step, and return the second meeting.</div>
   </li>
   <li>
     <span class="pitfalls__title">Reversing a leftover tail in k-group</span>
-    <div class="pitfalls__bug">A final group of size < k is reversed. The spec says leave it.</div>
-    <div class="pitfalls__fix">Walk k steps from groupPrev; if you hit null, break before reversing.</div>
+    <div class="pitfalls__bug">A final group of size less than k is reversed because the loop did not check that k nodes remain. The spec says leave that tail in original order.</div>
+    <div class="pitfalls__fix">Walk k steps from groupPrev first; if you hit null, break before reversing that incomplete slice.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting the dummy when the head can change</span>
-    <div class="pitfalls__bug">Merge, delete-head, k-group first group: you return the old head, now in the middle.</div>
-    <div class="pitfalls__fix">ListNode dummy = new ListNode(0, head); return dummy.next.</div>
+    <div class="pitfalls__bug">Merge, delete-the-head, and the first k-group all return the old head, which now sits in the middle of the list. The rest of the splices looked local and correct.</div>
+    <div class="pitfalls__fix">ListNode dummy = new ListNode(0, head); do every splice through the dummy; then return dummy.next as the real head.</div>
   </li>
   <li>
     <span class="pitfalls__title">Comparing node values instead of references in Floyd</span>
-    <div class="pitfalls__bug">slow.val == fast.val on a list with duplicates. False cycle, or a missed one.</div>
-    <div class="pitfalls__fix">Compare the node objects: slow == fast.</div>
+    <div class="pitfalls__bug">slow.val == fast.val on a list with duplicate values reports a false cycle, or misses a real one when two different nodes happen to share a value.</div>
+    <div class="pitfalls__fix">Compare the node objects themselves: slow == fast. Values are irrelevant to the meeting test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Breaking the original list in the weave copy</span>
-    <div class="pitfalls__bug">clone.random wired to an original, or the caller's list left interleaved with clones.</div>
-    <div class="pitfalls__fix">clone.random = orig.random.next. Restore orig.next = clone.next in the split pass.</div>
+    <div class="pitfalls__bug">clone.random is wired to an original node, or the caller's list is left interleaved with clones, because the split pass never restored orig.next.</div>
+    <div class="pitfalls__fix">Set clone.random = orig.random.next so randoms stay on clones, then restore orig.next = clone.next in the same split pass.</div>
   </li>
 </ul>
 
@@ -681,28 +683,28 @@ flowchart TD
   <details class="followup">
     <summary>Can Floyd find a duplicate number in an array?</summary>
     <div class="followup__body">
-      <p>Yes, LC 287. An array a of n+1 values in 1..n is a functional graph i → a[i]. The cycle entry is the duplicate. Same code with slow = a[slow] and fast = a[a[fast]].</p>
+      <p>Yes, that is LC 287. An array <code>a</code> of <code>n+1</code> values in <code>1..n</code> is a functional graph <code>i &rarr; a[i]</code>: every index has outdegree one, so a duplicate value creates exactly one cycle. The cycle entry is the duplicate. The same code runs with <code>slow = a[slow]</code> and <code>fast = a[a[fast]]</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you reverse groups of k if k does not divide n?</summary>
     <div class="followup__body">
-      <p>Leave the leftover tail in original order (LC 25). From the node before the would-be group, try to walk k steps; if you cannot, stop. Test n=5 k=3, n=5 k=1, n=5 k=5.</p>
+      <p>Leave the leftover tail in original order, which is the LC 25 spec. From the node before the would-be group, try to walk <code>k</code> steps; if you cannot, stop and do not reverse. Test <code>n=5, k=3</code> (answer starts 3,2,1 and ends 4,5), <code>k=1</code> (identity), and <code>k=5</code> (full reverse).</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Map vs weave for copy-random in 25 minutes?</summary>
     <div class="followup__body">
-      <p>The map. Two obvious passes, O(n) extra. Mention the weave as the O(1)-space follow-up and write it if they ask.</p>
+      <p>Write the map. Two obvious passes, old node to new node, <code>O(n)</code> extra memory, and you will finish. Mention the weave &mdash; clone after each original, wire randoms via <code>orig.random.next</code>, then split &mdash; as the <code>O(1)</code>-space follow-up, and write it only if they ask.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you merge k sorted lists?</summary>
     <div class="followup__body">
-      <p>A min-heap of the current heads, O(n log k). Pairwise tournament merge is the same bound. Repeatedly merging into an accumulator is O(n k). Details on the <a href="heaps-and-priority-queue.html">heaps page</a>.</p>
+      <p>Put the current head of each list into a min-heap and always splice the smallest, which is <code>O(n log k)</code> on <code>n</code> total nodes. Pairwise tournament merge has the same bound. Repeatedly merging into an accumulator is <code>O(n k)</code> and dies when <code>k</code> is large. Details sit on the <a href="heaps-and-priority-queue.html">heaps page</a>.</p>
     </div>
   </details>
 </div>

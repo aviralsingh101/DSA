@@ -22,7 +22,7 @@
   <p class="hero__tagline">tin[v]..tout[v] is a contiguous segment of a flattened DFS, so subtree sum / add becomes a Fenwick range on that segment.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="lca-binary-lifting.html">LCA & Binary Lifting</a>,
       <a href="../06-range-queries/fenwick-tree.html">Fenwick Tree</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A subtree is not a contiguous slice of the parent-pointer array, so a Fenwick on vertex ids is meaningless. An Euler tour (enter-time order) numbers vertices so that the subtree of v is exactly the interval [tin[v], tout[v]]. Point add + subtree sum is then a Fenwick on that interval; subtree add + point query is a range-add on the interval.</p>
-<p>The same timestamps give the ancestry test tin[u] &le; tin[v] &le; tout[u] and are the substrate for HLD, virtual trees, and Mo on trees. CF 620E New Year Tree, 383C Propagating tree, 877E Danil are the cluster.</p>
-<p>Tour variants: node-only (one tin per vertex), or enter-and-leave (the true Euler tour used for RMQ-LCA). Subtree queries use the node-only flattening.</p>
+<p>You are given a tree of 200000 vertices and 200000 operations of the form "add 5 to every node in the subtree of v" or "what is the sum of the subtree of v?". The obvious method walks that subtree each time. A star with the query vertex at the centre makes every walk cost the whole tree, so the batch is about <code>4&times;10&#8310;</code> steps. Putting a Fenwick tree on the vertex labels does not help either: the subtree of vertex 7 is not the slice of ids from 7 to something, because the labels arrived in input order, not in ancestor order.</p>
+<p>An <em>Euler tour</em> of the tree, in the node-only sense used here, is the sequence of vertices in the order a DFS first enters them. The reason a subtree becomes a contiguous interval is physical, not magical. DFS enters <code>v</code>, then visits everything reachable below <code>v</code>, and only then returns to <code>v</code>'s parent. Nothing from outside that subtree can be entered in between, because the only door out is the edge back to the parent. So the enter times of <code>v</code> and its descendants form a consecutive block of integers <code>[tin[v], tout[v]]</code>. A point add plus a subtree sum is then a Fenwick on that block; a subtree add plus a point query is a range-add on the same block.</p>
+<p>The same two timestamps give an ancestry test for free: <code>u</code> is an ancestor of <code>v</code> exactly when <code>tin[u] &le; tin[v] &le; tout[u]</code>. They are also the first numbering HLD, virtual trees and Mo on trees reuse. In a statement the tell is a static tree shape, values that change, subtree (not path) operations, and <code>n, q &le; 2&times;10&#8309;</code>. CF 620E, 383C and 877E are the cluster. Path queries need HLD or a difference at the LCA; they are not one interval in this flattening.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>DFS enter times make every subtree a contiguous range. Put a Fenwick (or segtree) on those times, not on vertex labels.</p>
+    <p>DFS enter times make every subtree a contiguous range, because the walk finishes a node's descendants before it is allowed to leave. Put a Fenwick (or segment tree) on those times, not on the vertex labels.</p>
   </div>
 </aside>
 
@@ -112,18 +112,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n,q &le; 2e5. tin in 0..n-1 (or 1..n). Fenwick of size n+2. Recursion depth: iterative DFS to assign tin if the tree is a chain.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> is the usual pair. Enter times sit in <code>0..n-1</code> (or <code>1..n</code>); the Fenwick is size <code>n+2</code> so a range-add's off-the-end decrement still fits. A chain of 200000 nodes will overflow a recursive tour, so assign <code>tin</code> with an iterative stack when balance is not promised. The tree shape is static; if edges are added or deleted this numbering dies.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>timer=0. dfs(u,p): tin[u]=timer++. rec children. tout[u]=timer-1 (so [tin,tout] includes u and descendants). If you prefer half-open, tout=timer after children and the subtree is [tin, tout).</p>
-<p>Map vertex v to index tin[v] in a Fenwick. Point add at v: add(tin[v], x). Subtree sum: range(tin[v], tout[v]). Subtree add: rangeAdd(tin, tout, x); point query at tin[v].</p>
+<p>A single counter <code>timer</code> starts at 0. <code>dfs(u, p)</code> writes <code>tin[u] = timer++</code> on entry, recurses to every child except the parent, and on the way out writes <code>tout[u] = timer - 1</code>. Because the timer only moves forward, and because every descendant is entered before that last assignment, the inclusive interval <code>[tin[u], tout[u]]</code> is exactly <code>u</code> plus its descendants. If you prefer a half-open convention, set <code>tout[u] = timer</code> after the children and treat the subtree as <code>[tin[u], tout[u])</code>; mixing the two conventions is the classic off-by-one. Either way, the flattened array of length <code>n</code> is a permutation of the vertices.</p>
+<p>A Fenwick (or segment tree) is then indexed by <code>tin</code>, never by the original label. Point-add at vertex <code>v</code> is <code>add(tin[v], delta)</code>. Subtree sum is the range <code>[tin[v], tout[v]]</code>. The dual, subtree-add plus point-query, is a range-add on that same interval and a prefix read at <code>tin[v]</code>. Ancestry does not even need the Fenwick: <code>u</code> is an ancestor of <code>v</code> when <code>tin[u] &le; tin[v]</code> and <code>tout[v] &le; tout[u]</code>. A true Euler tour that records a vertex on enter and on leave has length <code>2n-1</code> and is the other numbering, used for RMQ-LCA, not for these subtree ranges.</p>
+<p>On the sample 0-1-2, 1-3, 0-4 the tour enters 0 (<code>tin=0</code>), then 1 (<code>tin=1</code>), then leaf 2 (<code>tin=2</code>, <code>tout=2</code>), then leaf 3 (<code>tin=3</code>, <code>tout=3</code>). Leaving 1 writes <code>tout[1] = 3</code>, so the subtree of 1 is the block of indices 1..3, which is exactly the set {1, 2, 3}. Leaf 4 takes index 4, and leaving 0 writes <code>tout[0] = 4</code>, the whole tree. A Fenwick range <code>[1, 3]</code> is the subtree sum of 1; adding 10 at node 2 touches only index 2 and that range becomes 13 if every value started at 1. Vertex 0 is an ancestor of 3 because 0 sits at or before 3's enter time and 0's leave covers it.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The subtree of v, in DFS enter order, occupies a contiguous index interval.</p><span class="eq">subtree(v) = { u | tin[v] &le; tin[u] &le; tout[v] }</span>
+    <p>The subtree of <code>v</code>, written in DFS enter order, occupies one contiguous index interval, because the walk is not allowed to leave <code>v</code> until every descendant has been entered:</p><span class="eq">subtree(v) = { u | tin[v] &le; tin[u] &le; tout[v] }</span><p>In plain words, the numbers you stamp on the way in are just a relabelling that makes "below me" look like a slice of an array, so every Fenwick or segment-tree trick you already know applies to subtrees.</p><p>Interview sentence: <em>"I flatten by enter time so a subtree is [tin, tout]; the Fenwick indexes tin, not the label."</em></p>
   </div>
 </aside>
 
@@ -163,7 +164,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Enter 0, tin[0]=0. Recurse to 1.",
+          "note": "Enter 0 first and stamp tin[0] = 0. The walk must finish every descendant of 0 before it is allowed to leave, so the remaining stamps will be a single block.",
           "active": [
             0
           ],
@@ -175,7 +176,7 @@
           }
         },
         {
-          "note": "Enter 1, tin[1]=1. Recurse to 2.",
+          "note": "Enter 1 next and stamp tin[1] = 1. Everything still below 1 will receive the next consecutive times, because the walk cannot return to 0 yet.",
           "active": [
             1
           ],
@@ -187,7 +188,7 @@
           }
         },
         {
-          "note": "Enter 2, tin[2]=2, leaf, tout[2]=2. Then 3: tin=3, tout=3.",
+          "note": "Leaf 2 takes time 2 and immediately writes tout[2] = 2. Leaf 3 takes time 3 the same way. No outsider has been entered between them.",
           "active": [
             2,
             3
@@ -200,7 +201,7 @@
           }
         },
         {
-          "note": "Leave 1, tout[1]=3. Subtree of 1 is indices 1..3 = {1,2,3}.",
+          "note": "Leaving 1 writes tout[1] = 3. The subtree of 1 is now the contiguous block of indices 1 through 3, which is exactly the set {1, 2, 3}.",
           "window": [
             1,
             3
@@ -213,7 +214,7 @@
           }
         },
         {
-          "note": "Enter 4, tin[4]=4, tout=4. Leave 0, tout[0]=4. Whole tree [0,4].",
+          "note": "Enter leaf 4 at time 4, then leave the root with tout[0] = 4. The whole tree is the interval [0, 4] and every subtree is some sub-block of it.",
           "active": [
             4
           ],
@@ -225,7 +226,7 @@
           }
         },
         {
-          "note": "Fenwick range [1,3] is subtree of 1. Ancestry: 0 is ancestor of 3 because 0<=3<=4 (tins) and tout[0]>=tin[3].",
+          "note": "A Fenwick range [1, 3] is the subtree sum of 1. Vertex 0 is an ancestor of 3 because 3's enter time sits inside 0's interval.",
           "best": [
             1,
             2,
@@ -261,17 +262,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>DFS:</strong> tin[u]=timer++ before children; tout[u]=timer-1 after.</li>
-  <li><strong>Fenwick of size n</strong> indexed by tin.</li>
-  <li><strong>Point add on vertex v:</strong> bit.add(tin[v], delta).</li>
-  <li><strong>Subtree sum:</strong> bit.range(tin[v], tout[v]).</li>
-  <li><strong>Subtree add, point query:</strong> rangeAdd on [tin,tout], query prefix(tin[v]).</li>
-  <li><strong>Ancestry:</strong> tin[u]&lt;=tin[v] &amp;&amp; tout[v]&lt;=tout[u].</li>
+  <li><strong>Stamp enter time before the children, leave time after.</strong> <code>tin[u] = timer++</code> on the way in and <code>tout[u] = timer - 1</code> on the way out, so the inclusive interval is exactly the descendants and nothing else.</li>
+  <li><strong>Build a Fenwick of size n indexed by tin.</strong> Vertex labels are an arbitrary permutation; only the enter-time order makes a subtree look like a slice, which is why the tree sits on <code>tin</code>.</li>
+  <li><strong>Point-add at a vertex writes at its enter time.</strong> <code>bit.add(tin[v], delta)</code> updates one cell, and every ancestor range that covers that cell sees the new value on the next query.</li>
+  <li><strong>Subtree sum is one range read.</strong> <code>bit.range(tin[v], tout[v])</code> covers <code>v</code> and its descendants because that is precisely the block the DFS stamped for them.</li>
+  <li><strong>Subtree add plus point query is the dual.</strong> Range-add on <code>[tin[v], tout[v]]</code> and read the prefix at <code>tin[u]</code>, so a later point query at a descendant sees the add and a node outside the block does not.</li>
+  <li><strong>Keep tout even if you only planned sums.</strong> Ancestry is the interval test <code>tin[u] &le; tin[v] &le; tout[u]</code>, and several later techniques (HLD, virtual trees) reuse the same pair of stamps.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Stamp enter and leave times on 0-1-2, 1-3, 0-4, then watch the subtree of 1 become the contiguous block of indices 1 through 3.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -279,12 +280,12 @@ graph TD
       <tr><th>u</th><th>tin</th><th>tout</th><th>flat</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>—</td><td>[0]</td><td>Enter 0, tin[0]=0. Recurse to 1.</td></tr>
-      <tr><td>1</td><td>1</td><td>—</td><td>[0,1]</td><td>Enter 1, tin[1]=1. Recurse to 2.</td></tr>
-      <tr><td>2</td><td>2</td><td>2</td><td>[0,1,2,3]</td><td>Enter 2, tin[2]=2, leaf, tout[2]=2. Then 3: tin=3, tout=3.</td></tr>
-      <tr><td>1</td><td>1</td><td>3</td><td>sub 1</td><td>Leave 1, tout[1]=3. Subtree of 1 is indices 1..3 = {1,2,3}.</td></tr>
-      <tr><td>4</td><td>4</td><td>4</td><td>[0,1,2,3,4]</td><td>Enter 4, tin[4]=4, tout=4. Leave 0, tout[0]=4. Whole tree [0,4].</td></tr>
-      <tr class="trace-table__row--change"><td>query</td><td>1</td><td>3</td><td>BIT range</td><td>Fenwick range [1,3] is subtree of 1. Ancestry: 0 is ancestor of 3 because 0<=3<=4 (tins) and tout[0]>=tin[3].</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>—</td><td>[0]</td><td>Enter 0 first and stamp tin[0] = 0. The walk must finish every descendant of 0 before it is allowed to leave, so the remaining stamps will be a single block.</td></tr>
+      <tr><td>1</td><td>1</td><td>—</td><td>[0,1]</td><td>Enter 1 next and stamp tin[1] = 1. Everything still below 1 will receive the next consecutive times, because the walk cannot return to 0 yet.</td></tr>
+      <tr><td>2</td><td>2</td><td>2</td><td>[0,1,2,3]</td><td>Leaf 2 takes time 2 and immediately writes tout[2] = 2. Leaf 3 takes time 3 the same way. No outsider has been entered between them.</td></tr>
+      <tr><td>1</td><td>1</td><td>3</td><td>sub 1</td><td>Leaving 1 writes tout[1] = 3. The subtree of 1 is now the contiguous block of indices 1 through 3, which is exactly the set {1, 2, 3}.</td></tr>
+      <tr><td>4</td><td>4</td><td>4</td><td>[0,1,2,3,4]</td><td>Enter leaf 4 at time 4, then leave the root with tout[0] = 4. The whole tree is the interval [0, 4] and every subtree is some sub-block of it.</td></tr>
+      <tr class="trace-table__row--change"><td>query</td><td>1</td><td>3</td><td>BIT range</td><td>A Fenwick range [1, 3] is the subtree sum of 1. Vertex 0 is an ancestor of 3 because 3's enter time sits inside 0's interval.</td></tr>
     </tbody>
   </table>
 </div>
@@ -415,9 +416,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>DFS assigns each vertex one tin. Fenwick ops are O(log n). Naive subtree walk is O(subtree) per query and dies at q=1e5.</p>
+    <p>The DFS assigns each of the <code>n</code> vertices one enter time, which is a linear pass. Each Fenwick update or range query walks about <code>log n</code> cells, around 18 at <code>n = 2&times;10&#8309;</code>. A batch of <code>q = 2&times;10&#8309;</code> operations is a few million cell writes, comfortable. Walking a subtree per query is <code>O(|subtree|)</code> and becomes about <code>4&times;10&#8310;</code> visits when every query hits the root.</p>
     <p><span class="eq">T_prep = O(n), T_op = O(log n)</span></p>
-    <p>Path queries are not an interval in this flattening (unless you add HLD or lift diffs at the LCA).</p>
+    <p>Path queries are not an interval in this flattening: the path from <code>u</code> to <code>v</code> is two root-paths glued at the LCA, so a single <code>[tin, tout]</code> is the wrong set. Those need HLD, or a difference array at <code>u</code>, <code>v</code> and the LCA, not a second Euler numbering.</p>
   </div>
 
   <table class="complexity__compare">
@@ -439,28 +440,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">tout exclusive vs inclusive mix-up</span>
-    <div class="pitfalls__bug">range(tin, tout) with tout=timer after children is exclusive on the right if you also stored tin as the start; off-by-one drops the last descendant or includes a sibling.</div>
-    <div class="pitfalls__fix">Pick one: tout=timer-1 inclusive, or half-open [tin,tout). Draw the sample.</div>
+    <div class="pitfalls__bug">Writing <code>tout = timer</code> after the children and then calling an inclusive <code>range(tin, tout)</code> looks consistent, then either drops the last descendant or includes the next sibling, and the sample of a one-child tree still happens to pass.</div>
+    <div class="pitfalls__fix">Pick one convention and stick to it: <code>tout = timer - 1</code> inclusive, or half-open <code>[tin, tout)</code>. Draw the five-node sample and check that subtree 1 is exactly {1, 2, 3}.</div>
   </li>
   <li>
     <span class="pitfalls__title">Fenwick on vertex id instead of tin</span>
-    <div class="pitfalls__bug">Subtree {1,2,3} is not ids 1..3 after an arbitrary labelling.</div>
-    <div class="pitfalls__fix">Always index by tin[v].</div>
+    <div class="pitfalls__bug">Indexing the Fenwick by the input label looks like the obvious map, and a lucky labelling where the subtree of 1 is {1, 2, 3} makes the sample green, then a different numbering makes the same range cover strangers.</div>
+    <div class="pitfalls__fix">Always index by <code>tin[v]</code>. Print both the label and the enter time on the sample before the first query.</div>
   </li>
   <li>
     <span class="pitfalls__title">Updating val[v] without adding at tin[v]</span>
-    <div class="pitfalls__bug">You change an array the Fenwick never sees.</div>
-    <div class="pitfalls__fix">add(tin[v], newVal-oldVal) or set via two adds.</div>
+    <div class="pitfalls__bug">Writing into a parallel <code>val[]</code> array looks like you stored the new value, but the Fenwick still holds the old number and every later subtree sum is stale.</div>
+    <div class="pitfalls__fix">Translate the update as <code>add(tin[v], newVal - oldVal)</code>, or rebuild that cell with two adds. Query the same subtree immediately after the write.</div>
   </li>
   <li>
     <span class="pitfalls__title">Root's parent edge in an undirected list causing a second DFS into the parent</span>
-    <div class="pitfalls__bug">tin assigned twice, timer explodes, or infinite rec.</div>
-    <div class="pitfalls__fix">skip parent, same as every tree DFS.</div>
+    <div class="pitfalls__bug">Forgetting <code>if (v == p) continue</code> looks like the binary-tree recursion and then either assigns <code>tin</code> twice, blows the timer past <code>n</code>, or recurses forever.</div>
+    <div class="pitfalls__fix">Skip the parent in the tour, the same guard as every other undirected tree DFS. A two-node tree exposes it at once.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using this flattening for path u-v</span>
-    <div class="pitfalls__bug">Path is two intervals to the LCA, not one. Queries give nonsense.</div>
-    <div class="pitfalls__fix">HLD, or difference array at u,v,+lca according to the op.</div>
+    <div class="pitfalls__bug">A path is two intervals glued at the LCA, so treating it as <code>[tin[u], tin[v]]</code> looks like "the nodes between them" and then sums a block of unrelated descendants.</div>
+    <div class="pitfalls__fix">Use HLD, or a difference array at <code>u</code>, <code>v</code> and the LCA according to the operation. The five-node sample path 2-1-0-4 is not the interval [2, 4].</div>
   </li>
 </ul>
 
@@ -502,28 +503,28 @@ graph TD
   <details class="followup">
     <summary>Ancestry in O(1)?</summary>
     <div class="followup__body">
-      <p>Yes: tin[u] &le; tin[v] &le; tout[u]. That is why you should still store tout even if you only planned sums.</p>
+      <p>Yes: <code>u</code> is an ancestor of <code>v</code> exactly when <code>tin[u] &le; tin[v] &le; tout[u]</code>. That is the same interval fact that makes subtree sums work, which is why you should still store <code>tout</code> even if the statement only asked for sums. Two integer compares, no Fenwick, no walk.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Path add, point query without HLD?</summary>
     <div class="followup__body">
-      <p>Add +x at v, add -x at parent[u] depending on the op; more carefully: difference on the root-path by adding at the node and subtracting at the LCA's parent. Then a subtree-sum (Euler+BIT) of the diffs reconstructs the point. Common CF trick.</p>
+      <p>Put a difference on the root-path: add <code>+x</code> at the node and subtract <code>x</code> at the parent of the LCA (the exact endpoints depend on whether the LCA is included). A subtree-sum of those diffs, which is Euler plus a Fenwick, reconstructs the point value. It is a common CF trick and still uses this flattening; it is not a claim that a path is one interval.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>tin unique?</summary>
     <div class="followup__body">
-      <p>Node-only flattening: each vertex once, tin in 0..n-1 permutation. True Euler tour: vertices repeat, length 2n-1, first[] stores the first index for RMQ-LCA.</p>
+      <p>In the node-only flattening each vertex is entered once, so <code>tin</code> is a permutation of <code>0..n-1</code>. The true Euler tour used for RMQ-LCA records a vertex on enter and after every child, has length <code>2n-1</code>, and stores <code>first[v]</code> as the first index of <code>v</code> in that longer sequence. Subtree queries want the short numbering; LCA-as-RMQ wants the long one.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>HLD connection?</summary>
     <div class="followup__body">
-      <p>HLD chains are also intervals, but of a different numbering (heavy-path compressed). The first step of HLD still uses sz[] from a DFS; Euler is the lighter tool when the query is a whole subtree.</p>
+      <p>Heavy-light decomposition also turns some paths into intervals, but the numbering is different: it compresses heavy paths, not whole subtrees. The first step of HLD still runs a DFS for subtree sizes, and that DFS can stamp <code>tin</code>/<code>tout</code> at the same time. Euler alone is the lighter tool when every query is a whole subtree and you do not need an arbitrary path.</p>
     </div>
   </details>
 </div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Left &lt; node &lt; right on every subtree: inorder is sorted, k-th smallest is an inorder walk, and validate is a range (lo, hi) passed down, not a local comparison.</p>
   <div class="hero__meta">
     <span class="pill pill--easy">Easy</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>,
       <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A BST is a binary tree plus an invariant, and almost every BST bug is a local check that is not the invariant. "Left child &lt; me &lt; right child" is necessary and not sufficient: a right grandchild can still violate the ancestor. The real invariant is a range: every node sits in (lo, hi) inherited from its ancestors.</p>
-<p>Because inorder is sorted, k-th smallest is "walk inorder, stop at k", and "two-sum in a BST" is a two-pointer on the iterator, not a hash set you needed for an unsorted tree. Delete is the one structural operation people fumble (two children: splice the inorder successor).</p>
-<p>Balanced BSTs (TreeMap) are a later Java page. This page is the interview BST: validate, search, insert, delete, k-th, LCA using values, convert sorted array to BST.</p>
+<p>You are handed a binary tree of a few thousand nodes and asked whether it is a binary search tree. The tempting check looks at each node and asks only whether the left child is smaller and the right child is larger. That test accepts a tree whose root is 4, whose left child is 2, and whose right child of 2 is 6: locally 2 &lt; 6, yet 6 sits in the left half of 4 and the whole tree is illegal. Almost every BST bug is that same mistake written a different way: a local compare that is not the real rule.</p>
+<p>A <em>binary search tree</em>, usually shortened to BST, is a binary tree plus one range rule: every key in the left subtree is smaller than the node, and every key in the right subtree is larger, not just the two children. Because of that rule, an inorder walk emits keys in sorted order, so "k-th smallest" is "walk inorder and stop at k", and two-sum on a BST is two iterators walking that sorted sequence, not the hash set you needed on an unordered tree. Delete is the one structural edit people fumble: a node with two children is replaced by its inorder successor, the next key to the right.</p>
+<p>This page is the interview BST: validate, search, insert, delete, k-th, LCA using the values, and convert a sorted array into a balanced tree. Java's <code>TreeMap</code> is a later, self-balancing structure and is not required here. In a statement the tell is the phrase "binary search tree" next to limits like <code>n &le; 10&#8308;</code> in interviews or <code>n &le; 10&#8309;</code> in contests, and a question that uses the ordered invariant rather than a general path or diameter.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Validate with a range, not a local compare. Inorder of a BST is strictly increasing (if unique keys). k-th smallest is inorder that stops early.</p>
+    <p>Validate by passing a range down from the ancestors, not by comparing a node to its two children. Inorder of a BST is strictly increasing when keys are unique, and k-th smallest is that same walk stopping early.</p>
   </div>
 </aside>
 
@@ -112,18 +112,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e4 in interviews, n &le; 1e5 in contests. Skew BST is a linked list: search is O(n). TreeMap/TreeSet are red-black, O(log n) guaranteed. Duplicate policy: usually unique; if not, pick &le; on one side and document it.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Interview limits sit around <code>n &le; 10&#8308;</code>; contests go to <code>n &le; 10&#8309;</code>. A skew BST is a linked list, so a search can take <code>n</code> steps and a recursive walk can overflow the stack. <code>TreeMap</code> and <code>TreeSet</code> are red-black trees and guarantee <code>O(log n)</code>; this page does not. Duplicate policy is usually "keys are unique"; if equals are allowed, pick one side (commonly the right) and make validate match that choice.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Validate: ok(node, lo, hi) with long sentinels (or null bounds). Fail if val &le; lo or val &ge; hi. Recurse left with hi=val, right with lo=val. Inorder alternative: prev pointer, fail if node.val &le; prev.</p>
-<p>Insert: empty slot is the new node; go left if val &lt; cur, else right. Delete: 0 children drop; 1 child replace; 2 children copy successor.val then delete successor (which has no left). LCA: while node is not between p and q, step left or right.</p>
+<p>Validate by passing a live range. The helper is <code>ok(node, lo, hi)</code>, and the sentinels must be <code>long</code> (or boxed <code>Integer</code> bounds) because <code>Integer.MIN_VALUE</code> is a legal key. Fail as soon as <code>val &le; lo</code> or <code>val &ge; hi</code>. The left child inherits <code>(lo, val)</code> and the right child inherits <code>(val, hi)</code>, which is how a grandchild is still checked against every ancestor. The inorder alternative keeps a <code>prev</code> pointer and fails if the current value is not strictly larger; that is the same rule written as a sorted scan.</p>
+<p>Search and insert are binary search on the tree: go left when the key is smaller, right otherwise, and a <code>null</code> slot is where a new node hangs. Delete has three shapes. No children: drop the node. One child: replace it with that child. Two children: copy the value of the <em>inorder successor</em> &mdash; the leftmost node of the right subtree, which has no left child &mdash; then delete that successor. LCA walks from the root and steps left while both keys are smaller, right while both are larger, and stops at the first node that sits between them.</p>
+<p>Walk the sample 4 / 2 5 / 1 3. The root 4 is checked against <code>(-&infin;, +&infin;)</code>. Node 2 must sit in <code>(-&infin;, 4)</code>, node 1 in <code>(-&infin;, 2)</code>, node 3 in <code>(2, 4)</code>, and node 5 in <code>(4, +&infin;)</code>; all pass, and inorder emits 1, 2, 3, 4, 5. Replace 3 with 6 and the local check at 2 still sees 2 &lt; 6, but the range <code>(2, 4)</code> rejects 6 at once. Inserting 0 walks 4 to 2 to 1 and hangs a left child. Deleting 2 copies 3 into 2's slot and then removes the old 3, which had no left child.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>For every node, all keys in its left subtree are &lt; node.val and all keys in its right subtree are &gt; node.val (unique keys).</p><span class="eq">lo &lt; node.val &lt; hi, inherited from ancestors</span>
+    <p>For every node, every key in its left subtree is strictly less than <code>node.val</code> and every key in its right subtree is strictly greater (unique keys). That is equivalent to a range inherited from the ancestors:</p><span class="eq">lo &lt; node.val &lt; hi</span><p>In plain words, a node is legal only when it sits inside the open interval its ancestors carved out; checking the two children is not enough, because a grandchild can break an ancestor the parent never looks at.</p><p>Interview sentence: <em>"I pass (lo, hi) down; a local left-right check is not the invariant."</em></p>
   </div>
 </aside>
 
@@ -156,7 +157,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Tree 4 / 2 5 / 1 3. Root 4 in (-inf, +inf).",
+          "note": "The sample is 4 / 2 5 / 1 3. Root 4 is checked against an open range that covers every integer, so it always passes.",
           "active": [
             3
           ],
@@ -168,7 +169,7 @@
           }
         },
         {
-          "note": "Left child 2 must be in (-inf, 4).",
+          "note": "Stepping left tightens the high end: node 2 must sit strictly below 4, which it does, so the walk continues into 2's children.",
           "active": [
             1
           ],
@@ -180,7 +181,7 @@
           }
         },
         {
-          "note": "1 in (-inf, 2), 3 in (2, 4). Both ok.",
+          "note": "Node 1 must sit below 2, and node 3 must sit between 2 and 4. Both ranges hold, so the left subtree of 4 is legal.",
           "active": [
             0,
             2
@@ -193,7 +194,7 @@
           }
         },
         {
-          "note": "Right child 5 in (4, +inf). Ok. Whole tree valid.",
+          "note": "The right child 5 must sit strictly above 4. It does, so every node has passed and the tree is a BST.",
           "active": [
             4
           ],
@@ -205,7 +206,7 @@
           }
         },
         {
-          "note": "If 3 were 6, local 2<6 but 6 is not <4. Range check catches it; a local left<me<right on 2 would not see 6.",
+          "note": "If 3 were 6, the local check at 2 would still see 2 &lt; 6, but the inherited range (2, 4) rejects 6 at once.",
           "values": {
             "node": 6,
             "lo": 2,
@@ -214,7 +215,7 @@
           }
         },
         {
-          "note": "Inorder 1,2,3,4,5 is strictly increasing, the other validator.",
+          "note": "The other validator is inorder: 1, 2, 3, 4, 5 is strictly increasing, which is the same range rule written as a sorted scan.",
           "best": [
             0,
             1,
@@ -252,17 +253,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Validate:</strong> dfs(n, lo, hi), fail unless lo &lt; n.val &lt; hi; rec left (lo,val), right (val,hi).</li>
-  <li><strong>Or inorder:</strong> prev, fail if n.val &le; prev.</li>
-  <li><strong>Search / insert:</strong> compare and step, like binary search.</li>
-  <li><strong>Delete two-children:</strong> successor = min of right; copy; delete successor.</li>
-  <li><strong>k-th:</strong> inorder until count==k, or sizes on nodes for O(h).</li>
-  <li><strong>LCA:</strong> from root, step until p and q are on different sides (or one equals the node).</li>
+  <li><strong>Validate with a shrinking range.</strong> Recurse as <code>ok(n, lo, hi)</code> and fail unless <code>lo &lt; n.val &lt; hi</code>, then send <code>(lo, val)</code> left and <code>(val, hi)</code> right so every ancestor still constrains the grandchildren.</li>
+  <li><strong>Or walk inorder and keep the previous key.</strong> Fail as soon as <code>n.val &le; prev</code>, because a legal BST with unique keys must emit a strictly increasing sequence.</li>
+  <li><strong>Search and insert are binary search.</strong> Compare the key to the current node and step left or right; a <code>null</code> child is the hole where a new node belongs, which is why insert is <code>O(h)</code> and not a rebuild.</li>
+  <li><strong>Delete a two-child node via its successor.</strong> The successor is the minimum of the right subtree, it has no left child, so you can copy its value and then delete that easier node instead of splicing two live children.</li>
+  <li><strong>k-th smallest is inorder that stops.</strong> Count visits until you hit <code>k</code>, or store subtree sizes on each node if later queries must stay <code>O(h)</code> after inserts.</li>
+  <li><strong>LCA walks from the root using values.</strong> Step left while both keys are smaller, right while both are larger, and stop at the first node that sits between them, because that is where the two search paths split.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Range-validate the sample BST 4 / 2 5 / 1 3, then watch the same check reject a 6 that a local child compare would have accepted.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -270,12 +271,12 @@ graph TD
       <tr><th>node</th><th>lo</th><th>hi</th><th>ok</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>4</td><td>-inf</td><td>+inf</td><td>true</td><td>Tree 4 / 2 5 / 1 3. Root 4 in (-inf, +inf).</td></tr>
-      <tr><td>2</td><td>-inf</td><td>4</td><td>true</td><td>Left child 2 must be in (-inf, 4).</td></tr>
-      <tr><td>3</td><td>2</td><td>4</td><td>true</td><td>1 in (-inf, 2), 3 in (2, 4). Both ok.</td></tr>
-      <tr><td>5</td><td>4</td><td>+inf</td><td>true</td><td>Right child 5 in (4, +inf). Ok. Whole tree valid.</td></tr>
-      <tr><td>6</td><td>2</td><td>4</td><td>false</td><td>If 3 were 6, local 2<6 but 6 is not <4. Range check catches it; a local left<me<right on 2 would not see 6.</td></tr>
-      <tr class="trace-table__row--change"><td>inorder</td><td>prev</td><td>—</td><td>true</td><td>Inorder 1,2,3,4,5 is strictly increasing, the other validator.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>-inf</td><td>+inf</td><td>true</td><td>The sample is 4 / 2 5 / 1 3. Root 4 is checked against an open range that covers every integer, so it always passes.</td></tr>
+      <tr><td>2</td><td>-inf</td><td>4</td><td>true</td><td>Stepping left tightens the high end: node 2 must sit strictly below 4, which it does, so the walk continues into 2's children.</td></tr>
+      <tr><td>3</td><td>2</td><td>4</td><td>true</td><td>Node 1 must sit below 2, and node 3 must sit between 2 and 4. Both ranges hold, so the left subtree of 4 is legal.</td></tr>
+      <tr><td>5</td><td>4</td><td>+inf</td><td>true</td><td>The right child 5 must sit strictly above 4. It does, so every node has passed and the tree is a BST.</td></tr>
+      <tr><td>6</td><td>2</td><td>4</td><td>false</td><td>If 3 were 6, the local check at 2 would still see 2 &lt; 6, but the inherited range (2, 4) rejects 6 at once.</td></tr>
+      <tr class="trace-table__row--change"><td>inorder</td><td>prev</td><td>—</td><td>true</td><td>The other validator is inorder: 1, 2, 3, 4, 5 is strictly increasing, which is the same range rule written as a sorted scan.</td></tr>
     </tbody>
   </table>
 </div>
@@ -391,9 +392,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>h is log n on a balanced tree and n on a skew tree. Validate must see every node, O(n).</p>
+    <p>Search, insert, delete and BST-LCA each walk one root-to-node path, so they cost <code>O(h)</code>. On a balanced tree <code>h</code> is about <code>log n</code>, roughly 17 steps at <code>n = 10&#8309;</code>. On a skew tree the same operations become a linked-list scan of <code>n</code> steps. Validate must look at every node, so it is always <code>&Theta;(n)</code> no matter how balanced the tree is.</p>
     <p><span class="eq">T_search = O(h), T_validate = &Theta;(n)</span></p>
-    <p>Order-statistic trees store sz[] so k-th is O(h) after each insert.</p>
+    <p>Naive k-th smallest is an inorder walk that stops at <code>k</code>, which is <code>O(h + k)</code> and in the worst case <code>O(n)</code>. If the follow-up is many k-th queries mixed with inserts, store a subtree size on each node and the same question becomes one more <code>O(h)</code> descent. <code>TreeMap</code> hides a red-black tree and quotes <code>O(log n)</code> for all of this; a hand-rolled BST does not.</p>
   </div>
 
   <table class="complexity__compare">
@@ -415,28 +416,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Local left < me < right only</span>
-    <div class="pitfalls__bug">A 6 sitting in the left subtree of 4 passes the local check at 2.</div>
-    <div class="pitfalls__fix">Pass (lo, hi). Use long so Integer.MIN_VALUE is a legal node value.</div>
+    <div class="pitfalls__bug">A 6 sitting as the right child of 2, under a root of 4, passes every parent-child compare, so the function returns true on an illegal tree and the sample of a valid BST never exposes it.</div>
+    <div class="pitfalls__fix">Pass <code>(lo, hi)</code> from the ancestors, and use <code>long</code> sentinels so <code>Integer.MIN_VALUE</code> is still a legal key. The 4 / 2 / 6 counterexample is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow sentinels</span>
-    <div class="pitfalls__bug">lo = Integer.MIN_VALUE, node.val is also MIN_VALUE, lo < val fails or you use <= wrong.</div>
-    <div class="pitfalls__fix">long lo, hi with Long.MIN/MAX, or Integer bounds as objects.</div>
+    <div class="pitfalls__bug">Starting with <code>lo = Integer.MIN_VALUE</code> looks like "no lower bound", then a root whose value is also <code>MIN_VALUE</code> fails <code>lo &lt; val</code>, or you switch to <code>&le;</code> and silently accept a duplicate that the statement forbade.</div>
+    <div class="pitfalls__fix">Use <code>long lo, hi</code> with <code>Long.MIN_VALUE</code> / <code>Long.MAX_VALUE</code>, or pass boxed bounds that can be null. A one-node tree holding <code>Integer.MIN_VALUE</code> is the check.</div>
   </li>
   <li>
     <span class="pitfalls__title">Delete successor incorrectly</span>
-    <div class="pitfalls__bug">You delete the successor's value from the wrong parent, or forget it has no left child only.</div>
-    <div class="pitfalls__fix">successor = min(right); node.val = s.val; node.right = delete(node.right, s.val).</div>
+    <div class="pitfalls__bug">Deleting the successor from the original parent, or treating it as if it might have a left child, looks like a local pointer fix and then either loses the right subtree or leaves a second copy of the key.</div>
+    <div class="pitfalls__fix">Set <code>successor = min(right)</code>, copy <code>s.val</code> into the node, then <code>node.right = delete(node.right, s.val)</code>. The successor of a two-child node never has a left child.</div>
   </li>
   <li>
     <span class="pitfalls__title">Duplicates</span>
-    <div class="pitfalls__bug"><= on both sides, or a validate that uses < both ways, rejects a legal duplicate policy.</div>
-    <div class="pitfalls__fix">Pick a side for equals (usually right) and match validate to it.</div>
+    <div class="pitfalls__bug">Using <code>&le;</code> on both sides, or a validate that demands a strict <code>&lt;</code> both ways, looks consistent and then either builds a broken tree or rejects a legal policy the statement actually allowed.</div>
+    <div class="pitfalls__fix">Pick one side for equals, usually the right, and make insert, search and validate all agree. A two-node tree with equal keys is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">k-th by converting to an array always</span>
-    <div class="pitfalls__bug">Fine for one query; wasteful if the follow-up is many k-th with inserts.</div>
-    <div class="pitfalls__fix">Subtree sizes, or a persistent inorder iterator.</div>
+    <div class="pitfalls__bug">Dumping inorder into a list is correct for one query and looks like the obvious answer, then the follow-up of many k-th questions mixed with inserts rebuilds the list each time and becomes linear per query.</div>
+    <div class="pitfalls__fix">Store subtree sizes, or keep a persistent inorder iterator. Time a few thousand mixed operations if the follow-up appears.</div>
   </li>
 </ul>
 
@@ -478,28 +479,28 @@ graph TD
   <details class="followup">
     <summary>Why long bounds?</summary>
     <div class="followup__body">
-      <p>The node type is int, so MIN_VALUE and MAX_VALUE are legal keys. If you pass those as the initial lo/hi with int, a root equal to MIN_VALUE is rejected. long sentinels sit strictly outside.</p>
+      <p>The node stores an <code>int</code>, so both <code>Integer.MIN_VALUE</code> and <code>Integer.MAX_VALUE</code> are legal keys. If you pass those same values as the initial <code>lo</code> and <code>hi</code> with <code>int</code> arithmetic, a root equal to <code>MIN_VALUE</code> fails the lower-bound test. <code>long</code> sentinels sit strictly outside the <code>int</code> range, so every legal key falls inside the first call.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is every inorder-sorted tree a BST?</summary>
     <div class="followup__body">
-      <p>Yes for unique keys: the BST invariant is equivalent to inorder being strictly increasing. Building a tree from an increasing inorder still needs a structure (balanced mid split) if you also want height log n.</p>
+      <p>For unique keys, yes: the BST range rule is equivalent to inorder being strictly increasing. That does not tell you how to build the tree. An increasing inorder sequence can be laid out as a linked list or as a balanced tree; taking the midpoint of the remaining slice as the root is what gives height about <code>log n</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Delete complexity?</summary>
     <div class="followup__body">
-      <p>O(h) to find, O(h) to find the successor, O(h) to splice. Still O(h). Hibbard deletion unbalances over time; interviews ignore that.</p>
+      <p>You walk <code>O(h)</code> to find the node, another <code>O(h)</code> to find its successor if it has two children, and <code>O(h)</code> to splice that successor out. All of that is still <code>O(h)</code>. Repeated Hibbard deletions slowly unbalance a tree; interviews ignore that and never ask you to rebalance by hand.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>LCA in BST vs general tree?</summary>
     <div class="followup__body">
-      <p>BST: walk from the root using values, no extra memory. General: postorder both-sides (previous page) or binary lifting (later).</p>
+      <p>On a BST you walk from the root comparing values, using no extra memory beyond a few pointers, because the split point is decided by the keys. On a general binary tree the keys tell you nothing, so you use the postorder both-sides walk from the previous page, or binary lifting when there are many queries on a static tree.</p>
     </div>
   </details>
 </div>

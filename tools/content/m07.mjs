@@ -8,7 +8,7 @@ export const topics = [
 pack({
   id: "graph-representations",
   difficulty: "Easy",
-  readTime: "20 min",
+  readTime: "24 min",
   tagline: "Pick the encoding before the algorithm: adjacency list, matrix, or edge list " +
     "are not interchangeable, and the wrong one turns an <code>O(n + m)</code> walk into an " +
     "<code>O(n&sup2;)</code> timeout.",
@@ -18,20 +18,53 @@ pack({
     ["Java for DSA", "../00-foundations/java-for-dsa.html"],
   ],
   why: [
-    "Every graph algorithm is written against an encoding, not a picture. The same five-node " +
-      "drawing becomes neighbour arrays, an <code>n &times; n</code> matrix, or a flat edge " +
-      "list, and each answers a different question in constant time. Choosing the encoding is " +
-      "the first algorithmic decision.",
-    "Interviews punish the wrong choice immediately. Iterating neighbours of <code>u</code> is " +
-      "<code>O(deg(u))</code> on a list and <code>O(n)</code> on a matrix. Testing whether " +
-      "<code>(u, v)</code> exists is the opposite. On <code>n = 10&#8309;</code> a matrix is a " +
-      "memory error; on <code>n = 400</code> it is the faster structure.",
-    "Off-by-one indexing, forgotten reverse edges, and mixing 0-based code with 1-based input " +
-      "account for more wrong answers on easy graph problems than the algorithms themselves.",
+    "You are handed a city map as a plain list of 200000 road segments, each one printed as a " +
+      "pair of junction numbers such as <code>17 4093</code>, and you are asked which junctions " +
+      "a delivery van starting at junction 0 can eventually reach. Before you can search " +
+      "anything you have to decide how those pairs sit in memory, because a bare list of pairs " +
+      "cannot tell you which roads leave junction 17 without reading all 200000 of them. If your " +
+      "search asks that question once for each of the 100000 junctions, you have signed up for " +
+      "roughly <code>2&times;10&#185;&#8304;</code> reads, and a judge that gives you two seconds " +
+      "cuts you off after about one percent of the work. The cure is not a cleverer search. It " +
+      "is storing the very same edges so that \"the roads leaving 17\" is already gathered in one " +
+      "place before the search starts.",
+    "Three encodings are in common use, and each makes a different question cheap. An " +
+      "<em>adjacency list</em> keeps, for every vertex <code>u</code>, a small growable array of " +
+      "the vertices you can step to from <code>u</code>, so listing the neighbours of " +
+      "<code>u</code> costs exactly <code>deg(u)</code> reads &mdash; <code>deg(u)</code>, the " +
+      "<em>degree</em> of <code>u</code>, being the number of edges that touch it. An " +
+      "<em>adjacency matrix</em> is an <code>n &times; n</code> table of booleans where the cell " +
+      "in row <code>u</code>, column <code>v</code> is true exactly when that edge exists, so " +
+      "\"is there a road from 17 to 4093?\" is a single array read, but listing the neighbours of " +
+      "17 means scanning all <code>n</code> cells of row 17 even if only three of them are true. " +
+      "An <em>edge list</em> is the raw pairs kept exactly as they arrived; it supports no lookup " +
+      "at all, and is the right choice only when the whole algorithm is one sorted sweep over " +
+      "every edge.",
+    "The input limits usually make the decision for you, so read them first. At " +
+      "<code>n = 10&#8309;</code> a matrix wants <code>10&#185;&#8304;</code> cells, which is ten " +
+      "gigabytes even at one byte per cell, so it cannot be allocated at all; the adjacency list " +
+      "for the same graph stores <code>n + 2m</code> integers, about half a million of them for " +
+      "<code>m = 2&times;10&#8309;</code> undirected edges, which is a few megabytes. At " +
+      "<code>n = 400</code> the matrix is only 160000 cells and the constant-time edge test " +
+      "becomes worth paying for. The word that names the split is <em>sparse</em>: a graph is " +
+      "sparse when the edge count <code>m</code> grows roughly like <code>n</code> rather than " +
+      "like <code>n&sup2;</code>, and essentially every graph a contest hands you is sparse.",
+    "Two problems come from the statement rather than from the algorithm, and both cause more " +
+      "wrong answers on easy graph tasks than the algorithms do. First, judges usually number " +
+      "vertices from 1 to <code>n</code> while Java arrays start at 0, so either allocate " +
+      "<code>n + 1</code> slots and leave slot 0 unused, or subtract one from every label as you " +
+      "read it &mdash; choose one convention and never mix them, because half-converted input " +
+      "either throws an <code>ArrayIndexOutOfBoundsException</code> at index <code>n</code> or " +
+      "leaves a phantom vertex 0 that no edge ever touches. Second, when the statement says the " +
+      "roads are two-way, the pair <code>u v</code> has to be inserted twice, once into the list " +
+      "of <code>u</code> and once into the list of <code>v</code>; a single insert is the usual " +
+      "reason a perfectly correct search reports that half the map is unreachable.",
   ],
-  insight: "Adjacency list is the default because most graphs you meet are sparse " +
-    "(<code>m = O(n)</code>). Reach for a matrix only when <code>n</code> is a few hundred " +
-    "<em>and</em> you need <code>O(1)</code> edge tests.",
+  insight: "Store the graph so that the question your algorithm asks most often is the cheap " +
+    "one. Nearly every algorithm in this module walks the neighbours of a vertex, which is why " +
+    "the adjacency list &mdash; one array of neighbours per vertex &mdash; is the default " +
+    "encoding, and why the matrix only earns its <code>n&sup2;</code> cells when <code>n</code> " +
+    "is a few hundred and you keep asking whether one specific pair is joined.",
   yes: [
     "Input is n and m pairs (u, v), possibly weighted",
     "You will iterate every neighbour of a vertex (BFS, DFS, Dijkstra)",
@@ -55,43 +88,91 @@ pack({
       "Membership on a list is O(deg)",
       "Keep a matrix, a HashSet of pairs, or accept the scan"],
   ],
-  constraint: "<code>n, m &le; 2&times;10&#8309;</code> forces lists (n&sup2; memory dies). " +
-    "<code>n &le; 400</code> is the matrix signature. Always store vertices as int; weights as " +
-    "int or long if sums can overflow.",
+  constraint: "<code>n, m &le; 2&times;10&#8309;</code> is the usual sparse-graph signature " +
+    "and it forces an adjacency list: an <code>n &times; n</code> matrix would ask for " +
+    "<code>4&times;10&#185;&#8304;</code> cells and cannot be allocated. When the statement " +
+    "instead gives <code>n &le; 400</code>, the matrix fits in a couple of megabytes and the " +
+    "constant-time edge test becomes the reason to pick it. Store vertex ids as " +
+    "<code>int</code>; store path-weight sums as <code>long</code> once a weight can reach " +
+    "<code>10&#8313;</code>.",
   core: [
-    "Adjacency list: <code>List&lt;List&lt;Integer&gt;&gt; g</code> with n empty lists, then " +
-      "<code>g.get(u).add(v)</code> (and <code>g.get(v).add(u)</code> if undirected). Weighted: " +
-      "store <code>int[]{v, w}</code> or a small Edge type. Matrix: " +
-      "<code>boolean[][]</code> or <code>int[][]</code> with INF off-edge.",
-    "Allocate n+1 and ignore slot 0 when input is 1-based. Never write " +
-      "<code>new ArrayList[n]</code> without suppressing warnings; prefer a loop of " +
-      "<code>g.add(new ArrayList&lt;&gt;())</code>. Grids stay implicit: from (r,c) try four " +
-      "deltas and bounds-check.",
+    "The default encoding is an <em>adjacency list</em>: an outer list of length " +
+      "<code>n</code> whose slot <code>u</code> holds a growable list of the vertices you can " +
+      "step to from <code>u</code>. You start with <code>n</code> empty inner lists, then for " +
+      "each input pair <code>(u, v)</code> you run <code>g.get(u).add(v)</code>. If the " +
+      "statement says the roads are two-way you immediately run <code>g.get(v).add(u)</code> " +
+      "as well, in the same loop body, because a later walk from <code>v</code> has no other " +
+      "way to discover that edge. A weighted edge stores a small pair " +
+      "<code>int[]{v, w}</code> (or a tiny <code>Edge</code> type) instead of a bare integer, " +
+      "so the weight travels with the neighbour and Dijkstra never has to look it up elsewhere.",
+    "The other two encodings exist for different questions. An <em>adjacency matrix</em> is " +
+      "an <code>n &times; n</code> table, <code>boolean[][]</code> for presence or " +
+      "<code>int[][]</code> with a huge sentinel off the edge, and the cell " +
+      "<code>g[u][v]</code> answers \"is this pair joined?\" in one read. An <em>edge list</em> " +
+      "is just the raw triples kept in an array so you can sort them once, which is what " +
+      "Kruskal needs and what a neighbour-walk does not. Two Java habits sit next to the " +
+      "choice of encoding. If the judge numbers vertices from 1 to <code>n</code>, allocate " +
+      "<code>n + 1</code> slots and leave slot 0 unused rather than mixing conversions. And " +
+      "never write <code>new ArrayList[n]</code>: loop <code>g.add(new ArrayList&lt;&gt;())</code> " +
+      "so every slot is a real list before the first insert. A grid stays implicit: from a " +
+      "cell <code>(r, c)</code> you try four deltas and reject any neighbour that walks off " +
+      "the board, without ever allocating <code>RC</code> lists.",
+    "Walk the five-node sample that the visual uses. The edges arrive as " +
+      "<code>0-1</code>, <code>0-2</code>, <code>1-2</code>, <code>1-3</code>, " +
+      "<code>2-4</code>, all two-way. After the first insert the lists are " +
+      "<code>g[0]=[1]</code> and <code>g[1]=[0]</code>. After <code>0-2</code> you have " +
+      "<code>g[0]=[1,2]</code> and <code>g[2]=[0]</code>. The triangle closes with " +
+      "<code>1-2</code>, then <code>1-3</code> hangs a leaf off 1, then <code>2-4</code> " +
+      "hangs a leaf off 2. The finished degrees are <code>[2, 3, 3, 1, 1]</code>, which is " +
+      "exactly the number of times each vertex appears as an endpoint, and a walk that " +
+      "starts at 0 now sees 1 and 2 in a handful of reads instead of scanning all five " +
+      "input pairs again.",
+  ],
+  extra: [
+    {
+      kind: "key",
+      title: "Undirected means two writes in the same loop",
+      html: "<p>The pair <code>u v</code> is one road with two ends. If you insert it only into " +
+        "<code>g[u]</code>, a perfectly correct BFS that starts at <code>v</code> reports that " +
+        "<code>u</code> is unreachable. Write both directions before you read the next line of input.</p>",
+    },
+    {
+      kind: "tip",
+      title: "Grids never become adjacency lists",
+      html: "<p>A <code>1000 &times; 1000</code> maze has a million cells and about four million " +
+        "possible steps. Generating the four neighbours from <code>(r, c)</code> with a pair of " +
+        "delta arrays costs a few arithmetic operations and no extra heap objects.</p>",
+    },
   ],
   invariant: "<p>After the build, walking <code>g.get(u)</code> yields each outgoing neighbour " +
-    "exactly once (twice only if you inserted a duplicate edge).</p>" +
-    "<span class=\"eq\">undirected (u,v) &rArr; two inserts; 1-based input &rArr; length n+1</span>",
+    "exactly once (twice only if the input itself repeated that edge).</p>" +
+    "<span class=\"eq\">undirected (u, v) &rArr; two inserts; 1-based input &rArr; length n+1</span>" +
+    "<p>In plain words, the list hanging off a vertex is the complete answer to \"where can I " +
+    "step from here?\", so a later search never has to reread the original pairs, and a missing " +
+    "reverse insert is indistinguishable from a missing road.</p>",
   arrayLabel: "deg[u] after inserting the sample edges",
   array: [2, 3, 3, 1, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["edge", "u-v", "dir", "deg"],
   vizTitle: "Building an undirected list on 5 nodes",
+  dryIntro: "Five undirected edges land one at a time into empty neighbour lists. Watch each " +
+    "degree rise twice, once at each endpoint, which is the whole reason the reverse insert exists.",
   frames: [
-    { note: "n=5, empty lists. Degrees all 0.",
+    { note: "Five vertices start with empty neighbour lists, so every degree is still 0 and no walk can leave any vertex yet.",
       values: { edge: 0, "u-v": "\u2014", dir: "\u2014", deg: "[0,0,0,0,0]" } },
-    { note: "Insert 0-1 undirected: g[0].add(1), g[1].add(0). deg[0]=1, deg[1]=1.",
+    { note: "The first two-way road 0-1 is written into both lists, so g[0] holds 1, g[1] holds 0, and those two degrees become 1.",
       active: [0, 1],
       values: { edge: 1, "u-v": "0-1", dir: "both", deg: "[1,1,0,0,0]" } },
-    { note: "Insert 0-2. Triangle starts at 0.",
+    { note: "Road 0-2 is inserted both ways, so vertex 0 now has two neighbours and the triangle 0-1-2 has two of its three sides.",
       active: [0, 2],
       values: { edge: 2, "u-v": "0-2", dir: "both", deg: "[2,1,1,0,0]" } },
-    { note: "Insert 1-2. The triangle 0-1-2 is complete.",
+    { note: "Road 1-2 closes the triangle: each of 0, 1 and 2 now stores the other two corners, and those three degrees sit at 2.",
       active: [1, 2],
       values: { edge: 3, "u-v": "1-2", dir: "both", deg: "[2,2,2,0,0]" } },
-    { note: "Insert 1-3.",
+    { note: "Road 1-3 hangs a leaf off vertex 1, so the list at 1 grows to three neighbours and vertex 3 appears for the first time.",
       active: [1, 3],
       values: { edge: 4, "u-v": "1-3", dir: "both", deg: "[2,3,2,1,0]" } },
-    { note: "Insert 2-4. Final degrees [2,3,3,1,1]. List is the default encoding for every later page.",
+    { note: "Road 2-4 hangs the last leaf. Degrees finish at [2, 3, 3, 1, 1], and this list is the encoding every later page will walk.",
       active: [2, 4], best: [0, 1, 2, 3, 4],
       values: { edge: 5, "u-v": "2-4", dir: "both", deg: "[2,3,3,1,1]" } },
   ],
@@ -103,12 +184,12 @@ pack({
   n1 --- n3["3"]
   n2 --- n4["4"]`,
   steps: [
-    "<strong>Read n, m.</strong> Decide list vs matrix from n and whether you need O(1) tests.",
-    "<strong>Allocate</strong> n (or n+1) empty neighbour lists.",
-    "<strong>For each edge</strong> (u,v[,w]): add v to g[u]; if undirected also add u to g[v].",
-    "<strong>Convert 1-based</strong> either by allocating n+1 or by decrementing on read.",
-    "<strong>Grids:</strong> do not build lists; from a cell try 4 or 8 deltas.",
-    "<strong>Kruskal-only:</strong> keep int[][] edges and skip the adjacency structure.",
+    "<strong>Read n and m, then pick the encoding from those two numbers.</strong> A list is the default once <code>n</code> is in the tens of thousands, because an <code>n &times; n</code> table cannot be allocated; a matrix earns its keep only when <code>n</code> is a few hundred and you will ask \"is this pair an edge?\" many times.",
+    "<strong>Allocate n empty neighbour lists, or n+1 if the judge numbers from 1.</strong> Leaving slot 0 unused is cheaper than mixing conversions later, and every later index into <code>g</code> then matches the printed label.",
+    "<strong>For each edge (u, v[, w]), write v into g[u], and if the graph is undirected write u into g[v] in the same body.</strong> The reverse insert is what makes a walk starting at v able to see u; forgetting it is the usual reason half the map looks unreachable.",
+    "<strong>Pick one 1-based convention and never mix it.</strong> Either allocate length <code>n+1</code> or subtract one from every label as you read it, because a half-converted vertex either throws at index <code>n</code> or sits in slot 0 as a ghost nobody reaches.",
+    "<strong>Leave grids implicit: from (r, c) try four or eight deltas and reject anything off the board.</strong> Materialising <code>RC</code> lists for a maze spends memory and object headers on neighbours you can compute in a few additions.",
+    "<strong>If the algorithm only sorts the edges once, keep an int[][] edge list and skip the adjacency structure.</strong> Kruskal never asks for the neighbours of a vertex, so building lists is wasted work on that page.",
   ],
   code: [
     { tab: "Brute", file: "MatrixBuild.java",
@@ -177,9 +258,9 @@ public class WeightedList {
     time: "O(n + m) to build a list; O(n\u00b2) a matrix",
     space: "O(n + m) list; O(n\u00b2) matrix",
     derivation: [
-      "Each edge is stored a constant number of times (once directed, twice undirected), so a list is linear in the input size.",
+      "<p>Building a list writes each directed edge once and each undirected edge twice, so the number of stored integers is <code>n</code> list headers plus a constant times <code>m</code>. Walking every neighbour of every vertex then costs one scan of those stored integers, which is <code>n + 2m</code> reads on an undirected graph.</p>",
       "<span class=\"eq\">list: S = n + &Theta;(m); matrix: S = n&sup2; regardless of m</span>",
-      "Neighbour iteration is O(deg) vs O(n). That factor is why Dijkstra on a matrix is O(n&sup2;) even with a heap-free scan.",
+      "<p>A matrix always occupies <code>n&sup2;</code> cells, about <code>10&#185;&#8304;</code> at <code>n = 10&#8309;</code>, which is why it is illegal at the usual limits. Listing the neighbours of one vertex on a matrix scans a whole row of <code>n</code> cells even if only three are true, so Dijkstra on a matrix is <code>O(n&sup2;)</code> even without a heap. At <code>n = 400</code> that is 160000 cells and the constant-time edge test is the thing you are buying.</p>",
     ],
     compare: [
       ["Adjacency list", "O(n+m) build", "O(n+m)", "Default sparse graphs"],
@@ -190,20 +271,20 @@ public class WeightedList {
   },
   pitfalls: [
     { title: "Forgetting the reverse edge",
-      bug: "Undirected input stored one way. BFS from one endpoint never sees the other.",
-      fix: "In the same loop body: add both directions. Directed problems add once." },
+      bug: "The input says the roads are two-way, but the loop only writes v into g[u]. A later BFS that starts at v never sees u, so a correct search reports that half the map is unreachable.",
+      fix: "In the same loop body write both directions for undirected input, and write once only when the statement says the edges are directed. A two-line print of g.get(u) and g.get(v) after the first edge catches it." },
     { title: "1-based vs 0-based",
-      bug: "ArrayIndexOutOfBounds at n, or vertex 0 is a ghost nobody reaches.",
-      fix: "Allocate n+1 and ignore 0, or decrement every label as you read." },
+      bug: "The judge prints vertices 1..n and the array has length n, so the largest label throws ArrayIndexOutOfBounds, or you leave a phantom vertex 0 that no edge ever touches.",
+      fix: "Allocate n+1 and ignore slot 0, or subtract one from every label as you read it. Pick one convention and use it in every later index, including the answer you print." },
     { title: "new ArrayList[n] generic array",
-      bug: "Unchecked warning, and easy to forget to fill each slot, then NPE on g[u].add.",
-      fix: "List of lists, loop-init each ArrayList." },
+      bug: "The generic-array warning is easy to suppress and then forget to fill each slot, so the first g[u].add throws a NullPointerException that looks like a graph bug.",
+      fix: "Build a List of lists and loop g.add(new ArrayList<>()) so every slot is a real list before the first insert. That also avoids the unchecked warning." },
     { title: "Materialising a grid graph",
-      bug: "RC vertices and 4RC edges allocated for a maze. Memory and constant-factor death.",
-      fix: "Compute neighbours from (r,c) with dr/dc arrays." },
+      bug: "A maze with R rows and C columns is turned into RC vertices and 4RC allocated edges. The object headers alone can cost tens of megabytes and a constant-factor timeout.",
+      fix: "Keep the grid as the grid. From (r, c) add the four deltas, reject anything off the board or blocked, and never build an adjacency list for a maze." },
     { title: "Self-loops and multi-edges",
-      bug: "Degree counts and \"m = n-1 so it is a tree\" tests lie.",
-      fix: "Know whether the statement allows them; skip u==v if they are noise." },
+      bug: "A test that says \"m = n-1 so it is a tree\" is wrong if the input allowed a self-loop or a repeated pair, because those inflate the edge count without connecting a new vertex.",
+      fix: "Read whether the statement allows loops and parallel edges. Skip u==v when they are noise, and treat a second copy of u-v as a multi-edge if the problem cares about multiplicity." },
   ],
   variants: [
     ["Weighted pairs", "Store (v,w) not bare ints.", "g.get(u).add(new int[]{v,w});", "Dijkstra, 0-1 BFS"],
@@ -214,13 +295,13 @@ public class WeightedList {
   ],
   followups: [
     ["When is a matrix smaller than a list?",
-      "<p>When the graph is dense, m ~ n&sup2;/2. A boolean matrix is n&sup2; bits-or-bytes; a list of Integer objects is much fatter per edge. For n=400, matrix wins. For n=1e5, matrix does not exist.</p>"],
+      "<p>When the graph is dense, meaning m is on the order of n&sup2;/2, a boolean matrix is n&sup2; bits or bytes and a list of Integer objects is much fatter per stored edge. At n = 400 the matrix is 160000 cells and usually wins. At n = 10&#8309; the matrix cannot be allocated at all, so the question does not arise: you use a list because it is the only encoding that fits.</p>"],
     ["How do you test edge existence on a list quickly?",
-      "<p>Sort each neighbour list and binary search, or keep a HashSet of packed longs ((long)u<<32|v). Usually you do not need it: BFS/DFS never ask \"is uv an edge?\" they iterate neighbours.</p>"],
+      "<p>Membership on a list is O(deg(u)), which is fine when you only ever iterate neighbours. If you truly need a yes/no test, sort each neighbour list and binary search, or keep a HashSet of packed longs ((long)u &lt;&lt; 32 | v). BFS and DFS never ask that question: they walk g.get(u) and do not probe arbitrary pairs.</p>"],
     ["Directed vs undirected in the rest of this module?",
-      "<p>BFS/DFS/components assume you stored the right directions. Cycle detection and bipartite are defined differently on directed graphs (that is a later page). Default in interviews: undirected unless the statement says otherwise.</p>"],
+      "<p>Every later page assumes you stored the directions the statement named. BFS, DFS and components walk whatever you inserted, so a missing reverse edge silently splits the graph. Cycle detection and bipartite tests are different algorithms on directed graphs, covered on their own page. In interviews, treat the graph as undirected unless the statement says otherwise.</p>"],
     ["Why not Map&lt;Integer,List&lt;Integer&gt;&gt;?",
-      "<p>When vertices are 0..n-1 an ArrayList of lists is faster and simpler. Use a map only for sparse labels (word ladder strings, chess squares as packed ints).</p>"],
+      "<p>When vertices are already numbered 0..n-1, an ArrayList of lists is a direct index and has no hash overhead. A map is the right tool only when labels are sparse or are not integers at all: word-ladder strings, chess squares packed into ints, or a huge id space where only a few nodes appear. Convert those labels to 0..k-1 at the boundary if you can.</p>"],
   ],
   problems: [
     lc(133, "clone-graph", "Medium", "Copy the encoding"),
@@ -246,23 +327,40 @@ public class WeightedList {
 pack({
   id: "bfs",
   difficulty: "Easy",
-  readTime: "22 min",
+  readTime: "24 min",
   tagline: "The only shortest-path algorithm you need on an unweighted graph: a queue, a " +
     "<code>dist</code> array, and the rule that the first time you see a vertex is the closest time.",
   tags: ["BFS", "queue", "shortest path", "P0"],
   prereqs: [["Graph Representations", "graph-representations.html"]],
   why: [
-    "Breadth-first search visits vertices in order of unweighted distance from the source. That " +
-      "is why it computes shortest paths on unit-weight graphs, why multi-source flood-fills " +
-      "work, and why \"minimum operations to turn A into B\" is a BFS on an implicit graph.",
-    "The code is short and the bugs are classic: marking visited at pop instead of push (the " +
-      "queue explodes), using a Stack by accident, forgetting disconnected components, and " +
-      "treating a weighted graph as unweighted.",
-    "The queue is the frontier, dist[u] is the level, and the invariant is visible in the array: " +
-      "processed vertices, the current layer, and the undiscovered rest.",
+    "You are standing at junction 0 on a city map of 100000 junctions and 200000 two-way " +
+      "roads, and every road takes the same time to drive. You need the fewest roads that " +
+      "reach junction 4093. Trying every walk is hopeless: even a branching of two new roads " +
+      "per step explodes, and a judge that gives you two seconds will not wait while you " +
+      "enumerate them. What you want is a walk that visits junctions in order of how many " +
+      "roads they sit from 0, so the first time you arrive at 4093 you already hold the " +
+      "shortest answer and can stop.",
+    "That walk is <em>breadth-first search</em>, usually shortened to BFS. It keeps a FIFO " +
+      "queue &mdash; first in, first out, the same structure as a line at a ticket window " +
+      "&mdash; of junctions that have been reached but whose neighbours have not yet been " +
+      "looked at. Because every road has the same weight, a walk that uses fewer roads is " +
+      "always cheaper than a walk that uses more. BFS therefore expands layer 0, then layer " +
+      "1, then layer 2, and the first time a junction enters the queue it has been reached " +
+      "by a walk with the fewest possible roads. That is why BFS is a shortest-path algorithm " +
+      "only on unweighted edges (or edges that all share one positive weight you can treat as 1).",
+    "The same first-visit rule is also why BFS dies the moment the roads have different " +
+      "lengths. Suppose 0 is joined to 2 by one road of length 100, and also joined to 2 by " +
+      "the two-road walk 0-1-2 whose roads each have length 1. BFS reaches 2 along the single " +
+      "road, records distance 1, and never looks at 2 again, so it reports 1 (or 100 if you " +
+      "stored weights) and misses the cheaper total of 2. Different positive weights need " +
+      "Dijkstra; weights that are only 0 and 1 need 0-1 BFS. The signal in a real statement " +
+      "is \"minimum number of moves / operations / roads\" together with limits such as " +
+      "<code>n, m &le; 2&times;10&#8309;</code> or a grid of a thousand rows, and no mention " +
+      "of unequal costs.",
   ],
-  insight: "The first time BFS reaches a vertex is via a shortest path. Mark it visited " +
-    "<em>when you push</em>, so each vertex enters the queue once.",
+  insight: "On unweighted edges the first time BFS reaches a vertex is via a shortest path, " +
+    "because a walk with fewer roads is always cheaper. Mark the vertex visited in the same " +
+    "breath as you push it, so each vertex enters the queue once and the queue stays linear.",
   yes: [
     "Shortest path on a graph whose edges all have the same weight",
     "Minimum number of moves / operations to reach a state",
@@ -286,40 +384,90 @@ pack({
       "0-weight edges break \"first visit is best\" unless you deque to the front",
       "See zero-one-bfs"],
   ],
-  constraint: "<code>n, m &le; 2&times;10&#8309;</code> or a grid <code>R,C &le; 10&#179;</code>. " +
-    "Time O(n+m). Mark on push so the queue holds O(n), not O(n&sup2;) duplicates.",
+  constraint: "<code>n, m &le; 2&times;10&#8309;</code> or a grid <code>R, C &le; 10&#179;</code> " +
+    "is the usual BFS prompt: one linear walk, about a million steps, fits comfortably in two " +
+    "seconds. Mark a vertex on the push, not on the pop, so the queue holds at most <code>n</code> " +
+    "entries rather than one copy per incoming edge. If the statement then gives unequal " +
+    "positive weights, this page is the wrong tool even when those limits look identical.",
   core: [
-    "dist[] starts at -1 (unseen). Queue the source, dist[s]=0. While the queue is non-empty, " +
-      "pop u, and for each unseen neighbour v set dist[v]=dist[u]+1 and push v. First hit is " +
-      "shortest because edges have equal weight, so a vertex is never improved later.",
-    "Multi-source: push every source with dist 0 first. The first time a cell is reached is " +
-      "the distance to the nearest source. Parent[] or a prev map reconstructs the path.",
+    "You need two structures. <code>dist[u]</code> holds the fewest edges from the source " +
+      "<code>s</code> to <code>u</code>, and it starts at <code>-1</code> everywhere, which " +
+      "is how you say \"unseen\". An <code>ArrayDeque</code> holds the vertices that have " +
+      "been reached but whose neighbours have not yet been scanned; this must be a FIFO " +
+      "queue, not a stack, because the order of the pops is the order of the distances. You " +
+      "set <code>dist[s] = 0</code>, push <code>s</code>, and then repeat: pop <code>u</code>, " +
+      "and for each neighbour <code>v</code> whose <code>dist[v]</code> is still <code>-1</code> " +
+      "write <code>dist[v] = dist[u] + 1</code> and push <code>v</code>. That write is the " +
+      "first place this module <em>relaxes an edge</em> &mdash; asking whether the walk that " +
+      "just reached <code>u</code>, plus the one edge <code>u &rarr; v</code>, is a cheaper " +
+      "way to <code>v</code> than anything recorded so far. On unit weights the answer is " +
+      "yes exactly once, the first time, and never again.",
+    "Marking on the push is load-bearing. If you wait until you pop <code>v</code> to set " +
+      "<code>dist[v]</code>, every incoming edge can enqueue its own copy of <code>v</code>, " +
+      "and on a dense graph the queue grows toward <code>n&sup2;</code> entries. Setting " +
+      "<code>dist[v]</code> in the same breath as <code>q.add(v)</code> makes \"already seen\" " +
+      "and \"already queued\" the same test. Multi-source BFS is the same loop with a longer " +
+      "start: push every source at distance 0 before the loop, and the first time a vertex " +
+      "is reached it is the distance to the nearest source. A <code>parent[v] = u</code> " +
+      "write on that same relaxing push reconstructs the path by walking backwards from the " +
+      "target.",
+    "Walk the five-node sample from 0. The edges are the same undirected triangle 0-1-2 with " +
+      "leaves 3 and 4. You start with <code>dist = [-1,-1,-1,-1,-1]</code>, set " +
+      "<code>dist[0] = 0</code>, and queue <code>[0]</code>. Pop 0, relax 0-1 and 0-2, and " +
+      "the queue becomes <code>[1, 2]</code> with both distances 1. Pop 1, relax 1-3 to " +
+      "distance 2, and skip 2 because it is already marked. Pop 2, relax 2-4 to distance 2. " +
+      "Pops of 3 and 4 find only marked neighbours. The finished array is " +
+      "<code>[0, 1, 1, 2, 2]</code>, and every first visit was a shortest unweighted path.",
   ],
-  invariant: "<p>Vertices leave the queue in non-decreasing dist order. When u is popped, " +
-    "dist[u] is final.</p>" +
-    "<span class=\"eq\">first push of v sets dist[v] = dist[u] + 1 = &delta;(s, v)</span>",
+  extra: [
+    {
+      kind: "warn",
+      title: "First visit is shortest only when every edge has the same weight",
+      html: "<p>BFS counts hops. A one-hop road of weight 100 loses to a three-hop walk of " +
+        "weights 1+1+1, but BFS records the one-hop arrival and never reopens that vertex. " +
+        "Different positive weights are Dijkstra; weights in {0, 1} are 0-1 BFS on the next " +
+        "pages.</p>",
+    },
+    {
+      kind: "key",
+      title: "Relax means \"try this edge as a cheaper way in\"",
+      html: "<p>To <em>relax</em> an edge <code>u &rarr; v</code> of weight <code>w</code> is to " +
+        "ask: is <code>dist[u] + w</code> smaller than the current <code>dist[v]</code>? If " +
+        "yes, overwrite <code>dist[v]</code>. On this page <code>w</code> is always 1 and the " +
+        "test succeeds only on the first visit.</p>",
+    },
+  ],
+  invariant: "<p>Vertices leave the queue in non-decreasing <code>dist</code> order. When " +
+    "<code>u</code> is popped, <code>dist[u]</code> is already the true unweighted distance " +
+    "from the source, and no later edge can improve it.</p>" +
+    "<span class=\"eq\">first push of v sets dist[v] = dist[u] + 1 = &delta;(s, v)</span>" +
+    "<p>In plain words, the queue is a line of people standing in order of how far they live " +
+    "from the source, and you only ever add someone to the back of that line, so the person " +
+    "at the front is always the closest unfinished junction.</p>",
   arrayLabel: "dist[u]  (-1 = unseen)",
   array: [0, 1, 1, 2, 2],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "queue", "v", "distV"],
   vizTitle: "BFS from 0 on the 5-node sample",
+  dryIntro: "Breadth-first search from vertex 0 on the running five-node graph. Each pop " +
+    "expands one layer, and a neighbour is marked in the same breath as it is pushed.",
   frames: [
-    { note: "Source 0. dist[0]=0, queue [0]. Others unseen.",
+    { note: "Source 0 is marked at distance 0 and sits alone in the queue; the other four vertices are still unseen at -1.",
       active: [0], dim: [1, 2, 3, 4],
       values: { u: 0, queue: "[0]", v: "\u2014", distV: 0 } },
-    { note: "Pop 0. Neighbours 1 and 2 unseen. Push 1 (dist 1), push 2 (dist 1). Mark on push.",
+    { note: "Pop 0 and relax both unseen neighbours: 1 and 2 enter the queue at distance 1, marked on the push so neither will be enqueued again.",
       active: [1, 2], done: [0],
       values: { u: 0, queue: "[1, 2]", v: "1,2", distV: 1 } },
-    { note: "Pop 1. Neighbour 3 unseen, dist 2. Neighbour 2 already seen, skip.",
+    { note: "Pop 1. Neighbour 3 is unseen so it is pushed at distance 2; neighbour 2 is already marked and is skipped.",
       active: [3], done: [0, 1],
       values: { u: 1, queue: "[2, 3]", v: 3, distV: 2 } },
-    { note: "Pop 2. Neighbour 4 unseen, dist 2. 0 and 1 already seen.",
+    { note: "Pop 2. Neighbour 4 is unseen so it is pushed at distance 2; 0 and 1 were marked earlier and are skipped.",
       active: [4], done: [0, 1, 2],
       values: { u: 2, queue: "[3, 4]", v: 4, distV: 2 } },
-    { note: "Pop 3. Neighbour 1 seen. Queue [4].",
+    { note: "Pop 3. Its only neighbour is 1, already marked, so the queue shrinks to the leftover vertex 4.",
       done: [0, 1, 2, 3], active: [4],
       values: { u: 3, queue: "[4]", v: "\u2014", distV: "\u2014" } },
-    { note: "Pop 4. Done. dist = [0,1,1,2,2]. First visit was shortest.",
+    { note: "Pop 4 and the queue empties. The finished distances [0, 1, 1, 2, 2] are shortest because every edge had the same weight.",
       best: [0, 1, 2, 3, 4],
       values: { u: 4, queue: "[]", v: "done", distV: 2 } },
   ],
@@ -331,12 +479,12 @@ pack({
   n1 --- n3["3 dist=2"]
   n2 --- n4["4 dist=2"]`,
   steps: [
-    "<strong>dist = -1 everywhere</strong>, dist[s]=0, queue s. Use ArrayDeque, not Stack.",
-    "<strong>While queue nonempty:</strong> u = poll.",
-    "<strong>For each neighbour v</strong> with dist[v]==-1: dist[v]=dist[u]+1, offer v.",
-    "<strong>Mark on push</strong> (dist[v] != -1 means queued). Never wait until pop.",
-    "<strong>Multi-source:</strong> offer every source at dist 0 before the loop.",
-    "<strong>Path:</strong> store parent[v]=u on the relaxing push, then walk back from t.",
+    "<strong>Fill dist with -1, set dist[s] = 0, and push s into an ArrayDeque.</strong> The -1 is the unseen sentinel, and a deque used with add/poll is a FIFO queue; addLast/pollLast would turn it into a stack and destroy the layer order.",
+    "<strong>While the queue is nonempty, pop the front vertex u.</strong> Because the queue is FIFO, u is a closest unfinished vertex, so its distance is already final and you are ready to look at its neighbours.",
+    "<strong>For each neighbour v still at -1, write dist[v] = dist[u] + 1 and push v.</strong> That is the relaxation of the unit-weight edge u &rarr; v: the first time it succeeds it is also the last, which is why BFS never reopens a vertex.",
+    "<strong>Mark on the push, never on the pop.</strong> Setting dist[v] in the same breath as q.add(v) means \"already queued\" and \"already seen\" are one test, so a vertex with many incoming edges enters the queue once.",
+    "<strong>For multi-source problems, push every source at distance 0 before the loop starts.</strong> The first time any other vertex is reached it is then the distance to the nearest source, which is why rotting oranges and 01-matrix are one BFS, not n of them.",
+    "<strong>To reconstruct a path, store parent[v] = u on that same relaxing push, then walk from t back to s and reverse.</strong> The walk has length dist[t], and if dist[t] is still -1 the target was unreachable.",
   ],
   code: [
     { tab: "Brute", file: "AllPathsMin.java",
@@ -436,9 +584,9 @@ public class GridBFS {
     time: "O(n + m)",
     space: "O(n)",
     derivation: [
-      "Each vertex is pushed at most once (marked on push). Each edge is examined a constant number of times from its endpoints.",
+      "<p>Each vertex is pushed at most once, because it is marked in the same breath as the push. Each undirected edge is then looked at from both ends, a constant amount of work per edge. The queue and the dist array each hold at most n integers.</p>",
       "<span class=\"eq\">T = &Theta;(n + m), S = queue + dist = O(n)</span>",
-      "Marking on pop would enqueue the same vertex once per incoming edge and can blow the queue to O(n&sup2;) on dense graphs.",
+      "<p>At n = 10&#8309; and m = 2&times;10&#8309; that is a few hundred thousand operations, well inside two seconds. Marking on pop instead would enqueue a vertex once per incoming edge and can grow the queue toward n&sup2; entries on a dense graph, about 10&#185;&#8304; integers at n = 10&#8309;, which both times out and runs out of memory.</p>",
     ],
     compare: [
       ["DFS path", "O(n+m) but not shortest", "O(n)", "Components, not distances"],
@@ -449,20 +597,20 @@ public class GridBFS {
   },
   pitfalls: [
     { title: "Marking visited at pop",
-      bug: "The same vertex is queued many times; memory and time explode.",
-      fix: "Set dist[v] (or seen[v]) in the same breath as q.add(v)." },
+      bug: "Waiting until pop to set dist[v] looks like \"I mark a vertex when I process it\", but every incoming edge then enqueues its own copy of v and the queue can grow toward n&sup2; on a dense graph.",
+      fix: "Set dist[v] (or seen[v]) in the same breath as q.add(v). A vertex whose dist is no longer -1 is already queued and must be skipped." },
     { title: "Using Stack / DFS accidentally",
-      bug: "LIFO does not visit by distance. Paths can be long.",
-      fix: "ArrayDeque with add/poll (FIFO). addLast/pollLast is a stack." },
+      bug: "ArrayDeque used with push/pop (or addLast/pollLast) is last-in first-out, so you visit a deep path first and the first arrival is no longer the fewest hops.",
+      fix: "Use add and poll, which are FIFO. If you need a stack, say so and switch to DFS; do not let a deque silently become one." },
     { title: "Weighted edges treated as unit",
-      bug: "BFS on a graph with weights 1 and 100 reports the hop-shortest, not the weight-shortest.",
-      fix: "Dijkstra or 0-1 BFS." },
+      bug: "A graph whose edges have weights 1 and 100 is fed to BFS, which reports the hop-shortest path. That looks correct on paper because the code matches the unweighted template, but a 3-hop walk of 1+1+1 beats a 1-hop of 100.",
+      fix: "If weights differ and are non-negative, use Dijkstra. If they are only 0 and 1, use 0-1 BFS. Ordinary BFS is legal only when every edge has the same weight." },
     { title: "Disconnected source",
-      bug: "dist[t] stays -1 and you print it as a length, or you forget to run BFS from every component.",
-      fix: "Unreachable is -1. Multi-component: loop sources or one BFS per unseen." },
+      bug: "dist[t] stays -1 and you print it as a length, or you run one BFS from vertex 0 and miss a component that never touches 0.",
+      fix: "Treat -1 as unreachable and do not add it into an answer sum. For a property of every component, loop over unseen vertices and start a fresh BFS at each." },
     { title: "Grid without bounds checks",
-      bug: "nr, nc walk off the board. Crash or wrap.",
-      fix: "Reject nr&lt;0 || nr&gt;=R || nc&lt;0 || nc&gt;=C before indexing." },
+      bug: "The four deltas walk nr or nc off the board, and the next index either throws or wraps to a cell that is not a real neighbour.",
+      fix: "Reject nr &lt; 0 || nr &ge; R || nc &lt; 0 || nc &ge; C before you read the grid. The bounds test is cheaper than a try/catch and is part of the neighbour generation." },
   ],
   variants: [
     ["Multi-source", "All sources in the queue at dist 0 before the loop.",
@@ -474,13 +622,13 @@ public class GridBFS {
   ],
   followups: [
     ["Why is the first visit optimal?",
-      "<p>All edges have the same weight, so a walk with fewer edges is always lighter. BFS explores by hop count, so the first time you arrive you have the fewest hops.</p>"],
+      "<p>Only because every edge has the same weight. A walk that uses fewer edges is then always cheaper than a walk that uses more, and BFS expands in hop-count order, so the first arrival has the fewest hops. If one edge is heavier than another, a later walk with more hops can be cheaper, and BFS will already have frozen the worse first arrival. That is the whole reason this page is not Dijkstra.</p>"],
     ["How do you reconstruct the path?",
-      "<p>parent[v]=u when you push v. Then from t walk parent until s, reverse. Length is dist[t].</p>"],
+      "<p>When you first push v from u, write parent[v] = u. That edge is the last step of a shortest path to v. After the search, start at t and follow parent until you reach s, collecting vertices, then reverse the list. The length of that list minus one equals dist[t], which is a useful sanity check.</p>"],
     ["BFS on a tree?",
-      "<p>Same code. Level order is BFS. Distances from a node are unique. Two BFS (or one DFS) find the diameter: BFS from any node to a farthest, BFS again from there.</p>"],
+      "<p>The same code works, and because a tree has a unique path between any pair the distances are unique as well. Level order of a binary tree is exactly this queue. Two BFS runs find the diameter: start at any node, BFS to a farthest node, then BFS again from there; the second distance is the diameter. One DFS can do the same job if you only need the length.</p>"],
     ["When does BFS use more memory than DFS?",
-      "<p>On a complete binary tree the last level holds n/2 nodes, so the queue is &Theta;(n). DFS stack is O(height)=O(log n) on a balanced tree and O(n) on a path. Different worst cases.</p>"],
+      "<p>On a complete binary tree the last level holds n/2 nodes, so the BFS queue is &Theta;(n) while a DFS stack is only O(height) = O(log n). On a single path the situation reverses: BFS holds one vertex at a time and DFS recursion is depth n. Quote the worst case that matches the input shape, not a slogan that one is always leaner.</p>"],
   ],
   problems: [
     lc(102, "binary-tree-level-order-traversal", "Medium", "Tree BFS"),
@@ -506,7 +654,7 @@ public class GridBFS {
 pack({
   id: "dfs-and-components",
   difficulty: "Easy",
-  readTime: "22 min",
+  readTime: "24 min",
   tagline: "Depth-first search is the graph's recursion: mark, recurse on unseen neighbours, " +
     "and the vertices you touched in one call are a connected component.",
   tags: ["DFS", "components", "recursion", "P0"],
@@ -515,18 +663,32 @@ pack({
     ["BFS", "bfs.html"],
   ],
   why: [
-    "DFS does not find shortest paths. It finds a spanning tree of each component, enter/exit " +
-      "times, and the connected pieces of an undirected graph. Those facts unlock cycle " +
-      "detection, topological sort, bridges and SCCs.",
-    "The practical reason to prefer DFS for components is that the code is a six-line recursion " +
-      "and the component id of every vertex is \"the start vertex of the DFS that first reached " +
-      "it\". Number of islands and provinces are this idea in costume.",
-    "The cost is the call stack. On a path of n = 1e5, the JVM throws. The cure is an explicit " +
-      "ArrayDeque stack, not a hope that the graph is shallow.",
+    "You are given 100000 user accounts and 200000 \"these two accounts share an email\" " +
+      "pairs, and you must report how many separate groups of people the pairs form. A pair " +
+      "is an undirected edge, a group is a <em>connected component</em> &mdash; a maximal set " +
+      "of vertices in which you can walk from any member to any other along the stored edges. " +
+      "Starting one search at account 0 paints everyone 0 can reach, but it says nothing about " +
+      "an account that never touches 0. If you forget the accounts you never started from, you " +
+      "report 1 on a graph that has 50 groups, and the judge marks it wrong.",
+    "Depth-first search, DFS, is the recursive way to paint one group. From a vertex you mark " +
+      "it, then you immediately dive into the first unseen neighbour, and you only come back " +
+      "to the second neighbour after that dive returns. The vertices one such start touches " +
+      "are exactly one connected component, and the edges you recurse along form a spanning " +
+      "tree of that component. Number-of-islands and number-of-provinces are this idea wearing " +
+      "a grid or a matrix costume: land cells are vertices, 4-way adjacency is the edge set, " +
+      "and each fresh start of the recursion is one island.",
+    "DFS is not a shortest-path algorithm. It can wander down a long corridor before it looks " +
+      "at a neighbour sitting one step away, so the first time it reaches a vertex is not a " +
+      "closest time. What it gives you instead is the component partition, plus enter and exit " +
+      "times that later pages use for cycles, topological sort, bridges and strongly connected " +
+      "components. The cost you must name out loud is the call stack. On a path of " +
+      "<code>n = 10&#8309;</code> the JVM's default stack is only a few thousand frames and " +
+      "the recursion throws. The contest default at that size is an explicit " +
+      "<code>ArrayDeque</code> used as a stack, or union-find if you only need the grouping.",
   ],
-  insight: "One DFS from an unvisited vertex paints exactly one connected component. Loop over " +
-    "vertices, start a new paint when you see a fresh one, and the number of paints is the " +
-    "number of components.",
+  insight: "One DFS started at an unvisited vertex paints exactly one connected component. " +
+    "Loop over every vertex, start a new paint when you see a fresh one, and the number of " +
+    "paints is the number of components. Distances are BFS's job, not this one.",
   yes: [
     "How many connected groups / islands / provinces?",
     "Colour / list every vertex in the same component as X",
@@ -550,42 +712,77 @@ pack({
       "Same partition, different tree",
       "DFS for recursion/timestamps; BFS for distances"],
   ],
-  constraint: "<code>n, m &le; 2&times;10&#8309;</code>. Recursive DFS needs an explicit stack " +
-    "at this size. Time O(n+m). A grid is O(RC).",
+  constraint: "<code>n, m &le; 2&times;10&#8309;</code> is one linear walk, the same " +
+    "<code>O(n + m)</code> as BFS, and a grid is the same bound with <code>n = RC</code>. " +
+    "Recursive DFS at this size needs an explicit stack, because a path of a hundred thousand " +
+    "vertices overflows the Java call stack. If you only need the grouping and edges arrive " +
+    "online, union-find is shorter than a walk.",
   core: [
-    "Mark u visited (and assign the current component id), then recurse on each unseen " +
-      "neighbour. Because an undirected edge is stored both ways, the parent is already " +
-      "visited and skipped. Everything else you reach is in the same component.",
-    "The outer loop is the part people forget. dfs(0) only paints the component of 0. Iterate " +
-      "s = 0..n-1 and start a new DFS with a fresh id whenever s is still unseen. tin/tout " +
-      "increment around the recursive calls and turn ancestry into an interval test.",
+    "You need one array <code>comp[u]</code> that starts at <code>-1</code> (unseen) and will " +
+      "hold the component id of <code>u</code>. The recursive step is four lines: write " +
+      "<code>comp[u] = id</code>, then for each neighbour <code>v</code> still at " +
+      "<code>-1</code> call <code>dfs(v, id)</code>. Because an undirected edge is stored both " +
+      "ways, the vertex you just came from is already painted and is skipped, which is how " +
+      "the recursion does not bounce forever across a two-way road. Everything else the " +
+      "recursion can still reach belongs to the same component, which is why one start paints " +
+      "exactly one group.",
+    "The outer loop is the part people forget. A single <code>dfs(0, 0)</code> paints only " +
+      "the group that contains 0. You iterate <code>s</code> from 0 to <code>n-1</code> and, " +
+      "whenever <code>s</code> is still unseen, start a new DFS with a fresh id. The number of " +
+      "times you increment that id is the number of components. On a grid the same loop walks " +
+      "every cell, starts a flood when it sees unseen land, and recurses to the four in-bounds " +
+      "land neighbours. Two extra clocks, <code>tin[u]</code> and <code>tout[u]</code>, tick " +
+      "around the recursive calls and turn \"is u an ancestor of v in this DFS tree?\" into " +
+      "an interval test on those two numbers.",
+    "Walk the sample with an isolated vertex 4 added. The edges 0-1, 0-2, 1-2, 1-3 join the " +
+      "first four vertices; 4 has no edge. All five <code>comp</code> slots start at " +
+      "<code>-1</code>. The outer loop starts <code>dfs(0, 0)</code>, which marks 0, dives to " +
+      "1, then to 2 and 3, and returns with <code>comp = [0,0,0,0,-1]</code>. The loop then " +
+      "skips 1, 2 and 3 because they are painted, finds 4 unseen, and starts " +
+      "<code>dfs(4, 1)</code>. Vertex 4 has no neighbours, so it paints only itself. Two " +
+      "starts, two components, finished array <code>[0, 0, 0, 0, 1]</code>.",
   ],
-  invariant: "<p>During dfs(u), every vertex already marked with the current id is reachable " +
-    "from the component start, and when dfs(u) returns, every vertex reachable from u through " +
-    "unseen vertices has been marked.</p>" +
-    "<span class=\"eq\">one start of dfs on an unvisited vertex = one connected component</span>",
+  extra: [
+    {
+      kind: "warn",
+      title: "Recursive DFS on a path of n = 10^5 throws",
+      html: "<p>The JVM default stack is a few thousand frames. Rewrite the walk with an " +
+        "explicit ArrayDeque used as a stack, marking on push the same way BFS marks on push, " +
+        "or switch to union-find if you only need the grouping.</p>",
+    },
+  ],
+  invariant: "<p>During <code>dfs(u)</code>, every vertex already marked with the current id " +
+    "is reachable from the vertex that started this paint, and when <code>dfs(u)</code> " +
+    "returns, every vertex reachable from <code>u</code> through still-unseen vertices has " +
+    "been marked with that same id.</p>" +
+    "<span class=\"eq\">one start of dfs on an unvisited vertex = one connected component</span>" +
+    "<p>In plain words, diving as deep as you can from a fresh vertex is enough to collect " +
+    "everyone who can reach that vertex, and a vertex you never started a dive from is in a " +
+    "different group.</p>",
   arrayLabel: "comp[u]  (-1 = unseen)",
   array: [0, 0, 0, 0, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "stack", "id", "compU"],
   vizTitle: "Two components: paint {0,1,2,3} then isolated 4",
+  dryIntro: "The running graph plus an isolated vertex 4. Watch the outer loop start a second " +
+    "paint when it finds 4 still unmarked after the first dive returns.",
   frames: [
-    { note: "Add isolated vertex 4 to the sample. All comp = -1. Start at 0, id 0.",
+    { note: "Every component id starts at -1. The outer loop begins a dive at vertex 0 with paint id 0, and 4 sits unseen on the side.",
       active: [0], dim: [1, 2, 3, 4],
       values: { u: 0, stack: "[0]", id: 0, compU: 0 } },
-    { note: "Recurse to 1, still id 0.",
+    { note: "The recursion follows the first unseen neighbour into 1, still carrying paint id 0, so 0 and 1 now belong to the same group.",
       active: [1], done: [0],
       values: { u: 1, stack: "[0,1]", id: 0, compU: 0 } },
-    { note: "From 1 to 2 and 3. Triangle plus 3 all id 0.",
+    { note: "From 1 the dive reaches 2 and then 3. The triangle plus the leaf are all paint 0, and the first component is now fully marked.",
       active: [2, 3], done: [0, 1],
       values: { u: 2, stack: "[0,1,2]", id: 0, compU: 0 } },
-    { note: "Component 0 finished. Outer loop finds 4 unseen.",
+    { note: "The first dive returns. The outer loop skips 1, 2 and 3 because they are painted, and it stops on unseen vertex 4.",
       done: [0, 1, 2, 3], dim: [4],
       values: { u: "scan", stack: "[]", id: 0, compU: "0 done" } },
-    { note: "dfs(4) with id 1. No neighbours.",
+    { note: "A second dive starts at 4 with a fresh paint id 1. Vertex 4 has no neighbours, so the new component is a single vertex.",
       active: [4], done: [0, 1, 2, 3],
       values: { u: 4, stack: "[4]", id: 1, compU: 1 } },
-    { note: "Two components. Answer 2. comp = [0,0,0,0,1].",
+    { note: "Two dives were started, so the answer is 2 and the finished ids are [0, 0, 0, 0, 1].",
       best: [4], done: [0, 1, 2, 3],
       values: { u: "done", stack: "[]", id: 1, compU: "2 comps" } },
   ],
@@ -597,12 +794,12 @@ pack({
   n1 --- n3["3"]
   n4["4 isolated"]`,
   steps: [
-    "<strong>comp[u] = -1</strong> (unseen). comps = 0.",
-    "<strong>For s in 0..n-1</strong> if unseen: dfs(s, comps++).",
-    "<strong>dfs(u, id):</strong> comp[u]=id; for v in g[u] if unseen dfs(v, id).",
-    "<strong>Grid:</strong> same, recurse to 4-neighbours that are land and unvisited.",
-    "<strong>Timestamps:</strong> tin[u]=timer++ before children, tout[u]=timer after (or timer-1).",
-    "<strong>If n=1e5 path:</strong> rewrite with an explicit stack of (u, neighbour-index).",
+    "<strong>Fill comp with -1 and set a counter comps = 0.</strong> The -1 is the unseen sentinel, and the counter will become the number of groups once the outer loop finishes.",
+    "<strong>Loop s from 0 to n-1 and, whenever s is still unseen, start dfs(s, comps++).</strong> A single start from 0 only paints the group of 0; the loop is what finds every other group.",
+    "<strong>Inside dfs(u, id), write comp[u] = id, then recurse on every neighbour still at -1.</strong> Marking on entry is what stops the two-way undirected edge from bouncing forever, and everything the recursion can still reach shares this id.",
+    "<strong>On a grid, the same loop walks every cell and recurses to the four in-bounds land neighbours of an unseen land cell.</strong> Each fresh start is one island, and water cells are simply never started from.",
+    "<strong>If you need ancestry later, set tin[u] = timer++ before the child calls and tout[u] after they return.</strong> Then u is an ancestor of v in this DFS tree exactly when tin[v] sits inside [tin[u], tout[u]].",
+    "<strong>If n can be a path of 10^5, rewrite the walk with an explicit stack of (u, next-neighbour-index).</strong> The JVM call stack will not hold a hundred thousand frames, and union-find is the shorter alternative when you only need the grouping.",
   ],
   code: [
     { tab: "Brute", file: "FloodRecursive.java",
@@ -692,9 +889,9 @@ public class Components {
     time: "O(n + m)",
     space: "O(n) plus recursion / explicit stack",
     derivation: [
-      "Each vertex is marked once; each edge is looked at from both ends. Same as BFS.",
+      "<p>Each vertex is marked once and never entered again, and each undirected edge is inspected from both ends, so the walk is the same linear scan as BFS: a constant amount of work per vertex and per edge.</p>",
       "<span class=\"eq\">T = &Theta;(n + m), S_stack = &Theta;(height) which can be n</span>",
-      "That is why the iterative version is the contest default for n=1e5.",
+      "<p>At n = 10&#8309; and m = 2&times;10&#8309; the time is a few hundred thousand operations. The hidden cost is the stack: a path graph has height n, so recursive DFS needs n frames and the JVM throws. An explicit ArrayDeque of size n is a few hundred kilobytes and is the contest default at that size. A grid of R rows and C columns is the same bound with n = RC.</p>",
     ],
     compare: [
       ["Recursive DFS", "O(n+m)", "O(n) stack", "Small n, or guaranteed shallow"],
@@ -705,20 +902,20 @@ public class Components {
   },
   pitfalls: [
     { title: "dfs(0) only",
-      bug: "You paint one component and report 1 on a disconnected graph.",
-      fix: "Outer loop over all vertices (or all grid cells)." },
+      bug: "A single start from vertex 0 paints one group and you report 1, which looks right on a connected sample but is wrong the moment the graph has an isolated vertex.",
+      fix: "Loop over every vertex (or every grid cell) and start a new paint whenever the slot is still unseen. The number of starts is the answer." },
     { title: "StackOverflowError on a path",
-      bug: "Recursive DFS depth n. JVM default stack is a few thousand frames.",
-      fix: "Explicit ArrayDeque, or DSU." },
+      bug: "Recursive DFS follows a corridor of n vertices and the JVM default stack is only a few thousand frames, so a correct algorithm throws on the usual n = 10^5 path.",
+      fix: "Rewrite with an explicit ArrayDeque used as a stack, or use union-find if you only need the grouping and not a DFS tree." },
     { title: "Not marking the start before pushing neighbours",
-      bug: "Same vertex queued many times in the iterative version.",
-      fix: "Mark on push, same as BFS." },
+      bug: "The iterative version pushes an unseen neighbour without painting it, so every incoming tree edge enqueues another copy and the stack holds the same vertex many times.",
+      fix: "Mark on push, the same rule as BFS. For components you only need visited; for tin/tout you also keep a neighbour iterator on the stack." },
     { title: "Directed \"components\"",
-      bug: "Undirected DFS on a directed graph reports weakly-connected pieces, not SCCs.",
-      fix: "Kosaraju / Tarjan for strong connectivity." },
+      bug: "You drop the directions, run undirected DFS, and report groups that can touch each other if edges are treated as two-way. Those are weakly connected pieces, not strongly connected components.",
+      fix: "Undirected DFS answers undirected connectivity. \"Can everyone reach everyone?\" on a directed graph needs Kosaraju or Tarjan, a later page." },
     { title: "Mutating the grid then needing it later",
-      bug: "Painting '1' to '0' destroys the input.",
-      fix: "Separate seen[][] if the caller still needs the grid." },
+      bug: "Painting land '1' to water '0' is a tidy in-place mark, but a later part of the problem still wants the original grid and now sees a blank sea.",
+      fix: "Keep a separate seen[][] whenever the caller still needs the input. In-place painting is fine only when the grid is throwaway." },
   ],
   variants: [
     ["Timestamps", "tin before children, tout after. Ancestor iff tin[u]<=tin[v]<=tout[u].",
@@ -730,13 +927,13 @@ public class Components {
   ],
   followups: [
     ["DFS vs BFS for islands?",
-      "<p>Same O(RC). DFS is shorter recursive code. BFS avoids stack overflow on a snake of land. Interviewers accept either; mention the stack issue.</p>"],
+      "<p>Both are O(RC) and both paint the same partition. Recursive DFS is fewer lines. BFS (or iterative DFS) avoids a StackOverflowError on a snake of land that is one cell wide and a hundred thousand long. Interviewers accept either; say out loud that you would switch to an explicit stack at contest size.</p>"],
     ["How do tin/tout test ancestry?",
-      "<p>u is an ancestor of v in the DFS tree iff the interval [tin[u], tout[u]] contains tin[v]. That is the Euler-tour view of a tree.</p>"],
+      "<p>You increment a timer just before diving into the children of u, store that as tin[u], and store tout[u] when the dive returns. Then u is an ancestor of v in this DFS tree exactly when tin[v] lies inside the closed interval [tin[u], tout[u]]. That interval view is the Euler tour of the tree, and it is how later pages test ancestry without walking parent pointers.</p>"],
     ["Connected vs strongly connected?",
-      "<p>Undirected: one DFS (or one BFS, or DSU) per component. Directed: \"can everyone reach everyone?\" needs SCCs. Weak connectivity is the undirected view of the underlying graph.</p>"],
+      "<p>On an undirected graph, one DFS, one BFS or one union-find pass per unseen vertex gives the connected components. On a directed graph, \"can everyone in the group reach everyone else?\" is strong connectivity and needs Kosaraju or Tarjan. Treating the directed edges as two-way gives only weak connectivity, which is a different predicate.</p>"],
     ["Why mark on push in iterative DFS?",
-      "<p>The same reason as BFS: an unmarked vertex with many incoming tree edges would otherwise sit on the stack many times. For components you only need visited; for tin/tout you need a neighbour iterator.</p>"],
+      "<p>The same reason as BFS: an unmarked vertex with several incoming tree edges would otherwise be pushed once per edge and sit on the stack many times. For a component paint you only need visited. If you also want tin/tout, the stack entry has to remember which neighbour you will try next, so you push a pair (u, next-index) rather than a bare vertex.</p>"],
   ],
   problems: [
     lc(200, "number-of-islands", "Medium", "Grid DFS"),
@@ -762,25 +959,39 @@ public class Components {
 pack({
   id: "cycle-detection-and-bipartite",
   difficulty: "Medium",
-  readTime: "22 min",
+  readTime: "24 min",
   tagline: "A back edge to an active ancestor is a cycle; a neighbour already coloured your " +
     "colour is a non-bipartite odd cycle. Same DFS, two extra integers.",
   tags: ["cycle", "bipartite", "coloring", "P0"],
   prereqs: [["DFS & Components", "dfs-and-components.html"]],
   why: [
-    "\"Does this graph have a cycle?\" and \"can you 2-colour it?\" are the two most common " +
-      "graph predicates after connectivity. Both are one extra field on the DFS/BFS you already " +
-      "have: colour WHITE/GRAY/BLACK for directed cycles, parent-skip plus a seen ancestor for " +
-      "undirected, and a 0/1 colour for bipartite.",
-    "Bipartite is exactly \"no odd cycle\". Course schedule (directed cycle), redundant " +
-      "connection (undirected cycle), is-graph-bipartite, and possible-bipartition are the " +
-      "interview cluster. Getting the parent-skip wrong reports every undirected edge as a cycle.",
-    "Directed and undirected tests are different algorithms that share a walk. Mixing them is " +
-      "the classification error this page exists to prevent.",
+    "You are given 200000 two-way friendships on 100000 people, and you must say whether the " +
+      "network contains a loop &mdash; a walk that starts and ends at the same person without " +
+      "repeating a friendship. The same input, asked differently, is \"can you split the people " +
+      "into two teams so that every friendship crosses teams?\" Both questions are answered by " +
+      "the walk you already have, plus one extra integer per vertex. Getting that extra integer " +
+      "wrong is the usual reason a correct-looking DFS reports that every two-way road is a " +
+      "cycle: the parent you just came from is stored as a neighbour in the other direction, " +
+      "and a naive \"seen neighbour means a cycle\" test fires on every edge.",
+    "A graph is <em>bipartite</em> when its vertices can be painted with two colours so that " +
+      "every edge joins different colours. That is exactly the same as \"there is no odd " +
+      "cycle\", because walking around a loop of odd length forces some vertex to take both " +
+      "colours. Course schedule (a directed cycle among prerequisites), redundant connection " +
+      "(the extra undirected edge that closed a loop), is-graph-bipartite, and possible " +
+      "bipartition are the interview cluster, and they share one skeleton: walk, and watch for " +
+      "the forbidden neighbour.",
+    "Directed and undirected tests are different algorithms that happen to share a walk. On " +
+      "an undirected graph a cycle is a seen neighbour that is not your parent. On a directed " +
+      "graph a cycle is an edge to a vertex that is still on the recursion stack, usually " +
+      "coloured GRAY. Mixing the two &mdash; parent-skip on a directed graph, or GRAY on an " +
+      "undirected one &mdash; is the classification error this page exists to prevent. The " +
+      "signal in a statement is the word \"cycle\", \"deadlock\", \"prerequisites\", or \"split " +
+      "into two groups\", sitting next to the usual <code>n, m &le; 2&times;10&#8309;</code> " +
+      "limits that already tell you one linear walk is enough.",
   ],
   insight: "Undirected cycle: a seen neighbour that is not your parent. Directed cycle: a " +
-    "neighbour still on the recursion stack (GRAY). Bipartite: BFS/DFS 2-colour; a same-colour " +
-    "neighbour is an odd cycle.",
+    "neighbour still on the recursion stack (GRAY). Bipartite: paint 0/1 along the walk; a " +
+    "neighbour that already has your colour is an odd cycle.",
   yes: [
     "\"Detect a cycle\" in an undirected or directed graph",
     "Course schedule / deadlock / prerequisite graph",
@@ -804,40 +1015,76 @@ pack({
       "Parent-skip misses directed back edges that are not the parent",
       "Use GRAY/BLACK, not parent"],
   ],
-  constraint: "O(n+m), same as DFS. Bipartite colouring must restart from every unseen vertex: " +
-    "a disconnected graph can have one bipartite component and one odd cycle elsewhere.",
+  constraint: "One walk is <code>O(n + m)</code>, the same budget as DFS, so the usual " +
+    "<code>n, m &le; 2&times;10&#8309;</code> limits are comfortable. Bipartite colouring must " +
+    "restart from every unseen vertex: a disconnected graph can have one perfectly 2-coloured " +
+    "component and one odd cycle sitting in another piece you never visited. A single start " +
+    "from vertex 0 is the usual wrong answer.",
   core: [
-    "Undirected: dfs(u, parent). For each neighbour v, if v is unseen recurse; if v != parent " +
-      "you found a cycle. DSU alternative: union every edge, a failed union is a cycle edge.",
-    "Directed: colour WHITE=unseen, GRAY=on stack, BLACK=done. Edge to GRAY is a back edge. " +
-      "Bipartite: colour[u] in {0,1}, push/rec to v with 1-colour[u]; if v is already coloured " +
-      "the same as u, conflict.",
+    "On an undirected graph you pass the parent. <code>dfs(u, p)</code> marks <code>u</code> " +
+      "seen, then for each neighbour <code>v</code> it does one of three things: if " +
+      "<code>v</code> is unseen it recurses with parent <code>u</code>; if <code>v</code> " +
+      "equals <code>p</code> it skips, because that is the two-way road you just walked; if " +
+      "<code>v</code> is seen and is not <code>p</code>, the edge <code>u-v</code> closes a " +
+      "cycle. Union-find is the same test without a walk: union every edge, and the first " +
+      "union that returns false is a cycle edge. A self-loop <code>u-u</code> is a cycle on " +
+      "its own and must be caught before the parent-skip, because the parent of <code>u</code> " +
+      "is not <code>u</code>.",
+    "On a directed graph the parent-skip is the wrong test, because a back edge need not be " +
+      "the vertex you came from. You colour each vertex WHITE (unseen), GRAY (on the recursion " +
+      "stack) or BLACK (finished). An edge to GRAY is a <em>back edge</em> and is a directed " +
+      "cycle. An edge to BLACK is a cross or forward edge and is legal in a DAG, which is why " +
+      "treating BLACK as a cycle reports cycles that do not exist. Bipartite colouring is the " +
+      "third extra integer: <code>colour[u]</code> is 0 or 1. You start an unseen vertex at " +
+      "colour 0 and paint each neighbour the opposite bit. If a neighbour is already painted " +
+      "and the colour matches yours, the edge between you is the closing side of an odd cycle.",
+    "Walk the running triangle 0-1-2 plus leaves 3 and 4. Start at 0 with colour 0 and queue " +
+      "<code>[0]</code>. Neighbours 1 and 2 both get colour 1. From 1 you paint 3 with colour " +
+      "0, then you look at neighbour 2, which is already colour 1 &mdash; the same colour as " +
+      "1. Edge 1-2 is the third side of the triangle, a cycle of length 3, and the graph is " +
+      "not bipartite. Delete 1-2 and the same paint finishes as 0, 1, 1, 0, 1 with no " +
+      "conflict, which is a valid 2-colouring of the remaining tree.",
   ],
-  invariant: "<p>Undirected: the DFS tree plus a non-parent seen neighbour closes a cycle. " +
-    "Directed: GRAY nodes are the active path; a GRAY neighbour is a back edge.</p>" +
-    "<span class=\"eq\">bipartite &hArr; 2-colourable &hArr; no odd cycle</span>",
+  extra: [
+    {
+      kind: "warn",
+      title: "Parent-skip is not a directed cycle test",
+      html: "<p>Every undirected edge is stored twice, so skipping the parent is mandatory " +
+        "there and wrong on a directed graph. Directed cycles use WHITE/GRAY/BLACK: only an " +
+        "edge to GRAY is a back edge. BLACK is finished and legal in a DAG.</p>",
+    },
+  ],
+  invariant: "<p>Undirected: the DFS tree plus a seen neighbour that is not the parent closes " +
+    "a cycle. Directed: GRAY vertices are the active path, and an edge to a GRAY neighbour is " +
+    "a back edge. Bipartite: a same-colour neighbour is an odd cycle.</p>" +
+    "<span class=\"eq\">bipartite &hArr; 2-colourable &hArr; no odd cycle</span>" +
+    "<p>In plain words, you are walking the graph with one extra label per vertex, and the " +
+    "forbidden neighbour &mdash; a non-parent you have already seen, a GRAY stack vertex, or " +
+    "someone wearing your colour &mdash; is the whole test.</p>",
   arrayLabel: "color[u]  (0/1; -1 unseen)",
   array: [0, 1, 0, 1, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "col", "v", "verdict"],
   vizTitle: "2-colour BFS; then an odd-cycle conflict",
+  dryIntro: "Two-colour BFS on the running graph. The triangle 0-1-2 forces vertices 1 and 2 " +
+    "to share a colour, which is the odd-cycle conflict that ends the search.",
   frames: [
-    { note: "Start at 0, colour 0. Queue [0].",
+    { note: "Start at vertex 0 with colour 0 and an empty rest of the graph. The queue holds only 0, and no edge has been checked yet.",
       active: [0], dim: [1, 2, 3, 4],
       values: { u: 0, col: 0, v: "\u2014", verdict: "ok" } },
-    { note: "Neighbours 1 and 2 get colour 1.",
+    { note: "Both neighbours of 0 are unseen, so 1 and 2 are painted the opposite colour 1 and pushed, still with no conflict.",
       active: [1, 2], done: [0],
       values: { u: 0, col: 0, v: "1,2", verdict: "ok" } },
-    { note: "From 1, neighbour 3 gets colour 0. Neighbour 2 is already colour 1, different from 1's colour 1? 1 is colour 1, 2 is colour 1 \u2014 SAME. Edge 1-2 is an odd-cycle (triangle 0-1-2).",
+    { note: "From 1, leaf 3 gets colour 0, but neighbour 2 is already colour 1, the same as 1, so edge 1-2 closes the odd triangle 0-1-2.",
       active: [1, 2],
       values: { u: 1, col: 1, v: 2, verdict: "conflict" } },
-    { note: "Triangle is odd. Graph is not bipartite. Stop.",
+    { note: "A cycle of length 3 cannot be 2-coloured, so the graph is not bipartite and the search can stop.",
       best: [0, 1, 2],
       values: { u: 1, col: 1, v: 2, verdict: "not bipartite" } },
-    { note: "If we deleted 1-2, colours 0,1,0,1,0 would work: 3 and 4 opposite their parents.",
+    { note: "Delete edge 1-2 and the same paint finishes without a clash: each leaf sits opposite its parent, and the graph becomes a tree.",
       done: [0, 1, 2, 3, 4],
       values: { u: "alt", col: "2-col", v: "no 1-2", verdict: "bipartite" } },
-    { note: "Directed cycle uses GRAY, not 2-colour: a prereq graph can be a DAG (bipartite even) or have a directed cycle (not a DAG).",
+    { note: "A directed cycle is a different test: an edge to a GRAY stack vertex, not a 2-colour clash. A prereq graph can be a DAG and still 2-colour fine.",
       values: { u: "dir", col: "GRAY", v: "back", verdict: "cycle" } },
   ],
   merTitle: "Triangle 0-1-2 is an odd cycle",
@@ -849,12 +1096,12 @@ pack({
   n2 --- n4["4"]
   n1 -.-> n2`,
   steps: [
-    "<strong>Undirected cycle:</strong> dfs(u, p); seen neighbour v!=p &rarr; cycle. Or DSU fail.",
-    "<strong>Directed cycle:</strong> WHITE/GRAY/BLACK; edge to GRAY &rarr; cycle.",
-    "<strong>Bipartite:</strong> colour unseen as 0, BFS/DFS flip bits.",
-    "<strong>Conflict:</strong> neighbour already has your colour.",
-    "<strong>Restart</strong> from every unseen vertex (disconnected graphs).",
-    "<strong>Do not</strong> use parent-skip as a directed cycle test.",
+    "<strong>Undirected cycle: dfs(u, p), and a seen neighbour v other than p is a cycle.</strong> You skip the parent because the two-way road you just walked is stored twice and is not a loop. Union-find is the same test: a failed union is a cycle edge.",
+    "<strong>Directed cycle: colour WHITE / GRAY / BLACK, and an edge to GRAY is a back edge.</strong> GRAY means \"still on the recursion stack\", so that edge returns to an active ancestor and closes a directed loop.",
+    "<strong>Bipartite: paint an unseen vertex 0 and flip the bit on every step.</strong> BFS or DFS both work; the extra integer is the colour, and the walk is the one you already have.",
+    "<strong>A neighbour that already has your colour is an odd cycle, so the graph is not bipartite.</strong> The edge between the two same-colour vertices is the closing side of a loop of odd length.",
+    "<strong>Restart the walk from every unseen vertex.</strong> A disconnected graph can hide an odd cycle (or a directed cycle) in a component you never started, and a single start from 0 would miss it.",
+    "<strong>Do not use parent-skip as a directed cycle test, and do not treat BLACK as a cycle.</strong> Parent-skip is an undirected trick; a BLACK neighbour in a DAG is a legal cross or forward edge.",
   ],
   code: [
     { tab: "Brute", file: "DsuCycle.java",
@@ -948,9 +1195,9 @@ public class DirectedCycle {
     time: "O(n + m)",
     space: "O(n)",
     derivation: [
-      "One walk paints or colours every vertex and inspects every edge a constant number of times.",
+      "<p>One walk paints or colours every vertex once and inspects every edge a constant number of times from its endpoints, so the time is the same linear scan as DFS or BFS.</p>",
       "<span class=\"eq\">T = &Theta;(n + m)</span>",
-      "DSU cycle check is O(m \u03b1(n)) and does not give the directed or bipartite answers.",
+      "<p>At n = 10&#8309; and m = 2&times;10&#8309; that is a few hundred thousand operations. Union-find as an undirected cycle check is O(m &alpha;(n)), effectively linear as well, but it does not answer the directed-cycle question and it does not 2-colour the graph. Restarting from every unseen vertex does not change the bound: each vertex is still painted once.</p>",
     ],
     compare: [
       ["Undirected DFS + parent", "O(n+m)", "O(n)", "Existence of a cycle"],
@@ -961,20 +1208,20 @@ public class DirectedCycle {
   },
   pitfalls: [
     { title: "Counting the parent as a back edge",
-      bug: "Every undirected edge is stored twice, so the parent looks like a cycle.",
-      fix: "Pass parent; skip v==parent. For multiple edges u-v-u, treat multiplicity separately." },
+      bug: "Every undirected edge is stored twice, so the vertex you just came from sits in the neighbour list and a naive \"seen neighbour means a cycle\" test fires on every single edge.",
+      fix: "Pass the parent and skip v == parent. A genuine multi-edge u-v stored twice is a cycle of length 2 and should be treated separately from the parent." },
     { title: "2-colour from a single source",
-      bug: "A far component with an odd cycle is never visited.",
-      fix: "Outer loop over unseen vertices, same as components." },
+      bug: "You start at vertex 0, colour that component cleanly, and return true, while a far component you never visited contains an odd cycle.",
+      fix: "Loop over unseen vertices and start a fresh colouring at each, the same outer loop as components. One conflict anywhere fails the whole graph." },
     { title: "GRAY vs BLACK mix-up",
-      bug: "Treating BLACK as a cycle in a DAG (cross/forward edges).",
-      fix: "Only GRAY is a back edge. BLACK is finished and legal in a DAG." },
+      bug: "Treating an edge to BLACK as a cycle looks plausible because BLACK is \"already seen\", but those edges are the legal cross and forward edges of a DAG, so you report cycles that do not exist.",
+      fix: "Only GRAY is a back edge. BLACK means the dive finished and the vertex is safe to point at. Test it on a small DAG that has a cross edge." },
     { title: "Bipartite on a directed graph without undirected view",
-      bug: "The usual interview bipartite graph is undirected. Directed \"bipartite\" is a different notion.",
-      fix: "Unless stated, undirect the edges for 2-colouring." },
+      bug: "The usual interview bipartite graph is undirected. Running 2-colour on directed edges as if they were one-way asks a different question that most statements did not ask.",
+      fix: "Unless the statement says otherwise, treat the edges as undirected for 2-colouring. Directed \"bipartite\" is a rarer notion and should be named explicitly." },
     { title: "Returning true on the first component",
-      bug: "You find one bipartite piece and skip the rest.",
-      fix: "Conflict anywhere fails the whole graph; success requires every component to pass." },
+      bug: "The first piece 2-colours cleanly, you return true, and you never look at the rest of the vertices. The wrong version looks right on a connected sample.",
+      fix: "A conflict anywhere fails the whole graph. Success requires every component to finish without a same-colour neighbour." },
   ],
   variants: [
     ["DSU bipartite", "XOR-to-root: union with w=1, reject if same-root and XOR 0.",
@@ -986,13 +1233,13 @@ public class DirectedCycle {
   ],
   followups: [
     ["Why is an odd cycle exactly non-bipartite?",
-      "<p>A 2-colouring along a path alternates. Closing a walk of odd length forces a vertex to take both colours. Even cycles 2-colour fine; forests are always bipartite.</p>"],
+      "<p>A 2-colouring along a path has to alternate, 0 then 1 then 0. Closing a walk of odd length brings you back to the start after an odd number of flips, so that start vertex would have to be both colours at once. An even cycle flips an even number of times and lands on the original colour, so it 2-colours fine. A forest has no cycle at all and is always bipartite.</p>"],
     ["Can a disconnected graph be bipartite?",
-      "<p>Yes iff every component is. Isolated vertices are bipartite. Always restart colouring.</p>"],
+      "<p>Yes, if and only if every component is bipartite. An isolated vertex is a trivial two-colouring: paint it 0 and it has no neighbour to clash with. That is why the outer loop over unseen vertices is mandatory. One odd cycle in a far component fails the whole graph, and one successful component does not prove the rest.</p>"],
     ["Directed cycle vs topological order?",
-      "<p>A DAG is a directed graph with no cycle, equivalently one that has a topological order. Kahn and 3-colour DFS both prove it. Next page uses that order for DP.</p>"],
+      "<p>A DAG is a directed graph with no directed cycle, and that is equivalent to \"the vertices have a topological order\", a permutation where every edge goes forward. Kahn's algorithm and 3-colour DFS both prove the same fact: if you cannot finish n vertices, a directed cycle remains. The next page uses that order to turn a recurrence into a for-loop.</p>"],
     ["Self-loop?",
-      "<p>Undirected or directed, a self-loop is a cycle (and an odd cycle). Handle u==v before parent-skip.</p>"],
+      "<p>A self-loop u-u is a cycle of length 1, which is odd, so it is both a cycle and a proof that the graph is not bipartite. Handle u == v before the parent-skip, because the parent of u is some other vertex and the skip would miss the loop. Directed self-loops are a GRAY edge from u to itself.</p>"],
   ],
   problems: [
     lc(207, "course-schedule", "Medium", "Directed cycle"),
@@ -1018,7 +1265,7 @@ public class DirectedCycle {
 pack({
   id: "topological-sort-and-dag-dp",
   difficulty: "Medium",
-  readTime: "24 min",
+  readTime: "26 min",
   tagline: "A DAG has a linear order where every edge goes forward; process vertices in that " +
     "order and every DP recurrence becomes a for-loop.",
   tags: ["topo sort", "Kahn", "DAG DP", "P0"],
@@ -1027,21 +1274,35 @@ pack({
     ["DFS & Components", "dfs-and-components.html"],
   ],
   why: [
-    "Dynamic programming on graphs is illegal the moment a cycle exists: a state would depend " +
-      "on itself. On a DAG, there is a topological order, and once you have it, " +
-      "<code>dp[v] = f(dp of incoming neighbours)</code> is a single pass. Course schedule II, " +
-      "longest increasing path in a matrix (implicit DAG of cells), and \"number of ways to " +
-      "reach t\" are this pattern.",
-    "Two algorithms produce the order: Kahn (queue of indegree-0 vertices) and DFS (add u after " +
-      "all outgoing rec calls, then reverse). Kahn also detects cycles: if you pop fewer than n " +
-      "vertices, a directed cycle remains. That is why course-schedule and course-schedule-II " +
-      "share a skeleton.",
-    "The DP step is easy to get wrong by iterating the adjacency list in file order instead of " +
-      "topo order. Always build the order first, then relax along it.",
+    "You are given 200000 directed prerequisite edges on 100000 courses, and you must list " +
+      "the courses in an order that never takes a course before its prerequisites. If the " +
+      "edges contain a directed loop, no such list exists, because a course would have to " +
+      "come before itself. If they do not contain a loop, the graph is a <em>DAG</em> &mdash; " +
+      "a directed acyclic graph &mdash; and a <em>topological order</em> is a permutation of " +
+      "the vertices in which every edge points forward. Course schedule II is exactly that " +
+      "list; \"number of ways to reach t\" and \"longest increasing path in a matrix\" are " +
+      "the same order used as the evaluation order of a recurrence.",
+    "Dynamic programming on a general graph is illegal the moment a cycle exists, because a " +
+      "state would depend on itself. On a DAG the order removes that circularity: once you " +
+      "have processed every vertex that can point at <code>v</code>, the value " +
+      "<code>dp[v]</code> can be written in one step from those already-final neighbours. " +
+      "Two algorithms produce the order. Kahn keeps a queue of vertices whose <em>indegree</em> " +
+      "&mdash; the number of incoming edges still not accounted for &mdash; has fallen to " +
+      "zero. DFS adds a vertex only after every outgoing recursive call has returned, then " +
+      "reverses the list. Kahn also detects the cycle: if you pop fewer than <code>n</code> " +
+      "vertices, a directed loop remains, which is why course-schedule and course-schedule-II " +
+      "share one skeleton.",
+    "The DP step is easy to get wrong by iterating the adjacency list in the order the file " +
+      "printed the edges. That order is not a topological order, so you can update " +
+      "<code>v</code> while <code>u</code> is still stale, and the ways or distances come out " +
+      "short. The constraint that names this page is a directed graph together with " +
+      "<code>n, m &le; 2&times;10&#8309;</code> and a phrase such as \"prerequisites\", " +
+      "\"build order\", or \"number of ways\", with no request for a shortest path on a graph " +
+      "that is allowed to have cycles.",
   ],
-  insight: "Topo order is a permutation where every edge u&rarr;v has u before v. DP on a DAG " +
-    "is \"for u in topo: update neighbours of u\". Kahn builds the order with a queue of " +
-    "indegree 0.",
+  insight: "A topological order is a permutation where every edge u &rarr; v has u before v. " +
+    "Build that order first, then walk it once and update each neighbour from already-final " +
+    "values. Kahn builds the order with a queue of indegree-zero vertices.",
   yes: [
     "Prerequisites / course order / build order / compilation order",
     "Number of ways / shortest / longest path on a directed graph with no cycles (or after you prove it is a DAG)",
@@ -1065,41 +1326,77 @@ pack({
       "BFS order is a topo order only on some DAGs (unit-weight from unique source)",
       "Kahn / DFS-finish; do not rely on BFS"],
   ],
-  constraint: "<code>n, m &le; 2&times;10&#8309;</code>. Kahn is O(n+m). Recursion DFS-topo has " +
-    "the usual stack-depth issue. DP values (ways, sums) need long and possibly a mod.",
+  constraint: "<code>n, m &le; 2&times;10&#8309;</code> is one linear Kahn pass, about a " +
+    "million steps. Recursive DFS-topo has the usual stack-depth issue on a long chain and " +
+    "should be rewritten with an explicit stack at this size. Path counts and sums need " +
+    "<code>long</code>, and often a mod <code>10&#8313;+7</code>, because the number of paths " +
+    "in a DAG can be exponential in <code>n</code>.",
   core: [
-    "Kahn: compute indegree[], queue every vertex with indegree 0. Pop u, append to order, " +
-      "decrement indegree of neighbours, enqueue those that hit 0. If order.size() &lt; n, " +
-      "there is a cycle and no topo order.",
-    "DAG DP: initialise dp[sources], then for u in order, for v in g[u], relax " +
-      "dp[v] = combine(dp[v], dp[u], w(u,v)). Because u is before v, dp[u] is already final. " +
-      "DFS-memo from a sink is the same recurrence with the call stack as the topo order.",
+    "Kahn starts by counting, for every vertex, how many edges point at it. That count is " +
+      "the indegree. Every vertex whose indegree is already 0 has no remaining prerequisite " +
+      "and goes into an <code>ArrayDeque</code>. You then repeat: pop <code>u</code>, append " +
+      "it to the order, and for each outgoing neighbour <code>v</code> decrement " +
+      "<code>indeg[v]</code>. If that decrement hits 0, <code>v</code> has just lost its last " +
+      "unprocessed in-edge and is safe to enqueue. When the queue empties, either " +
+      "<code>order.size()</code> equals <code>n</code> and you hold a topological order, or a " +
+      "directed cycle ate the remaining vertices and no order exists.",
+    "DAG DP is a second pass over that order. To <em>relax</em> an edge <code>u &rarr; v</code> " +
+      "here means: combine the already-final <code>dp[u]</code> into <code>dp[v]</code> using " +
+      "whatever the problem asked for &mdash; add the ways, take a min distance, take a max " +
+      "length. Because <code>u</code> sits before <code>v</code> in the order, every in-edge " +
+      "of <code>v</code> is relaxed only after its tail is final, so one scan is enough even " +
+      "when weights are negative. Initialise <code>dp</code> at the sources (ways at " +
+      "<code>s</code> start at 1, distances at 0) and leave the rest at the identity of the " +
+      "combine. Memoised DFS from a sink is the same recurrence with the call stack standing " +
+      "in for the order, which is why longest-increasing-path on a grid does not build an " +
+      "edge list.",
+    "Walk the five-node DAG with edges 0&rarr;1, 0&rarr;2, 1&rarr;3, 2&rarr;3, 2&rarr;4. " +
+      "Indegrees start at <code>[0, 1, 1, 2, 1]</code>, so the queue holds only 0. Pop 0, " +
+      "append it, decrement 1 and 2 to 0, and enqueue both. Pop 1, decrement 3 from 2 to 1. " +
+      "Pop 2, decrement 3 to 0 and 4 to 0, and enqueue both. Pop 3 and 4. The order is " +
+      "<code>[0, 1, 2, 3, 4]</code> (or 4 before 3), size equals n, it is a DAG. A ways " +
+      "array that starts <code>ways[0] = 1</code> then adds along each edge finishes with " +
+      "<code>ways[3] = ways[1] + ways[2] = 2</code>, the two paths 0-1-3 and 0-2-3.",
   ],
-  invariant: "<p>Every vertex that enters Kahn's queue has all incoming edges already processed, " +
-    "so it is safe to place next.</p>" +
-    "<span class=\"eq\">for every edge u &rarr; v: index(u) &lt; index(v) in the order</span>",
+  extra: [
+    {
+      kind: "key",
+      title: "Relax on this page means \"combine a finished tail into its head\"",
+      html: "<p>Because the tail sits earlier in the topological order, <code>dp[u]</code> is " +
+        "already final when you look at <code>u &rarr; v</code>. That is why one pass is " +
+        "enough, and why negative weights are legal on a DAG even though they break Dijkstra.</p>",
+    },
+  ],
+  invariant: "<p>Every vertex that enters Kahn's queue has had all of its incoming edges " +
+    "already processed, so it is safe to place next in the order. After the second pass, " +
+    "<code>dp[v]</code> combines every in-edge from a finished tail.</p>" +
+    "<span class=\"eq\">for every edge u &rarr; v: index(u) &lt; index(v) in the order</span>" +
+    "<p>In plain words, you never take a course before its last remaining prerequisite has " +
+    "been listed, and you never read a DP value that is still waiting on an earlier course.</p>",
   arrayLabel: "indegree as Kahn runs",
   array: [0, 1, 1, 1, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "queue", "order", "indeg"],
   vizTitle: "Kahn on a 5-node DAG 0->1,0->2,1->3,2->3,2->4",
+  dryIntro: "Kahn's algorithm on the five-node DAG. Vertices enter the queue only when their " +
+    "last incoming edge has been accounted for, and a ways pass then reads only finished tails.",
   frames: [
-    { note: "Edges 0->1, 0->2, 1->3, 2->3, 2->4. indeg = [0,1,1,2,1]. Queue [0].",
+    { note: "Indegrees start at [0, 1, 1, 2, 1] because only vertex 0 has no incoming edge, so the queue holds 0 and the order is still empty.",
       active: [0],
       values: { u: "init", queue: "[0]", order: "[]", indeg: "[0,1,1,2,1]" } },
-    { note: "Pop 0. Order [0]. Decrement 1 and 2 to 0. Queue [1,2].",
+    { note: "Pop 0 and append it. Decrementing the two outgoing edges drops the indegrees of 1 and 2 to 0, so both become safe to enqueue.",
       active: [1, 2], done: [0],
       values: { u: 0, queue: "[1, 2]", order: "[0]", indeg: "[0,0,0,2,1]" } },
-    { note: "Pop 1. Order [0,1]. Decrement 3 to 1. Queue [2].",
+    { note: "Pop 1 and append it. The edge 1 to 3 drops that indegree from 2 to 1, so 3 still waits on the other in-edge from 2.",
       active: [3], done: [0, 1],
       values: { u: 1, queue: "[2]", order: "[0, 1]", indeg: "[0,0,0,1,1]" } },
-    { note: "Pop 2. Order [0,1,2]. Decrement 3 to 0, 4 to 0. Queue [3,4].",
+    { note: "Pop 2 and append it. Both remaining in-edges fall to 0, so 3 and 4 enter the queue together and every indegree is now 0.",
       active: [3, 4], done: [0, 1, 2],
       values: { u: 2, queue: "[3, 4]", order: "[0, 1, 2]", indeg: "[0,0,0,0,0]" } },
-    { note: "Pop 3 then 4. Order [0,1,2,3,4] (or 4 before 3). size==n, it is a DAG.",
+    { note: "Pop 3 and then 4. The order has length 5, equal to n, so the graph is a DAG and 4 could legally have been popped before 3.",
       done: [0, 1, 2, 3, 4],
       values: { u: 3, queue: "[4]", order: "[0,1,2,3]", indeg: "all 0" } },
-    { note: "DP example: ways[0]=1, then along the order ways[v]+=ways[u]. ways[3]=ways[1]+ways[2]=2.",
+    { note: "A ways pass starts with ways[0] = 1 and adds along each forward edge, so ways[3] becomes ways[1] + ways[2] = 2, the two paths from 0.",
       best: [3],
       values: { u: "dp", queue: "[]", order: "done", indeg: "ways[3]=2" } },
   ],
@@ -1111,12 +1408,12 @@ pack({
   n2 --> n3
   n2 --> n4["4"]`,
   steps: [
-    "<strong>indeg[v]++</strong> for every edge u->v.",
-    "<strong>Queue</strong> all v with indeg 0 (ArrayDeque).",
-    "<strong>Pop u</strong>, append to order; for v in g[u], if --indeg[v]==0 offer v.",
-    "<strong>If order.size()!=n</strong> there is a directed cycle; abort.",
-    "<strong>DP:</strong> for u in order, relax all edges u->v.",
-    "<strong>DFS topo:</strong> rec outgoing first, then add u; reverse the list (or addLast while walking sinks).",
+    "<strong>Count indeg[v]++ for every directed edge u &rarr; v.</strong> That count is how many prerequisites still block v, and a vertex that starts at 0 has nothing blocking it.",
+    "<strong>Queue every vertex whose indegree is already 0, using an ArrayDeque.</strong> Those vertices are the legal starts of any topological order, and an empty queue at this point means every vertex sits on a cycle.",
+    "<strong>Pop u, append it to the order, then decrement each neighbour and enqueue a neighbour that hits 0.</strong> Hitting 0 means u was that neighbour's last unprocessed in-edge, so it is now safe to list.",
+    "<strong>If the order has fewer than n vertices, a directed cycle remains and you abort.</strong> DP on a partial order silently drops the vertices that sat on the cycle, which is why course-schedule and this check share a skeleton.",
+    "<strong>DP: walk the finished order and relax every outgoing edge u &rarr; v.</strong> Relaxing here means combining the already-final dp[u] into dp[v]; because u sits earlier, one scan is enough.",
+    "<strong>DFS topo: recurse on outgoing neighbours first, then append u, then reverse the list.</strong> Postorder is sinks first, and the reverse (or an addFirst) puts sources first so the DP pass reads finished tails.",
   ],
   code: [
     { tab: "Brute", file: "DfsTopo.java",
@@ -1217,9 +1514,9 @@ public class DagPaths {
     time: "O(n + m)",
     space: "O(n + m)",
     derivation: [
-      "Each vertex enters the Kahn queue once; each edge decrements one indegree. DFS-topo is the same O(n+m) with a postorder list.",
+      "<p>Each vertex enters Kahn's queue at most once, and each directed edge decrements exactly one indegree, so the first pass is a constant amount of work per vertex and per edge. The DP pass walks the same edges once more. DFS-topo is the same bound with a postorder list.</p>",
       "<span class=\"eq\">T_topo = T_{DAG-DP} = &Theta;(n + m)</span>",
-      "Dijkstra on a DAG is overkill: the topo pass already relaxes each edge once, O(n+m) even with arbitrary (including negative) weights.",
+      "<p>At n = 10&#8309; and m = 2&times;10&#8309; both passes together are a few hundred thousand operations. Dijkstra on a DAG is overkill: the topological pass already relaxes each edge once, which is O(n + m) even when weights are negative. A heap would add a log factor you do not need.</p>",
     ],
     compare: [
       ["Kahn", "O(n+m)", "O(n)", "Order + cycle test"],
@@ -1230,20 +1527,20 @@ public class DagPaths {
   },
   pitfalls: [
     { title: "Using the adjacency-file order as topo",
-      bug: "dp[v] uses dp[u] before u is processed. Wrong ways / distances.",
-      fix: "Build the order first, then DP along it." },
+      bug: "You walk g in the order the file printed the edges, so dp[v] reads dp[u] while u is still the identity of the combine. Ways come out short and distances look almost right on a sorted sample.",
+      fix: "Build the topological order first, then run the DP pass along that order and nowhere else. A three-edge chain printed backwards is a good test." },
     { title: "Forgetting the cycle check",
-      bug: "Kahn returns a partial order; you DP on it and silently drop a strongly-connected bunch.",
-      fix: "order.size()==n, else fail / report impossible." },
+      bug: "Kahn returns a partial order of the vertices that were not on a cycle; you DP on it and silently drop a strongly-connected bunch, producing a number instead of \"impossible\".",
+      fix: "Require order.size() == n before any DP. If the size is smaller, fail or report that no order exists, the same check as course-schedule." },
     { title: "Indegree on undirected edges",
-      bug: "You added both directions, indegree never hits 0 on a two-cycle.",
-      fix: "Topo is for directed graphs. Orient first." },
+      bug: "You inserted both directions, so every edge is a two-cycle and indegree never falls to 0 except on isolated vertices. Kahn reports a cycle on a tree.",
+      fix: "Topological order is defined on directed graphs. If the statement is undirected, this page is the wrong tool unless you first orient the edges." },
     { title: "int overflow of ways",
-      bug: "Number of paths is exponential; int wraps.",
-      fix: "long, and mod 1e9+7 when the statement asks." },
+      bug: "The number of paths in a DAG can be exponential in n, so an int wraps to a small wrong number that still looks like a count.",
+      fix: "Store ways in a long, and reduce modulo 10^9+7 when the statement asks for a mod. A skinny chain of 40 vertices already overflows a 32-bit int." },
     { title: "DFS-topo without reverse",
-      bug: "Postorder is sinks first; you needed sources first.",
-      fix: "Collections.reverse, or addFirst, or DP in reverse postorder." },
+      bug: "Postorder appends a vertex after its outgoing calls, so the list is sinks first. A DP pass that reads it from the front uses unfinished tails.",
+      fix: "Collections.reverse the list, or addFirst as you finish, or run the DP backwards through the postorder. Sources must be read first." },
   ],
   variants: [
     ["Lexicographically smallest order", "Kahn with a min-heap instead of a queue.",
@@ -1255,13 +1552,13 @@ public class DagPaths {
   ],
   followups: [
     ["Is the topological order unique?",
-      "<p>Iff at every Kahn step the queue has size 1, i.e. the DAG is a single Hamiltonian path of forced prefixes. Otherwise many orders are legal; any one is enough for DP.</p>"],
+      "<p>Only when Kahn's queue has size 1 at every step, which means the DAG is a single forced chain: each prefix has exactly one legal next vertex. Otherwise many permutations are legal, and any one of them is enough for DP because every edge still goes forward. Sequence-reconstruction asks the uniqueness question; course-schedule-II asks for any order.</p>"],
     ["Why can DAG-DP handle negative weights?",
-      "<p>There is no cycle, so no negative cycle either. Each edge is relaxed once after its tail is final. Bellman-Ford's extra passes exist only to survive cycles.</p>"],
+      "<p>There is no directed cycle, so there is no negative cycle either. Each edge is relaxed once, after its tail is already final, so a negative weight just subtracts and cannot come back later to subtract again. Bellman-Ford's extra passes exist only to survive graphs that may contain cycles. Dijkstra is the wrong extra caution here: it refuses negatives that this pass handles for free.</p>"],
     ["Memo DFS vs Kahn DP?",
-      "<p>Equivalent. Memo DFS computes the same recurrence bottom-up via the call stack. Kahn is iterative and cycle-safe. Use memo DFS on implicit DAGs (grid increasing paths) where building the edge list is annoying.</p>"],
+      "<p>They compute the same recurrence. Memoised DFS uses the call stack as the topological order and is natural on an implicit DAG, such as cells of a grid with a strictly increasing move. Kahn is iterative and reports a cycle when the order is short. Use memo DFS when building an edge list is annoying; use Kahn when you also owe the caller a cycle test.</p>"],
     ["Course schedule II if many orders exist?",
-      "<p>Return any. If they want the lexicographically smallest, Kahn with a min-heap. If they want all orders, that is backtracking on the DAG (rare, exponential).</p>"],
+      "<p>Return any legal order. If they want the lexicographically smallest, replace Kahn's queue with a min-heap so the smallest label is always popped next. If they want every possible order, that is backtracking on the DAG and is exponential; interviews almost never go there. Check order.size() == n before you return, so a cycle becomes an empty list rather than a partial one.</p>"],
   ],
   problems: [
     lc(210, "course-schedule-ii", "Medium", "Kahn"),
@@ -1287,7 +1584,7 @@ public class DagPaths {
 pack({
   id: "dijkstra",
   difficulty: "Medium",
-  readTime: "24 min",
+  readTime: "26 min",
   tagline: "Non-negative weighted shortest paths: always expand the unsettled vertex with " +
     "smallest dist, and the first time you settle it the distance is final.",
   tags: ["Dijkstra", "heap", "shortest path", "P0"],
@@ -1296,20 +1593,35 @@ pack({
     ["Heaps & Priority Queue", "../03-linear-structures/heaps-and-priority-queue.html"],
   ],
   why: [
-    "BFS dies the moment edges have different positive weights: a 1-hop of weight 100 can lose " +
-      "to a 3-hop of weight 1+1+1. Dijkstra restores the \"expand closest unsettled\" rule by " +
-      "replacing the FIFO queue with a min-heap of (dist, vertex). With non-negative weights, " +
-      "the first time a vertex becomes the heap minimum, no future relaxation can improve it.",
-    "Network delay time, cheapest flights (with a k-stop twist), path-with-minimum-effort, and " +
-      "almost every \"weighted maze\" are Dijkstra. It is also the algorithm you must refuse to " +
-      "run on negative edges: the proof needs w &ge; 0.",
-    "Java's PriorityQueue does not support decrease-key. The standard contest pattern is " +
-      "\"push duplicates, skip stale pops\" where dist[u] &lt; popped distance. That is O(m log m), " +
-      "fine at m = 2e5.",
+    "You are given 100000 junctions and 200000 one-way roads whose driving times are " +
+      "positive integers up to a billion, and you need the cheapest time from junction 0 to " +
+      "every other junction. BFS is the wrong tool the moment those times are not all equal: " +
+      "a single road of time 100 loses to a three-road walk of times 1+1+1, but BFS records " +
+      "the first arrival (one hop) and never looks at that junction again. Trying every walk " +
+      "is worse: at this size even listing the roads once is a few hundred thousand steps, " +
+      "and enumerating walks is exponential. You need a search that always expands the " +
+      "unfinished junction whose current best time is smallest.",
+    "That search is Dijkstra's algorithm. It keeps a <code>dist</code> array of best times " +
+      "found so far, and a min-heap of pairs <code>(dist[u], u)</code> so the next expansion " +
+      "is the closest unfinished vertex. Network delay time, path-with-minimum-effort, and " +
+      "almost every weighted maze are this heap plus the rule that the first time a vertex " +
+      "comes off the heap with a matching <code>dist</code> its time is final. The rule needs " +
+      "every weight to be non-negative. With a negative road, a vertex you have already " +
+      "frozen can still be cheapened by a detour you have not expanded yet, and the answer " +
+      "comes out too large.",
+    "A concrete three-node counterexample is enough to refuse negatives. Vertices 0, 1, 2, " +
+      "source 0, edges 0&rarr;1 of weight 2, 0&rarr;2 of weight 4, and 2&rarr;1 of weight " +
+      "<code>-3</code>. Dijkstra settles 1 at time 2 (the direct road) while 2 still sits at " +
+      "time 4, then freezes <code>dist[1]</code>. The true cheapest walk is 0-2-1 with total " +
+      "4-3 = 1, which is never applied. Java's <code>PriorityQueue</code> also does not " +
+      "support decrease-key, so the contest pattern is \"push a new pair when the time " +
+      "improves, skip a popped pair whose time no longer matches <code>dist[u]</code>\". That " +
+      "is <code>O(m log m)</code>, fine at <code>m = 2&times;10&#8309;</code>, and the signal " +
+      "in a statement is \"minimum cost\" on non-negative weights with those limits.",
   ],
-  insight: "Settle vertices in order of increasing shortest-path distance. Non-negative edges " +
-    "mean leaving a closer vertex cannot wait for a farther one to help it. Skip heap entries " +
-    "whose distance is stale.",
+  insight: "Always expand the unfinished vertex with the smallest dist. When every edge " +
+    "weight is non-negative, the first fresh heap pop is the true shortest-path distance and " +
+    "can be frozen. Skip heap pairs whose stored time no longer matches dist[u].",
   yes: [
     "Shortest path with non-negative edge weights",
     "Grid with cell costs / effort / time to enter a cell",
@@ -1333,41 +1645,88 @@ pack({
       "Prim grows an MST by min edge to the tree; Dijkstra grows an SPT by min dist from s",
       "Same heap shape, different key"],
   ],
-  constraint: "<code>n, m &le; 2&times;10&#8309;</code>, weights up to 1e9 so dist is long. " +
-    "O(m log m) with duplicate-heap. A naive O(n&sup2;) scan of the min unsettled is better " +
-    "only when the graph is a dense matrix (n ~ 1000, m ~ n&sup2;).",
+  constraint: "<code>n, m &le; 2&times;10&#8309;</code> with weights up to <code>10&#8313;</code> " +
+    "is the usual heap-Dijkstra prompt: store <code>dist</code> in <code>long</code>, because " +
+    "a path of a hundred thousand billion-weight edges overflows an <code>int</code>. The " +
+    "duplicate-heap version is <code>O(m log m)</code>, about <code>2&times;10&#8309;</code> " +
+    "times 18, which fits. A dense <code>O(n&sup2;)</code> scan of the closest unsettled " +
+    "vertex is better only when the graph is a matrix with <code>n</code> around 1000.",
   core: [
-    "dist[] = INF, dist[s]=0. Heap holds (dist[u], u). Repeat: pop the smallest; if d != " +
-      "dist[u] continue (stale). Otherwise u is settled. For each edge u->v,w, if " +
-      "dist[u]+w &lt; dist[v], write dist[v] and push (dist[v], v).",
-    "INF must be larger than n * max_w (use 4e18). Never relax from a stale pop: that would " +
-      "re-expand a settled vertex and can explode the heap. Parent[] reconstructs the path.",
+    "You need a <code>long[] dist</code> filled with a huge sentinel INF, " +
+      "<code>dist[s] = 0</code>, and a min-heap of pairs <code>(d, u)</code>. To " +
+      "<em>relax</em> an edge <code>u &rarr; v</code> of weight <code>w</code> is to ask: is " +
+      "<code>dist[u] + w</code> smaller than the current <code>dist[v]</code>? If yes, " +
+      "overwrite <code>dist[v]</code> and push the new pair <code>(dist[v], v)</code> onto " +
+      "the heap. That is the same question BFS asked with <code>w = 1</code>, now asked with " +
+      "a real weight. The loop is: pop the pair with the smallest <code>d</code>; if " +
+      "<code>d</code> is not equal to <code>dist[u]</code> the pair is stale (an older, " +
+      "worse time) and you skip it; otherwise <code>u</code> is <em>settled</em> &mdash; its " +
+      "distance is frozen &mdash; and you relax every outgoing edge.",
+    "INF must be larger than any real path, so use <code>Long.MAX_VALUE / 4</code>, about " +
+      "<code>2&times;10&#185;&#8304;</code>. Adding a weight to <code>Integer.MAX_VALUE</code> " +
+      "wraps negative and then \"improves\" every vertex. Never relax from a stale pop: that " +
+      "re-expands a settled vertex and can grow the heap without bound. A " +
+      "<code>parent[v] = u</code> write on a successful relaxation reconstructs the path. " +
+      "The non-negative hypothesis is what makes the first fresh pop final: every remaining " +
+      "unsettled vertex is at least as far as <code>u</code>, and an extra non-negative edge " +
+      "cannot jump in front of a closer vertex you have already frozen.",
+    "Walk the running weighted sample from 0: edges 0&rarr;1 of 4, 0&rarr;2 of 2, 2&rarr;1 " +
+      "of 1, 1&rarr;3 of 1, 2&rarr;4 of 7. Start with <code>dist[0] = 0</code> and heap " +
+      "<code>[(0, 0)]</code>. Settle 0, relax 0&rarr;1 to 4 and 0&rarr;2 to 2. The next fresh " +
+      "pop is 2 at 2; relaxing 2&rarr;1 improves 1 from 4 to 3, and 2&rarr;4 writes 9. The " +
+      "next fresh pop is 1 at 3 (the leftover pair (4, 1) is stale and will be skipped). " +
+      "Relax 1&rarr;3 to 4, then settle 3 and 4. The finished array is " +
+      "<code>[0, 3, 2, 4, 9]</code>, and every first settlement was final because every " +
+      "weight was non-negative.",
   ],
-  invariant: "<p>When u is first popped with d==dist[u], dist[u] equals the true shortest-path " +
-    "distance from s. All remaining heap keys are &ge; dist[u].</p>" +
-    "<span class=\"eq\">w &ge; 0  &rArr;  settled set grows by true &delta;(s, u)</span>",
+  extra: [
+    {
+      kind: "warn",
+      title: "Three nodes are enough to break Dijkstra with a negative edge",
+      html: "<p>Source 0, edges 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight " +
+        "<code>-3</code>. Dijkstra freezes vertex 1 at 2 before it expands 2. The walk 0-2-1 " +
+        "has total 1 and is never applied. Use Bellman-Ford (or Johnson) when any weight can " +
+        "be negative.</p>",
+    },
+    {
+      kind: "key",
+      title: "Relax means \"is dist[u] + w a cheaper way to v?\"",
+      html: "<p>Overwrite <code>dist[v]</code> and push a new heap pair only when the answer " +
+        "is yes. The first time a popped pair matches the current <code>dist[u]</code>, that " +
+        "value is final &mdash; but only while every <code>w</code> is at least 0.</p>",
+    },
+  ],
+  invariant: "<p>When <code>u</code> is first popped with a pair whose time equals " +
+    "<code>dist[u]</code>, that time is the true shortest-path distance from the source, and " +
+    "every remaining heap key is at least as large.</p>" +
+    "<span class=\"eq\">w &ge; 0  &rArr;  settled set grows by true &delta;(s, u)</span>" +
+    "<p>In plain words, you always freeze the closest unfinished junction, and because no " +
+    "road has a negative time, nobody you have not yet visited can sneak in with a cheaper " +
+    "total than a junction you already froze.</p>",
   arrayLabel: "dist[u] as vertices settle",
   array: [0, 4, 2, 5, 9],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "d", "relax", "heap"],
   vizTitle: "Dijkstra from 0: edges 0-1:4, 0-2:2, 2-1:1, 1-3:1, 2-4:7",
+  dryIntro: "Dijkstra from 0 on the weighted five-node sample. Each fresh heap pop freezes a " +
+    "distance, and a leftover pair whose time no longer matches dist[u] is skipped as stale.",
   frames: [
-    { note: "dist[0]=0, heap [(0,0)]. Others INF.",
+    { note: "Source 0 starts at distance 0 in the heap; the other four vertices still hold the INF sentinel and have never been relaxed.",
       active: [0], dim: [1, 2, 3, 4],
       values: { u: 0, d: 0, relax: "start", heap: "[(0,0)]" } },
-    { note: "Settle 0. Relax 0->1 dist=4, 0->2 dist=2. Heap [(2,2),(4,1)].",
+    { note: "Settle 0 and relax both outgoing edges: vertex 1 is written at 4 and vertex 2 at 2, so the heap is now ordered [(2, 2), (4, 1)].",
       active: [1, 2], done: [0],
       values: { u: 0, d: 0, relax: "1=4, 2=2", heap: "[(2,2),(4,1)]" } },
-    { note: "Pop (2,2), settle 2. Relax 2->1 to 3 (improves 4), 2->4 to 9.",
+    { note: "The fresh pop (2, 2) settles 2. Relaxing 2 to 1 improves 4 down to 3, and relaxing 2 to 4 writes 9 for the first time.",
       active: [1, 4], done: [0, 2],
       values: { u: 2, d: 2, relax: "1=3, 4=9", heap: "[(3,1),(4,1),(9,4)]" } },
-    { note: "Pop (3,1), settle 1. Stale (4,1) will be skipped later. Relax 1->3 to 4.",
+    { note: "The fresh pop (3, 1) settles 1 at the improved time. The leftover pair (4, 1) is now stale. Relaxing 1 to 3 writes 4.",
       active: [3], done: [0, 1, 2],
       values: { u: 1, d: 3, relax: "3=4", heap: "[(4,1 stale),(4,3),(9,4)]" } },
-    { note: "Skip stale (4,1). Pop (4,3), settle 3.",
+    { note: "The stale pair (4, 1) is popped and skipped because 4 no longer equals dist[1]. The next fresh pop (4, 3) settles 3.",
       done: [0, 1, 2, 3],
       values: { u: 3, d: 4, relax: "\u2014", heap: "[(9,4)]" } },
-    { note: "Settle 4 at 9. dist = [0,3,2,4,9]. First settlement was final because all w>=0.",
+    { note: "Settle 4 at 9 and the heap empties. The finished distances [0, 3, 2, 4, 9] are final because every weight was non-negative.",
       best: [0, 1, 2, 3, 4],
       values: { u: 4, d: 9, relax: "done", heap: "[]" } },
   ],
@@ -1379,12 +1738,12 @@ pack({
   n1 -->|"1"| n3["3"]
   n2 -->|"7"| n4["4"]`,
   steps: [
-    "<strong>dist = INF</strong> (long), dist[s]=0. PriorityQueue of long[]{d,u} by d.",
-    "<strong>Pop (d,u)</strong>. If d != dist[u], stale &mdash; continue.",
-    "<strong>For each edge</strong> u->v of weight w: nd = d+w; if nd &lt; dist[v], dist[v]=nd, offer {nd,v}.",
-    "<strong>Stop</strong> when the heap is empty, or when you settle t if you only need s-t.",
-    "<strong>Unreachable</strong> stays INF; do not add INF+w (overflow).",
-    "<strong>Refuse negative w</strong>; the skip-stale proof needs w>=0.",
+    "<strong>Fill a long[] dist with INF = Long.MAX_VALUE/4, set dist[s] = 0, and push (0, s).</strong> A 32-bit INF plus a positive weight wraps negative and then \"improves\" every vertex, which is why the array is long from the first line.",
+    "<strong>Pop the pair (d, u) with the smallest time. If d != dist[u], skip it as stale.</strong> That pair is an older, worse time you pushed before a later relaxation improved u, and re-expanding it would grow the heap for no gain.",
+    "<strong>Otherwise u is settled: relax each outgoing edge u &rarr; v of weight w.</strong> Relaxing means: if d + w is smaller than dist[v], overwrite dist[v] and push the new pair. That is the only write that can change an answer.",
+    "<strong>Stop when the heap is empty, or return as soon as you settle t if you only need s-t.</strong> All-destinations must drain the heap; a single target can exit early because every later pop is at least as far as t.",
+    "<strong>Leave unreachable vertices at INF, and never add a weight onto INF.</strong> Overflow of a sentinel is the usual way a distant vertex suddenly looks cheaper than the source.",
+    "<strong>Refuse any negative weight; the freeze-on-first-pop proof needs w &ge; 0.</strong> The three-node graph 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight -3 freezes 1 at 2 and misses the true total 1.",
   ],
   code: [
     { tab: "Brute", file: "DenseDijkstra.java",
@@ -1502,9 +1861,9 @@ public class DijkstraUndirected {
     time: "O((n + m) log m) with a binary heap of duplicates",
     space: "O(n + m)",
     derivation: [
-      "Each edge can push at most one new heap node (when it improves dist[v]). At most m heap entries, each pop/push is O(log m).",
+      "<p>Each successful relaxation pushes one new pair, so the heap holds at most m entries in the duplicate-key version. Each push or pop on a binary heap costs O(log m), and each edge is examined once per settlement of its tail.</p>",
       "<span class=\"eq\">T = O(m log m), S = O(n + m)</span>",
-      "Fibonacci-heap Dijkstra is O(m + n log n) and nobody implements it in an interview. Dense O(n&sup2;) is the right call for a matrix.",
+      "<p>At m = 2&times;10&#8309; that is about 2&times;10&#8309; times 18 heap operations, a few million steps, which fits in two seconds. A Fibonacci heap would be O(m + n log n) and nobody implements it in an interview. When the graph is a dense matrix with n around 1000, scanning the closest unsettled vertex in O(n&sup2;) is faster than paying a log on n&sup2; heap entries.</p>",
     ],
     compare: [
       ["BFS", "O(n+m)", "O(n)", "Unit weights"],
@@ -1515,20 +1874,20 @@ public class DijkstraUndirected {
   },
   pitfalls: [
     { title: "int overflow of dist",
-      bug: "INF = Integer.MAX_VALUE then INF+w wraps negative and \"improves\" everything.",
-      fix: "long dist, INF = Long.MAX_VALUE/4." },
+      bug: "INF = Integer.MAX_VALUE looks like a safe sentinel, then INF + w wraps to a negative number and every later comparison treats that overflow as a cheaper path.",
+      fix: "Use long[] dist and INF = Long.MAX_VALUE / 4. A path of n billion-weight edges then still sits well below the sentinel." },
     { title: "Not skipping stale pops",
-      bug: "You re-expand u with an old d, pushing even more garbage.",
-      fix: "<code>if (d != dist[u]) continue;</code> immediately after pop." },
+      bug: "You re-expand u with an old d, relax its edges again, and push even more leftover pairs. The heap grows and the algorithm can look like it is looping.",
+      fix: "Immediately after each pop, if (d != dist[u]) continue. Only a pair that still matches the current best time is allowed to settle and relax." },
     { title: "Negative weights",
-      bug: "A later cheaper path through a negative edge never gets a chance; answer is too large, or the loop never settles.",
-      fix: "Bellman-Ford. Dijkstra's proof needs w>=0." },
+      bug: "A later cheaper walk through a negative edge never gets to improve a vertex you already froze, so the printed answer is too large. The three-node graph 0&rarr;1=2, 0&rarr;2=4, 2&rarr;1=-3 is the usual silent wrong answer.",
+      fix: "Refuse Dijkstra the moment any weight can be negative. Use Bellman-Ford, or Johnson's reweighting if you need many sources and there is no negative cycle." },
     { title: "Using TreeSet of vertices without updating",
-      bug: "Java TreeSet of (d,u) needs remove-old then add-new; easy to forget the remove.",
-      fix: "Duplicate-heap is simpler. TreeSet decrease-key is optional." },
+      bug: "A TreeSet of (d, u) used as decrease-key needs a remove of the old pair before the add of the new one; forgetting the remove leaves two keys for one vertex and the set order lies.",
+      fix: "The duplicate-heap pattern is simpler and is the contest default. TreeSet decrease-key is optional and only worth it if you already know you will not miss the remove." },
     { title: "Undirected input stored one way",
-      bug: "Shortest path cannot walk backwards.",
-      fix: "Insert both directions with the same weight unless the statement is directed." },
+      bug: "The statement says the roads are two-way but you inserted each pair once, so the shortest walk cannot use a road backwards and a reachable target looks unreachable.",
+      fix: "Insert both directions with the same weight unless the statement is directed. The reverse insert belongs in the same loop body as the forward one." },
   ],
   variants: [
     ["k-shortest / k stops", "State (u, usedStops) or stop when visits exceed k+1.",
@@ -1540,13 +1899,13 @@ public class DijkstraUndirected {
   ],
   followups: [
     ["Why non-negative is required?",
-      "<p>The settled vertex u is the closest unsettled. If some edge later had negative weight, a not-yet-settled vertex could jump in front of u after we already froze dist[u]. The heap order would lie.</p>"],
+      "<p>The settled vertex u is the closest unfinished vertex, and freezing it is safe only if nobody you have not yet expanded can produce a smaller total. A negative edge can do exactly that. On vertices 0, 1, 2 with edges 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight -3, Dijkstra freezes 1 at 2; the walk 0-2-1 totals 1 and arrives too late. The heap order then describes a world that is no longer true.</p>"],
     ["Dijkstra vs Prim?",
-      "<p>Same mechanical loop, different key. Dijkstra: key = dist from s. Prim: key = min edge weight to the tree. Mixing them is a common interview slip when you have just implemented one.</p>"],
+      "<p>The loop shape is the same &mdash; a min-heap of vertices, grow a set one vertex at a time &mdash; but the key is different. Dijkstra's key is the best distance from the source. Prim's key is the cheapest edge that touches the tree so far. Mixing them is a common interview slip when you have just implemented one: you grow an MST when the question asked for shortest paths, or the other way around.</p>"],
     ["Early exit?",
-      "<p>If you only need dist[t], return when you settle t. The heap may still hold other vertices; that is fine. All-destinations must empty the heap.</p>"],
+      "<p>If you only need dist[t], return the moment you settle t. Every later fresh pop is at a distance at least as large, so it cannot improve t. The heap may still hold other vertices; that is fine. If you need distances to every vertex you must drain the heap. Do not exit on the first time t is pushed, only on the first time it is settled.</p>"],
     ["How do you print the path?",
-      "<p>parent[v]=u on a successful relaxation. Walk t back to s. If several equal distances, the first relaxation (or a &lt;= vs &lt; policy) picks one shortest path.</p>"],
+      "<p>On each successful relaxation write parent[v] = u, the tail of the edge that just improved v. After the search, start at t and follow parent until you reach s, then reverse the list. If several walks tie, the first relaxation (or a &le; versus &lt; policy) picks one of the shortest paths, not all of them.</p>"],
   ],
   problems: [
     lc(743, "network-delay-time", "Medium", "Dijkstra, answer = max dist"),
@@ -1572,7 +1931,7 @@ public class DijkstraUndirected {
 pack({
   id: "zero-one-bfs",
   difficulty: "Medium",
-  readTime: "22 min",
+  readTime: "24 min",
   tagline: "When every edge weight is 0 or 1, a deque simulates Dijkstra in <code>O(n + m)</code>: " +
     "0-edges to the front, 1-edges to the back.",
   tags: ["0-1 BFS", "deque", "shortest path", "P1"],
@@ -1581,21 +1940,31 @@ pack({
     ["Dijkstra", "dijkstra.html"],
   ],
   why: [
-    "Dijkstra's heap is paying a log to order vertices by distance. If the only weights are 0 " +
-      "and 1, the new distance is either d or d+1, so the frontier is two consecutive layers. " +
-      "A deque maintains that: append-front the 0-relaxations (same layer) and append-back the " +
-      "1-relaxations (next layer). The structure stays sorted without a heap.",
-    "This shows up as \"move for free in this direction, cost 1 to change direction\", \"break " +
-      "a wall or not\", \"0-cost edges plus unit edges\", and several Codeforces labyrinths. " +
-      "Using a heap still works but is slower and hides the idea.",
-    "The correctness is Dijkstra's: you still expand in non-decreasing distance. The 0-edge is " +
-      "the decrease-key that BFS cannot do (BFS would skip a second visit). You may relax a " +
-      "vertex twice: once via a 1-edge, then improve via a 0-edge. Marking on first push is " +
-      "therefore wrong; compare distances like Dijkstra.",
+    "You are in a 1000 by 1000 maze. Stepping onto an empty cell is free, and breaking a " +
+      "wall costs 1, and you want the fewest walls to break to reach the exit. Dijkstra with " +
+      "a heap solves it, but at a million cells the heap pays a log factor on every " +
+      "improvement, something like twenty extra operations per edge, and the idea itself is " +
+      "hidden inside a generic shortest-path hammer. Ordinary BFS is worse: it marks a cell " +
+      "the first time it is reached, so a later free step that would have cheapened that cell " +
+      "is refused. You need the freeze-closest rule of Dijkstra without paying for a heap.",
+    "The observation is that every weight is 0 or 1, so a new candidate distance is either " +
+      "the same as the current vertex or one more. The unfinished vertices therefore sit in " +
+      "at most two consecutive layers. A <em>deque</em> &mdash; a double-ended queue, an " +
+      "<code>ArrayDeque</code> that you can add to either end &mdash; keeps those two layers " +
+      "in order: a 0-weight step goes on the front (same layer) and a 1-weight step goes on " +
+      "the back (next layer). Popping from the front then expands in non-decreasing distance, " +
+      "which is exactly Dijkstra's order, in linear time.",
+    "The same observation is why you must not mark on first push. A vertex can be reached " +
+      "first along a 1-edge at distance <code>d+1</code>, then improved along a 0-edge to " +
+      "distance <code>d</code>. BFS would have frozen the worse first visit. The signal in a " +
+      "statement is \"weights are 0 or 1\", \"follow the painted arrow for free, change it " +
+      "for 1\", or \"minimum walls to break\", together with limits such as " +
+      "<code>n, m &le; 10&#8310;</code> where a heap still works but is the slower, less " +
+      "honest answer.",
   ],
-  insight: "0-weight goes to the front of the deque (same dist), 1-weight to the back (dist+1). " +
-    "The deque stays sorted, so you get Dijkstra in linear time. Allow a second visit when the " +
-    "distance improves.",
+  insight: "A 0-weight edge goes to the front of the deque (same distance) and a 1-weight " +
+    "edge goes to the back (distance plus one). The deque stays sorted, so you get Dijkstra " +
+    "in linear time. Allow a second visit whenever the distance improves.",
   yes: [
     "Every edge weight is in {0, 1}",
     "Grid: moving one way is free, turning or breaking a wall costs 1",
@@ -1619,41 +1988,83 @@ pack({
       "A later 0-edge can improve a vertex already queued at dist+1",
       "Relax like Dijkstra; allow improved second push"],
   ],
-  constraint: "<code>n, m &le; 10&#8310;</code> is comfortable: O(n+m). dist is int (or long if " +
-    "you add other costs). Each vertex is pushed at most twice in the 0-1 case (once per " +
-    "possible dist parity of improvement), still linear.",
+  constraint: "<code>n, m &le; 10&#8310;</code> is the reason this page exists: a linear " +
+    "deque walk of a few million steps fits, while Dijkstra's <code>O(m log m)</code> is the " +
+    "same idea with a slower hammer. Distances are small integers, so <code>int</code> is " +
+    "enough unless you mix in a second cost. Each vertex is pushed a constant number of " +
+    "times (once per useful improvement), which is still linear.",
   core: [
-    "dist=INF, dist[s]=0, deque holds vertices (not pairs, if you skip stale). Pop front u. " +
-      "For each edge u->v of weight w in {0,1}: nd=dist[u]+w; if nd &lt; dist[v], dist[v]=nd, " +
-      "then addFirst(v) if w==0 else addLast(v).",
-    "Still skip stale: if you store (d,u) in the deque, ignore pops with d!=dist[u]. Do not " +
-      "mark visited on first push. Ordinary BFS is the special case with no 0-edges.",
+    "You need a <code>dist</code> array filled with INF, <code>dist[s] = 0</code>, and an " +
+      "<code>ArrayDeque</code> that starts holding <code>s</code>. To <em>relax</em> an edge " +
+      "<code>u &rarr; v</code> of weight <code>w</code> in <code>{0, 1}</code> is the same " +
+      "question as on the Dijkstra page: is <code>dist[u] + w</code> smaller than the current " +
+      "<code>dist[v]</code>? If yes, overwrite <code>dist[v]</code>, then " +
+      "<code>addFirst(v)</code> when <code>w</code> is 0 (same layer) and " +
+      "<code>addLast(v)</code> when <code>w</code> is 1 (next layer). You pop from the front. " +
+      "If you store pairs <code>(d, u)</code>, skip a pop whose <code>d</code> no longer " +
+      "matches <code>dist[u]</code>, the same stale-pair rule as Dijkstra.",
+    "Do not mark a vertex visited on first discovery. A 0-edge is a decrease-key: it can " +
+      "improve a vertex that is already sitting in the deque at a worse distance. Ordinary " +
+      "BFS is the special case with no 0-edges, which is why its mark-on-push rule is legal " +
+      "there and wrong here. Swapping the two ends of the deque &mdash; putting 1-edges on " +
+      "the front &mdash; destroys the two-layer order and you expand a farther vertex first. " +
+      "Weights outside <code>{0, 1}</code> also break the invariant: a +2 jump can overtake, " +
+      "and you need Dijkstra or Dial's buckets.",
+    "Walk the five-node sample whose 0-edges are 0-2 and 2-1 and whose 1-edges are 0-1, 1-3 " +
+      "and 2-4. Start with <code>dist[0] = 0</code> and deque <code>[0]</code>. From 0 the " +
+      "0-edge writes 2 at distance 0 and goes to the front; the 1-edge writes 1 at distance 1 " +
+      "and goes to the back, so the deque is <code>[2, 1]</code>. Pop 2 (still distance 0). " +
+      "The 0-edge 2-1 improves vertex 1 from 1 to 0 and is pushed to the front; the 1-edge " +
+      "2-4 writes 4 at distance 1. Pop the improved 1 at distance 0, write 3 at distance 1, " +
+      "and skip the leftover stale copy of 1. The finished array is <code>[0, 0, 0, 1, 1]</code>. " +
+      "Vertex 1 was reached twice; the 0-edge was the improvement BFS would have missed.",
   ],
-  invariant: "<p>The deque holds vertices with two consecutive distances d and d+1, the d's " +
-    "in front. Expanding front therefore expands in non-decreasing order, as Dijkstra requires.</p>" +
-    "<span class=\"eq\">w=0 &rarr; addFirst (dist stays); w=1 &rarr; addLast (dist+1)</span>",
+  extra: [
+    {
+      kind: "warn",
+      title: "Mark-on-push BFS is wrong the moment a 0-edge exists",
+      html: "<p>A vertex can be queued first along a 1-edge and then improved along a 0-edge. " +
+        "Refusing the second push freezes the worse distance. Compare <code>nd</code> against " +
+        "<code>dist[v]</code> the way Dijkstra does.</p>",
+    },
+    {
+      kind: "key",
+      title: "Relax means the same thing as on the Dijkstra page",
+      html: "<p>If <code>dist[u] + w</code> is smaller than <code>dist[v]</code>, overwrite " +
+        "and push. The only new rule is which end of the deque receives the push: front for " +
+        "weight 0, back for weight 1.</p>",
+    },
+  ],
+  invariant: "<p>The deque holds vertices at two consecutive distances <code>d</code> and " +
+    "<code>d+1</code>, with the <code>d</code> copies at the front. Popping the front " +
+    "therefore expands in non-decreasing order, which is the order Dijkstra needs.</p>" +
+    "<span class=\"eq\">w=0 &rarr; addFirst (dist stays); w=1 &rarr; addLast (dist+1)</span>" +
+    "<p>In plain words, free steps stay in the current ticket line and paid steps join the " +
+    "line behind it, so you always serve the cheapest unfinished cell next.</p>",
   arrayLabel: "dist[u] during 0-1 BFS from 0",
   array: [0, 1, 0, 1, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "w", "nd", "deque"],
   vizTitle: "0-edges 0-2 and 2-1; 1-edges 0-1, 1-3, 2-4",
+  dryIntro: "0-1 BFS from 0 on mixed free and unit edges. Watch vertex 1 get queued at " +
+    "distance 1 and then improved to 0 by the free edge 2-1, the second visit BFS would refuse.",
   frames: [
-    { note: "Start: dist[0]=0, deque [0].",
+    { note: "Source 0 starts at distance 0 alone in the deque; the other four vertices still hold INF and have never been relaxed.",
       active: [0], dim: [1, 2, 3, 4],
       values: { u: 0, w: "\u2014", nd: 0, deque: "[0]" } },
-    { note: "From 0: 0-edge to 2, nd=0, addFirst. 1-edge to 1, nd=1, addLast. deque [2,1].",
+    { note: "From 0 the free edge writes 2 at distance 0 on the front, and the unit edge writes 1 at distance 1 on the back, so the deque is [2, 1].",
       active: [1, 2], done: [0],
       values: { u: 0, w: "0 then 1", nd: "2@0, 1@1", deque: "[2, 1]" } },
-    { note: "Pop 2 (dist 0). 0-edge 2-1 improves 1 from 1 to 0, addFirst. 1-edge to 4 at dist 1, addLast.",
+    { note: "Pop 2 at distance 0. The free edge 2-1 improves vertex 1 from 1 to 0 and is pushed to the front; the unit edge writes 4 at distance 1.",
       active: [1, 4], done: [0, 2],
       values: { u: 2, w: "0 to 1", nd: "1 improved to 0", deque: "[1, 1stale, 4]" } },
-    { note: "Pop 1 at dist 0 (the improved copy). Relax 1-3 at dist 1. Skip stale 1 later.",
+    { note: "Pop the improved copy of 1 at distance 0 and relax the unit edge to 3 at distance 1. The leftover stale copy of 1 will be skipped.",
       active: [3], done: [0, 1, 2],
       values: { u: 1, w: 1, nd: 1, deque: "[stale1, 4, 3]" } },
-    { note: "Skip stale. Pop 4 dist 1, pop 3 dist 1.",
+    { note: "Skip the stale copy of 1, then pop 4 at distance 1 and pop 3 at distance 1. Both of those distances are already final.",
       done: [0, 1, 2, 3, 4],
       values: { u: 4, w: "\u2014", nd: 1, deque: "[3]" } },
-    { note: "Final dist [0,0,0,1,1]. Vertex 1 was reached twice; the 0-edge was the improvement BFS would have missed.",
+    { note: "The finished distances are [0, 0, 0, 1, 1]. Vertex 1 was reached twice; the free edge was the improvement ordinary BFS would have missed.",
       best: [0, 1, 2],
       values: { u: "done", w: "\u2014", nd: "\u2014", deque: "[]" } },
   ],
@@ -1665,12 +2076,12 @@ pack({
   n1 -->|"1"| n3["3"]
   n2 -->|"1"| n4["4"]`,
   steps: [
-    "<strong>dist = INF</strong>, dist[s]=0, ArrayDeque, add s.",
-    "<strong>Pop first</strong> (smallest remaining dist).",
-    "<strong>If stale</strong> (stored d != dist[u]) continue.",
-    "<strong>w==0:</strong> if improves, dist[v]=nd, addFirst(v).",
-    "<strong>w==1:</strong> if improves, dist[v]=nd, addLast(v).",
-    "<strong>Do not</strong> mark visited on first discovery.",
+    "<strong>Fill dist with INF, set dist[s] = 0, and add s to an ArrayDeque.</strong> INF should be MAX/4, the same sentinel as Dijkstra, so INF + 1 cannot wrap and pretend to be an improvement.",
+    "<strong>Pop from the front: that vertex is a closest unfinished vertex.</strong> The two-layer order is what makes the front safe to expand without a heap.",
+    "<strong>If you stored a pair (d, u) and d no longer equals dist[u], skip it as stale.</strong> That leftover is an older, worse time, and re-expanding it would push more garbage the way an unfiltered Dijkstra heap does.",
+    "<strong>On a 0-edge, if nd is smaller than dist[v], write it and addFirst(v).</strong> A free step stays in the current layer, which is why it goes to the front and can improve a vertex already queued at d+1.",
+    "<strong>On a 1-edge, if nd is smaller than dist[v], write it and addLast(v).</strong> A paid step belongs on the next layer, behind every still-pending free step of the current layer.",
+    "<strong>Do not mark a vertex visited on first discovery.</strong> A later 0-edge is a real improvement, and refusing the second push freezes the worse first visit the way ordinary BFS would.",
   ],
   code: [
     { tab: "Brute", file: "HeapOnZeroOne.java",
@@ -1789,9 +2200,9 @@ public class WallGrid01 {
     time: "O(n + m)",
     space: "O(n)",
     derivation: [
-      "Each successful relaxation pushes a vertex. In 0-1 BFS each vertex's distance is a non-negative integer and only decreases, and it can take at most two useful values before settling in practice; the standard proof is that the deque stays sorted by dist, each edge is processed a constant number of times, total linear.",
+      "<p>Each successful relaxation pushes a vertex onto one end of the deque. Distances are non-negative integers and only decrease, and the deque is kept sorted by distance, so each edge is processed a constant number of times. That is a linear scan of the vertices and the edges, with no heap.</p>",
       "<span class=\"eq\">T = O(n + m)</span> versus Dijkstra's O(m log m).",
-      "If you mark on first push you miss 0-edge improvements and the algorithm becomes wrong, not just slower.",
+      "<p>At n = m = 10&#8310; the linear walk is a few million steps. Dijkstra on the same input pays an extra log, about twenty operations per edge, which is tens of millions of heap operations and the slower, less honest answer. Marking on first push does not make the algorithm faster; it makes it wrong, because a later 0-edge is a real improvement you just refused.</p>",
     ],
     compare: [
       ["BFS (all w=1)", "O(n+m)", "O(n)", "Mark on push"],
@@ -1802,20 +2213,20 @@ public class WallGrid01 {
   },
   pitfalls: [
     { title: "Marking visited on first discovery",
-      bug: "A 0-edge later would have improved dist; you refuse the second push. Wrong answer.",
-      fix: "Only skip if nd >= dist[v]. Same as Dijkstra." },
+      bug: "A vertex is queued along a 1-edge and you mark it seen, so a later 0-edge that would have cheapened it is refused. The code looks like the BFS template, which is why the wrong answer is so common.",
+      fix: "Only skip a neighbour when nd is not smaller than dist[v]. That is the same comparison as Dijkstra, and it is what allows the second push." },
     { title: "addFirst / addLast swapped",
-      bug: "1-edges go to the front, order is no longer sorted, you expand a farther vertex first.",
-      fix: "0 = addFirst, 1 = addLast. Always." },
+      bug: "Putting 1-edges on the front (or 0-edges on the back) looks like a harmless swap, but the two-layer order dies and you expand a farther vertex before a closer one.",
+      fix: "Weight 0 is always addFirst and weight 1 is always addLast. A three-edge path 0 -1-> a -0-> t versus 0 -0-> t is a good test of the ends." },
     { title: "Using this for weight 2",
-      bug: "A +2 jump can overtake and the two-layer invariant dies.",
-      fix: "Dijkstra, or Dial with more buckets." },
+      bug: "A +2 jump can overtake the next layer, so the deque is no longer sorted by distance and the algorithm silently returns a non-shortest walk.",
+      fix: "Use Dijkstra for arbitrary non-negative weights, or Dial's bucket queue if the weights are small integers 0..K. This page needs a 0 that stays on the current layer." },
     { title: "pollLast instead of pollFirst",
-      bug: "You built a stack. Distances are not monotone.",
-      fix: "pollFirst / pop from the front, like a queue that you also unshift." },
+      bug: "Popping from the back turns the deque into a stack, so distances are no longer monotone and the first expansion of a vertex is not the closest one.",
+      fix: "Always pollFirst. The structure is a queue that you also unshift onto, not a stack, and addLast/pollLast would destroy the algorithm." },
     { title: "INT overflow INF+1",
-      bug: "Integer.MAX_VALUE + 1 is negative, \"improves\" everything.",
-      fix: "INF = MAX/4, same as Dijkstra." },
+      bug: "Integer.MAX_VALUE + 1 wraps negative, so every 1-edge out of an unreachable vertex looks cheaper than a real path and \"improves\" the whole graph.",
+      fix: "Use INF = Integer.MAX_VALUE / 4, the same sentinel as Dijkstra. A real distance in a 0-1 graph is at most n and sits far below that." },
   ],
   variants: [
     ["Dial's algorithm", "Weights 0..K: array of deques, cursor at current dist.",
@@ -1827,13 +2238,13 @@ public class WallGrid01 {
   ],
   followups: [
     ["Why can a vertex be pushed twice?",
-      "<p>First via a 1-edge at dist d+1, then via a 0-path at dist d. The second is a real improvement. BFS forbids this; 0-1 BFS must allow it.</p>"],
+      "<p>It can be reached first along a 1-edge at distance d+1, then improved along a 0-edge (or a path of 0-edges) to distance d. That second write is a real cheaper walk, not a duplicate. Ordinary BFS forbids a second visit because on unit weights the first visit is already best. Here the 0-edge is a decrease-key, so the second visit must be allowed.</p>"],
     ["Is 0-1 BFS just Dijkstra?",
-      "<p>Yes, with a deque as a specialised heap for two consecutive keys. Saying that sentence is the interview-level understanding.</p>"],
+      "<p>Yes. The deque is a specialised heap that only ever holds two consecutive keys, so you get the same freeze-closest order without paying a log. Saying that sentence is the interview-level understanding: you still expand in non-decreasing distance, you still relax an edge only when it improves dist[v], and you still skip stale leftover copies.</p>"],
     ["LC 1368 \u2014 why 0-1?",
-      "<p>Following the arrow already painted in the cell costs 0; changing the arrow (or walking against it) costs 1. That is exactly 0-1 BFS on the grid graph.</p>"],
+      "<p>Each cell already has an arrow painted on it. Walking in the painted direction costs 0, because you did not change the grid. Walking in any other direction (or rewriting the arrow) costs 1. Those are exactly the two weights this page knows how to order, so the grid graph is a 0-1 instance and a heap is the slower way to say the same thing.</p>"],
     ["What if weights are 1 and 2?",
-      "<p>Not 0-1. You can still Dial with K=2, or just Dijkstra. The two-layer deque invariant needs a 0 to sit on the current layer.</p>"],
+      "<p>That is not 0-1. There is no free step that stays on the current layer, so a +2 jump can overtake and the two-layer deque invariant dies. You can still use Dial's algorithm with K = 2 buckets, or just run Dijkstra. The 0 is load-bearing: it is the edge that sits at the front.</p>"],
   ],
   problems: [
     lc(1368, "minimum-cost-to-make-at-least-one-valid-path", "Hard", "0-1 BFS on a grid"),

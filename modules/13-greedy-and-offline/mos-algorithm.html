@@ -22,7 +22,7 @@
   <p class="hero__tagline">Reorder offline range queries into sqrt-blocks so adding/removing one endpoint is amortised <code>O(n sqrt n)</code> instead of <code>O(nq)</code>.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="coordinate-compression.html">Coordinate Compression</a>,
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>n,q = 1e5 range queries that are not prefix-friendly (distinct count, mode, mex) cannot use Fenwick. If you can add and remove one index in O(1) or O(log n), Mo's algorithm orders the queries so the two pointers L,R move O(n sqrt n) times total.</p>
-<p>Sort queries by (L / B, R) with B ≈ n/sqrt(q) or sqrt(n). Hilbert-order curves cut the constant further. Hilbert is optional; block sort is the interview version.</p>
-<p>Mo on trees (Euler tour, two visits) and Mo with updates (time as a third coordinate, n^{5/3}) are the upgrades. If the add is already O(log n), total is O(n sqrt n log n), still often fine.</p>
+<p>You are given an array of length <code>n</code> and <code>q</code> range questions such as "how many distinct values sit in <code>[L, R]</code>", "what is the mode", or "what is the mex". Prefix sums cannot help, because those answers do not have an inverse: knowing the distinct count of <code>[0, R]</code> and of <code>[0, L-1]</code> tells you nothing about <code>[L, R]</code>. Rebuilding a frequency map from scratch for every query costs about <code>n q</code> additions. At <code>n = q = 10<sup>5</sup></code> that is ten billion steps, and the judge will cut you off. Mo's algorithm is the offline reorder that makes two pointers crawl the array so cheaply that the same add/remove work finishes in tens of millions of steps instead.</p>
+<p>You are allowed to answer the queries in any order, so you sort them before you walk. The sort key is the block of the left endpoint, <code>L / B</code>, and inside a block the right endpoint <code>R</code>. That one decision is what bounds the pointer movement, and the arithmetic is why. The left pointer, inside a single block, lives in a window of only <code>B</code> indices, so it moves at most <code>B</code> steps per query and <code>q B</code> steps in total; when the block changes it may jump across the whole array, at most <code>n</code> steps per block, and there are <code>n / B</code> blocks, which is another <code>n<sup>2</sup> / B</code>. The right pointer is sorted inside each block, so it travels across the array at most once per block (or twice if you reset), which is again <code>(n / B) &times; n = n<sup>2</sup> / B</code>. Adding those up gives <code>q B + n<sup>2</sup> / B</code> endpoint moves. Setting <code>B &approx; &radic;n</code> (or <code>n / &radic;q</code> when <code>q</code> differs from <code>n</code>) balances the two terms at about <code>n &radic;n</code>.</p>
+<p>In a real problem statement the signal is offline <code>[L, R]</code> queries sitting next to <code>n, q &le; 10<sup>5</sup></code> and an answer that is not a prefix difference: distinct, mode, mex, sum of <code>freq<sup>2</sup> &times; value</code>. If you can add or remove one index in constant time (or a log, still often fine), the bound above is the intended budget &mdash; about <code>3 &times; 10<sup>7</sup></code> to <code>2 &times; 10<sup>8</sup></code> add/remove calls in Java if the inner function stays an array bump, not a HashMap. Hilbert order cuts the constant further and is optional; the block sort is the interview version. Queries that arrive online cannot be reordered, and then you need a real data structure instead.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>You pay for moving L and R, not for answering. Sort queries so consecutive ones are nearby on the number line, in blocks.</p>
+    <p>You pay for moving <code>L</code> and <code>R</code>, not for answering. Sorting by the block of <code>L</code> and then by <code>R</code> is what caps those moves at <code>q B + n<sup>2</sup> / B</code>, which becomes about <code>n &radic;n</code> once the block size is <code>&radic;n</code>.</p>
   </div>
 </aside>
 
@@ -112,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 10&#8309;</code>, add/remove O(1) → ~ n sqrt n = 3e7-2e8 operations. Java: keep the inner add tiny, use arrays not HashMap.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 10<sup>5</sup></code> with an add/remove that is <code>O(1)</code> is the signature: about <code>n &radic;n &approx; 3 &times; 10<sup>7</sup></code> endpoint moves, up to a couple of hundred million if the constant is sloppy. Java will accept that only if <code>add</code> is an array bump, not a HashMap. Online queries, or <code>n = 10<sup>6</sup></code> with the same bound, push you off this page.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Maintain current [curL, curR] (init empty or [0,-1]). For each query in block order, while curL&gt;L add --curL; while curR&lt;R add ++curR; while curL&lt;L rem curL++; while curR&gt;R rem curR--. Then store ans[id].</p>
-<p>Block id of L is L/B. Sort by block, then by R ascending (odd blocks descending R — Hilbert-lite, cuts moves in half).</p>
+<p>Keep a live window <code>[curL, curR]</code> and a frequency structure that matches exactly those indices. Start empty, conventionally <code>curL = 0</code> and <code>curR = -1</code>, so nothing is in the window and you never double-add index 0. For each query <code>(L, R, id)</code> in the sorted order, expand or shrink with four loops: while <code>curL &gt; L</code> add <code>--curL</code>; while <code>curR &lt; R</code> add <code>++curR</code>; while <code>curL &lt; L</code> remove <code>curL++</code>; while <code>curR &gt; R</code> remove <code>curR--</code>. Expand before you shrink so the window is never invalid. Then write <code>ans[id]</code>. The functions <code>add(i)</code> and <code>rem(i)</code> must be exact inverses: for distinct count, <code>add</code> does <code>freq[a[i]]++</code> and increments <code>distinct</code> when the count leaves 0, and <code>rem</code> decrements first and drops <code>distinct</code> when the count returns to 0.</p>
+<p>The sort is what makes those four loops cheap, and this is the arithmetic. Pick a block size <code>B</code>, usually <code>&lfloor;&radic;n&rfloor;</code>. Give every query the key <code>(L / B, R)</code>, and for a small extra constant sort <code>R</code> descending in odd-numbered blocks so the right pointer does not reset from <code>n</code> back to 0 at every block boundary. Inside one block the left endpoints all lie in an interval of length <code>B</code>, so <code>curL</code> moves at most <code>B</code> steps per query: that is <code>q B</code> left-moves. At a block change <code>curL</code> may jump up to <code>n</code> indices, and there are <code>n / B</code> blocks, which is <code>n<sup>2</sup> / B</code> more left-moves. Because <code>R</code> is monotonic inside a block, <code>curR</code> travels the array at most once per block: another <code>(n / B) &times; n = n<sup>2</sup> / B</code> right-moves. The total is <code>q B + 2 n<sup>2</sup> / B</code> add/remove calls. Substitute <code>B = &radic;n</code> and both pieces become <code>n &radic;n</code> when <code>q &approx; n</code>.</p>
+<p>Walk <code>a = [1, 2, 1, 3, 2]</code> with queries <code>[0, 2]</code>, <code>[1, 4]</code>, <code>[0, 4]</code> and <code>B = 2</code>. Block-sorted order is <code>[0, 2]</code>, then <code>[0, 4]</code>, then <code>[1, 4]</code>, because the first two share block 0 and are ordered by <code>R</code>. Start empty. Expanding to <code>[0, 2]</code> adds 1, 2, 1 and <code>distinct</code> becomes 2. Expanding <code>R</code> to 4 adds 3 and 2, <code>distinct</code> becomes 3, and that answers <code>[0, 4]</code>. Moving <code>L</code> from 0 to 1 removes a single 1, the frequency of 1 drops from 2 to 1, and <code>distinct</code> stays 3, which answers <code>[1, 4]</code>. The pointers crawled a handful of steps instead of rebuilding three frequency maps from scratch.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After processing a query, [curL, curR] equals the query range and the frequency structure matches that range. Total |endpoint moves| = O((n+q) sqrt n) with B = sqrt(n).</p>
+    <p>After each query is processed, <code>[curL, curR]</code> equals that query's range and the frequency structure matches it exactly. With block size <code>B = &radic;n</code>, the total number of endpoint moves is <code>O((n + q) &radic;n)</code>, because left-moves cost <code>q B + n<sup>2</sup> / B</code> and right-moves cost <code>n<sup>2</sup> / B</code>.</p><p>In plain words, you never rebuild the window: you slide it from the previous query to the next, and the block-then-<code>R</code> order is what stops those slides from adding up to <code>n q</code>.</p><p>Interview sentence: <em>"I sort by L-block then R so the two pointers move O(n sqrt n) times, not O(n q)."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the block sort bounds the pointers</span>
+    <p>Left: <code>q B</code> inside blocks plus <code>n &times; (n / B)</code> at block changes. Right: <code>n</code> of travel per block times <code>n / B</code> blocks. Total <code>q B + n<sup>2</sup> / B</code>. Set <code>B = &radic;n</code> (or <code>n / &radic;q</code>) to balance the two terms. Odd-even <code>R</code> does not change the big-O; it roughly halves the right-pointer resets.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">add and rem are inverses</span>
+    <p>If <code>rem</code> is not the exact undo of <code>add</code>, <code>distinct</code> drifts and every later answer is wrong. Start from the empty window <code>[0, -1]</code> and only mutate inside the four while-loops, so you cannot double-add index 0 by accident.</p>
   </div>
 </aside>
 
@@ -155,7 +172,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "a=[1,2,1,3,2]. Queries: [0,2] dist 2, [1,4] dist 3, [0,4] dist 3. B=2.",
+          "note": "Array [1, 2, 1, 3, 2] and queries [0, 2], [1, 4], [0, 4], with block size 2. The live window starts empty at [0, -1].",
           "active": [
             0,
             1,
@@ -168,7 +185,7 @@
           }
         },
         {
-          "note": "Block-sorted: [0,2] then [0,4] then [1,4] (same/nearby blocks).",
+          "note": "Block sort puts [0, 2] first, then [0, 4], then [1, 4], because the first two share block 0 and are ordered by the right endpoint.",
           "active": [
             0
           ],
@@ -179,7 +196,7 @@
           }
         },
         {
-          "note": "Expand to [0,2]: add 1,2,1. distinct=2.",
+          "note": "Expanding to [0, 2] adds the values 1, 2, 1. Two distinct numbers are now in the window, which answers the first query.",
           "active": [
             0,
             1,
@@ -192,7 +209,7 @@
           }
         },
         {
-          "note": "Expand R to 4: add 3,2. distinct=3. Answer [0,4].",
+          "note": "The next query only needs R to grow to 4, so we add 3 and then 2. Distinct becomes 3 and that answers [0, 4].",
           "active": [
             0,
             1,
@@ -207,7 +224,7 @@
           }
         },
         {
-          "note": "Move L to 1: remove a[0]=1, freq[1] 2→1, still distinct 3. Answer [1,4].",
+          "note": "Moving L from 0 to 1 removes a[0] = 1. Its frequency drops from 2 to 1, distinct stays 3, and that answers [1, 4].",
           "active": [
             1,
             2,
@@ -221,7 +238,7 @@
           }
         },
         {
-          "note": "Pointers moved a few steps, not 3 full rebuilds.",
+          "note": "The two pointers crawled a handful of indices instead of rebuilding three frequency maps, which is the block order paying off.",
           "active": [
             1
           ],
@@ -254,17 +271,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Compress</strong> values if they are 1e9 so freq[] is an array.</li>
-  <li><strong>Pack queries</strong> (L,R,id). Sort by (L/B, R) with odd-even R.</li>
-  <li><strong>add(i):</strong> freq[a[i]]++; if freq==1 distinct++.</li>
-  <li><strong>rem(i):</strong> if freq==1 distinct--; freq[--].</li>
-  <li><strong>Move</strong> the four while-loops in an order that never goes invalid (add before rem when expanding).</li>
-  <li><strong>Write ans[id]</strong>. Print in original order.</li>
+  <li><strong>Compress values so freq[] is a plain array.</strong> Keys up to <code>10<sup>9</sup></code> cannot index a frequency table; ranks in <code>1 .. n</code> make <code>add</code> a single increment, which is the only reason <code>n &radic;n</code> fits the time limit.</li>
+  <li><strong>Pack each query as (L, R, id) and sort by (L / B, R).</strong> The block of the left endpoint is the primary key because that is what caps left-pointer travel; odd blocks should sort <code>R</code> descending so the right pointer does not reset at every boundary.</li>
+  <li><strong>Write add(i) as the exact increment.</strong> For distinct count: bump <code>freq[a[i]]</code> and increment <code>distinct</code> only when the count leaves zero. Any other answer (mode, mex, freq-squared) plugs in here and nowhere else.</li>
+  <li><strong>Write rem(i) as the exact undo of add.</strong> Decrement first, then drop <code>distinct</code> when the count returns to zero. A rem that is not the inverse makes every later answer drift, and the bug is invisible on the first query.</li>
+  <li><strong>Move with the four while-loops, expand before shrink.</strong> Starting from the empty window <code>[0, -1]</code>, only these loops mutate the structure, so you cannot double-add index 0 or remove an index that was never in.</li>
+  <li><strong>Store ans[id] and print in the original order.</strong> The sort permutes the queries; the <code>id</code> field is what puts the answers back. Forgetting it prints a correct bag of numbers in the wrong rows.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Three distinct-count queries on a five-element array, answered in block order. Each row is one pointer move and the frequency picture after that move.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -272,12 +289,12 @@ flowchart TD
       <tr><th>L,R</th><th>cur</th><th>distinct</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>init</td><td>[0,-1]</td><td>0</td><td>a=[1,2,1,3,2]. Queries: [0,2] dist 2, [1,4] dist 3, [0,4] dist 3. B=2.</td></tr>
-      <tr><td>order</td><td>—</td><td>—</td><td>Block-sorted: [0,2] then [0,4] then [1,4] (same/nearby blocks).</td></tr>
-      <tr><td>0,2</td><td>[0,2]</td><td>2</td><td>Expand to [0,2]: add 1,2,1. distinct=2.</td></tr>
-      <tr><td>0,4</td><td>[0,4]</td><td>3</td><td>Expand R to 4: add 3,2. distinct=3. Answer [0,4].</td></tr>
-      <tr><td>1,4</td><td>[1,4]</td><td>3</td><td>Move L to 1: remove a[0]=1, freq[1] 2→1, still distinct 3. Answer [1,4].</td></tr>
-      <tr><td>done</td><td>Mo</td><td>saved</td><td>Pointers moved a few steps, not 3 full rebuilds.</td></tr>
+      <tr class="trace-table__row--change"><td>init</td><td>[0,-1]</td><td>0</td><td>Array [1, 2, 1, 3, 2] and queries [0, 2], [1, 4], [0, 4], with block size 2. The live window starts empty at [0, -1].</td></tr>
+      <tr><td>order</td><td>—</td><td>—</td><td>Block sort puts [0, 2] first, then [0, 4], then [1, 4], because the first two share block 0 and are ordered by the right endpoint.</td></tr>
+      <tr><td>0,2</td><td>[0,2]</td><td>2</td><td>Expanding to [0, 2] adds the values 1, 2, 1. Two distinct numbers are now in the window, which answers the first query.</td></tr>
+      <tr><td>0,4</td><td>[0,4]</td><td>3</td><td>The next query only needs R to grow to 4, so we add 3 and then 2. Distinct becomes 3 and that answers [0, 4].</td></tr>
+      <tr><td>1,4</td><td>[1,4]</td><td>3</td><td>Moving L from 0 to 1 removes a[0] = 1. Its frequency drops from 2 to 1, distinct stays 3, and that answers [1, 4].</td></tr>
+      <tr><td>done</td><td>Mo</td><td>saved</td><td>The two pointers crawled a handful of indices instead of rebuilding three frequency maps, which is the block order paying off.</td></tr>
     </tbody>
   </table>
 </div>
@@ -386,7 +403,9 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>L moves: each block of L has size B, q queries, plus n resets: O(q B + n n/B). R moves O(n * n/B + q n/B wait): R is monotonic inside a block, so O((n/B)*n + q*something). Set B=sqrt(n), both are O(n sqrt n).</p>
+    <p>Fix a block size <code>B</code>. Left-pointer travel splits in two. Inside one block every <code>L</code> lies in an interval of length <code>B</code>, so each of the <code>q</code> queries moves <code>curL</code> by at most <code>B</code>, which is <code>q B</code> steps. At a block change <code>curL</code> may jump up to <code>n</code> indices, and there are <code>n / B</code> blocks, which is <code>n<sup>2</sup> / B</code> more steps. Right-pointer travel is simpler: because queries inside a block are sorted by <code>R</code>, <code>curR</code> is monotonic and crosses the array at most once per block, another <code>(n / B) &times; n = n<sup>2</sup> / B</code>. The grand total is</p>
+    <p><span class="eq">T = O(q B + n<sup>2</sup> / B)</span></p>
+    <p>Set <code>B = &radic;n</code> when <code>q &approx; n</code>, or <code>B = n / &radic;q</code> when they differ, and both terms become <code>O((n + q) &radic;n)</code>. Putting real numbers in: at <code>n = q = 10<sup>5</sup></code> we have <code>&radic;n &approx; 316</code>, so about <code>3 &times; 10<sup>7</sup></code> add/remove calls, a few hundred milliseconds in Java if each call is an array bump. Rebuild-per-query on the same input is <code>n q = 10<sup>10</sup></code> steps. Skip the block key and sort only by <code>R</code>, and the left pointer jumps randomly for an <code>O(n q)</code> again.</p>
   </div>
 
   <table class="complexity__compare">
@@ -408,28 +427,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">add/rem not inverses</span>
-    <div class="pitfalls__bug">Removing twice, or freq going negative, then distinct drifts forever.</div>
-    <div class="pitfalls__fix">rem is the exact inverse. Assert freq[x]>=0.</div>
+    <div class="pitfalls__bug">A rem that decrements after checking <code>freq == 1</code>, or that is called twice on the same index, looks locally symmetric and then <code>freq</code> goes negative, so <code>distinct</code> drifts and every later query is silently wrong.</div>
+    <div class="pitfalls__fix">Make <code>rem</code> the exact undo of <code>add</code>, and assert <code>freq[x] &ge; 0</code> after every removal. The first query can still pass while the third is already garbage.</div>
   </li>
   <li>
     <span class="pitfalls__title">HashMap frequencies at 1e5</span>
-    <div class="pitfalls__bug">T_add is huge; n sqrt n * hashmap blows the TL.</div>
-    <div class="pitfalls__fix">Compress to 1..n, int[] freq.</div>
+    <div class="pitfalls__bug">A HashMap looks like the natural way to count values up to <code>10<sup>9</sup></code>, but each add then costs a hash plus possible resize, and <code>n &radic;n</code> of those is several hundred million map operations that miss the time limit.</div>
+    <div class="pitfalls__fix">Compress values to <code>1 .. n</code> and use an <code>int[] freq</code>. The inner function must stay a couple of array writes; that is the whole point of the bound.</div>
   </li>
   <li>
     <span class="pitfalls__title">Starting from [0,0] without adding 0</span>
-    <div class="pitfalls__bug">You think the first index is in, but it is not, or you double-add it.</div>
-    <div class="pitfalls__fix">Start [0,-1] empty, only add in the while loops.</div>
+    <div class="pitfalls__bug">Initialising <code>curL = curR = 0</code> looks like "the window starts at the first index", so you either forget to add <code>a[0]</code> or you add it once at init and again in the first expand, and the first answer is off by one value.</div>
+    <div class="pitfalls__fix">Start from the empty window <code>[0, -1]</code> and only add or remove inside the four while-loops. Index 0 enters exactly when a query needs it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Sorting by R only</span>
-    <div class="pitfalls__bug">L jumps randomly, O(nq).</div>
-    <div class="pitfalls__fix">Primary key is L-block.</div>
+    <div class="pitfalls__bug">Sorting queries by the right endpoint alone looks like it should keep <code>curR</code> monotonic, which it does, but then <code>curL</code> jumps anywhere in the array on every query and the left-pointer term becomes <code>O(n q)</code> again.</div>
+    <div class="pitfalls__fix">The primary key must be the block of <code>L</code>. The right endpoint is only the secondary key, and that is the split the <code>q B + n<sup>2</sup> / B</code> bound depends on.</div>
   </li>
   <li>
     <span class="pitfalls__title">Inclusive/exclusive mix</span>
-    <div class="pitfalls__bug">Queries are [l,r] inclusive, you rem r when you meant r+1.</div>
-    <div class="pitfalls__fix">Stick to inclusive and the four loops above.</div>
+    <div class="pitfalls__bug">Queries arrive as inclusive <code>[l, r]</code> and the expand loops look like they should stop at <code>r + 1</code>, so you remove <code>r</code> when you meant to keep it, or you add one past the end and read garbage.</div>
+    <div class="pitfalls__fix">Pick inclusive endpoints and the four loops on this page, and do not mix in an exclusive <code>r</code> from a Fenwick habit. A one-element query <code>[i, i]</code> is the test.</div>
   </li>
 </ul>
 
@@ -471,28 +490,28 @@ flowchart TD
   <details class="followup">
     <summary>Why sqrt?</summary>
     <div class="followup__body">
-      <p>Balance L-moves (worse when B is large) against R-moves (worse when B is small / more blocks). B=n/sqrt(q) is slightly better than sqrt(n) when q differs from n.</p>
+      <p>The total movement is <code>q B + n<sup>2</sup> / B</code>. The first term grows with <code>B</code> (left pointer wanders more inside a fat block); the second term shrinks with <code>B</code> (fewer blocks, so fewer full-array travels of <code>R</code> and fewer left-pointer resets). Those two pieces balance when <code>B</code> is about <code>&radic;n</code>, or more tightly <code>n / &radic;q</code> when <code>q</code> is far from <code>n</code>. Either choice is <code>O((n + q) &radic;n)</code>; the second is a constant-factor win on unbalanced inputs.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can Mo be online?</summary>
     <div class="followup__body">
-      <p>No. The sort needs all queries. If queries are online, you need a real data structure.</p>
+      <p>No. The bound depends on sorting every query before the pointers move, so you must hold the whole batch. If queries arrive one at a time and must be answered immediately, you cannot reorder them and this page does not apply. Reach for a Fenwick, a segment tree, or a wavelet tree that supports the same question online.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Distinct with updates, online?</summary>
     <div class="followup__body">
-      <p>Not Mo. Segment tree of Fenwicks, or a wavelet tree, or sqrt rebuild. Harder.</p>
+      <p>Still not Mo, even the 3D variant, because online forbids reordering. A segment tree of Fenwicks, a wavelet tree, or a sqrt-rebuild of the array are the usual answers, and they are heavier code. Mo-with-updates (time as a third coordinate, blocks of size <code>n<sup>2/3</sup></code>) is only for an offline mix of updates and queries.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Hilbert order?</summary>
     <div class="followup__body">
-      <p>Map (L,R) to a position on a Hilbert curve so nearby queries in 2D are nearby in 1D. Faster constants, longer code. Block sort first.</p>
+      <p>A Hilbert curve maps each pair <code>(L, R)</code> to a position on a space-filling curve so queries that are close in the 2D square are close in the 1D sort order. The pointer travel then has a smaller constant than block sort, at the cost of longer code and a 64-bit interleave. Learn the block sort first; add Hilbert only after the add/remove is already tiny and you are still near the time limit.</p>
     </div>
   </details>
 </div>

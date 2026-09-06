@@ -22,7 +22,7 @@
   <p class="hero__tagline">Idempotent range queries on a static array in <code>O(1)</code> after an <code>O(n log n)</code> doubling table &mdash; two overlapping blocks, no inverse required.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>,
       <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Prefix sums give <code>O(1)</code> range sums because addition has an inverse. Minimum, maximum, gcd and bitwise AND do not: knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>. A sparse table exploits a different algebraic property, <em>idempotence</em>: overlapping ranges may be combined freely because <code>min(S, S) = min(S)</code>.</p>
-<p>The table stores, for every index i and every k, the min (or gcd, or AND) of the block of length <code>2<sup>k</sup></code> starting at i. Any query range of length L is covered by two such blocks of length <code>2<sup>floor(log2 L)</sup></code>, one aligned with the left end and one with the right. Two lookups, one combine, <code>O(1)</code>.</p>
-<p>The catch is that the array must be static: a point update invalidates <code>O(n)</code> table entries. For mixed updates use a segment tree. For invertible ops on a static array, prefix sums are smaller and simpler. This page is the remaining quadrant: static + idempotent.</p>
+<p>You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> that will never change, and someone keeps asking: what is the smallest value between these two indices? Scanning the range is correct, but a hundred thousand queries each walking a hundred thousand cells is ten billion steps and the judge will cut you off. A prefix-sum array would answer a range <em>sum</em> in one subtraction, because addition has an inverse: if you know the sum up to <code>r</code> and the sum up to <code>l-1</code>, you can peel the left prefix off. Minimum has no inverse of that kind. Knowing <code>min(a[0..r])</code> and <code>min(a[0..l-1])</code> tells you nothing about <code>min(a[l..r])</code>, because the overall minimum might sit in the left prefix and hide the answer you actually wanted.</p>
+<p>A sparse table exploits a different algebraic property, <em>idempotence</em> &mdash; combining a value with itself gives the same value back, so <code>min(x, x) = x</code>. That means two ranges that overlap in the middle can still be combined freely: the overlap is counted twice, and the minimum does not care. The table stores, for every starting index <code>i</code> and every length that is a power of two, the minimum (or gcd, or bitwise AND) of that block. Any query range of length <code>L</code> is then covered by two such blocks of length <code>2<sup>floor(log<sub>2</sub> L)</sup></code>, one glued to the left end and one glued to the right. Two array lookups and one combine, and you are done in constant time.</p>
+<p>The catch is that the array must stay still. Changing one cell invalidates every block that covers it, which in the worst case is about <code>n</code> table entries, so a single point update is as expensive as rebuilding. For mixed updates you want a segment tree. For invertible operations on a static array, a prefix sum is smaller and simpler. This page is the remaining quadrant: the array never changes, and the operation is idempotent.</p>
+<p>In a real statement the signal is a static array sitting next to limits such as <code>n, q &le; 10&#8310;</code> and a query that is minimum, maximum, gcd, or bitwise AND / OR. That combination rules out a scan per query, and it is exactly what a sparse table is for. The same doubling then covers the Euler-tour reduction of lowest-common-ancestor, and any other problem that secretly asks for the minimum of a range that never moves.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Idempotent operations can overlap. Cover [L, R] with two power-of-two blocks and combine them; the overlap is free.</p>
+    <p>Idempotent operations can overlap, so any range is the combine of two power-of-two blocks glued to its ends. The overlap is free for min, gcd and AND; it would double-count a sum, which is why this table is not a prefix array.</p>
   </div>
 </aside>
 
@@ -117,19 +118,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 10&#8310;</code> static RMQ is the textbook sparse-table prompt. Memory is <code>n log n</code> integers (about 80 MB at n = 10&#8310; with 32-bit cells), which is acceptable. If n is 10&#8311; you cannot afford the table.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 10&#8310;</code> on a static array with a min / max / gcd / AND query is the textbook sparse-table prompt. The table holds <code>n log n</code> integers &mdash; about 80 MB at <code>n = 10&#8310;</code> with 32-bit cells &mdash; which is acceptable. If <code>n</code> is <code>10&#8311;</code> you cannot afford that memory, and if even one update appears you should switch to a segment tree instead.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Let <code>st[k][i]</code> be the combine of <code>a[i .. i + 2<sup>k</sup> - 1]</code>. The k = 0 row is a copy of the array. The recurrence is <code>st[k][i] = op(st[k-1][i], st[k-1][i + 2<sup>k-1</sup>])</code>, defined for every i where the second block still fits. Building is a double loop, k outer, i inner.</p>
-<p>A query [L, R] inclusive has length <code>len = R - L + 1</code>. Let <code>k = floor(log2(len))</code>. The two blocks <code>[L, L+2<sup>k</sup>-1]</code> and <code>[R-2<sup>k</sup>+1, R]</code> both lie inside [L, R] and together cover it. Their overlap is harmless because op is idempotent. Precompute <code>lg[i]</code> so the floor-log is an array lookup, not a library call.</p>
-<p>Idempotence is load-bearing. Sum is <em>not</em> idempotent: two overlapping blocks would double-count the middle. That is why sparse tables are not a replacement for prefix sums. The operations that work: min, max, gcd, lcm (with care), AND, OR, and "first index of the minimum".</p>
+<p>You need a two-dimensional table <code>st[k][i]</code>. The cell <code>st[k][i]</code> holds the combine of the contiguous block <code>a[i .. i + 2<sup>k</sup> - 1]</code>, a stretch of length <code>2<sup>k</sup></code> that starts at index <code>i</code>. Row <code>k = 0</code> is just a copy of the array, because a block of length 1 is a single element. Every later row is filled from the row below it: <code>st[k][i] = op(st[k-1][i], st[k-1][i + 2<sup>k-1</sup>])</code>, which glues two already-computed halves of length <code>2<sup>k-1</sup></code> into one block of length <code>2<sup>k</sup></code>. The outer loop must be <code>k</code>, then <code>i</code>, because each row reads the row you just finished. You only write a cell when the second half still fits inside the array.</p>
+<p>A query on the closed interval <code>[L, R]</code> has length <code>len = R - L + 1</code>. Let <code>k = floor(log<sub>2</sub> len)</code>, the largest power of two that still fits inside the range. The left block <code>[L, L + 2<sup>k</sup> - 1]</code> starts at <code>L</code> and stays inside the query. The right block <code>[R - 2<sup>k</sup> + 1, R]</code> ends at <code>R</code> and also stays inside. Together they cover every index in <code>[L, R]</code>, and they overlap in the middle whenever <code>len</code> is not itself a power of two. That overlap is harmless precisely because the operation is idempotent. Precompute an array <code>lg[i]</code> so the floor-log is one lookup, not a floating-point call in a hot loop.</p>
+<p>Idempotence is load-bearing. Sum is <em>not</em> idempotent: two overlapping blocks would add the middle twice and report a number that looks plausible and is wrong. That is why a sparse table is not a replacement for prefix sums, even though both answer range queries on a static array. The operations that work are minimum, maximum, gcd, lcm (with care around zeros), bitwise AND, bitwise OR, and "the first index at which the minimum occurs" if you store an argmin instead of a value.</p>
+<p>Walk the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> through a query on indices <code>[2, 6]</code>. The length is 5, so <code>k = floor(log<sub>2</sub> 5) = 2</code> and each block has length 4. The left block is indices 2..5, values 4, 1, 5, 9, minimum 1, which is already stored as <code>st[2][2]</code>. The right block starts at <code>6 - 4 + 1 = 3</code>, indices 3..6, values 1, 5, 9, 2, minimum 1, stored as <code>st[2][3]</code>. Combining them gives <code>min(1, 1) = 1</code>. The overlap [3, 5] sat in both blocks and did not change the answer. A sum table on the same two blocks would have added 1+5+9 twice and reported 32 instead of 21.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>For an idempotent associative op, any range is the combine of two (possibly overlapping) dyadic blocks:</p><span class="eq">op(L, R) = op( st[k][L], st[k][R - 2<sup>k</sup> + 1] ),&nbsp; k = &lfloor;log<sub>2</sub>(R - L + 1)&rfloor;</span><p>Interview sentence: <em>"I overlap two power-of-two windows; min does not mind the overlap, sum would."</em></p>
+    <p>For an idempotent associative operation, any range is the combine of two (possibly overlapping) dyadic blocks:</p><span class="eq">op(L, R) = op( st[k][L], st[k][R - 2<sup>k</sup> + 1] ),&nbsp; k = &lfloor;log<sub>2</sub>(R - L + 1)&rfloor;</span><p>In plain words, you never have to tile the query with disjoint pieces. You grab the longest power-of-two window that starts at <code>L</code> and the longest power-of-two window that ends at <code>R</code>, and because taking the minimum of a value twice does not change it, the stretch that was in both windows is free. Sum would charge you twice for that stretch, which is why this identity is reserved for min, max, gcd and the bitwise cousins.</p><p>Interview sentence: <em>"I overlap two power-of-two windows; min does not mind the overlap, sum would."</em></p>
   </div>
 </aside>
 
@@ -191,7 +193,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "The array. Query [L, R] = [2, 6], length 5.",
+          "note": "The array. Query [L, R] = [2, 6], values 4, 1, 5, 9, 2, so the length is 5.",
           "active": [
             2,
             3,
@@ -362,13 +364,13 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate</strong> <code>st[LOG][n]</code> and <code>lg[n+1]</code>. <code>LOG = 32 - Integer.numberOfLeadingZeros(n)</code>.</li>
-  <li><strong>lg:</strong> <code>lg[1] = 0</code>; for i = 2..n, <code>lg[i] = lg[i >> 1] + 1</code>.</li>
-  <li><strong>Row 0:</strong> copy the array into <code>st[0][i]</code>.</li>
-  <li><strong>Double:</strong> for k = 1..LOG-1, for i such that <code>i + (1<<k) - 1 &lt; n</code>, <code>st[k][i] = op(st[k-1][i], st[k-1][i + (1<<(k-1))])</code>.</li>
-  <li><strong>Query [L, R]:</strong> <code>k = lg[R - L + 1]</code>, return <code>op(st[k][L], st[k][R - (1<<k) + 1])</code>.</li>
-  <li><strong>Do not use this for sum.</strong> Overlap would double-count.</li>
-  <li><strong>Updates:</strong> rebuild the table, or switch to a segment tree.</li>
+  <li><strong>Allocate the two tables.</strong> Create <code>st[LOG][n]</code> and <code>lg[n+1]</code>, with <code>LOG = 32 - Integer.numberOfLeadingZeros(n)</code>, so you have one row per power of two that can appear as a block length.</li>
+  <li><strong>Fill the floor-log array first.</strong> Set <code>lg[1] = 0</code> and then <code>lg[i] = lg[i >> 1] + 1</code> for every later i, because a query must read <code>k</code> in constant time and a floating-point log will round the wrong way at powers of two.</li>
+  <li><strong>Copy the array into row 0.</strong> A block of length <code>2<sup>0</sup> = 1</code> is a single element, so <code>st[0][i] = a[i]</code> is the base case every later row will double from.</li>
+  <li><strong>Double each row from the one below.</strong> For k from 1, for every i whose block of length <code>1&lt;&lt;k</code> still fits, write <code>st[k][i] = op(st[k-1][i], st[k-1][i + (1&lt;&lt;(k-1))])</code>. The outer loop is k because each row reads the finished row beneath it.</li>
+  <li><strong>Answer [L, R] with two lookups.</strong> Read <code>k = lg[R - L + 1]</code> and return <code>op(st[k][L], st[k][R - (1&lt;&lt;k) + 1])</code>. The <code>+ 1</code> is what makes the right block end exactly at R.</li>
+  <li><strong>Refuse this structure for sum or XOR.</strong> The two blocks overlap on almost every query, so a sum would double-count the middle and XOR would cancel it to zero. Those operations belong on a prefix array.</li>
+  <li><strong>Rebuild, or switch, if an update arrives.</strong> One write invalidates every block that covers that index, which is linear in n. Rare updates can rebuild the whole table; mixed updates want a segment tree.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -381,7 +383,7 @@ flowchart TD
       <tr><th>L</th><th>R</th><th>k</th><th>ans</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>2</td><td>6</td><td>?</td><td>?</td><td>The array. Query [L, R] = [2, 6], length 5.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>6</td><td>?</td><td>?</td><td>The array. Query [L, R] = [2, 6], values 4, 1, 5, 9, 2, so the length is 5.</td></tr>
       <tr><td>2</td><td>6</td><td>2</td><td>?</td><td>lg[5] = 2 because 2^2 = 4 <= 5 < 8. k = 2, block length 4.</td></tr>
       <tr><td>2</td><td>6</td><td>2</td><td>st[2][2]=1</td><td>Left block starts at L = 2, length 4: indices 2..5, values 4,1,5,9. min = 1. This is st[2][2].</td></tr>
       <tr><td>2</td><td>6</td><td>2</td><td>st[2][3]=1</td><td>Right block ends at R = 6: starts at 6 - 4 + 1 = 3, indices 3..6, values 1,5,9,2. min = 1. This is st[2][3].</td></tr>
@@ -532,9 +534,9 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Row k has at most n entries, and there are <code>log n</code> rows, each filled with a constant-time combine:</p>
+    <p>Row k has at most n entries, and there are <code>log n</code> rows, each filled with a constant-time combine. At <code>n = 10&#8310;</code> that is about <code>10&#8310; &times; 20 = 2&times;10&#8311;</code> writes, which is a few milliseconds:</p>
     <p><span class="eq">T<sub>build</sub> = &Theta;(n log n),&nbsp;&nbsp; T<sub>query</sub> = &Theta;(1)</span></p>
-    <p>A segment tree is <code>O(n)</code> build and <code>O(log n)</code> query, and supports updates. When there are no updates and q is huge, the sparse table wins on query constants (two array reads vs a dozen). At <code>n = 10&#8310;</code> the table is the memory you pay for those constants.</p>
+    <p>A segment tree is <code>O(n)</code> build and <code>O(log n)</code> query, and supports updates. When there are no updates and q is huge, the sparse table wins on query constants (two array reads vs a dozen). At <code>n = 10&#8310;</code> the table is the memory you pay for those constants, about 80 MB of 32-bit cells.</p>
     <p>Farach-Colton/Bender RMQ is <code>O(n)</code> build and <code>O(1)</code> query after a Cartesian-tree reduction; nobody codes it in a contest. Binary lifting LCA is the usual alternative when the RMQ is on a tree, not an array.</p>
   </div>
 
@@ -557,8 +559,8 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using it for sum / XOR</span>
-    <div class="pitfalls__bug">The two blocks overlap, the middle is combined twice, and XOR of a value with itself is 0, so you can even "zero out" the overlap. Silently wrong.</div>
-    <div class="pitfalls__fix">Sparse tables are for idempotent ops. Sum and XOR go to prefix arrays.</div>
+    <div class="pitfalls__bug">The two blocks overlap, the middle is combined twice, and XOR of a value with itself is 0, so you can even "zero out" the overlap. Silently wrong, and it looks fine on any query whose length is itself a power of two.</div>
+    <div class="pitfalls__fix">Sparse tables are for idempotent ops only. Sum and XOR go to a prefix array; test a query whose length is not a power of two, because that is where the overlap appears.</div>
   </li>
   <li>
     <span class="pitfalls__title">Off-by-one in the right block</span>
@@ -568,12 +570,12 @@ flowchart TD
   <li>
     <span class="pitfalls__title">Floating-point log</span>
     <div class="pitfalls__bug"><code>(int)(Math.log(len) / Math.log(2))</code> rounding down incorrectly at powers of two, picking k too large, and reading off the end of a row.</div>
-    <div class="pitfalls__fix">Integer <code>lg[]</code> table, or <code>31 - Integer.numberOfLeadingZeros(len)</code>.</div>
+    <div class="pitfalls__fix">Build an integer <code>lg[]</code> table, or use <code>31 - Integer.numberOfLeadingZeros(len)</code>. Check a query whose length is exactly 8 or 16, where the float version most often slips.</div>
   </li>
   <li>
     <span class="pitfalls__title">Building with i outer, k inner</span>
-    <div class="pitfalls__bug"><code>st[k][i]</code> reads <code>st[k-1][...]</code> that has not been filled yet if k is the inner loop.</div>
-    <div class="pitfalls__fix">k outermost, then i. Same dependency as binary-lifting's doubling.</div>
+    <div class="pitfalls__bug"><code>st[k][i]</code> reads <code>st[k-1][...]</code> that has not been filled yet if k is the inner loop. The cell looks initialised because Java zeros the array, so you silently combine zeros instead of real values.</div>
+    <div class="pitfalls__fix">Keep k as the outermost loop, then i. The dependency is the same as binary-lifting's doubling: each row is defined only in terms of the finished row below it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Inclusive / exclusive bounds mix-up</span>

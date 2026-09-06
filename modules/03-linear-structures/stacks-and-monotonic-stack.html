@@ -39,14 +39,16 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The next-greater-element question looks like a nested scan: for each index, walk right until a strictly larger value. That is <code>O(n&sup2;)</code> and dies at <code>n = 10&#8309;</code>. If <code>a[j]</code> is smaller than <code>a[i]</code> and to its right, <code>a[j]</code> can never be the next greater of anyone still waiting left of <code>i</code>. A stack of unresolved indices, popped when a greater value arrives, does all the work in one pass.</p>
-<p>That same pop-when-dominated structure is an entire SDE-2 cluster. Largest rectangle in a histogram is next-smaller on both sides. Trapping rain is bounded by the nearest taller bar on each side. Sum of subarray minimums is previous-less times next-less. Daily temperatures and stock span are next-greater with a distance payload.</p>
-<p>The other stack family is structural, not monotonic: matching brackets, decoding nested strings, RPN / calculator. Those keep unmatched openers or pending operators. Mixing the two families in an interview is a classification error.</p>
+<p>You are handed the closing price of a stock for every day of the year, say <code>[2, 1, 2, 4, 3]</code> for a very short year, and for each day you must report the first later day whose price is strictly higher. Day 0 at price 2 has to wait until day 3 at price 4; day 1 at price 1 is answered immediately by day 2. The program that writes itself is two nested loops: stand on each index and walk rightwards until you see something bigger. On five days that is instant. On <code>n = 10&#8309;</code> days a gently decreasing input makes every inner walk run all the way to the end of the array, which is roughly <code>10&#8309; &times; 10&#8309; / 2 = 5&times;10&#8313;</code> comparisons &mdash; minutes of CPU time for a problem that gives you one second.</p>
+<p>The wasted effort has a very definite shape, and seeing it is the whole trick. Suppose you are standing at index <code>i</code> and somewhere to its right sits an index <code>j</code> with <code>a[j]</code> smaller than <code>a[i]</code>. Then <code>a[j]</code> can never be the answer for <code>i</code>, and it can never be the answer for any earlier index that is still unanswered either, because a value bigger than <code>a[i]</code> is certainly bigger than <code>a[j]</code> and would have been reached first. The moment a larger value shows up, <code>a[j]</code> is <em>dominated</em> &mdash; permanently useless as a candidate for anybody &mdash; and can be discarded forever. The nested loops keep re-reading those dead values, and that re-reading is the entire cost.</p>
+<p>A <em>stack</em> is a container where the only element you may inspect or remove is the one you added most recently, last in and first out, like a pile of plates. Keep a stack of the indices whose answer you have not found yet, deliberately arranged so their values decrease as you go from the bottom to the top. That never-turning-around ordering is what the word <em>monotonic</em> means here. When a new value arrives it settles every index on top of the stack that it beats, popping each one and writing its answer on the way, and then it joins the stack itself to wait for something bigger. An index is pushed exactly once and popped at most once, so the whole scan does at most <code>n</code> pushes and <code>n</code> pops.</p>
+<p>Once that skeleton is visible, a cluster of famous problems collapses into the same single pass with a different quantity computed at the moment of each pop. Largest rectangle in a histogram asks how far each bar can stretch left and right before it meets a shorter bar, which is nearest-smaller on both sides. Trapping rain water fills each column up to the shorter of the tallest bar on its left and the tallest on its right. Sum of subarray minimums multiplies each value by the number of subarrays it is the minimum of, and that count is a product of two gaps between its previous-smaller and its next-smaller position. Daily temperatures and stock span are next-greater where you record the distance <code>i - j</code> rather than the value.</p>
+<p>In a real statement the signal is <code>n &le; 10&#8309;</code> sitting next to a phrase about the nearest larger or smaller neighbour, an area under a row of bars, or water held between them. Be careful, though: there is a second and completely unrelated family that also uses a stack. Matching brackets, decoding a nested string like <code>3[ab]</code>, and evaluating an expression with parentheses all push something and pop it later, but what they hold is unmatched openers or pending operators, and no comparison between values ever happens. Deciding which of the two families a question belongs to before you write a line is the classification an interviewer is quietly watching for.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A monotonic stack stores indices whose answer is not yet known, in an order that lets you discard dominated candidates forever. Each index is pushed once and popped once, so the nested while is O(n) amortised, not quadratic.</p>
+    <p>A monotonic stack holds exactly the indices whose answer is still unknown, kept in sorted order so that one comparison against the newest arrival is enough to decide whether the top is finished. Every index enters once and leaves once, so the loop nested inside a loop still costs <code>&Theta;(n)</code> in total; the word for that accounting is <em>amortised</em> &mdash; a single step can be expensive, but the average over the whole run is constant.</p>
   </div>
 </aside>
 
@@ -119,18 +121,36 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a next-greater / histogram / rain flavour is the linear-stack signature. Areas and contributions need <code>long</code>: heights up to <code>10&#8313;</code> times widths up to <code>10&#8309;</code> overflow int.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> next to a next-greater, histogram or rain-water flavour is the linear-stack signature: the nested scan would be about <code>5&times;10&#8313;</code> comparisons and this pass is about <code>2&times;10&#8309;</code>. Watch the arithmetic as well as the loop &mdash; areas and contributions must be accumulated in <code>long</code>, because a height of <code>10&#8313;</code> times a width of <code>10&#8309;</code> is far past the two-billion ceiling of a Java <code>int</code> and wraps silently to a negative number.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Keep a stack of indices whose next-greater (or next-smaller) is unknown. Values are monotone: decreasing when hunting a strictly greater neighbour, increasing when hunting smaller. When <code>a[i]</code> breaks the monotone property, every popped index has just found its answer, and is dominated forever. Store <em>indices</em>, not values: widths and distances need the position. Histogram sentinel: loop to <code>i = n</code> with virtual height 0 so every remaining bar pops.</p>
-<p>Contribution (sum of subarray mins): subarrays where i is the unique min start in (prevLess, i] and end in [i, nextLess). Make one side strict so a plateau is not counted twice. Use <code>ArrayDeque</code>, never <code>java.util.Stack</code>.</p>
+<p>The container is an <code>ArrayDeque&lt;Integer&gt;</code> called <code>st</code>, and it holds <em>indices</em>, never values. At any instant during the scan, <code>st</code> contains exactly those positions to the left of the current index <code>i</code> whose next-greater element has not been found yet, oldest at the bottom and newest at the top, and the values <code>a[st]</code> read from bottom to top never increase. Storing indices rather than values matters because widths, distances and the identity of equal values all need the position; the value is one lookup away as <code>a[st.peekLast()]</code> whenever you want it.</p>
+<p>The scan is a single loop over <code>i</code> from 0 to <code>n-1</code>. Before pushing <code>i</code>, look at the top index <code>j = st.peekLast()</code>. If <code>a[j] &lt; a[i]</code> then <code>i</code> is the <em>first</em> position right of <code>j</code> holding a larger value &mdash; first because everything strictly between them was itself pushed and then popped by a value no larger than <code>a[i]</code>, so nothing in the gap could have beaten <code>a[j]</code> earlier. Write <code>ans[j] = a[i]</code>, pop <code>j</code>, and test the new top, which is exactly why the pop lives in a <code>while</code> and not an <code>if</code>: one arrival can settle many waiting indices at once. When the top no longer loses to <code>a[i]</code> the descending order is restored, so push <code>i</code> and move on. Whatever is still on the stack when the loop ends never met a larger value, and gets <code>-1</code>.</p>
+<p>Two knobs adapt this skeleton to every problem in the family. The comparison direction picks the question: values decreasing up the stack finds the next <em>greater</em> element, and flipping the comparison so values increase finds the next <em>smaller</em> one. The second knob is the sentinel, a fake element appended purely to force the loop to finish its work. For the histogram you run <code>i</code> from 0 all the way to <code>n</code> and pretend the bar at index <code>n</code> has height 0; being shorter than everything real, it drains the stack, so bars that never met a shorter neighbour still get measured. When a bar of height <code>h[j]</code> pops at position <code>i</code>, the index left underneath it on the stack, call it <code>left</code>, is by the invariant the nearest shorter bar on that side, so the rectangle of that height spans <code>i - left - 1</code> columns.</p>
+<p>Trace <code>[2, 1, 2, 4, 3]</code> by hand. Index 0 lands on an empty stack, so <code>st = [0]</code> standing for the value 2. At <code>i = 1</code> the value 1 does not beat 2, nothing pops, and <code>st = [0, 1]</code> reads 2 then 1 going up &mdash; decreasing, as promised. At <code>i = 2</code> the value 2 beats the top value 1, so index 1 pops with <code>ans[1] = 2</code>; the new top is index 0 whose value 2 is not <em>strictly</em> less than 2, so the popping halts there and <code>st = [0, 2]</code>. At <code>i = 3</code> the value 4 knocks out index 2 and then index 0, writing <code>ans[2] = 4</code> and <code>ans[0] = 4</code> and leaving the stack empty before 3 joins it. At <code>i = 4</code> the value 3 loses to 4 and simply sits down. Indices 3 and 4 are still waiting when the array runs out, so they take <code>-1</code>, and the finished answer is <code>[4, 2, 4, -1, -1]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The stack holds unresolved indices in monotone order of <code>a[&middot;]</code>. For a decreasing stack used for next-greater:</p><span class="eq">a[s0] &ge; a[s1] &ge; &hellip; , and every popped j has a[j] &lt; a[i] with no greater value in (j, i)</span><p>Interview sentence: <em>"Each index is pushed once and popped once, so the nested while is O(n)."</em></p>
+    <p>The stack holds the still-unresolved indices in monotone order of <code>a[&middot;]</code>. For a decreasing stack used for next-greater, at the top of every iteration:</p><span class="eq">s0 &lt; s1 &lt; &hellip; &lt; sk &lt; i, and a[s0] &ge; a[s1] &ge; &hellip; &ge; a[sk]</span><p>In plain words, everything currently on the stack is still waiting for a bigger number, the entries nearer the top are the more recent and the smaller ones, and any index that has already left the stack has been handed its final answer and will never be touched again. That is a claim you can check line by line while reading the code: if a pop ever happens without writing an answer, or a push ever leaves a smaller value below a larger one, one half of the statement is broken and the output will be wrong.</p><p>Interview sentence: <em>"Each index is pushed once and popped once, so the nested while is O(n)."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the inner while is not a second loop</span>
+    <p>Count pops instead of counting iterations. The outer loop runs <code>n</code> times and pushes one index each time, so the stack receives exactly <code>n</code> elements over the whole run and can therefore give back at most <code>n</code>. Every single turn of the inner <code>while</code> removes one of them permanently, so all the inner turns added together number at most <code>n</code> &mdash; no matter how they are distributed. One unlucky arrival may pop 99 999 predecessors, but then the other 99 999 arrivals pop nothing at all. This is the standard <em>amortised</em> argument: you pay for the pop when you push, not when you pop.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Strict or non-strict changes the answer, not just the style</span>
+    <p>On a plateau of equal values, <code>a[j] &lt; a[i]</code> leaves the earlier equal index on the stack while <code>a[j] &le; a[i]</code> evicts it. Next-greater-element specs say <em>strictly</em> greater, so use <code>&lt;</code>. Contribution problems such as sum of subarray minimums need one side strict and the other not, so that a run of equal minima is counted by exactly one of its occurrences rather than by all of them.</p>
   </div>
 </aside>
 
@@ -163,7 +183,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Start. Stack empty. Answers unknown.",
+          "note": "Before the scan starts the stack is empty and no index has an answer yet, so every cell is greyed out as unresolved.",
           "dim": [
             0,
             1,
@@ -179,7 +199,7 @@
           }
         },
         {
-          "note": "i=0, a[0]=2. Nothing to pop. Push 0.",
+          "note": "i=0, value 2. The stack is empty so there is nobody to settle; index 0 goes on and starts waiting for something bigger.",
           "active": [
             0
           ],
@@ -197,7 +217,7 @@
           }
         },
         {
-          "note": "i=1, a[1]=1. 1 is not greater than 2. Push 1. Stack [0,1].",
+          "note": "i=1, value 1. It does not beat the top value 2, so index 0 keeps waiting and index 1 stacks on top of it, values still descending.",
           "active": [
             1
           ],
@@ -217,7 +237,7 @@
           }
         },
         {
-          "note": "i=2, a[2]=2. 2>1, pop 1, write nge[1]=2. Strict: do not pop 0. Push 2.",
+          "note": "i=2, value 2. It beats the top value 1, so index 1 pops with answer 2. The next top holds 2 as well, and strictly-greater means a tie does not pop, so index 0 stays.",
           "active": [
             2
           ],
@@ -239,7 +259,7 @@
           }
         },
         {
-          "note": "i=3, a[3]=4. Pop 2 then 0; write nge[2]=4 and nge[0]=4. Push 3.",
+          "note": "i=3, value 4. One arrival settles two waiting indices: 2 pops, then 0 pops, both answered with 4. The stack empties and index 3 is pushed onto it.",
           "active": [
             3
           ],
@@ -261,7 +281,7 @@
           }
         },
         {
-          "note": "i=4, a[4]=3. 3<4, push 4. End: leftover get -1. Answer [4,2,4,-1,-1].",
+          "note": "i=4, value 3. It loses to the 4 below it, so nothing pops and it simply joins the stack as another unanswered index.",
           "active": [
             4
           ],
@@ -278,7 +298,7 @@
           }
         },
         {
-          "note": "Histogram on [2,1,5,6,2,3]: bar of height 5 has prev-smaller 1 and next-smaller 4, area 10.",
+          "note": "The same skeleton on the histogram [2,1,5,6,2,3]: the bar of height 5 pops when the shorter bar 2 arrives, its nearest shorter neighbours sit at indices 1 and 4, leaving a width of two columns and an area of 10.",
           "dim": [
             0,
             1,
@@ -323,18 +343,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Classify.</strong> Nearest greater/smaller (monotonic) vs nested structure.</li>
-  <li><strong>Comparison:</strong> decreasing stack for next-greater; increasing for next-smaller. Strictness is spec.</li>
-  <li><strong>Store indices</strong> in <code>ArrayDeque&lt;Integer&gt;</code>: addLast / pollLast / peekLast.</li>
-  <li><strong>Scan once.</strong> While the top is dominated by a[i], pop and write. Then push i.</li>
-  <li><strong>Sentinel.</strong> Histogram: i to n with height 0. NGE leftovers get -1.</li>
-  <li><strong>Widths:</strong> nextSmall - prevSmall - 1. Contributions in <code>long</code>.</li>
-  <li><strong>Amortised O(n):</strong> each index pushed once and popped once.</li>
+  <li><strong>Classify the family first</strong> so you do not write the wrong loop. A nearest-greater or nearest-smaller question wants a monotonic stack of indices; a brackets or operator question wants unmatched openers and never compares values.</li>
+  <li><strong>Pick the comparison from the question</strong>, not from habit. Values decreasing up the stack find the next greater element; values increasing find the next smaller. Whether equals pop is written in the spec, not guessed.</li>
+  <li><strong>Store indices, never values</strong>, in an <code>ArrayDeque</code> used only from the back. Widths, distances and the identity of equal values all need the position; the value is one lookup away as <code>a[st.peekLast()]</code>.</li>
+  <li><strong>Scan once from left to right.</strong> While the top is strictly smaller than <code>a[i]</code>, pop it and write the answer, because <code>i</code> is the first later index that beats it. Then push <code>i</code> so it can wait for its own neighbour.</li>
+  <li><strong>Force the leftovers to finish</strong> with a sentinel when every bar must be measured. Histogram loops <code>i</code> to <code>n</code> with a fake height 0; next-greater leftovers simply stay <code>-1</code> because nothing to their right was larger.</li>
+  <li><strong>Turn neighbours into a width or a contribution</strong> at the moment of the pop. The rectangle of height <code>h[j]</code> spans <code>nextSmall - prevSmall - 1</code> columns, and that product must be computed in <code>long</code> before any modulo.</li>
+  <li><strong>Defend the nested <code>while</code> with amortisation</strong> &mdash; a single step can be expensive, but the average over the whole run is constant. Each index is pushed once and popped at most once, so the inner loop cannot be quadratic no matter how the pops cluster.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Walk <code>[2, 1, 2, 4, 3]</code> left to right. At every step the stack holds only unresolved indices, each pop writes that index's next-greater, and leftovers at the end stay <code>-1</code>.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -342,13 +362,13 @@ flowchart TD
       <tr><th>i</th><th>a[i]</th><th>stack</th><th>wrote</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>[]</td><td>—</td><td>Start. Stack empty. Answers unknown.</td></tr>
-      <tr><td>0</td><td>2</td><td>[0]</td><td>—</td><td>i=0, a[0]=2. Nothing to pop. Push 0.</td></tr>
-      <tr><td>1</td><td>1</td><td>[0, 1]</td><td>—</td><td>i=1, a[1]=1. 1 is not greater than 2. Push 1. Stack [0,1].</td></tr>
-      <tr><td>2</td><td>2</td><td>[0, 2]</td><td>nge[1]=2</td><td>i=2, a[2]=2. 2>1, pop 1, write nge[1]=2. Strict: do not pop 0. Push 2.</td></tr>
-      <tr class="trace-table__row--change"><td>3</td><td>4</td><td>[3]</td><td>nge[0]=nge[2]=4</td><td>i=3, a[3]=4. Pop 2 then 0; write nge[2]=4 and nge[0]=4. Push 3.</td></tr>
-      <tr><td>4</td><td>3</td><td>[3, 4]</td><td>[4,2,4,-1,-1]</td><td>i=4, a[4]=3. 3<4, push 4. End: leftover get -1. Answer [4,2,4,-1,-1].</td></tr>
-      <tr><td>hist</td><td>5</td><td>—</td><td>area 10</td><td>Histogram on [2,1,5,6,2,3]: bar of height 5 has prev-smaller 1 and next-smaller 4, area 10.</td></tr>
+      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>[]</td><td>—</td><td>Before the scan starts the stack is empty and no index has an answer yet, so every cell is greyed out as unresolved.</td></tr>
+      <tr><td>0</td><td>2</td><td>[0]</td><td>—</td><td>i=0, value 2. The stack is empty so there is nobody to settle; index 0 goes on and starts waiting for something bigger.</td></tr>
+      <tr><td>1</td><td>1</td><td>[0, 1]</td><td>—</td><td>i=1, value 1. It does not beat the top value 2, so index 0 keeps waiting and index 1 stacks on top of it, values still descending.</td></tr>
+      <tr><td>2</td><td>2</td><td>[0, 2]</td><td>nge[1]=2</td><td>i=2, value 2. It beats the top value 1, so index 1 pops with answer 2. The next top holds 2 as well, and strictly-greater means a tie does not pop, so index 0 stays.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>4</td><td>[3]</td><td>nge[0]=nge[2]=4</td><td>i=3, value 4. One arrival settles two waiting indices: 2 pops, then 0 pops, both answered with 4. The stack empties and index 3 is pushed onto it.</td></tr>
+      <tr><td>4</td><td>3</td><td>[3, 4]</td><td>[4,2,4,-1,-1]</td><td>i=4, value 3. It loses to the 4 below it, so nothing pops and it simply joins the stack as another unanswered index.</td></tr>
+      <tr><td>hist</td><td>5</td><td>—</td><td>area 10</td><td>The same skeleton on the histogram [2,1,5,6,2,3]: the bar of height 5 pops when the shorter bar 2 arrives, its nearest shorter neighbours sit at indices 1 and 4, leaving a width of two columns and an area of 10.</td></tr>
     </tbody>
   </table>
 </div>
@@ -525,7 +545,7 @@ flowchart TD
 
   <div class="complexity__derivation">
     <p>Every index is pushed at most once and popped at most once. If P is the total pops:</p><span class="eq">T(n) = n pushes + P pops, P ≤ n, so T(n) = Θ(n)</span>
-    <p>The nested while is therefore not a hidden quadratic. Histogram and rain are the same pass with more arithmetic per pop. Sum of subarray mins is two passes plus a linear accumulation, still Θ(n).</p>
+    <p>The nested <code>while</code> is therefore not a hidden quadratic: one unlucky arrival may pop almost every predecessor, but those popped indices never return, so the other arrivals do almost no inner work. Histogram and rain are the same pass with a few extra arithmetic operations per pop. Sum of subarray mins is two linear passes plus a linear accumulation, still <code>&Theta;(n)</code>. At <code>n = 10&#8309;</code> that is about <code>2&times;10&#8309;</code> stack operations, not the <code>5&times;10&#8313;</code> comparisons of the nested scan.</p>
   </div>
 
   <table class="complexity__compare">
@@ -548,28 +568,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using java.util.Stack</span>
-    <div class="pitfalls__bug">Synchronised Vector subclass. Slower, allows null, signals outdated Java.</div>
-    <div class="pitfalls__fix">ArrayDeque with addLast / pollLast / peekLast.</div>
+    <div class="pitfalls__bug">java.util.Stack is a synchronised Vector subclass, so every push pays a lock and null is allowed. It looks like the obvious name for a stack, which is why people reach for it.</div>
+    <div class="pitfalls__fix">Use ArrayDeque from the back only: addLast, pollLast, peekLast. That is the current Java stack.</div>
   </li>
   <li>
     <span class="pitfalls__title">Storing values instead of indices</span>
-    <div class="pitfalls__bug">Cannot compute widths, distances, or equal-value identity.</div>
-    <div class="pitfalls__fix">Always store indices. Read values through a[st.peekLast()].</div>
+    <div class="pitfalls__bug">Storing values instead of indices looks simpler until you need a width, a distance, or to tell two equal values apart. The answer then cannot be recovered from the stack.</div>
+    <div class="pitfalls__fix">Always push indices, never the raw values. Read the value through a[st.peekLast()] whenever a comparison needs it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Wrong strictness on equals</span>
-    <div class="pitfalls__bug">Plateau double-counted or undercounted in contribution problems.</div>
-    <div class="pitfalls__fix">NGE is strict. Contribution: one side strict, the other not.</div>
+    <div class="pitfalls__bug">Using the same comparison on both sides of a plateau double-counts or undercounts equal minima, and the sample of distinct values still passes, so the bug hides.</div>
+    <div class="pitfalls__fix">Next-greater is strict. Contribution problems make one side strict and the other not, so each subarray has exactly one owner.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting the histogram sentinel</span>
-    <div class="pitfalls__bug">Suffix minima never pop; strictly increasing samples still look OK.</div>
-    <div class="pitfalls__fix">Loop i to n with virtual height 0 at i==n.</div>
+    <div class="pitfalls__bug">Without a height-0 sentinel, suffix-minimum bars never pop. A strictly increasing histogram still looks correct because every earlier bar pops later anyway.</div>
+    <div class="pitfalls__fix">Loop i from 0 to n and treat index n as height 0 so every real bar is forced to pop and be measured.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow on area</span>
-    <div class="pitfalls__bug">height * width wraps before you store it.</div>
-    <div class="pitfalls__fix">(long) height * (i - left - 1). Reduce mod only after the product.</div>
+    <div class="pitfalls__bug">height * width is computed in int first, wraps past two billion, and is then stored in a long. The overflow has already happened and the area comes back negative.</div>
+    <div class="pitfalls__fix">Cast first: (long) height * (i - left - 1). Reduce modulo only after the full product is in a long.</div>
   </li>
 </ul>
 
@@ -611,28 +631,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is the nested while O(n) not O(n²)?</summary>
     <div class="followup__body">
-      <p>Amortisation. An index that has been popped is never pushed again, so the inner loop runs at most n times in total. State it as "each index is pushed once and popped once".</p>
+      <p>Count pops, not iterations of the inner loop. Each index is pushed exactly once and, once popped, is never pushed again, so the <code>while</code> can fire at most <code>n</code> times across the whole scan. One arrival may drain almost the entire stack; the remaining arrivals then pop nothing. That accounting is called <em>amortised</em> constant time per index.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Histogram vs rain: same stack, different payload?</summary>
     <div class="followup__body">
-      <p>Histogram: height[mid]*(right-left-1), take max. Rain: (min(h[left],h[right])-h[mid])*width, add. Two-pointer rain is simpler if they only want rain; the stack generalises to histogram.</p>
+      <p>Same nearest-smaller neighbours, different arithmetic at the pop. Histogram multiplies <code>height[mid] * (right - left - 1)</code> and keeps the max. Rain fills the column up to <code>min(h[left], h[right]) - h[mid]</code> and adds. Two-pointer rain is simpler if they only want rain; the stack is what generalises to histogram and to contribution problems.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you avoid double-counting equal minima?</summary>
     <div class="followup__body">
-      <p>Previous strictly-less and next less-or-equal (or the opposite). Ownership is a partition of subarrays, not a cover.</p>
+      <p>Give every subarray exactly one owner. Previous strictly-less plus next less-or-equal (or the opposite pair) partitions the subarrays instead of covering them twice. Using the same comparison on both sides overcounts a plateau of equal minima, and a sample of distinct values will not catch it.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Circular NGE without overwriting?</summary>
     <div class="followup__body">
-      <p>Only write if ans[j]==-1. Do not push aliases i≥n. A strictly decreasing array is the worst case: every answer wraps except a[0] which stays -1.</p>
+      <p>Scan the array twice so the wrap-around is visible, but only write <code>ans[j]</code> when it is still <code>-1</code>, and never push an alias index <code>i &ge; n</code>. A strictly decreasing array is the worst case: every answer wraps except the global maximum, which stays <code>-1</code> because nothing in the circle is larger than it.</p>
     </div>
   </details>
 </div>

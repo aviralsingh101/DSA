@@ -22,7 +22,7 @@
   <p class="hero__tagline">One DFS computes every subtree answer; a second DFS reroots, combining "down" with "the rest of the tree" so every vertex can be treated as the root in O(n).</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="binary-tree-problem-patterns.html">Binary Tree Problem Patterns</a>,
       <a href="../07-graphs-core/dfs-and-components.html">DFS & Components</a>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Interview diameter is one global. CP asks "for every vertex, the longest path starting there", or "sum of distances to all others", or "whether the tree stays balanced if we root here". Computing n independent DFSes is O(n^2). Tree DP is one down-DFS of subtree summaries, then optionally a reroot-DFS that pushes the parent's "outside" answer into each child in O(1) or O(deg) extra.</p>
-<p>The algebraic requirement is that you can merge a child's contribution and an "outside" contribution. Sum of distances: down[u] = sum (down[v]+sz[v]), then reroot ans[v] = ans[u] + n - 2*sz[v]. Longest-out-path needs the top-two child depths because the excluded child might have been the best.</p>
-<p>CF 219D choosing capital, CF 161D distance in tree, and "sum of distances" (LC 834) are the cluster. If the merge is not invertible, rerooting needs the top-two trick or a second pass that recomputes from siblings.</p>
+<p>You are given a tree of 200000 vertices and asked, for every vertex, the sum of its distances to all the others. The obvious method roots the tree at vertex 0 and walks it, then roots it at vertex 1 and walks it again, and so on. Each walk costs a full pass, so two hundred thousand walks are about <code>4&times;10&#8310;</code> steps and the judge will not wait. The interview version of diameter hides the same trap: one global number needs one walk, but "the longest path starting at every vertex" is n separate questions and will not survive a naive restart.</p>
+<p>Tree DP answers the rooted version first. A <em>down</em> DFS, starting at an arbitrary root, writes a summary of each subtree: its size, the sum of distances inside it, or the longest downward spine. That already answers the question at the chosen root. <em>Rerooting</em> is the second walk, and it is the whole point of this page: when the root slides from <code>u</code> to a child <code>v</code>, you do not recompute those subtree summaries. You recompute only the <em>outside</em> &mdash; everything that is not in <code>v</code>'s subtree &mdash; and combine it with the down-summary you already have. For sums that combination is a closed formula; for maxima you keep the top two child contributions so the excluded child is not reused as its own outside.</p>
+<p>In a statement the tell is "for every vertex" sitting next to <code>n &le; 2&times;10&#8309;</code> on an undirected tree of <code>n - 1</code> edges. LC 834 (sum of distances), CF 219D (choose a capital), and "height if we root here" are the cluster. If the merge has no inverse, rerooting still works, but you must rebuild the outside from siblings instead of subtracting, which is why the top-two trick exists.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Subtree DP answers questions about the rooted tree. Rerooting reuses those summaries so every vertex's "if I were root" answer is O(1) extra after O(n) preprocess.</p>
+    <p>The down DFS answers the question as if one chosen vertex were the root. Rerooting reuses those subtree summaries and only recomputes the outside contribution when the root slides to a child, so every vertex's answer is constant extra work after one linear preprocess.</p>
   </div>
 </aside>
 
@@ -111,18 +111,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 2e5. Recursion may overflow; iterative DFS or -Xss. Answers are long (n * n * value). Tree is undirected n-1 edges; root at 0 arbitrarily for the down pass.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 2&times;10&#8309;</code> on an undirected tree is the signature. A recursive pair of walks can overflow on a chain, so keep an iterative DFS or raise the stack. Answers are <code>long</code>: a sum of distances can reach about <code>n&times;(n-1)</code>, which wraps an <code>int</code>. Root the first pass at 0 (or 1) arbitrarily; the second pass will give every other vertex the same quality of answer.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Down: dfs(u, p) computes sz[u], down[u] from children only. Example sum of distances: sz[u]=1+sum sz[v], down[u]=sum (down[v]+sz[v]). Then ans[0]=down[0].</p>
-<p>Reroot: dfs2(u, p). For each child v, ans[v] = ans[u] - sz[v] + (n - sz[v]) = ans[u] + n - 2*sz[v] for sum-of-distances. Recurse. For max-height, pass the best outside depth, using the top two child depths so the excluded child's outside is the second-best.</p>
+<p>The first walk is ordinary subtree DP. <code>dfs1(u, p)</code> skips the parent, then for each child <code>v</code> folds <code>v</code>'s summary into <code>u</code>. For sum of distances you store two arrays: <code>sz[u]</code> is the number of vertices in <code>u</code>'s subtree, starting at 1 and adding each <code>sz[v]</code>, and <code>down[u]</code> is the sum of distances from <code>u</code> to those vertices, built as <code>down[u] += down[v] + sz[v]</code> because every node in <code>v</code>'s subtree is one edge farther from <code>u</code> than from <code>v</code>. After this pass, <code>ans[root] = down[root]</code> is the real answer at the chosen root, and every <code>down[u]</code> and <code>sz[u]</code> is finished. Those two arrays are not recomputed later.</p>
+<p>When the root moves from <code>u</code> to a child <code>v</code>, the vertices that change distance are easy to name. Everyone in <code>v</code>'s subtree, <code>sz[v]</code> of them, is now one closer. Everyone else, <code>n - sz[v]</code> vertices, is now one farther. The new answer is therefore the old answer plus <code>(n - sz[v]) - sz[v]</code>, which is <code>ans[u] + n - 2&times;sz[v]</code>. That is the only number the second DFS writes: the outside contribution at <code>v</code>. It does not rebuild <code>down[]</code>, and it does not recount subtree sizes. For a maximum instead of a sum there is no subtraction, so at <code>u</code> you keep the best and second-best child depths and give <code>v</code> whichever of those two is not <code>v</code> itself, plus the outside already known at <code>u</code>.</p>
+<p>Take the five-node tree with edges 0-1, 1-2, 1-3, 0-4, rooted at 0. Leaves 2, 3 and 4 have <code>sz = 1</code> and <code>down = 0</code>. Node 1 owns 2 and 3, so <code>sz[1] = 3</code> and <code>down[1] = 2</code>. The root then has <code>sz[0] = 5</code> and <code>down[0] = (2+3) + (0+1) = 6</code>, which is <code>ans[0]</code>. Sliding the root to 1 changes three distances by -1 and two (nodes 0 and 4) by +1, so <code>ans[1] = 6 + 5 - 2&times;3 = 5</code>. Sliding from 0 to 4 changes one distance by -1 and four by +1, so <code>ans[4] = 6 + 5 - 2&times;1 = 9</code>. Two walks, five answers, no fifth DFS.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After the down pass, down[u] is the answer on the subtree of u. After reroot, ans[u] is the answer on the whole tree as if rooted at u.</p><span class="eq">ans[v] = combine(ans[u] without v's subtree, down[v])</span>
+    <p>After the down pass, <code>down[u]</code> is the answer on the subtree of <code>u</code> in the first rooting. After reroot, <code>ans[u]</code> is the answer on the whole tree as if rooted at <code>u</code>:</p><span class="eq">ans[v] = combine(ans[u] without v's subtree, down[v])</span><p>In plain words, moving the root to a child does not ask you to walk the tree again; it asks you to adjust the parent's already-known answer by the nodes that got closer and the nodes that got farther, then keep going.</p><p>Interview sentence: <em>"I precompute every subtree, then I only recompute the outside when I slide the root."</em></p>
   </div>
 </aside>
 
@@ -162,7 +163,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Tree: 0-1, 1-2, 1-3, 0-4. Root 0. Leaves sz=1, down=0.",
+          "note": "Root the five-node tree at 0. Each leaf has subtree size 1 and a down-sum of 0, because it can see nobody below it.",
           "active": [
             2,
             3,
@@ -176,7 +177,7 @@
           }
         },
         {
-          "note": "Node 1: children 2,3. sz=3, down=(0+1)+(0+1)=2.",
+          "note": "Node 1 owns leaves 2 and 3, so its size is 3 and its down-sum is 2: each of those two nodes is one edge away.",
           "active": [
             1
           ],
@@ -188,7 +189,7 @@
           }
         },
         {
-          "note": "Node 0: children 1,4. sz=5, down=(2+3)+(0+1)=6. ans[0]=6.",
+          "note": "The root folds child 1 (down 2 plus size 3) and leaf 4 (0 plus 1) into a down-sum of 6, which is already the answer at 0.",
           "active": [
             0
           ],
@@ -200,7 +201,7 @@
           }
         },
         {
-          "note": "Reroot to 1: ans[1]=6 + 5 - 2*3 = 5. Intuition: 3 nodes got 1 closer, 2 nodes (0 and 4) got 1 farther.",
+          "note": "Slide the root to 1: three nodes get closer and two get farther, so the answer becomes 6 + 5 - 2 times 3, which is 5.",
           "active": [
             1
           ],
@@ -212,7 +213,7 @@
           }
         },
         {
-          "note": "Reroot to 4: ans[4]=6+5-2*1=9.",
+          "note": "Slide the root from 0 to 4 instead: one node gets closer and four get farther, so the answer becomes 6 + 5 - 2, which is 9.",
           "active": [
             4
           ],
@@ -224,7 +225,7 @@
           }
         },
         {
-          "note": "All five answers from two DFS passes, not five.",
+          "note": "Every vertex now has its own answer from those two walks. The down-sums were never rebuilt after the first pass.",
           "best": [
             0,
             1,
@@ -262,17 +263,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Build undirected lists</strong>, n-1 edges, root at 0.</li>
-  <li><strong>Down DFS:</strong> skip parent; compute sz and down from children.</li>
-  <li><strong>ans[root] = down[root]</strong> (or a custom combine).</li>
-  <li><strong>Reroot DFS:</strong> for each child, write ans[child] from ans[u] and sz[child] (or top-two).</li>
-  <li><strong>Top-two</strong> when the merge is max, not a group with inverse.</li>
-  <li><strong>long</strong> for sums; iterative stack if n=2e5.</li>
+  <li><strong>Build the undirected adjacency lists.</strong> A tree of <code>n</code> vertices has <code>n - 1</code> edges stored both ways, so every loop must skip the parent; root the first pass at 0 so the down summaries have a direction.</li>
+  <li><strong>Down DFS writes subtree summaries only.</strong> From the children compute <code>sz[u]</code> and <code>down[u]</code> (or the top-two depths), because those numbers are the ones the second pass will reuse rather than recompute.</li>
+  <li><strong>Seed the answer at the chosen root.</strong> Set <code>ans[root] = down[root]</code>, which is already the true whole-tree answer there and is the parent value the reroot step will adjust.</li>
+  <li><strong>Reroot by adjusting the outside.</strong> For each child, write <code>ans[v]</code> from <code>ans[u]</code> and <code>sz[v]</code> (or from the top-two depths), because sliding the root changes only who got closer and who got farther.</li>
+  <li><strong>Keep a top-two when the merge is a maximum.</strong> There is no inverse for <code>max</code>, so the excluded child's outside must come from the second-best sibling plus the parent's own outside, not from subtracting.</li>
+  <li><strong>Use long and prefer an iterative stack at <code>n = 2&times;10&#8309;</code>.</strong> A sum of distances overflows <code>int</code>, and a chain-shaped tree overflows the JVM stack long before the arithmetic does.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Sum of distances on the five-node tree 0-1-2, 1-3, 0-4: first the down-sums from root 0, then the two reroots that adjust who got closer.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -280,12 +281,12 @@ graph TD
       <tr><th>u</th><th>sz</th><th>down</th><th>ans</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>leaves</td><td>1</td><td>0</td><td>—</td><td>Tree: 0-1, 1-2, 1-3, 0-4. Root 0. Leaves sz=1, down=0.</td></tr>
-      <tr><td>1</td><td>3</td><td>2</td><td>—</td><td>Node 1: children 2,3. sz=3, down=(0+1)+(0+1)=2.</td></tr>
-      <tr><td>0</td><td>5</td><td>6</td><td>6</td><td>Node 0: children 1,4. sz=5, down=(2+3)+(0+1)=6. ans[0]=6.</td></tr>
-      <tr><td>1</td><td>3</td><td>2</td><td>5</td><td>Reroot to 1: ans[1]=6 + 5 - 2*3 = 5. Intuition: 3 nodes got 1 closer, 2 nodes (0 and 4) got 1 farther.</td></tr>
-      <tr><td>4</td><td>1</td><td>0</td><td>9</td><td>Reroot to 4: ans[4]=6+5-2*1=9.</td></tr>
-      <tr class="trace-table__row--change"><td>all</td><td>—</td><td>—</td><td>done</td><td>All five answers from two DFS passes, not five.</td></tr>
+      <tr class="trace-table__row--change"><td>leaves</td><td>1</td><td>0</td><td>—</td><td>Root the five-node tree at 0. Each leaf has subtree size 1 and a down-sum of 0, because it can see nobody below it.</td></tr>
+      <tr><td>1</td><td>3</td><td>2</td><td>—</td><td>Node 1 owns leaves 2 and 3, so its size is 3 and its down-sum is 2: each of those two nodes is one edge away.</td></tr>
+      <tr><td>0</td><td>5</td><td>6</td><td>6</td><td>The root folds child 1 (down 2 plus size 3) and leaf 4 (0 plus 1) into a down-sum of 6, which is already the answer at 0.</td></tr>
+      <tr><td>1</td><td>3</td><td>2</td><td>5</td><td>Slide the root to 1: three nodes get closer and two get farther, so the answer becomes 6 + 5 - 2 times 3, which is 5.</td></tr>
+      <tr><td>4</td><td>1</td><td>0</td><td>9</td><td>Slide the root from 0 to 4 instead: one node gets closer and four get farther, so the answer becomes 6 + 5 - 2, which is 9.</td></tr>
+      <tr class="trace-table__row--change"><td>all</td><td>—</td><td>—</td><td>done</td><td>Every vertex now has its own answer from those two walks. The down-sums were never rebuilt after the first pass.</td></tr>
     </tbody>
   </table>
 </div>
@@ -414,9 +415,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each edge is traversed a constant number of times across two DFS passes. Combining a child is O(1) for sums, O(deg) total per node for top-two (still O(n) because sum of deg = 2n-2).</p>
-    <p><span class="eq">T = &Theta;(n)</span> versus naive &Theta;(n^2)</p>
-    <p>If the merge needs a full multiset of child answers, you pay extra (small-to-large, or a heap).</p>
+    <p>Each of the <code>n - 1</code> edges is walked a constant number of times across the two DFS passes. Combining a child is <code>O(1)</code> for a sum, and collecting the top two depths at a node is <code>O(deg(u))</code>, which still totals <code>O(n)</code> because the degrees of a tree sum to <code>2n - 2</code>. The naive "root at each vertex and DFS" is <code>&Theta;(n&#178;)</code>.</p>
+    <p><span class="eq">T = &Theta;(n)</span> versus naive <span class="eq">&Theta;(n&#178;)</span></p>
+    <p>At <code>n = 2&times;10&#8309;</code> the two linear walks are a few million edge hops, comfortable; the naive version is about <code>4&times;10&#8310;</code> hops and will time out. If the merge really needs a full multiset of child answers you pay extra (small-to-large, or a heap), but the textbook reroot of a sum or a max does not.</p>
   </div>
 
   <table class="complexity__compare">
@@ -438,28 +439,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Forgetting to skip the parent</span>
-    <div class="pitfalls__bug">Infinite recursion on an undirected edge stored both ways.</div>
-    <div class="pitfalls__fix">if (v == p) continue; every loop.</div>
+    <div class="pitfalls__bug">An undirected edge is stored both ways, so a loop that treats every neighbour as a child looks like the binary-tree recursion and then recurses forever along the same edge.</div>
+    <div class="pitfalls__fix">Write <code>if (v == p) continue;</code> in every neighbour loop, both passes. A two-node tree is enough to expose the infinite walk.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow of n*dist</span>
-    <div class="pitfalls__bug">ans[u] up to n*(n-1) / something times values. int wraps.</div>
-    <div class="pitfalls__fix">long[] ans, down.</div>
+    <div class="pitfalls__bug">A sum of distances can reach about <code>n&times;(n-1)</code>, so an <code>int</code> array wraps to a small wrong number that still looks like a plausible answer on the sample.</div>
+    <div class="pitfalls__fix">Store <code>down</code> and <code>ans</code> as <code>long[]</code>. A star with a 200000-leaf count is the overflow test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Reroot max without top-two</span>
-    <div class="pitfalls__bug">You subtract the child's depth from a max that was that child; outside becomes 0 wrongly.</div>
-    <div class="pitfalls__fix">Store best and second-best child depths at u.</div>
+    <div class="pitfalls__bug">Subtracting the child's own depth from a parent max that came from that same child looks like the sum-formula's inverse, then the child's outside becomes 0 even though a sibling spine is still there.</div>
+    <div class="pitfalls__fix">Store the best and second-best child depths at <code>u</code>, and give <code>v</code> whichever of those two is not itself. A node with two long arms is the check.</div>
   </li>
   <li>
     <span class="pitfalls__title">sz[v] after rerooting used as if still rooted at 0</span>
-    <div class="pitfalls__bug">The formula ans[u]+n-2*sz[v] needs sz[v] = size of v's down-subtree in the first rooting, which stays valid for the child v of u on the down tree.</div>
-    <div class="pitfalls__fix">Do not recompute sz during dfs2 unless you know why.</div>
+    <div class="pitfalls__bug">The formula <code>ans[u] + n - 2&times;sz[v]</code> needs <code>sz[v]</code> to stay the down-subtree size from the first rooting; recomputing sizes during the second pass looks tidy and then uses the wrong closer-count.</div>
+    <div class="pitfalls__fix">Leave <code>sz[]</code> alone in <code>dfs2</code> unless you have a separate reason to rebuild it. Check that <code>ans[1]</code> on the five-node sample is 5, not 6.</div>
   </li>
   <li>
     <span class="pitfalls__title">Stack overflow</span>
-    <div class="pitfalls__bug">A path of 2e5. JVM dies.</div>
-    <div class="pitfalls__fix">Iterative DFS or increase stack; contests often have a chain anti-rec test.</div>
+    <div class="pitfalls__bug">A path of <code>2&times;10&#8309;</code> is a legal tree, so the recursive pair of walks is correct on paper and then dies with <code>StackOverflowError</code> on the anti-recursion test.</div>
+    <div class="pitfalls__fix">Write an iterative DFS, or raise the stack, whenever the statement does not promise a bushy tree. Contests like this chain.</div>
   </li>
 </ul>
 
@@ -501,28 +502,28 @@ graph TD
   <details class="followup">
     <summary>Why n - 2*sz[v]?</summary>
     <div class="followup__body">
-      <p>Moving the root from u to child v: every node in v's subtree is 1 closer, everyone else is 1 farther. Closer count = sz[v], farther = n-sz[v], delta = (n-sz[v]) - sz[v].</p>
+      <p>When the root slides from <code>u</code> to child <code>v</code>, every node in <code>v</code>'s subtree is one hop closer and every node outside that subtree is one hop farther. The closer count is <code>sz[v]</code>, the farther count is <code>n - sz[v]</code>, and the change in the sum is <code>(n - sz[v]) - sz[v]</code>, which is <code>n - 2&times;sz[v]</code>. You add that delta to <code>ans[u]</code>; you do not walk either side again.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When is rerooting impossible in O(n)?</summary>
     <div class="followup__body">
-      <p>When you cannot compute "parent's answer without this child" in O(1) or O(deg). Then small-to-large, or accept O(n log n) / O(n^2).</p>
+      <p>When you cannot recover "the parent's answer without this child" in constant time or in time proportional to the degree. A merge that needs a full multiset of sibling answers forces small-to-large, a heap, or an honest <code>O(n&#178;)</code>. Sums and maxima with a top-two are the cases that stay linear.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Diameter via rerooting?</summary>
     <div class="followup__body">
-      <p>Height of a rerooting is the eccentricity of that vertex. Diameter = max eccentricity, also = max over v of down[v]+up[v]. Two BFS is shorter if you only need the diameter value.</p>
+      <p>The height of the tree after rerooting at <code>v</code> is the eccentricity of <code>v</code>, the farthest distance from that vertex. The diameter is the maximum eccentricity, which is also <code>max(down[v] + up[v])</code> over vertices. If you only need the diameter value, two BFS (or two DFS) from a farthest vertex is shorter and does not reroot.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Weighted edges?</summary>
     <div class="followup__body">
-      <p>Same formulas with +w(u,v) instead of +1, and "n-2sz" becomes a weighted analogue: minus 2*sum of subtree weights plus total. Track subtree weight sum.</p>
+      <p>Replace each <code>+1</code> with the edge weight <code>w(u, v)</code> in the down pass. The reroot delta becomes "minus twice the total weight of <code>v</code>'s subtree, plus the total weight of every edge", so you track a subtree weight-sum alongside <code>sz</code>. The picture is the same: closer side loses <code>w</code>, farther side gains <code>w</code>.</p>
     </div>
   </details>
 </div>

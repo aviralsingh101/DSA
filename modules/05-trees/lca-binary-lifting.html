@@ -22,7 +22,7 @@
   <p class="hero__tagline">Precompute the 2^k-th ancestor of every node in <code>O(n log n)</code>, then LCA and k-th ancestor queries become <code>O(log n)</code> jumps.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="tree-dp-and-rerooting.html">Tree DP & Rerooting</a>,
       <a href="../02-sorting-hashing-bits/bit-manipulation.html">Bit Manipulation</a>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The interview LCA on a binary tree is one DFS. The contest LCA is n,q = 1e5 queries on a static tree: distance(u,v), k-th node on a path, max edge on a path. Binary lifting stores up[k][v] = the 2^k-th parent of v, built from up[k][v]=up[k-1][up[k-1][v]]. Lift the deeper node to the same depth, then lift both until their parents match.</p>
-<p>The same table answers "k-th ancestor" by jumping bits of k, and with extra payload on edges (max, gcd, sum) you merge along the jumps. Euler-tour RMQ is the other LCA; lifting is easier to extend with path aggregates.</p>
-<p>depth[] from a DFS, parent[0][v] from the same DFS, then the doubling loop. Queries are then a short bit loop. Off-by-one on "lift to depth of LCA+1" is the classic bug.</p>
+<p>You are given a static tree of 200000 vertices and 200000 questions of the form "what is the lowest common ancestor of u and v?", or "how far is u from v?", or "what is the k-th node on the path?". The interview LCA on a binary tree is one DFS and dies here: walking parents one step at a time can take 200000 hops per question, and a batch of that size is about <code>4&times;10&#8310;</code> steps. You need a way to climb many edges in one pointer hop.</p>
+<p>That is what the table <code>up[k][v]</code> is for. It holds the ancestor of <code>v</code> that sits exactly <code>2<sup>k</sup></code> steps toward the root: <code>up[0][v]</code> is the parent, <code>up[1][v]</code> is the grandparent, <code>up[2][v]</code> is four steps up, and so on. The reason those particular ancestors are enough is that any climb of <code>d</code> steps has a binary representation, so <code>d</code> is a sum of distinct powers of two. Once every power-of-two ancestor is stored, a climb of <code>d</code> steps is at most twenty pointer hops instead of <code>d</code> of them. You build the table by doubling: the <code>2<sup>k</sup></code> ancestor is the <code>2<sup>k-1</sup></code> ancestor of the <code>2<sup>k-1</sup></code> ancestor.</p>
+<p>The same jumps answer k-th ancestor and, with a payload stored next to each jump, the max or gcd of the edges you skipped. Euler-tour RMQ is the other LCA and is faster when you only need the meeting node; lifting is the one you reach for when the statement also wants a path aggregate. The tell in a contest is <code>n, q &le; 2&times;10&#8309;</code> on a static tree, plus distance, k-th, or path-min language.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Any ancestor distance d is a sum of distinct powers of two. Jump those bits. LCA is: equalise depth, then jump both while the 2^k parents still differ, then take the parent.</p>
+    <p>Any climb of d steps is a sum of distinct powers of two, so <code>up[k][v]</code> stores the ancestor exactly <code>2<sup>k</sup></code> steps up and a query jumps those bits. LCA equalises depth, then lifts both nodes while their <code>2<sup>k</sup></code> parents still differ, then takes the parent.</p>
   </div>
 </aside>
 
@@ -111,18 +111,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n,q &le; 2e5, LOG=18 or 20. up is int[LOG][n] (or [n][LOG]). Root's parent is the root or -1; jumping past the root must be defined (stay at root, or -1).</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> is the textbook pair. Take <code>LOG = 18</code> or 20, because <code>2<sup>18</sup> = 262144</code> already covers the limit. The table is <code>int[LOG][n]</code> (or the swapped layout), about 16 MB of integers at <code>n = 2&times;10&#8309;</code> and 20 rows. The root's parent is <code>-1</code> or the root itself; whichever you pick, jumping past the root must be defined so <code>up[k][-1]</code> is never read.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>DFS from the root: depth[v], up[0][v]=parent. Then for k=1..LOG-1, for all v, up[k][v]=up[k-1][up[k-1][v]] (if parent is -1, keep -1).</p>
-<p>LCA: if depth[u]&lt;depth[v] swap. Lift u by depth[u]-depth[v] using bits. If u==v return u. Then for k=LOG-1..0, if up[k][u]!=up[k][v] jump both. Return up[0][u].</p>
+<p>One DFS from the root fills <code>depth[v]</code> and the first row of the table: <code>up[0][v]</code> is the parent of <code>v</code>, the ancestor one step up. That row is the reason the rest of the table exists at all. The doubling loop then sets <code>up[k][v] = up[k-1][up[k-1][v]]</code> for <code>k = 1, 2, &hellip;</code>: to jump <code>2<sup>k</sup></code> steps you jump <code>2<sup>k-1</sup></code> twice. If a midpoint is <code>-1</code> you keep <code>-1</code>, which is how a short tree stays well-defined. After this preprocess, climbing <code>h</code> steps from a node is a loop over the bits of <code>h</code>: when bit <code>k</code> is set, replace the node by <code>up[k][node]</code>.</p>
+<p>LCA uses that climb twice. First swap so <code>u</code> is at least as deep as <code>v</code>, then lift <code>u</code> by <code>depth[u] - depth[v]</code> so the two nodes sit at the same depth. If they are now equal, the deeper one was under the shallower and you are done. Otherwise walk <code>k</code> from <code>LOG-1</code> down to 0 and, whenever <code>up[k][u]</code> still differs from <code>up[k][v]</code>, jump both. You must go from the high bit downward: a low-bit jump first can overshoot the meeting point and land on two different ancestors that later cannot resync. When the loop ends the two nodes are the children of the LCA, so the answer is <code>up[0][u]</code>. Distance is then <code>depth[u] + depth[v] - 2&times;depth[lca]</code>.</p>
+<p>On the sample tree 0-1-2, 1-3, 0-4 the depths are <code>[0, 1, 2, 2, 1]</code> and <code>up[0]</code> is <code>[-1, 0, 1, 1, 0]</code>. Doubling fills <code>up[1][2] = up[0][1] = 0</code> and <code>up[1][3] = 0</code>, the grandparents. LCA(2, 3): depths already match and the nodes differ, <code>up[1]</code> of both is 0 so you do not jump 2, <code>up[0]</code> of both is 1 so you do not jump 1 either, and you return that parent 1. LCA(2, 4): lift 2 by one step to 1, 1 is not 4, both parents are 0, return 0. Distance 2 to 4 is <code>2 + 1 - 0 = 3</code>, the path 2-1-0-4. The 2nd ancestor of 2 is a single jump of bit 1, which lands on 0.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>up[k][v] is the ancestor of v exactly 2^k steps toward the root (or the root / -1 if you run out).</p><span class="eq">lca(u,v) = first common ancestor; dist = d[u]+d[v]-2 d[lca]</span>
+    <p><code>up[k][v]</code> is the ancestor of <code>v</code> sitting exactly <code>2<sup>k</sup></code> steps toward the root (or <code>-1</code> / the root if the climb runs out). LCA is the deepest node that is an ancestor of both arguments:</p><span class="eq">lca(u,v) = first common ancestor; dist = d[u]+d[v]-2 d[lca]</span><p>In plain words, you never walk one parent at a time: you keep a list of "skip 1, skip 2, skip 4, skip 8, &hellip;" pointers so any climb is a handful of those skips, and the meeting node is what is left after the two nodes have been skipped up to just below it.</p><p>Interview sentence: <em>"up[k][v] is the 2^k-th parent; I equalise depth, then jump while parents differ."</em></p>
   </div>
 </aside>
 
@@ -162,7 +163,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Tree 0-1-2, 1-3, 0-4. depth [0,1,2,2,1]. up[0] = parent [-1,0,1,1,0].",
+          "note": "On 0-1-2, 1-3, 0-4 the depths are 0,1,2,2,1. The first row up[0] is just the parent of each node, so 2 and 3 both point at 1.",
           "values": {
             "u-v": "prep",
             "depthGap": "—",
@@ -171,7 +172,7 @@
           }
         },
         {
-          "note": "up[1][v] = grandparent: [-, -, 0, 0, -].",
+          "note": "Doubling fills up[1][v], the ancestor two steps up. Nodes 2 and 3 both land on the root 0; nodes with no grandparent stay at -1.",
           "values": {
             "u-v": "doubling",
             "depthGap": "—",
@@ -180,7 +181,7 @@
           }
         },
         {
-          "note": "LCA(2,3): depths equal. up[1][2]=0 and up[1][3]=0 same, so do not jump 2. up[0][2]=1 != up[0][3]=1? They are equal 1. Then return parent of 2, which is 1. Wait: if up[0] already equal, we still return up[0][u] after the loop... Standard: if after equalising u==v return u. Here 2!=3. Loop k: if parents differ, jump. up[0][2]==up[0][3]==1, so we do not jump, then return up[0][2]=1.",
+          "note": "LCA(2,3): depths already match and the nodes differ. Their two-step parents agree, their one-step parents agree, so the answer is that shared parent 1.",
           "active": [
             2,
             3
@@ -193,7 +194,7 @@
           }
         },
         {
-          "note": "LCA(2,4): lift 2 by 1 to 1. 1!=4. up[0][1]=0, up[0][4]=0 equal, return 0.",
+          "note": "LCA(2,4): lift 2 by one step to 1 so the depths match. 1 is not 4, both parents are 0, and that parent is the answer.",
           "active": [
             2,
             4
@@ -206,7 +207,7 @@
           }
         },
         {
-          "note": "dist(2,4)=2+1-0=3. Path 2-1-0-4.",
+          "note": "Distance 2 to 4 is depth 2 plus depth 1 minus twice the LCA depth 0, which is 3, the path 2-1-0-4.",
           "best": [
             0,
             1,
@@ -221,7 +222,7 @@
           }
         },
         {
-          "note": "k-th ancestor of 2, k=2: jump bit 1 (value 2) -> 0.",
+          "note": "The 2nd ancestor of 2 is a single jump of bit 1, value 2, which reads up[1][2] and lands on the root 0.",
           "active": [
             2,
             0
@@ -256,17 +257,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>DFS</strong> from root: depth[], up[0][v]=parent (root parent = -1 or itself).</li>
-  <li><strong>Double:</strong> for k=1..LOG-1, up[k][v] = up[k-1][up[k-1][v]] (guard -1).</li>
-  <li><strong>Equalise depth</strong> by lifting the deeper node.</li>
-  <li><strong>If equal, that is the LCA.</strong></li>
-  <li><strong>From high bit to 0:</strong> if up[k][u]!=up[k][v] jump both.</li>
-  <li><strong>Return up[0][u]</strong> (the parent of the nodes just below the LCA).</li>
+  <li><strong>DFS from the root fills depth and the parent row.</strong> Set <code>up[0][v]</code> to the parent (and the root's parent to <code>-1</code> or itself) because every later jump is defined in terms of that first row.</li>
+  <li><strong>Double to fill the rest of the table.</strong> <code>up[k][v] = up[k-1][up[k-1][v]]</code> with a guard on <code>-1</code>, so a jump of <code>2<sup>k</sup></code> is two jumps of <code>2<sup>k-1</sup></code> and you never index <code>up[k][-1]</code>.</li>
+  <li><strong>Equalise depth before comparing nodes.</strong> Lift the deeper node by the depth gap, using the bits of that gap, so the two arguments sit at the same level and a later joint jump cannot miss the meeting point.</li>
+  <li><strong>If they coincide after the lift, that node is the LCA.</strong> The deeper argument sat inside the shallower one's subtree, and there is nothing left to jump.</li>
+  <li><strong>Walk bits from high to low and jump while parents differ.</strong> A low-bit jump first can overshoot the LCA; the high-to-low order keeps both nodes just below the meeting point.</li>
+  <li><strong>Return the parent of either node.</strong> After the loop they are the two children of the LCA (or the same child twice), so <code>up[0][u]</code> is the answer and distance is the usual depth formula.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Build the doubling table on 0-1-2, 1-3, 0-4, then walk LCA(2,3), LCA(2,4), the distance formula, and a 2-step ancestor jump.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -274,12 +275,12 @@ graph TD
       <tr><th>u-v</th><th>depthGap</th><th>jump</th><th>lca</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>prep</td><td>—</td><td>up[0]</td><td>—</td><td>Tree 0-1-2, 1-3, 0-4. depth [0,1,2,2,1]. up[0] = parent [-1,0,1,1,0].</td></tr>
-      <tr><td>doubling</td><td>—</td><td>up[1]</td><td>—</td><td>up[1][v] = grandparent: [-, -, 0, 0, -].</td></tr>
-      <tr><td>2,3</td><td>0</td><td>none</td><td>1</td><td>LCA(2,3): depths equal. up[1][2]=0 and up[1][3]=0 same, so do not jump 2. up[0][2]=1 != up[0][3]=1? They are equal 1. Then return parent of 2, which is 1. Wait: if up[0] already equal, we still return up[0][u] after the loop... Standard: if after equalising u==v return u. Here 2!=3. Loop k: if parents differ, jump. up[0][2]==up[0][3]==1, so we do not jump, then return up[0][2]=1.</td></tr>
-      <tr><td>2,4</td><td>1</td><td>2->1</td><td>0</td><td>LCA(2,4): lift 2 by 1 to 1. 1!=4. up[0][1]=0, up[0][4]=0 equal, return 0.</td></tr>
-      <tr class="trace-table__row--change"><td>dist</td><td>—</td><td>—</td><td>3 hops</td><td>dist(2,4)=2+1-0=3. Path 2-1-0-4.</td></tr>
-      <tr><td>anc 2 k=2</td><td>2</td><td>bit1</td><td>0</td><td>k-th ancestor of 2, k=2: jump bit 1 (value 2) -> 0.</td></tr>
+      <tr class="trace-table__row--change"><td>prep</td><td>—</td><td>up[0]</td><td>—</td><td>On 0-1-2, 1-3, 0-4 the depths are 0,1,2,2,1. The first row up[0] is just the parent of each node, so 2 and 3 both point at 1.</td></tr>
+      <tr><td>doubling</td><td>—</td><td>up[1]</td><td>—</td><td>Doubling fills up[1][v], the ancestor two steps up. Nodes 2 and 3 both land on the root 0; nodes with no grandparent stay at -1.</td></tr>
+      <tr><td>2,3</td><td>0</td><td>none</td><td>1</td><td>LCA(2,3): depths already match and the nodes differ. Their two-step parents agree, their one-step parents agree, so the answer is that shared parent 1.</td></tr>
+      <tr><td>2,4</td><td>1</td><td>2->1</td><td>0</td><td>LCA(2,4): lift 2 by one step to 1 so the depths match. 1 is not 4, both parents are 0, and that parent is the answer.</td></tr>
+      <tr class="trace-table__row--change"><td>dist</td><td>—</td><td>—</td><td>3 hops</td><td>Distance 2 to 4 is depth 2 plus depth 1 minus twice the LCA depth 0, which is 3, the path 2-1-0-4.</td></tr>
+      <tr><td>anc 2 k=2</td><td>2</td><td>bit1</td><td>0</td><td>The 2nd ancestor of 2 is a single jump of bit 1, value 2, which reads up[1][2] and lands on the root 0.</td></tr>
     </tbody>
   </table>
 </div>
@@ -415,9 +416,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>LOG = ceil(log2 n) ~ 18. Filling up[k][v] is n * LOG. A query equalises with at most LOG jumps then at most LOG more.</p>
+    <p><code>LOG</code> is <code>ceil(log2 n)</code>, about 18 at <code>n = 2&times;10&#8309;</code>. Filling <code>up[k][v]</code> writes one integer per pair <code>(k, v)</code>, so the preprocess is <code>n&times;LOG</code> assignments, a few million. A query equalises depth with at most <code>LOG</code> jumps and then does at most <code>LOG</code> more, so one LCA is a few dozen pointer reads.</p>
     <p><span class="eq">T_build = O(n log n), T_q = O(log n)</span></p>
-    <p>Euler+RMQ is O(n log n) / O(1) with a sparse table, slightly heavier constants, worse at path payloads.</p>
+    <p>A batch of <code>q = 2&times;10&#8309;</code> queries is a few million jumps, comfortable. Walking parents one step at a time on a chain is <code>O(n)</code> per query and about <code>4&times;10&#8310;</code> steps in the same batch. Euler tour plus a sparse table answers LCA in <code>O(1)</code> after the same <code>n log n</code> preprocess, with heavier constants and no natural hook for a path max; lifting wins when you also need a payload.</p>
   </div>
 
   <table class="complexity__compare">
@@ -439,28 +440,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Lifting past the root without a guard</span>
-    <div class="pitfalls__bug">up[k][-1] or up[k][parent of root] indexes garbage.</div>
-    <div class="pitfalls__fix">Store -1, skip when mid&lt;0. Or parent[root]=root and jumps stay put.</div>
+    <div class="pitfalls__bug">Reading <code>up[k][-1]</code>, or treating the root's parent as 0 in a 0-based tree, looks like a finished table and then indexes garbage or wraps to a random node on a short climb.</div>
+    <div class="pitfalls__fix">Store <code>-1</code> and skip when the midpoint is negative, or set the root's parent to itself so jumps stay put. A query that asks for the 10th ancestor of a depth-2 node is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Returning u after the loop instead of up[0][u]</span>
-    <div class="pitfalls__bug">You stopped at the children of the LCA, not the LCA.</div>
-    <div class="pitfalls__fix">After equalise, if u==v return u; else jump while parents differ; return parent.</div>
+    <div class="pitfalls__bug">The high-to-low walk is designed to stop at the children of the LCA, so returning <code>u</code> looks like you finished the loop and then reports a child instead of the meeting node.</div>
+    <div class="pitfalls__fix">After equalising, if <code>u == v</code> return <code>u</code>; otherwise jump while parents differ and return <code>up[0][u]</code>. LCA(2, 3) on the sample must be 1, not 2.</div>
   </li>
   <li>
     <span class="pitfalls__title">Filling up[k] inside DFS before children set up[k-1]</span>
-    <div class="pitfalls__bug">up[k][v] depends only on v's ancestors, so filling at v during DFS is actually OK if you fill all k for v after up[0][v] is set, before children. Filling a global k-loop after the whole DFS is simpler.</div>
-    <div class="pitfalls__fix">Either fill all k for u at dfs entry, or a nested loop after DFS.</div>
+    <div class="pitfalls__bug">A nested <code>k</code>-loop that reads <code>up[k-1][parent]</code> before that parent has been doubled looks like the same recurrence and then writes -1 or a stale parent into later rows.</div>
+    <div class="pitfalls__fix">Fill every <code>k</code> for the current node after <code>up[0]</code> is set and before recursing to children, or run one global doubling loop after the whole DFS. Either order is safe; mixing them is not.</div>
   </li>
   <li>
     <span class="pitfalls__title">depth not set when lifting</span>
-    <div class="pitfalls__bug">Forgot DFS, all depths 0, LCA is nonsense.</div>
-    <div class="pitfalls__fix">One DFS from the true root (problem's 1, or 0).</div>
+    <div class="pitfalls__bug">Skipping the DFS leaves every depth at 0, so the equalise step never lifts and LCA of two distant leaves reports a nonsense meeting point that still type-checks.</div>
+    <div class="pitfalls__fix">Run one DFS from the statement's true root (often 1, sometimes 0) and set <code>depth[child] = depth[u] + 1</code>. Print the depth array on the sample before any query.</div>
   </li>
   <li>
     <span class="pitfalls__title">1-based nodes, 0-based table</span>
-    <div class="pitfalls__bug">n=5 nodes 1..5, array of 5, index 5 dies.</div>
-    <div class="pitfalls__fix">n+1 arrays, ignore 0, or decrement labels.</div>
+    <div class="pitfalls__bug">Nodes labelled 1..n stored in an array of length n make index n throw, and the same bug looks like an off-by-one only on the last vertex.</div>
+    <div class="pitfalls__fix">Allocate <code>n+1</code> and ignore index 0, or remap labels to <code>0..n-1</code> at the input boundary and stay consistent in every array.</div>
   </li>
 </ul>
 
@@ -502,28 +503,28 @@ graph TD
   <details class="followup">
     <summary>Why jump from high bits down when equalising is low bits up?</summary>
     <div class="followup__body">
-      <p>Equalising a known height h uses the bits of h, any order. The LCA's "while parents differ" must go from high to low: a low-bit jump first could overshoot the LCA and land on different ancestors that later cannot resync.</p>
+      <p>Equalising a known height <code>h</code> uses the bits of <code>h</code>, and any order works because you are jumping an exact distance you already computed. The LCA loop is different: you do not know the remaining distance, you only know whether a trial jump of <code>2<sup>k</sup></code> would land on two different ancestors. A low-bit jump first can overshoot the meeting point and leave the two nodes on different branches that later bits cannot bring back together. High-to-low never steps past the LCA.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Virtual trees?</summary>
     <div class="followup__body">
-      <p>Sort a subset of nodes by tin, LCA consecutive pairs, stack-build the compressed tree. Binary lifting (or RMQ) supplies those LCAs. Used in DP on a few important vertices.</p>
+      <p>Sort a subset of important nodes by their DFS enter times, take LCA of each consecutive pair, and stack-build the compressed tree that contains only those nodes and their meeting points. Binary lifting (or Euler+RMQ) supplies those LCAs. The compressed tree has size linear in the subset, which is why DP on a few marked vertices becomes affordable.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Weighted distance?</summary>
     <div class="followup__body">
-      <p>Store distRoot[v] = distance to root during DFS. dist(u,v)=distRoot[u]+distRoot[v]-2*distRoot[lca]. No extra lifting payload needed for sums.</p>
+      <p>During the same DFS that fills <code>up[0]</code>, store <code>distRoot[v]</code> as the distance from the root to <code>v</code>. Then <code>dist(u, v) = distRoot[u] + distRoot[v] - 2&times;distRoot[lca]</code>. Sum is invertible, so you do not need a payload on the jumps; max or gcd on the path still does.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>LOG = 20 vs 18?</summary>
     <div class="followup__body">
-      <p>2^18 = 262144. n=2e5 needs 18. 20 is a safe default. 31 is a waste of memory (n*31 ints).</p>
+      <p><code>2<sup>18</sup> = 262144</code>, so <code>n = 2&times;10&#8309;</code> needs 18 rows. 20 is a safe default you can type without thinking. 31 wastes a row per node for no query you will ever make: that is <code>n&times;31</code> integers, about 25 MB, for climbs that 20 already cover.</p>
     </div>
   </details>
 </div>

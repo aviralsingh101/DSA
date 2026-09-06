@@ -22,7 +22,7 @@
   <p class="hero__tagline">A tree of prefixes: each edge is a character, insert/search/startsWith are <code>O(|s|)</code>, and the same walk powers word-search II and autocomplete.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>
     </span>
@@ -36,14 +36,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>HashSet.contains is O(|s|) expected for exact strings and cannot answer "is there a stored word that starts with this prefix" without scanning everything. A trie shares prefixes: n words of length L use O(total characters) nodes, and a prefix query walks one path of length |prefix|.</p>
-<p>LC 208 is the API. Word Search II is "DFS the board, walk the trie in lockstep, prune when the node is null". Autocomplete, replace-words, and longest-word-in-dictionary are the same walk with a different payload on terminal nodes.</p>
-<p>The implementation choice is next[26] vs HashMap&lt;Character,Node&gt;. Interviews want the array for lowercase English. Count how many words share a node if you must delete.</p>
+<p>You are given 100000 words and asked, after each insertion, whether any stored word starts with a given prefix. A <code>HashSet</code> answers exact equality in time proportional to the query string, which is fine, and then a prefix question forces you to scan every word. A hundred thousand words of length 20 is two million character compares per prefix query; a few thousand of those queries will not finish. You need a structure that shares the common start of <code>app</code>, <code>ape</code> and <code>apple</code> so the prefix <code>ap</code> is one walk, not a scan.</p>
+<p>A <em>trie</em>, also called a prefix tree, is that structure. Each edge is one character, and the path from the root to a node spells the prefix that node represents. Words that share a start share the same path, so the whole dictionary occupies memory proportional to the total number of characters, not to the number of prefixes written out as strings. Insert, exact search and starts-with are each one walk of length equal to the query. LC 208 is that API. Word Search II walks the board and the trie in lockstep and prunes when the next cell has no child; autocomplete and replace-words are the same walk with a different payload on a terminal node.</p>
+<p>The implementation choice is <code>next[26]</code> versus a <code>HashMap</code> of children. Interviews want the array for lowercase English. A count on each node, how many inserted words pass through it, is what lets you delete without pulling the rug from under a sibling. In a statement the tell is "starts with", "prefix", "dictionary of words", or a board search over many patterns, with total characters around <code>10&#8309;</code>. Maximum XOR of numbers is the next page, a 2-child trie on bits, not this 26-way tree.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A trie node is the set of strings with a given prefix. Child c is that prefix extended by c. Terminal flag (or count) marks a complete word.</p>
+    <p>A trie node is the set of stored strings that share one prefix. The child labelled <code>c</code> is that prefix extended by <code>c</code>, and a terminal flag (or a count) marks the prefix that is itself a complete word.</p>
   </div>
 </aside>
 
@@ -110,18 +110,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Total characters &le; 1e5 typical. Node arrays of size 26 are fine. Alphabet size &sigma; multiplies memory; HashMap children for huge alphabets. Word Search II: 4^L board DFS pruned by the trie, L up to 10.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Total characters around <code>10&#8309;</code> is the everyday limit, and a <code>next[26]</code> array per node is acceptable memory. Alphabet size multiplies that memory, so a huge alphabet wants a map of children instead. Word Search II is a 4-way board DFS of depth up to 10, pruned by the trie; without the prune it is <code>4<sup>L</sup></code> and will time out on a 12-by-12 board even when the dictionary is tiny.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Node { Node[] next = new Node[26]; boolean term; int cnt; }. insert: cur = root, for ch in s: i=ch-'a'; if next[i]==null next[i]=new Node(); cur=next[i]; cur.cnt++. Then cur.term=true. search: walk, fail on null, then term. startsWith: walk, fail on null.</p>
-<p>Word Search II: build a trie of the word list. DFS the board; if next[cell]==null return; if term, emit word and optionally unmark term (dedup). Restore the cell after DFS. Delete dead leaves to prune (optional speed).</p>
+<p>A node holds <code>Node[] next = new Node[26]</code>, a boolean <code>term</code>, and optionally an integer <code>cnt</code> of words that pass through it. Insert starts at the root and, for each character <code>ch</code>, computes <code>i = ch - 'a'</code>. If <code>next[i]</code> is null it allocates a fresh node, then steps into it and increments <code>cnt</code>. After the last character it sets <code>term = true</code>. Search is the same walk and returns false on a missing child; if the walk finishes it returns <code>term</code>, not true. Starts-with is the same walk and returns true as soon as the walk finishes, whether or not that node is terminal. Mixing those two return values is the classic LC 208 bug.</p>
+<p>Word Search II builds a trie of the word list first. The board DFS carries a trie pointer alongside the cell: if the next letter has no child, that branch is dead and you return. Landing on a terminal node emits the word and, to avoid duplicates, you can clear <code>term</code> or delete a now-empty leaf. The cell itself must be marked (commonly with <code>'#'</code>) and restored after the four recursive calls, or a word can reuse the same square and invent a loop. Autocomplete is simpler: walk the prefix, then explore the small subtree under that node.</p>
+<p>Insert <code>app</code> then <code>ape</code>. The first word creates the path <code>a &rarr; p &rarr; p</code> and marks the last <code>p</code> terminal. The second reuses <code>a &rarr; p</code> and creates a sibling <code>e</code>, also terminal. Search <code>ape</code> walks three edges and finds <code>term</code> true. Search <code>ap</code> lands on the shared <code>p</code>, where <code>term</code> is still false unless you also inserted <code>ap</code>. Starts-with <code>ap</code> does that same walk and returns true because the node exists. Search <code>apple</code> dies when the next letter <code>l</code> has no child. Two words, five nodes, one shared prefix of length 2.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The path from the root to a node spells a prefix of at least one inserted word. term (or cntEnd) is true iff that prefix is a complete word.</p><span class="eq">search(s) = walk(s) lands on a node with term=true</span>
+    <p>The path from the root to a node spells a prefix of at least one inserted word. <code>term</code> (or an end-count) is true exactly when that prefix is itself a complete word:</p><span class="eq">search(s) = walk(s) lands on a node with term = true</span><p>In plain words, sharing a prefix means sharing a path, and "is this a word" is a flag on the last node, not the mere fact that the path exists.</p><p>Interview sentence: <em>"I walk one edge per character; search needs term, startsWith only needs the node."</em></p>
   </div>
 </aside>
 
@@ -154,7 +155,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Empty root. Insert app: create a, p, p. Mark term on last p.",
+          "note": "The trie starts as a bare root. Inserting app creates the path a, p, p and marks only the last p as a complete word.",
           "active": [
             1,
             2,
@@ -168,7 +169,7 @@
           }
         },
         {
-          "note": "Insert ape: reuse a,p, create e, mark term. Shared prefix ap.",
+          "note": "Inserting ape reuses the shared prefix a, p and hangs a new sibling e, also marked terminal. Two words now share those first two nodes.",
           "active": [
             1,
             2,
@@ -182,7 +183,7 @@
           }
         },
         {
-          "note": "search(\"ape\"): walk a-p-e, term true.",
+          "note": "search(\"ape\") walks a, then p, then e and lands on a node whose term flag is true, so the exact word is present.",
           "best": [
             4
           ],
@@ -194,7 +195,7 @@
           }
         },
         {
-          "note": "search(\"ap\"): land on p, term false (unless you also inserted ap).",
+          "note": "search(\"ap\") lands on the shared p, where term is still false because ap itself was never inserted, so exact search returns false.",
           "active": [
             2
           ],
@@ -206,7 +207,7 @@
           }
         },
         {
-          "note": "startsWith(\"ap\"): same walk, no term needed. true.",
+          "note": "startsWith(\"ap\") does that same walk and returns true because the node exists. The term flag is not consulted for a prefix query.",
           "active": [
             1,
             2
@@ -219,7 +220,7 @@
           }
         },
         {
-          "note": "search(\"apple\"): after app the next l is null. false.",
+          "note": "search(\"apple\") follows app and then looks for l, finds no child, and returns false without inventing a node.",
           "dim": [
             4
           ],
@@ -253,17 +254,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Node:</strong> next[26], term, optional cnt.</li>
-  <li><strong>insert:</strong> create missing children, mark term at the end, bump cnt.</li>
-  <li><strong>search:</strong> walk, null &rarr; false, else return term.</li>
-  <li><strong>startsWith:</strong> walk, null &rarr; false, else true.</li>
-  <li><strong>Board search:</strong> DFS 4-way, trie pointer, emit on term, restore cell.</li>
-  <li><strong>Do not</strong> store the whole string on every node unless you need it for output.</li>
+  <li><strong>Give each node a 26-slot array, a term flag, and an optional count.</strong> The array is the alphabet; the flag is what distinguishes a finished word from a mere prefix, which is why both fields exist.</li>
+  <li><strong>Insert by creating a child only when it is missing.</strong> Step one character at a time, increment <code>cnt</code> if you will later delete, and set <code>term</code> on the last node so a later exact search has something to read.</li>
+  <li><strong>Exact search returns the term flag, not the existence of the path.</strong> A missing child is false; a finished walk still asks <code>term</code>, or <code>search("ap")</code> after inserting <code>apple</code> comes back true by mistake.</li>
+  <li><strong>Starts-with is the same walk without the flag.</strong> If every edge existed, the prefix is in the dictionary, which is the whole point of sharing paths.</li>
+  <li><strong>Board search carries a trie pointer next to the cell.</strong> A missing child prunes that 4-way branch; a terminal node emits a word; the cell is marked and restored so one word cannot reuse the same square.</li>
+  <li><strong>Do not store the whole string on every node.</strong> Reconstruct it from the walk, or hang one <code>String</code> on terminal nodes only, because copying lists per insert is linear in the dictionary size.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Insert app then ape into an empty trie, then watch exact search, prefix search, and a missing suffix take three different answers from the same walk.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -271,12 +272,12 @@ graph TD
       <tr><th>word</th><th>ch</th><th>node</th><th>term</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>app</td><td>p</td><td>app</td><td>true</td><td>Empty root. Insert app: create a, p, p. Mark term on last p.</td></tr>
-      <tr><td>ape</td><td>e</td><td>ape</td><td>true</td><td>Insert ape: reuse a,p, create e, mark term. Shared prefix ap.</td></tr>
-      <tr class="trace-table__row--change"><td>ape</td><td>e</td><td>ape</td><td>found</td><td>search("ape"): walk a-p-e, term true.</td></tr>
-      <tr><td>ap</td><td>p</td><td>ap</td><td>false</td><td>search("ap"): land on p, term false (unless you also inserted ap).</td></tr>
-      <tr><td>ap</td><td>p</td><td>ap</td><td>prefix ok</td><td>startsWith("ap"): same walk, no term needed. true.</td></tr>
-      <tr><td>apple</td><td>l</td><td>null</td><td>false</td><td>search("apple"): after app the next l is null. false.</td></tr>
+      <tr class="trace-table__row--change"><td>app</td><td>p</td><td>app</td><td>true</td><td>The trie starts as a bare root. Inserting app creates the path a, p, p and marks only the last p as a complete word.</td></tr>
+      <tr><td>ape</td><td>e</td><td>ape</td><td>true</td><td>Inserting ape reuses the shared prefix a, p and hangs a new sibling e, also marked terminal. Two words now share those first two nodes.</td></tr>
+      <tr class="trace-table__row--change"><td>ape</td><td>e</td><td>ape</td><td>found</td><td>search("ape") walks a, then p, then e and lands on a node whose term flag is true, so the exact word is present.</td></tr>
+      <tr><td>ap</td><td>p</td><td>ap</td><td>false</td><td>search("ap") lands on the shared p, where term is still false because ap itself was never inserted, so exact search returns false.</td></tr>
+      <tr><td>ap</td><td>p</td><td>ap</td><td>prefix ok</td><td>startsWith("ap") does that same walk and returns true because the node exists. The term flag is not consulted for a prefix query.</td></tr>
+      <tr><td>apple</td><td>l</td><td>null</td><td>false</td><td>search("apple") follows app and then looks for l, finds no child, and returns false without inventing a node.</td></tr>
     </tbody>
   </table>
 </div>
@@ -407,9 +408,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each character of each word creates at most one new node. Shared prefixes share nodes.</p>
+    <p>Each character of each word creates at most one new node, and a shared prefix creates none. Insert, search and starts-with therefore walk exactly <code>|s|</code> edges. Memory is proportional to the total number of characters (times 26 pointers in the array implementation). A dictionary of 100000 words of length 10 is about a million nodes in the worst case, comfortable.</p>
     <p><span class="eq">T(insert) = O(|s|), S = O(&Sigma; |s_i|)</span></p>
-    <p>HashSet search is also O(|s|) but startsWith is O(n |s|) over the set. Trie makes prefix O(|s|).</p>
+    <p>A <code>HashSet</code> of the words is also <code>O(|s|)</code> for exact search, but a prefix query scans every word and becomes <code>O(n |s|)</code>: two million compares per query at the usual limit. The trie makes that prefix <code>O(|s|)</code>. Word Search II is a 4-way DFS whose branches die when the trie has no child, which is what keeps <code>4<sup>L</sup></code> from exploding.</p>
   </div>
 
   <table class="complexity__compare">
@@ -431,28 +432,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Forgetting term vs prefix</span>
-    <div class="pitfalls__bug">search("ap") true after inserting apple. startsWith and search mixed up.</div>
-    <div class="pitfalls__fix">search requires term; startsWith does not.</div>
+    <div class="pitfalls__bug">Returning true from search whenever the walk finishes looks like starts-with, so <code>search("ap")</code> after inserting <code>apple</code> is true and LC 208's two methods silently share one implementation.</div>
+    <div class="pitfalls__fix">Exact search requires <code>term</code>; starts-with does not. Insert only <code>apple</code> and assert both answers, they must differ.</div>
   </li>
   <li>
     <span class="pitfalls__title">Not creating nodes on insert</span>
-    <div class="pitfalls__bug">NPE on next[c].field, or silent drop of the suffix.</div>
-    <div class="pitfalls__fix">if (cur.next[c]==null) cur.next[c]=new Node();</div>
+    <div class="pitfalls__bug">Stepping into <code>next[c]</code> without allocating looks fine on a second insert that reuses a prefix, then the first insert of a new letter throws or drops the rest of the word.</div>
+    <div class="pitfalls__fix">Write <code>if (cur.next[c] == null) cur.next[c] = new Node();</code> before the step. A first insert of a two-letter word is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Word Search II without marking the cell</span>
-    <div class="pitfalls__bug">The same cell is reused in one word (loop).</div>
-    <div class="pitfalls__fix">board[r][c]='#'; rec; restore.</div>
+    <div class="pitfalls__bug">Leaving the cell live looks like "the board did not change", then a 4-way DFS re-enters the same square and invents a word that loops through one letter twice.</div>
+    <div class="pitfalls__fix">Set <code>board[r][c] = '#'</code>, recurse, then restore the letter. A 1-by-2 board with word <code>aa</code> is the check.</div>
   </li>
   <li>
     <span class="pitfalls__title">26 vs 'A'</span>
-    <div class="pitfalls__bug">Uppercase or extra characters, negative index.</div>
-    <div class="pitfalls__fix">Normalise, or a map. Guard c in 0..25.</div>
+    <div class="pitfalls__bug">Subtracting <code>'a'</code> from an uppercase letter or from a punctuation mark produces a negative index, so the first non-lowercase input throws and the lowercase sample never saw it.</div>
+    <div class="pitfalls__fix">Normalise to lowercase, or use a map. Guard that the index sits in <code>0..25</code> before you touch <code>next</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Storing List&lt;String&gt; on every node</span>
-    <div class="pitfalls__bug">Memory explodes; copying lists is O(n) per insert.</div>
-    <div class="pitfalls__fix">term + reconstruct the word, or store one String at terminals only.</div>
+    <div class="pitfalls__bug">Copying the list of words that share a prefix into each child looks convenient for autocomplete, then each insert is linear in the dictionary and memory explodes at a few thousand words.</div>
+    <div class="pitfalls__fix">Keep <code>term</code> plus a reconstruction of the word from the walk, or store one <code>String</code> on terminal nodes only.</div>
   </li>
 </ul>
 
@@ -494,28 +495,28 @@ graph TD
   <details class="followup">
     <summary>Why not a HashMap of all prefixes?</summary>
     <div class="followup__body">
-      <p>You can: insert every prefix of every word into a HashSet for startsWith, and a set of words for search. Memory is worse (every prefix stored as a String) and Word Search II still wants a walk that can prune. The trie is the compressed form of that map.</p>
+      <p>You can: insert every prefix of every word into a <code>HashSet</code> for starts-with, and keep a second set of complete words for search. Memory is worse because every prefix is stored as its own <code>String</code>, and Word Search II still wants a walk that can prune a dead branch in the middle of a word. The trie is the compressed form of that map, with one node per shared character rather than one string per prefix.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Aho-Corasick vs trie DFS on a text?</summary>
     <div class="followup__body">
-      <p>Aho adds failure links so you scan the text once for all patterns. If the "text" is a 2-D board with 4-way moves, board DFS + trie is the right shape (LC 212). If the text is a string, Aho is linear.</p>
+      <p>Aho-Corasick adds failure links so you scan a linear text once and report every pattern that occurs. If the "text" is a 2-D board with 4-way moves, that automaton does not match the shape of the search; board DFS locked to a trie pointer is the right tool (LC 212). If the text really is a string, Aho is linear in the text plus the dictionary plus the number of matches.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Autocomplete top-k?</summary>
     <div class="followup__body">
-      <p>At the prefix node, the subtree holds candidates. Precompute a small heap of best words at each node, or DFS the subtree (fine if small).</p>
+      <p>The subtree under the prefix node holds every candidate. For a small subtree you can DFS it and pick the best <code>k</code> words. If the subtree is large, precompute a small heap of the best words at each node when you insert, so a later query is a read rather than a walk. Either way you start from the node the prefix walk landed on, not from the root.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Unicode?</summary>
     <div class="followup__body">
-      <p>HashMap&lt;Character,Node&gt; or a UTF-8 byte trie (256). Do not allocate next[Character.MAX_VALUE].</p>
+      <p>Use <code>HashMap&lt;Character, Node&gt;</code>, or a byte trie on UTF-8 with 256 slots. Do not allocate <code>next[Character.MAX_VALUE]</code>: that is tens of thousands of unused pointers per node and will exhaust memory on the first handful of words. Interviews stay on lowercase English and the 26-slot array unless the statement names another alphabet.</p>
     </div>
   </details>
 </div>

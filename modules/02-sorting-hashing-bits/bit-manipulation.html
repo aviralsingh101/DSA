@@ -22,7 +22,7 @@
   <p class="hero__tagline">Bits are a 32- or 64-slot boolean array that hardware already ANDs, ORs and XORs in one cycle — subset enumeration, parity, and "every bit independently" all live here.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
       <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>XOR is addition without carry: x^x = 0, x^0 = x, and XOR is commutative. That is why "every element appears twice except one" is a single accumulator, and why you can swap two ints without a temp. AND/OR are the set operations on the bit-set of a 32-bit mask. Interviews hammer a small toolkit until it is muscle memory.</p>
-<p>The other half is subset enumeration. n ≤ 20 means 2^n masks fit in time; each mask is a subset, and <code>mask &amp; (1&lt;&lt;i)</code> tests membership. SOS DP, meet-in-the-middle, and many contest tricks start from that loop. You do not need a bitset class; an <code>int</code> is enough for n≤30, a <code>long</code> for n≤60.</p>
-<p>Java-specific traps: <code>&gt;&gt;</code> sign-extends, <code>&gt;&gt;&gt;</code> is logical; <code>Integer.bitCount</code> is popcount; <code>n &amp; -n</code> is the lowest set bit (two's complement). Shifting by 32 on an int is masked to 5 bits, so <code>1 &lt;&lt; 32</code> is 1, not 0. These are not trivia; they are WA.</p>
+<p>You are given 100,000 integers in which every value appears twice except one, and you must print the loner. A hash map of counts is correct and uses 100,000 extra boxed entries. XOR &mdash; the bit-wise exclusive-or, written <code>^</code>, which is 1 exactly when the two bits differ &mdash; finishes the same job with one accumulator and 100,000 word operations. Take 13, which is <code>1101</code> in binary. <code>13 ^ 13</code> is <code>0000</code> because every bit cancelled; <code>13 ^ 0</code> is still 13; <code>13 ^ 6</code> (6 is <code>0110</code>) is <code>1011</code>, which is 11. Pairs cancel, the unique value remains.</p>
+<p>The same 32 bits are also a tiny set. A <em>shift</em> slides those bits: <code>13 &lt;&lt; 1</code> is <code>11010</code> = 26 (multiply by two); <code>13 &gt;&gt; 1</code> is <code>0110</code> = 6 (divide by two, rounding toward negative infinity on signed ints). A <em>mask</em> is a number you AND with to keep only some bits: <code>13 &amp; (1 &lt;&lt; 2)</code> is <code>1101 &amp; 0100</code> = <code>0100</code>, so bit 2 of 13 is on. When n is at most 20, the integers 0 through <code>(1 &lt;&lt; n) - 1</code> are every subset of n items &mdash; about a million masks, each tested in a handful of bit operations, which is why "enumerate every subset" is legal at that limit and hopeless at n = 30.</p>
+<p>Java stores negatives in <em>two's complement</em>: to negate 13, flip every bit of <code>00001101</code> to <code>11110010</code> and add one, getting <code>11110011</code>, which is -13. That is why <code>13 &amp; -13</code> equals 1, the lowest set bit, and why <code>&gt;&gt;</code> sign-extends (fills new bits with 1 on a negative) while <code>&gt;&gt;&gt;</code> fills with 0. Shifting an <code>int</code> by 32 is masked to 5 bits, so <code>1 &lt;&lt; 32</code> is 1, not 0. In a real statement the tell is "every element appears twice except one", "power of two", or <code>n &le; 20</code> plus "every subset".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Treat the integer as a set of bit positions. XOR toggles, AND intersects, OR unions, and <code>mask ^ (1&lt;&lt;i)</code> flips membership. Most bit problems are set problems in costume.</p>
+    <p>Treat the integer as a set of bit positions. XOR toggles membership, AND keeps the intersection, OR takes the union, and <code>mask ^ (1 &lt;&lt; i)</code> flips element i. Most bit problems are set problems wearing an integer costume.</p>
   </div>
 </aside>
 
@@ -123,13 +123,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>XOR fold: the unique element in a twice-array is the XOR of everything. For three times, count each bit mod 3 (or the two-bit state machine). Power of two: exactly one bit set, <code>(x &amp; (x-1)) == 0</code> and x &gt; 0. Turn off lowest bit: <code>x &amp;= x-1</code>, which is also the kernel of Kernighan popcount.</p>
-<p>Masks: bit i is on iff element i is in the subset. Iterate submasks of m with <code>s = (s-1) &amp; m</code>. Prefix XOR makes subarray XOR a two-endpoint query, same identity as prefix sums. Java: prefer <code>Integer.bitCount</code>, <code>Integer.numberOfTrailingZeros</code>, <code>Integer.highestOneBit</code> over hand-rolled loops unless you are teaching them.</p>
+<p>An XOR fold is a running accumulator that starts at 0 and XORs every element in. Because <code>x ^ x = 0</code> and XOR does not care about order, every pair vanishes and the unique value remains. For values that appear three times, count each of the 32 bits modulo 3 instead. A power of two has exactly one bit set, so <code>x &gt; 0 &amp;&amp; (x &amp; (x - 1)) == 0</code>: subtracting one turns the trailing zeros of x into ones and the lowest one into a zero, and AND with x is then empty. The same identity, written <code>x &amp;= x - 1</code>, turns off the lowest set bit and is the kernel of Kernighan's popcount (count how many times you can do that before x is 0).</p>
+<p>A mask is an integer whose bit i is on exactly when element i is in the subset. The loop <code>for (int m = 0; m &lt; (1 &lt;&lt; n); m++)</code> therefore visits every subset when n is at most 20, and <code>(m &amp; (1 &lt;&lt; i)) != 0</code> tests membership. Submasks of a particular m walk with <code>s = (s - 1) &amp; m</code>. Prefix XOR is the same identity as prefix sums: the XOR of <code>a[l..r]</code> is <code>px[r+1] ^ px[l]</code>. In Java prefer <code>Integer.bitCount</code>, <code>Integer.numberOfTrailingZeros</code> and <code>Integer.highestOneBit</code> over a hand-rolled loop unless you are teaching the loop.</p>
+<p>Walk the XOR fold on <code>[4, 1, 2, 1, 2]</code>, writing bits of the accumulator. Start at 0. XOR 4 (<code>100</code>) gives <code>100</code>. XOR 1 (<code>001</code>) gives <code>101</code> = 5. XOR 2 (<code>010</code>) gives <code>111</code> = 7. XOR the second 1: <code>111 ^ 001 = 110</code> = 6, and the first 1 has cancelled. XOR the second 2: <code>110 ^ 010 = 100</code> = 4, and both pairs are gone. The same 13 from the opening: <code>13 &amp; -13</code> is 1 because two's complement -13 is <code>...11110011</code>, AND keeps only the shared lowest one, and two iterations of <code>x &amp;= x - 1</code> on 12 (<code>1100</code>) walk 12 &rarr; 8 &rarr; 0, so popcount is 2.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>XOR is its own inverse and is associative:</p><span class="eq">x ⊕ x = 0,&nbsp; x ⊕ 0 = x,&nbsp; (a⊕b⊕c) ⊕ b = a⊕c</span><p>Interview sentence: <em>"Pairs cancel under XOR; a mask is a subset of bit positions."</em></p>
+    <p>XOR is its own inverse and is associative:</p><span class="eq">x ⊕ x = 0,&nbsp; x ⊕ 0 = x,&nbsp; (a⊕b⊕c) ⊕ b = a⊕c</span><p>In plain words, XOR is a toggle: hitting a bit twice turns it back off, so every even count of a value disappears and only the odd leftover remains. A mask is the same idea pointed at positions: bit i on means "i is in the set", and AND / OR / XOR become intersect / union / toggle on that set.</p><p>Interview sentence: <em>"Pairs cancel under XOR; a mask is a subset of bit positions."</em></p>
   </div>
 </aside>
 
@@ -162,7 +163,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "XOR-fold [4,1,2,1,2]. acc=0. i=0, x=4 (100b). acc=4.",
+          "note": "XOR-fold [4,1,2,1,2]. Accumulator starts at 0. i=0, x=4 is bits 100, so acc becomes 4.",
           "active": [
             0
           ],
@@ -180,7 +181,7 @@
           }
         },
         {
-          "note": "x=1 (001b). acc=4^1=5 (101b).",
+          "note": "Next x=1, bits 001. XOR with acc 100 gives 101, so the accumulator is now 5.",
           "active": [
             1
           ],
@@ -200,7 +201,7 @@
           }
         },
         {
-          "note": "x=2 (010b). acc=5^2=7 (111b).",
+          "note": "Next x=2, bits 010. XOR with acc 101 gives 111, so the accumulator is now 7.",
           "active": [
             2
           ],
@@ -220,7 +221,7 @@
           }
         },
         {
-          "note": "x=1. acc=7^1=6 (110b). The first 1 cancelled.",
+          "note": "The second 1 arrives. XOR 111 with 001 gives 110, so the first 1 has cancelled and acc is 6.",
           "active": [
             3
           ],
@@ -240,7 +241,7 @@
           }
         },
         {
-          "note": "x=2. acc=6^2=4 (100b). Pairs cancelled; unique 4 remains.",
+          "note": "The second 2 arrives. XOR 110 with 010 gives 100: both pairs cancelled and the unique 4 remains.",
           "active": [
             4
           ],
@@ -317,18 +318,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>XOR fold</strong> when pairs (or even counts) should vanish.</li>
-  <li><strong>x &amp; (x-1)</strong> drops the lowest set bit; loop for popcount.</li>
-  <li><strong>x &amp; -x</strong> isolates the lowest set bit (Fenwick step).</li>
-  <li><strong>Enumerate masks</strong> <code>for (int m = 0; m &lt; (1 &lt;&lt; n); m++)</code> when n ≤ 20. Use <code>1L &lt;&lt; i</code> for i up to 62.</li>
-  <li><strong>Submasks:</strong> <code>for (int s = m; s &gt; 0; s = (s - 1) &amp; m)</code>.</li>
-  <li><strong>Prefix XOR</strong> for subarray XOR queries: <code>px[r+1]^px[l]</code>.</li>
-  <li><strong>Java:</strong> <code>&gt;&gt;&gt;</code> for logical shift; never <code>1 &lt;&lt; 32</code> on an int.</li>
+  <li><strong>XOR-fold when pairs, or any even count, should vanish.</strong> One accumulator replaces a hash map of counts because <code>x ^ x = 0</code> cancels every repeat.</li>
+  <li><strong>Use <code>x &amp; (x - 1)</code> to drop the lowest set bit.</strong> Looping that until x is 0 is Kernighan popcount, and one shot of it is the power-of-two test.</li>
+  <li><strong>Use <code>x &amp; -x</code> to isolate the lowest set bit.</strong> Two's complement makes -x share only that one bit with x, which is also the Fenwick "next bucket" step.</li>
+  <li><strong>Enumerate masks with <code>for (int m = 0; m &lt; (1 &lt;&lt; n); m++)</code> when n is at most 20.</strong> Use <code>1L &lt;&lt; i</code> for i up to 62 so the shift does not wrap on an int.</li>
+  <li><strong>Walk submasks of m with <code>s = (s - 1) &amp; m</code>.</strong> Each step turns off some bits of m without ever leaving the subset, which is why the inner SOS loop is 3^n rather than 4^n.</li>
+  <li><strong>Build a prefix XOR array for subarray queries.</strong> The range <code>a[l..r]</code> is then one operation, <code>px[r+1] ^ px[l]</code>, the same identity as prefix sums with XOR in place of plus.</li>
+  <li><strong>In Java, use <code>&gt;&gt;&gt;</code> for logical shifts and never <code>1 &lt;&lt; 32</code> on an int.</strong> The shift count is masked to 5 bits, so that expression is 1, and arithmetic <code>&gt;&gt;</code> keeps the sign bit.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>XOR-fold <code>[4, 1, 2, 1, 2]</code> bit by bit so each pair cancels, then count the set bits of 12 with <code>x &amp;= x-1</code> and list the 8 masks of n=3.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -336,11 +337,11 @@ flowchart TD
       <tr><th>i</th><th>x</th><th>acc</th><th>bits</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>4</td><td>4</td><td>100</td><td>XOR-fold [4,1,2,1,2]. acc=0. i=0, x=4 (100b). acc=4.</td></tr>
-      <tr><td>1</td><td>1</td><td>5</td><td>101</td><td>x=1 (001b). acc=4^1=5 (101b).</td></tr>
-      <tr><td>2</td><td>2</td><td>7</td><td>111</td><td>x=2 (010b). acc=5^2=7 (111b).</td></tr>
-      <tr><td>3</td><td>1</td><td>6</td><td>110</td><td>x=1. acc=7^1=6 (110b). The first 1 cancelled.</td></tr>
-      <tr class="trace-table__row--change"><td>4</td><td>2</td><td>4</td><td>100</td><td>x=2. acc=6^2=4 (100b). Pairs cancelled; unique 4 remains.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>4</td><td>4</td><td>100</td><td>XOR-fold [4,1,2,1,2]. Accumulator starts at 0. i=0, x=4 is bits 100, so acc becomes 4.</td></tr>
+      <tr><td>1</td><td>1</td><td>5</td><td>101</td><td>Next x=1, bits 001. XOR with acc 100 gives 101, so the accumulator is now 5.</td></tr>
+      <tr><td>2</td><td>2</td><td>7</td><td>111</td><td>Next x=2, bits 010. XOR with acc 101 gives 111, so the accumulator is now 7.</td></tr>
+      <tr><td>3</td><td>1</td><td>6</td><td>110</td><td>The second 1 arrives. XOR 111 with 001 gives 110, so the first 1 has cancelled and acc is 6.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>2</td><td>4</td><td>100</td><td>The second 2 arrives. XOR 110 with 010 gives 100: both pairs cancelled and the unique 4 remains.</td></tr>
       <tr><td>pop</td><td>12</td><td>2</td><td>x&=x-1</td><td>Kernighan: popcount of 12 (1100b): 12, 8, 0 — two bits, two iterations of x&=x-1.</td></tr>
       <tr><td>mask</td><td>0..7</td><td>—</td><td>2^3 subsets</td><td>Masks for n=3: 000..111 are the 8 subsets. bit i on ⇔ include a[i].</td></tr>
     </tbody>
@@ -496,8 +497,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>XOR / AND / OR of n integers is one pass: <span class="eq">Θ(n)</span>. Kernighan popcount is Θ(popcount(x)).</p>
-    <p>Subset enumeration: 2^n masks, n bit tests each, <span class="eq">T(n) = Θ(n 2^n)</span>. Submask enumeration of one mask with popcount p is 2^p. n=20 is about 20 million operations; n=25 is already tight in Java.</p>
+    <p>XOR, AND or OR of n integers is one pass: <span class="eq">Θ(n)</span> word operations. At <code>n = 10&#8309;</code> that is 100,000 XORs, versus a hash map of 100,000 boxed counts. Kernighan popcount is proportional to the number of set bits, at most 32 per int, so it is constant for interview purposes.</p>
+    <p>Subset enumeration tries 2^n masks and n bit tests each: <span class="eq">T(n) = Θ(n 2^n)</span>. At n=20 that is about 21 million bit tests, fine in Java; at n=25 it is 800 million and already tight. Submask enumeration of one mask with popcount p is 2^p, and summing over all masks is 3^n, which is why SOS inner loops stop around n=15.</p>
   </div>
 
   <table class="complexity__compare">
@@ -521,28 +522,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">1 << 31 and 1 << 32 on int</span>
-    <div class="pitfalls__bug"><code>1 &lt;&lt; 31</code> is Integer.MIN_VALUE (negative). <code>1 &lt;&lt; 32</code> is 1 because the shift count is masked to 5 bits.</div>
-    <div class="pitfalls__fix"><code>1L &lt;&lt; k</code> for k up to 62. Never shift an int by ≥ 32.</div>
+    <div class="pitfalls__bug"><code>1 &lt;&lt; 31</code> is Integer.MIN_VALUE (negative), and <code>1 &lt;&lt; 32</code> is 1 because Java masks the shift count to 5 bits, so a loop bound you thought was 0 wraps back to 1.</div>
+    <div class="pitfalls__fix">Write <code>1L &lt;&lt; k</code> for k up to 62, and never shift an <code>int</code> by 32 or more.</div>
   </li>
   <li>
     <span class="pitfalls__title">Arithmetic >> on a sign bit</span>
-    <div class="pitfalls__bug"><code>-1 >> 1</code> stays -1 (sign extend). Logical fill needs <code>&gt;&gt;&gt;</code>.</div>
-    <div class="pitfalls__fix">Unsigned / bit patterns: <code>&gt;&gt;&gt;</code>. Java has no unsigned int type.</div>
+    <div class="pitfalls__bug"><code>-1 &gt;&gt; 1</code> stays -1 because arithmetic shift copies the sign bit, so a bit-pattern you meant to halve stays all ones.</div>
+    <div class="pitfalls__fix">Use <code>&gt;&gt;&gt;</code> whenever you want zeros shifted in. Java has no unsigned int type, so the operator is the only unsigned shift you get.</div>
   </li>
   <li>
     <span class="pitfalls__title">x & (x-1) on x=0</span>
-    <div class="pitfalls__bug">Power-of-two test without <code>x &gt; 0</code> accepts 0, and negatives.</div>
-    <div class="pitfalls__fix"><code>x &gt; 0 &amp;&amp; (x &amp; (x-1)) == 0</code>.</div>
+    <div class="pitfalls__bug">A power-of-two test without <code>x &gt; 0</code> accepts 0 (and any negative), because <code>0 &amp; -1</code> is 0 and looks like "exactly one bit".</div>
+    <div class="pitfalls__fix">Write <code>x &gt; 0 &amp;&amp; (x &amp; (x - 1)) == 0</code>, and unit-test 0, 1, 2 and -8.</div>
   </li>
   <li>
     <span class="pitfalls__title">XOR of a subarray without a prefix</span>
-    <div class="pitfalls__bug">Recomputing XOR(l..r) in O(r-l) per query dies at n,q=1e5.</div>
-    <div class="pitfalls__fix">Prefix XOR array, query is <code>p[r+1] ^ p[l]</code>.</div>
+    <div class="pitfalls__bug">Recomputing <code>XOR(l..r)</code> in O(r-l) per query looks like a one-liner and dies at n, q = 1e5, which is 5&times;10&#8313; XORs in the worst case.</div>
+    <div class="pitfalls__fix">Build a prefix XOR array once, then answer each query as <code>p[r+1] ^ p[l]</code> in one operation.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mask loop with n=31 on int</span>
-    <div class="pitfalls__bug"><code>1 &lt;&lt; n</code> overflows the loop bound; signed int 2^31 is negative.</div>
-    <div class="pitfalls__fix">n≤30 for <code>int</code> masks; use <code>1L &lt;&lt; n</code> and a long loop.</div>
+    <div class="pitfalls__bug"><code>1 &lt;&lt; n</code> as the loop bound overflows a signed int: 2^31 is negative, so the loop either never runs or runs forever.</div>
+    <div class="pitfalls__fix">Keep n at most 30 for <code>int</code> masks, or switch to <code>1L &lt;&lt; n</code> and a <code>long</code> loop variable.</div>
   </li>
 </ul>
 
@@ -584,28 +585,28 @@ flowchart TD
   <details class="followup">
     <summary>Two unique numbers, everything else twice?</summary>
     <div class="followup__body">
-      <p>XOR everything to get a^b. The lowest set bit of a^b is a bit they differ on. Partition the array by that bit and XOR-fold each part: LC 260.</p>
+      <p>XOR everything to get a^b. Those two numbers differ in at least one bit, and the lowest set bit of a^b names one such bit. Partition the array into "that bit on" and "that bit off" and XOR-fold each part: each part still has even counts of the paired values and exactly one unique, which is LC 260.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why is n & -n the lowest set bit?</summary>
     <div class="followup__body">
-      <p>Two's complement: -n is ~n+1. Adding one flips trailing ones into zeros and the first zero into a one, which is exactly the lowest set bit of n, and AND isolates it.</p>
+      <p>Two's complement defines -n as ~n+1. Adding one flips every trailing 1 of ~n into a 0 and the first 0 into a 1, which is exactly the lowest set bit of n. AND with n then keeps only that shared one. On 13 that is <code>1101 &amp; ...0011 = 0001</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Enumerate only submasks of m, not all 2^n?</summary>
     <div class="followup__body">
-      <p><code>for (int s = m; s != 0; s = (s-1) &amp; m)</code> then handle s=0. That is SOS / subset-convolution's inner loop. 3^n over all (mask, submask) pairs.</p>
+      <p>Write <code>for (int s = m; s != 0; s = (s - 1) &amp; m)</code> and handle s=0 as a last step. Each iteration turns off some bits without ever leaving m, so you visit exactly the 2^{popcount(m)} submasks. Over all pairs (mask, submask) that is 3^n, the inner loop of SOS DP.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Maximum XOR pair in O(n)?</summary>
     <div class="followup__body">
-      <p>Not with masks. Build a binary trie of the numbers (or of prefix XORs for subarrays) and greedy-match the opposite bit. See XOR trie.</p>
+      <p>Not with a mask loop: n=1e5 cannot afford 2^32. Build a binary trie of the numbers (or of prefix XORs, if the question is a subarray) and, for each value, greedy-walk the opposite bit at every depth. That is O(32 n) and lives on the XOR trie page.</p>
     </div>
   </details>
 </div>

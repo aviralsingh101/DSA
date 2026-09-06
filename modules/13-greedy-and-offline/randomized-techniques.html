@@ -22,7 +22,7 @@
   <p class="hero__tagline">Randomised algorithms in contests: hashing bases, Miller-Rabin, treaps, random shuffle + greedy, and Monte-Carlo fingerprints &mdash; plus how to bound the failure probability.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../12-strings-advanced/rolling-hash.html">Rolling Hash</a>,
       <a href="../11-math-and-number-theory/modular-arithmetic.html">Modular Arithmetic</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A lot of deterministic-looking problems become short with a random hash or a random partition. Rolling hashes, Zobrist hashing of sets, and randomised incremental construction (Delaunay, treaps) are standard. Interviews may ask Miller-Rabin or "why shuffle then greedy".</p>
-<p>Monte-Carlo algorithms can be wrong with tiny probability (hash collision). Las Vegas algorithms are always correct and only the runtime is random (randomised quicksort, treap). Know which one you shipped.</p>
-<p>CF anti-hash tests punish fixed bases. Randomise on startup from a high-resolution clock. Never seed with 0 only.</p>
+<p>You are given two strings, or two sets, or a 64-bit integer that might be prime, and a deterministic structure that answers the question is a page of code you do not want to write under a clock. A random fingerprint &mdash; a 64-bit hash, a random witness, a random heap priority &mdash; turns the same question into a handful of multiplications. Rolling hashes, Zobrist hashes of sets, Miller-Rabin primality, and treaps are the usual forms. The cost of that brevity is a failure probability you must be willing to bound out loud, because a fixed base on Codeforces will be hunted by an anti-hash test and a wrong primality test will declare a composite prime.</p>
+<p>There are two error models and they are not interchangeable. A <em>Monte-Carlo</em> algorithm may return the wrong answer, with a probability you choose, and its worst-case runtime is usually deterministic: a hash comparison that collides, a Miller-Rabin witness that lies. A <em>Las Vegas</em> algorithm is always correct and only the runtime is random: randomised quicksort, a treap, a shuffle-then-greedy that retries until a witness works. Shipping a hash without saying "error about <code>q / 2<sup>64</sup></code>" is claiming Las Vegas for a Monte-Carlo algorithm, which is the interview trap.</p>
+<p>In a real problem statement the signal is equality of strings or sets, primality of a 64-bit integer, or a sequence that wants split and merge, sitting next to limits that make the deterministic alternative (KMP build, trial division to <code>&radic;n</code>, a splay tree) either slower to type or slower to run. Codeforces anti-hash tests punish a famous fixed base such as 31 modulo <code>10<sup>9</sup>+7</code>. Randomise the base from <code>System.nanoTime()</code> at startup, or use two moduli. Never seed <code>new Random(0)</code> in a submission you cannot reproduce the setter's attack against.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>If a random fingerprint collides with probability 1/2^{64}, q = 1e5 comparisons still fail with probability ~ 1e5/2^{64}. That is the calculation you recite.</p>
+    <p>If a random 64-bit fingerprint collides with probability about <code>1 / 2<sup>64</sup></code>, then <code>q = 10<sup>5</sup></code> comparisons still fail with probability about <code>10<sup>5</sup> / 2<sup>64</sup></code>, which is the calculation you recite. Las Vegas algorithms skip that sentence because they are never wrong, only sometimes slow.</p>
   </div>
 </aside>
 
@@ -112,18 +112,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Failure 2^{-64} is enough for 1e9 operations. Miller-Rabin: 7-13 bases for 64-bit, or random witnesses. Java <code>ThreadLocalRandom</code> / <code>Random</code> with nanoTime seed.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> A per-comparison failure of <code>2<sup>-64</sup></code> is small enough for a billion operations; a union bound still leaves the whole run safer than a hardware glitch. Miller-Rabin on a 64-bit integer needs a known set of 7 deterministic witnesses, or a handful of random ones. Java's <code>ThreadLocalRandom</code> or a <code>Random</code> seeded from <code>nanoTime</code> is the contest RNG; do not use <code>SecureRandom</code> unless the statement is about cryptography.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Zobrist: each value (or each (position,value)) gets a random 64-bit mask. XOR is the set hash; add/remove is XOR again. Collisions like 2^64 hashes.</p>
-<p>Miller-Rabin: write n-1 = 2^s * d. For a witness a, compute a^d and square s times; if you never see 1 or n-1 at the right time, n is composite. Random a, or a fixed list that is deterministic for 64-bit integers.</p>
+<p>Zobrist hashing gives each value (or each pair of position and value) a random 64-bit mask, stored in a table you fill once at startup. The hash of a set is the XOR of the masks of its members; adding or removing an element is XOR-ing that mask again, because XOR is its own inverse. Two different sets collide only when their symmetric difference XORs to zero, which for random 64-bit masks happens with probability about <code>2<sup>-64</sup></code> per comparison. Polynomial rolling hashes are the ordered cousin: a random base and one or two big moduli turn a string into a number, and a substring becomes a pair of prefix hashes. Both are Monte-Carlo: you state the union bound and you move on.</p>
+<p>Miller-Rabin tests whether an odd <code>n</code> is prime. Write <code>n - 1 = 2<sup>s</sup> &times; d</code> with <code>d</code> odd. For a witness <code>a</code>, compute <code>a<sup>d</sup> mod n</code> and then square that value <code>s</code> times. If you never see 1 or <code>n - 1</code> at the moment the theorem demands, <code>n</code> is composite for sure. If every squaring looks legal, <code>n</code> is probably prime; a random witness lies with probability at most <code>1/4</code>, so a dozen independent witnesses push the error below <code>2<sup>-20</sup></code>. For every 64-bit integer there is a short fixed list of witnesses that jointly catch every composite, which is how the test becomes deterministic on that range. The implementation trap is <code>a * b % m</code> on longs: a billion times a billion overflows, the witness is garbage, and primes are declared composite.</p>
+<p>Walk a few integers. For <code>n = 7</code>, <code>n - 1 = 2<sup>1</sup> &times; 3</code>; the witness 2 gives <code>2<sup>3</sup> = 8 &equiv; 1 (mod 7)</code>, which is a pass. For <code>n = 15 = 3 &times; 5</code>, <code>n - 1 = 2<sup>1</sup> &times; 7</code> and <code>2<sup>7</sup> = 128 &equiv; 8 (mod 15)</code>, which is neither 1 nor 14, so 15 is composite after one witness. Zobrist on the side: the sets <code>{1, 2}</code> and <code>{2, 1}</code> XOR the same two masks and compare equal; <code>{1, 2}</code> versus <code>{1, 3}</code> differ unless those three masks are linearly dependent over <code>GF(2)</code>, which is the <code>2<sup>-64</sup></code> event. A shuffle-then-try-first-feasible permutation is Las Vegas: if a constant fraction of permutations work, the expected number of trials is a small constant.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>A Monte-Carlo fingerprint is a homomorphism from the object (string, set) to a ring. Distinct objects collide with probability about 1/|ring| per comparison if the map is pairwise independent / polynomial.</p>
+    <p>A Monte-Carlo fingerprint is a homomorphism from the object (string, set, integer) into a ring or a bit-vector. Distinct objects collide with probability about <code>1 / |ring|</code> per comparison when the map is pairwise independent or a random polynomial; a union bound over <code>q</code> comparisons is the failure probability of the whole run.</p><p>In plain words, you replaced the object by a random name that almost surely differs from every other object's name, and you must say "almost surely" rather than "always".</p><p>Interview sentence: <em>"Hashing is Monte-Carlo with error q over 2 to the 64; a treap is Las Vegas and always correct."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Name the error model</span>
+    <p>Monte-Carlo: bounded error, usually a deterministic runtime (hash, a single Miller-Rabin round). Las Vegas: always correct, expected runtime (random pivot, treap, retry-until-witness). Do not call a hash "always correct" unless you verify collisions with a deterministic compare.</p>
   </div>
 </aside>
 
@@ -155,7 +164,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "7 is prime. Miller-Rabin with a=2: 7-1=2^1*3, 2^3=8equiv1 mod 7. Pass.",
+          "note": "Seven is prime. Miller-Rabin with witness 2 writes 7-1 as 2^1 times 3, and 2^3 = 8, which is 1 mod 7, so the witness passes.",
           "active": [
             0
           ],
@@ -166,7 +175,7 @@
           }
         },
         {
-          "note": "13 prime. Pass.",
+          "note": "Thirteen is also prime. The same witness 2 satisfies the squaring conditions, so Miller-Rabin reports prime again.",
           "active": [
             1
           ],
@@ -177,7 +186,7 @@
           }
         },
         {
-          "note": "15=3*5 composite. a=2: 15-1=2^1*7, 2^7=128equiv8 mod 15, not 1 or 14. Fail → composite.",
+          "note": "Fifteen is 3 times 5. Witness 2 gives 2^7 = 128, which is 8 mod 15, neither 1 nor 14, so the test correctly reports composite.",
           "active": [
             2
           ],
@@ -188,7 +197,7 @@
           }
         },
         {
-          "note": "17 prime. Pass.",
+          "note": "Seventeen is prime and the witness 2 passes once more, which is the pattern for every prime: a legal witness never rejects it.",
           "active": [
             3
           ],
@@ -199,7 +208,7 @@
           }
         },
         {
-          "note": "Zobrist: set {1,2} XOR {2,1} same masks, equal. {1,2} vs {1,3} differ w.h.p.",
+          "note": "Zobrist hashes of {1, 2} and {2, 1} XOR the same two masks and compare equal; {1, 2} versus {1, 3} differ except on a 2^-64 collision.",
           "active": [
             0,
             1
@@ -211,7 +220,7 @@
           }
         },
         {
-          "note": "Shuffle then \"first that works\": expected few trials if a constant fraction of permutations are good.",
+          "note": "Shuffle then try the first feasible permutation is Las Vegas: if a constant fraction of orders work, the expected number of retries is a small constant.",
           "active": [
             4
           ],
@@ -245,17 +254,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Pick the model:</strong> fingerprint (MC) or random structure (LV).</li>
-  <li><strong>Seed</strong> RNG from nanoTime xor identityHash, not a constant.</li>
-  <li><strong>Hash:</strong> random base / Zobrist table of 64-bit values.</li>
-  <li><strong>MR:</strong> deterministic bases for 64-bit, or k random witnesses.</li>
-  <li><strong>Treap:</strong> random priority per node, rotate to heap-order.</li>
-  <li><strong>State the bound</strong> in a comment if the blog / interview asks.</li>
+  <li><strong>Name the error model before you pick a tool.</strong> A fingerprint (hash, one Miller-Rabin round) is Monte-Carlo; a random tree or a random pivot is Las Vegas. Mixing the two in the analysis is how "always correct" gets attached to a hash.</li>
+  <li><strong>Seed the RNG from the clock, not from a constant.</strong> <code>System.nanoTime()</code> xor-ed with an identity hash is enough for a contest; <code>new Random(0)</code> is a target the setter can reproduce.</li>
+  <li><strong>Draw a random hash base or a Zobrist table of 64-bit masks.</strong> One random base plus two moduli, or XOR of random ids for a set: state the collision probability once in a comment and then treat compares as equalities.</li>
+  <li><strong>For 64-bit primality, use the known witness list (or k random witnesses).</strong> Deterministic bases make Miller-Rabin always correct on that range; random witnesses need the <code>4<sup>-k</sup></code> bound said out loud.</li>
+  <li><strong>Give every treap node a random long priority and rotate to heap order.</strong> The BST order stays on the keys, the heap order on the priorities, and split/merge then run in expected logarithmic time.</li>
+  <li><strong>Write the failure or expectation bound where a reviewer will see it.</strong> Interviews ask for that sentence; a blog without it reads as if the algorithm were deterministic, which is the claim that anti-hash tests exist to punish.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Miller-Rabin on a short list of integers, then a Zobrist equality and a shuffle-retry. Each row is one witness or one fingerprint, and the verdict it produces.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -263,12 +272,12 @@ flowchart TD
       <tr><th>n</th><th>MR</th><th>verdict</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>7</td><td>a=2</td><td>prime</td><td>7 is prime. Miller-Rabin with a=2: 7-1=2^1*3, 2^3=8equiv1 mod 7. Pass.</td></tr>
-      <tr><td>13</td><td>pass</td><td>prime</td><td>13 prime. Pass.</td></tr>
-      <tr><td>15</td><td>a=2</td><td>composite</td><td>15=3*5 composite. a=2: 15-1=2^1*7, 2^7=128equiv8 mod 15, not 1 or 14. Fail → composite.</td></tr>
-      <tr><td>17</td><td>pass</td><td>prime</td><td>17 prime. Pass.</td></tr>
-      <tr><td>zobrist</td><td>xor</td><td>equal sets</td><td>Zobrist: set {1,2} XOR {2,1} same masks, equal. {1,2} vs {1,3} differ w.h.p.</td></tr>
-      <tr><td>shuffle</td><td>Las Vegas</td><td>retry</td><td>Shuffle then "first that works": expected few trials if a constant fraction of permutations are good.</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td>a=2</td><td>prime</td><td>Seven is prime. Miller-Rabin with witness 2 writes 7-1 as 2^1 times 3, and 2^3 = 8, which is 1 mod 7, so the witness passes.</td></tr>
+      <tr><td>13</td><td>pass</td><td>prime</td><td>Thirteen is also prime. The same witness 2 satisfies the squaring conditions, so Miller-Rabin reports prime again.</td></tr>
+      <tr><td>15</td><td>a=2</td><td>composite</td><td>Fifteen is 3 times 5. Witness 2 gives 2^7 = 128, which is 8 mod 15, neither 1 nor 14, so the test correctly reports composite.</td></tr>
+      <tr><td>17</td><td>pass</td><td>prime</td><td>Seventeen is prime and the witness 2 passes once more, which is the pattern for every prime: a legal witness never rejects it.</td></tr>
+      <tr><td>zobrist</td><td>xor</td><td>equal sets</td><td>Zobrist hashes of {1, 2} and {2, 1} XOR the same two masks and compare equal; {1, 2} versus {1, 3} differ except on a 2^-64 collision.</td></tr>
+      <tr><td>shuffle</td><td>Las Vegas</td><td>retry</td><td>Shuffle then try the first feasible permutation is Las Vegas: if a constant fraction of orders work, the expected number of retries is a small constant.</td></tr>
     </tbody>
   </table>
 </div>
@@ -381,7 +390,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Miller-Rabin is k modular exponentiations. Each mulMod is O(1) with 128-bit, O(log m) with BigInteger. Collision bound: union bound over comparisons.</p>
+    <p>Miller-Rabin on one integer is <code>k</code> modular exponentiations, each a <code>O(log n)</code> sequence of multiplications modulo <code>n</code>. With a 128-bit <code>mulMod</code> those multiplications are constant time; with <code>BigInteger</code> they are <code>O(log n)</code> each, still fine for a few dozen tests. A Zobrist or rolling-hash compare is a handful of XORs or multiplications, treated as <code>O(1)</code>. A treap split or merge is expected <code>O(log n)</code> rotations because a random priority heap has logarithmic height.</p>
+    <p>The failure calculation is a union bound. One 64-bit fingerprint collides with probability about <code>2<sup>-64</sup></code>; <code>q</code> independent compares therefore fail with probability at most <code>q / 2<sup>64</sup></code>. Putting real numbers in: <code>q = 10<sup>5</sup></code> gives about <code>5 &times; 10<sup>-15</sup></code>, and even a billion compares is still about <code>5 &times; 10<sup>-11</sup></code>. Miller-Rabin with seven deterministic 64-bit witnesses has error zero on that range. Trial division to <code>&radic;n</code> on a 64-bit composite is up to <code>2<sup>32</sup></code> divisions and is the thing these tests replace.</p>
   </div>
 
   <table class="complexity__compare">
@@ -403,28 +413,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Fixed hash base on CF</span>
-    <div class="pitfalls__bug">Anti-hash tests. WA on test 67.</div>
-    <div class="pitfalls__fix">Random base, two moduli, or 2^61-1 + unsigned.</div>
+    <div class="pitfalls__bug">A famous base such as 31 modulo <code>10<sup>9</sup>+7</code> looks identical to the textbook rolling-hash, so the sample and the first sixty tests pass, then an anti-hash test constructs a collision and you WA on test 67.</div>
+    <div class="pitfalls__fix">Draw the base from the clock, or use two independent moduli, or hash modulo <code>2<sup>61</sup>-1</code> with unsigned overflow. Re-run against a known anti-hash pair before you submit.</div>
   </li>
   <li>
     <span class="pitfalls__title">mul overflow in MR</span>
-    <div class="pitfalls__bug">a*b % m for 1e18 wraps long and the witness is wrong: primes declared composite.</div>
-    <div class="pitfalls__fix">BigInteger, or long mulMod via split, or Math.multiplyHigh / unsigned.</div>
+    <div class="pitfalls__bug"><code>a * b % m</code> on longs looks like the usual modular multiply, but when <code>a</code> and <code>b</code> are near <code>10<sup>18</sup></code> the product wraps in 64 bits, the witness becomes garbage, and a real prime is reported composite.</div>
+    <div class="pitfalls__fix">Use <code>BigInteger</code>, a split <code>mulMod</code>, <code>Math.multiplyHigh</code>, or unsigned 128-bit arithmetic. Test on a known 64-bit prime near <code>2<sup>64</sup></code>, not on 17.</div>
   </li>
   <li>
     <span class="pitfalls__title">Seeding Random with 0</span>
-    <div class="pitfalls__bug">Reproducible collisions the setter can target if they know the seed.</div>
-    <div class="pitfalls__fix">nanoTime, or accept determinism for local debug only.</div>
+    <div class="pitfalls__bug">A constant seed makes every hash table identical across machines, which is convenient for debugging and is exactly the table a setter can target once they know the seed.</div>
+    <div class="pitfalls__fix">Seed from <code>System.nanoTime()</code> in the submission. Keep the constant seed only in a local debug build that you will not send to the judge.</div>
   </li>
   <li>
     <span class="pitfalls__title">Treap without unique priorities</span>
-    <div class="pitfalls__bug">Equal priorities can unbalance or infinite-rotate if you are not careful.</div>
-    <div class="pitfalls__fix">Random long priorities; on equal, treat as heap-tie by pointer.</div>
+    <div class="pitfalls__bug">Equal integer priorities look harmless because the BST order is still well defined, but a rotate-on-tie can loop or build a long chain, and the expected-log proof assumes distinct random priorities.</div>
+    <div class="pitfalls__fix">Draw a random <code>long</code> per node. On the rare remaining tie, break it by node identity and never rotate in a cycle.</div>
   </li>
   <li>
     <span class="pitfalls__title">Calling a Monte-Carlo algorithm Las Vegas in an interview</span>
-    <div class="pitfalls__bug">You claim "always correct" about hashing.</div>
-    <div class="pitfalls__fix">Say "error 2^{-64}" or verify with a deterministic compare on collision.</div>
+    <div class="pitfalls__bug">"The hash is always correct" sounds like confidence, but a fingerprint can collide, so the claim is false and a follow-up of "what is the error?" has no number attached.</div>
+    <div class="pitfalls__fix">Say "error about <code>q / 2<sup>64</sup></code>" for a 64-bit hash, or verify a suspected collision with a deterministic compare (KMP, character-by-character). Treaps and random pivots are the ones that are always correct.</div>
   </li>
 </ul>
 
@@ -466,28 +476,28 @@ flowchart TD
   <details class="followup">
     <summary>Monte-Carlo vs Las Vegas?</summary>
     <div class="followup__body">
-      <p>MC: bounded error, usually fast worst-case (hash). LV: always correct, expected fast (random pivot). Quicksort is LV. Hashing without verify is MC.</p>
+      <p>A Monte-Carlo algorithm may be wrong, with a probability you bound, and its worst-case runtime is usually deterministic: a hash compare, a single Miller-Rabin round. A Las Vegas algorithm is never wrong and only the runtime is random: randomised quicksort, a treap, a retry-until-witness loop. Hashing without a deterministic verify is Monte-Carlo. Do not mix the two sentences in an interview.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why do 7 MR bases suffice for 64-bit?</summary>
     <div class="followup__body">
-      <p>There is a proven finite set of witnesses that jointly catch every 64-bit composite. Using them makes MR deterministic for that range.</p>
+      <p>There is a proven finite set of witnesses that jointly catch every composite below <code>2<sup>64</sup></code>. Checking those witnesses, and no others, makes Miller-Rabin deterministic on unsigned 64-bit integers: every composite fails at least one of them, and no prime fails any of them. Random witnesses are for bigger integers, or for when you have not memorised the list.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Zobrist vs polynomial hash for sets?</summary>
     <div class="followup__body">
-      <p>Polynomial cares about order. XOR of random ids is commutative — it hashes sets/multisets (multiset needs a counter-dependent mask or 2D table).</p>
+      <p>A polynomial hash cares about order: swapping two characters changes the value. XOR of random ids is commutative and involutive, so it hashes sets (and, with a counter-dependent mask or a 2D table, multisets). Use Zobrist when the object is "these elements, in any order"; use a polynomial when the object is a string or a sequence.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you derandomise hashing?</summary>
     <div class="followup__body">
-      <p>Universal hashing with a random draw from a 2-universal family is already the theoretical version. Worst-case deterministic substring equality is KMP/SA/Z.</p>
+      <p>Universal hashing &mdash; drawing a function from a 2-universal family at startup &mdash; is already the theoretical version of what this page does with a random base. Worst-case deterministic substring equality does not hash at all: it uses KMP, the Z-function, or a suffix array. If the statement forbids randomness, those are the tools, not a fixed "random-looking" base.</p>
     </div>
   </details>
 </div>

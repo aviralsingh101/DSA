@@ -22,7 +22,7 @@
   <p class="hero__tagline">Map every substring to a polynomial <code>s[l] b^{len-1} + … + s[r]</code> modulo a prime so equality (and 2D / palindrome checks) become a few multiplies.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">30 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../11-math-and-number-theory/modular-arithmetic.html">Modular Arithmetic</a>,
       <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Substring equality, longest common substring, palindrome checks, and "does this pattern appear" are O(n) with KMP/Z for one pattern, but hashing stays O(1) per query after an O(n) prefix, and extends to 2D, trees, and sets of strings without a specialised automaton.</p>
-<p>The polynomial hash is a prefix array in the ring Z/MZ: H[i] = s[0]b^{i-1} + s[1]b^{i-2} + … + s[i-1]. A substring is H[r]-H[l]*b^{r-l}, computed with a precomputed pow[]. Two 64-bit moduli (or one 2^64 unsigned plus one prime) make collisions a non-issue in contests.</p>
-<p>The interview sentence is "compare hashes first, verify on a collision if the modulus is small". On Codeforces, anti-hash tests exist: use a randomised base, two moduli, or 2^61-1.</p>
+<p>You are given a string and a pile of questions of the form "is the slice from here to there the same as the slice from over there?" The honest answer compares the two slices character by character. That is correct, and at length <code>n</code> it costs <code>n</code> work per question. With <code>q = 2 &times; 10<sup>5</sup></code> questions on strings of length <code>10<sup>5</sup></code> you are looking at about <code>2 &times; 10<sup>10</sup></code> comparisons, and the judge will not wait. KMP and Z solve the special case of one pattern in one text, but they do not give you an arbitrary pair of slices in constant time, and they do not drop a set of slices into a hash set.</p>
+<p>The fix is to treat each slice as a number. Pick a base <code>b</code> and a modulus <code>M</code>, and read the characters of a slice as digits of a base-<code>b</code> integer, then reduce modulo <code>M</code>. Two slices that are equal produce the same number; two slices that differ almost always produce different numbers. After one prefix pass you can recover any slice's number with a subtraction and a multiply, the same shape as a prefix-sum difference, except the powers of <code>b</code> have to be aligned before you subtract.</p>
+<p>That number is called a <em>polynomial hash</em> or a <em>rolling hash</em>. One comparison against a small prime can collide, which is why contest code uses a random base, two moduli, or the free ring of unsigned 64-bit overflow. The interview sentence is "compare hashes first, and if the modulus is small enough to worry about, verify the characters on a hit". On Codeforces, tests that break a famous base and <code>10<sup>9</sup>+7</code> are a known sport.</p>
+<p>In a real statement the signal is many substring-equality questions, a binary search on "longest common prefix of these two suffixes", palindrome queries, or "put these slices in a set". If you must be deterministic with one pattern and no collision story, write KMP. If you need the lexicographic order of every suffix, write a suffix array.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A substring hash is a prefix-hash difference scaled by a power of the base &mdash; the same identity as prefix sums, in a modular ring.</p>
+    <p>A substring hash is a prefix-hash difference scaled by a power of the base &mdash; the same identity as a prefix sum, just living in a modular ring. Build <code>H</code> and <code>pow</code> once, then every slice is one multiply and one subtract, and two slices are equal exactly when those numbers agree (or, with a tiny probability, when they collide).</p>
   </div>
 </aside>
 
@@ -111,18 +112,44 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code>. Two 64-bit moduli, base random in [256, 1e9). Never use mod 1e9+7 alone on CF.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2 &times; 10<sup>5</sup></code> substring-equality questions is the signature. Two 64-bit moduli and a base drawn at random from <code>[257, 10<sup>9</sup>)</code> make a collision on that batch a non-event. A single fixed <code>10<sup>9</sup>+7</code> with base 31 is the combination Codeforces anti-hash tests are written to break, so do not ship it alone.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Fix base b and mod M. H[0]=0, H[i+1] = (H[i]*b + s[i]) % M. pow[0]=1, pow[i+1]=pow[i]*b % M. Substring [l, r) has hash (H[r] - H[l]*pow[r-l]) % M, add M if negative.</p>
-<p>Collision probability for one comparison is about (length)/M with a random base. q comparisons → q/M. Two independent hashes make it q/M^2. Anti-hash: randomise b at startup, or use unsigned long overflow as a free 2^64 ring plus a prime.</p>
+<p>You need two arrays, <code>H</code> and <code>pow</code>, both of length <code>n+1</code>. Fix a base <code>b</code> larger than the alphabet and a modulus <code>M</code>. Set <code>H[0] = 0</code> and <code>pow[0] = 1</code>. Then for each index <code>i</code> write <code>H[i+1] = (H[i] * b + s[i]) mod M</code> and <code>pow[i+1] = (pow[i] * b) mod M</code>. After that pass, <code>H[i]</code> is the hash of the prefix <code>s[0..i)</code>, read as a base-<code>b</code> integer. The half-open slice <code>[l, r)</code> has hash <code>(H[r] - H[l] * pow[r-l]) mod M</code>; if the subtraction went negative, add <code>M</code> back, because Java's remainder operator can return a negative representative.</p>
+<p>That difference is doing the same job a prefix-sum difference does. <code>H[r]</code> is the number for the whole prefix up to <code>r</code>. <code>H[l]</code> is the number for the prefix up to <code>l</code>, but its digits sit in higher places, so you multiply by <code>b^{r-l}</code> to shift them into the same places they occupy inside <code>H[r]</code>. Subtract, and the leading digits cancel, leaving only the digits of the slice. Two slices are equal if those leftover numbers agree. They can also agree by accident: with a random base the chance of one unlucky comparison is about <code>n / M</code>, <code>q</code> comparisons cost about <code>q / M</code>, and two independent moduli square that chance down to something you will not see in a contest.</p>
+<p>Anti-hash hygiene is part of the algorithm, not an optional extra. A fixed base 31 and modulus <code>10<sup>9</sup>+7</code> is famous enough that people generate strings whose polynomials collide on purpose. Draw <code>b</code> from a wide range at startup, or work in unsigned 64-bit overflow (the ring modulo <code>2<sup>64</sup></code>, which Java <code>long</code> arithmetic already is) and pair it with one prime if the contest is known to be hostile. Never map a letter to 0: a leading zero makes <code>a</code> and <code>aa</code> the same number, which is a collision you invented yourself.</p>
+<p>Walk the toy string <code>aba</code> with <code>a = 1</code>, <code>b = 2</code>, base 3, and no modulus so the arithmetic stays visible. <code>H[0] = 0</code>. After <code>a</code> you have <code>H[1] = 1</code>. After <code>ab</code> you have <code>H[2] = 1 &times; 3 + 2 = 5</code>. After <code>aba</code> you have <code>H[3] = 5 &times; 3 + 1 = 16</code>. The slice <code>[1, 3)</code> is <code>ba</code>, and the formula gives <code>16 - 1 &times; 3<sup>2</sup> = 7</code>, which is exactly <code>2 &times; 3 + 1</code>. The slice <code>[0, 2)</code> is <code>ab</code> and hashes to 5, so the two middle-overlapping slices are correctly reported different. A palindrome check is the same comparison against a hash built on the reversed string.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>H[i] = sum_{j=0}^{i-1} s[j] * b^{i-1-j} (mod M). Then hash[l, r) = H[r] - H[l] * b^{r-l} (mod M), the unique polynomial of that substring.</p>
+    <p>The prefix array stores the polynomial of every prefix, and a slice is a scaled difference:</p><span class="eq">H[i] = &sum;<sub>j=0</sub><sup>i-1</sup> s[j] &middot; b<sup>i-1-j</sup> (mod M),&nbsp;&nbsp; hash[l, r) = H[r] &minus; H[l] &middot; b<sup>r-l</sup> (mod M)</span><p>In plain words, two slices are the same string exactly when those two polynomials are the same, and with a random base a collision is a rare modular accident rather than a logic bug. Interview sentence: <em>"I prefix-hash like a prefix sum, multiply by <code>pow[len]</code> to line the powers up, and I never ship base 31 with one small prime on Codeforces."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Java % can be negative</span>
+    <p><code>(H[r] - H[l] * pow[r-l]) % M</code> is a correct integer in mathematics and a possibly-negative leftover in Java. A <code>HashSet</code> then treats <code>-3</code> and <code>M-3</code> as different keys, so two equal slices miss each other. Always fold the representative back into <code>[0, M)</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Map letters to 1..26, not 0..25</span>
+    <p>A leading zero digit makes <code>a</code> and <code>aa</code> the same polynomial when <code>a</code> maps to 0. Using the raw <code>char</code> code is also safe, because it is never 0. The bug is silent: the rest of the code looks right and only one family of slices collides.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Collision chance after q comparisons</span>
+    <p>Schwartz&ndash;Zippel on a degree-<code>n</code> polynomial against a random base says one comparison collides with probability about <code>n / M</code>. After <code>q</code> comparisons that is about <code>q n / M</code>. Two independent 64-bit moduli put the product near <code>q n / 2<sup>128</sup></code>, which is not a number you will hit in a contest lifetime.</p>
   </div>
 </aside>
 
@@ -159,7 +186,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "s = aba, map a=1, b=2, b_base=3, no mod for the toy. H[0]=0.",
+          "note": "The toy string is aba with a mapped to 1, b mapped to 2, and base 3 so the arithmetic stays visible. The empty prefix hashes to H[0] = 0.",
           "active": [
             0
           ],
@@ -170,7 +197,7 @@
           }
         },
         {
-          "note": "H[1] = 0*3+1 = 1. Hash of \"a\".",
+          "note": "After the first letter we store H[1] = 0 times 3 plus 1, which is 1, the hash of the single-character prefix a.",
           "active": [
             1
           ],
@@ -181,7 +208,7 @@
           }
         },
         {
-          "note": "H[2] = 1*3+2 = 5. Hash of \"ab\".",
+          "note": "After the second letter we store H[2] = 1 times 3 plus 2, which is 5, the hash of the prefix ab.",
           "active": [
             2
           ],
@@ -192,7 +219,7 @@
           }
         },
         {
-          "note": "H[3] = 5*3+1 = 16. Whole string.",
+          "note": "After the third letter we store H[3] = 5 times 3 plus 1, which is 16, the hash of the whole string aba.",
           "active": [
             3
           ],
@@ -203,7 +230,7 @@
           }
         },
         {
-          "note": "hash[1,3) = H[3]-H[1]*3^2 = 16-1*9 = 7. That is \"ba\" = 2*3+1 = 7. Match.",
+          "note": "The slice [1, 3) is ba. The prefix difference is 16 minus 1 times 9, which equals 7, and that is exactly 2 times 3 plus 1.",
           "active": [
             1,
             3
@@ -215,7 +242,7 @@
           }
         },
         {
-          "note": "hash[0,2) vs hash[1,3): \"ab\"=5 vs \"ba\"=7, not equal. Palindrome would compare forward [0,3) to reverse hash.",
+          "note": "Comparing [0, 2) against [1, 3) gives 5 versus 7, so ab and ba are correctly reported different. A palindrome check would compare a forward hash to a reverse hash.",
           "active": [
             0,
             2
@@ -250,17 +277,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Pick</strong> a random odd base &gt; alphabet, and one or two moduli (2^61-1, 1e9+9, unsigned 2^64).</li>
-  <li><strong>Build</strong> H and pow of length n+1 in one pass.</li>
-  <li><strong>hash(l, r)</strong> half-open: <code>h = H[r] - H[l]*pow[r-l]; if (h<0) h+=M;</code></li>
-  <li><strong>Compare</strong> two ranges by hash; optionally verify with char loop if M is small.</li>
-  <li><strong>Rabin-Karp slide:</strong> window := window*b - s[i-len]*pow[len] + s[i].</li>
-  <li><strong>Reverse hash</strong> on the reversed string (or a second prefix from the right) for palindromes.</li>
+  <li><strong>Pick a base and a modulus you would defend out loud.</strong> Draw an odd base larger than the alphabet, and choose one or two moduli from unsigned <code>2<sup>64</sup></code>, <code>2<sup>61</sup>-1</code>, or a pair of 10<sup>9</sup>-ish primes. Do this once at startup, not as a hardcoded 31.</li>
+  <li><strong>Build the two prefix arrays in one pass.</strong> Allocate <code>H</code> and <code>pow</code> of length <code>n+1</code>, set the zeros, and fold each character in with <code>H[i+1] = H[i]*b + s[i]</code>. This is the only <code>O(n)</code> work.</li>
+  <li><strong>Recover a half-open slice with a scaled difference.</strong> For <code>[l, r)</code> compute <code>h = H[r] - H[l]*pow[r-l]</code> and, if you are in a prime modulus, fold a negative leftover back into <code>[0, M)</code>. Mixing inclusive <code>r</code> with a <code>pow[r-l]</code> shift is the classic off-by-one.</li>
+  <li><strong>Compare two slices by those numbers.</strong> Equal hashes mean the slices are almost certainly equal; if the modulus is a small single prime, verify the characters on a hit. Different hashes mean the slices are definitely different.</li>
+  <li><strong>Slide a window when the problem is Rabin-Karp search.</strong> The next alignment is <code>window * b - s[i-len]*pow[len] + s[i]</code>, which drops the leaving character and appends the incoming one without rebuilding.</li>
+  <li><strong>Build a reverse hash when you need palindromes.</strong> Either prefix-hash the reversed string, or keep a second prefix that grows from the right. A slice is a palindrome when its forward hash equals the reverse hash of the same range.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Prefix hashes of aba with a visible base-3 encoding, then one slice recovery and one equality test that correctly reports ab different from ba.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -268,12 +295,12 @@ flowchart TD
       <tr><th>i</th><th>H</th><th>sub</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>empty</td><td>s = aba, map a=1, b=2, b_base=3, no mod for the toy. H[0]=0.</td></tr>
-      <tr><td>1</td><td>1</td><td>a</td><td>H[1] = 0*3+1 = 1. Hash of "a".</td></tr>
-      <tr><td>2</td><td>5</td><td>ab</td><td>H[2] = 1*3+2 = 5. Hash of "ab".</td></tr>
-      <tr><td>3</td><td>16</td><td>aba</td><td>H[3] = 5*3+1 = 16. Whole string.</td></tr>
-      <tr><td>q</td><td>16</td><td>ba=7</td><td>hash[1,3) = H[3]-H[1]*3^2 = 16-1*9 = 7. That is "ba" = 2*3+1 = 7. Match.</td></tr>
-      <tr><td>cmp</td><td>5 vs 7</td><td>not palindrome slice</td><td>hash[0,2) vs hash[1,3): "ab"=5 vs "ba"=7, not equal. Palindrome would compare forward [0,3) to reverse hash.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>empty</td><td>The toy string is aba with a mapped to 1, b mapped to 2, and base 3 so the arithmetic stays visible. The empty prefix hashes to H[0] = 0.</td></tr>
+      <tr><td>1</td><td>1</td><td>a</td><td>After the first letter we store H[1] = 0 times 3 plus 1, which is 1, the hash of the single-character prefix a.</td></tr>
+      <tr><td>2</td><td>5</td><td>ab</td><td>After the second letter we store H[2] = 1 times 3 plus 2, which is 5, the hash of the prefix ab.</td></tr>
+      <tr><td>3</td><td>16</td><td>aba</td><td>After the third letter we store H[3] = 5 times 3 plus 1, which is 16, the hash of the whole string aba.</td></tr>
+      <tr><td>q</td><td>16</td><td>ba=7</td><td>The slice [1, 3) is ba. The prefix difference is 16 minus 1 times 9, which equals 7, and that is exactly 2 times 3 plus 1.</td></tr>
+      <tr><td>cmp</td><td>5 vs 7</td><td>not palindrome slice</td><td>Comparing [0, 2) against [1, 3) gives 5 versus 7, so ab and ba are correctly reported different. A palindrome check would compare a forward hash to a reverse hash.</td></tr>
     </tbody>
   </table>
 </div>
@@ -380,7 +407,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Prefix and powers are one pass. Each query is a multiply and a subtract. Binary search on LCP is O(log n) hashes = O(log n).</p>
+    <p>The prefix arrays are one loop of <code>n</code> multiplies. Each substring query is then a constant amount of arithmetic: one multiply by a precomputed power, one subtract, and a possible correction into <code>[0, M)</code>. A binary search that asks "do these two suffixes share a prefix of length mid?" spends one hash comparison per probe, so one longest-common-prefix costs <code>O(log n)</code> hashes, about 17 queries at <code>n = 10<sup>5</sup></code>.</p>
+    <p>Putting real numbers in: <code>n = q = 2 &times; 10<sup>5</sup></code> is a couple of hundred thousand multiplies to build and the same number of multiplies to answer, which is a few milliseconds. The character-loop alternative is <code>q &times; n</code> reads, about <code>4 &times; 10<sup>10</sup></code> in the same limits, which is the number that forces this page. Double hashing doubles the constants and still fits comfortably.</p>
   </div>
 
   <table class="complexity__compare">
@@ -402,28 +430,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Negative mod in Java</span>
-    <div class="pitfalls__bug"><code>(h[r] - h[l]*pow) % M</code> can be negative, and HashSet treats -3 and M-3 as different.</div>
-    <div class="pitfalls__fix"><code>x %= M; if (x < 0) x += M;</code></div>
+    <div class="pitfalls__bug">Writing <code>(H[r] - H[l]*pow) % M</code> looks like the mathematical remainder and compiles cleanly. Java can return a negative leftover, and a <code>HashSet</code> then stores <code>-3</code> and <code>M-3</code> as two different keys, so equal slices miss each other.</div>
+    <div class="pitfalls__fix">After the remainder, if the value is negative add <code>M</code> once. Test it on a slice whose leading prefix hash is larger than the longer prefix hash, which is the usual way the subtraction goes negative.</div>
   </li>
   <li>
     <span class="pitfalls__title">Fixed base 31 and mod 1e9+7 on CF</span>
-    <div class="pitfalls__bug">Anti-hash tests exist. Single small prime with a famous base will get WA.</div>
-    <div class="pitfalls__fix">Random base per run, two moduli, or unsigned 64 + one prime.</div>
+    <div class="pitfalls__bug">The pair is in every blog post and it passes random tests, so it looks finished. Anti-hash generators know that pair and will hand you two different strings with the same polynomial, which is a wrong-answer, not a timeout.</div>
+    <div class="pitfalls__fix">Draw the base at random each run, use two moduli, or work in unsigned 64-bit overflow plus one prime. On a local stress test, hash a few million random strings into a set and look for unexpected collisions.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mapping letters to 0</span>
-    <div class="pitfalls__bug">Leading zeros make "a" and "aa" collide when a maps to 0.</div>
-    <div class="pitfalls__fix">Map 'a'.. to 1..26, or use the raw char code which is never 0.</div>
+    <div class="pitfalls__bug">Mapping <code>'a'</code> to 0 looks like a tidy 0-based alphabet. A leading zero digit makes <code>a</code> and <code>aa</code> the same number, so those two slices collide even though the rest of the hash code is correct.</div>
+    <div class="pitfalls__fix">Map <code>'a'..'z'</code> to <code>1..26</code>, or use the raw <code>char</code> code, which is never zero. Check that <code>hash(0,1)</code> and <code>hash(0,2)</code> differ on a string of all <code>a</code>s.</div>
   </li>
   <li>
     <span class="pitfalls__title">pow overflow before mod</span>
-    <div class="pitfalls__bug"><code>p[i]*B</code> overflows long if you meant a 1e18 modulus.</div>
-    <div class="pitfalls__fix">Use a mul-mod, 2^61-1 trick, or stay in unsigned 2^64.</div>
+    <div class="pitfalls__bug">Writing <code>p[i] * B</code> in a <code>long</code> looks safe because you intend to reduce modulo a 10<sup>18</sup>-ish prime afterwards. The product already overflowed the 64-bit register, so the value you reduce is not the product you wanted.</div>
+    <div class="pitfalls__fix">Stay in unsigned <code>2<sup>64</sup></code> and accept the overflow as the modulus, or reduce with a mul-mod (or the <code>2<sup>61</sup>-1</code> trick) before the product leaves 64 bits.</div>
   </li>
   <li>
     <span class="pitfalls__title">Half-open vs inclusive mix</span>
-    <div class="pitfalls__bug">hash(l,r) as inclusive but multiplied by pow[r-l] instead of pow[r-l+1].</div>
-    <div class="pitfalls__fix">Pick [l, r) everywhere, including the dry run.</div>
+    <div class="pitfalls__bug">Documenting <code>hash(l, r)</code> as inclusive while multiplying by <code>pow[r-l]</code> looks consistent with the array length. The power is one short, every slice of length greater than 1 is wrong, and small palindrome checks still pass by luck.</div>
+    <div class="pitfalls__fix">Pick half-open <code>[l, r)</code> everywhere, including the dry-run table, and test a length-1 slice next to a length-2 slice so the off-by-one cannot hide.</div>
   </li>
 </ul>
 
@@ -465,28 +493,28 @@ flowchart TD
   <details class="followup">
     <summary>Why a random base?</summary>
     <div class="followup__body">
-      <p>For a fixed base, an adversary can build collisions (especially with small M). A random base unknown at test-generation time makes the polynomial random, and the Schwartz-Zippel bound applies.</p>
+      <p>For a fixed base an adversary can solve for strings whose polynomials collide, especially against a small well-known modulus. A base drawn at startup, after the tests were generated, makes the polynomial a random one the adversary did not know. The Schwartz&ndash;Zippel lemma then bounds the collision chance by the degree over the field size, which is the <code>n / M</code> figure in the derivation.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is 2^64 overflow OK?</summary>
     <div class="followup__body">
-      <p>It is a ring, not a field, so it has zero divisors. Thue-Morse / overflow attacks exist but are rarer. Pair it with a prime modulus if the contest is known-hostile.</p>
+      <p>Java <code>long</code> arithmetic is already the ring modulo <code>2<sup>64</sup></code>, so you get a 64-bit hash with no remainder instruction. It is a ring, not a field, so it has zero divisors and a few known overflow attacks (Thue&ndash;Morse style). Those are rarer than <code>10<sup>9</sup>+7</code> collisions. Pair the overflow hash with one prime if the contest is known to be hostile; otherwise a random base in this ring is the usual Codeforces default.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>LCP of two suffixes?</summary>
     <div class="followup__body">
-      <p>Binary search the length: hash equality is the predicate. O(log n) per LCP. Suffix arrays give all adjacent LCPs faster if you need them all.</p>
+      <p>Binary search the length. The predicate "the two suffixes share a prefix of length mid" is one hash comparison, so one LCP is <code>O(log n)</code> after the prefix arrays exist. If you need the LCP of every adjacent pair of sorted suffixes, a suffix array plus Kasai is the cleaner linear fill; hashing wins when you only ask about a few pairs.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Hash vs KMP in an interview?</summary>
     <div class="followup__body">
-      <p>Mention both. If they want worst-case linear, write KMP. If they want substring queries or a set of strings, write hashing and name the collision policy.</p>
+      <p>Mention both and then pick. If they want a worst-case linear scan of one pattern and no probability talk, write KMP. If they want many substring queries, a set of slices, or a binary search on string equality, write a rolling hash and say out loud what you will do on a collision (second modulus, or a character verify). Do not pretend a 32-bit <code>String.hashCode</code> is the same tool.</p>
     </div>
   </details>
 </div>

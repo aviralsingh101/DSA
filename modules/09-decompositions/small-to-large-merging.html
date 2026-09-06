@@ -22,7 +22,7 @@
   <p class="hero__tagline">Always merge the smaller sack into the larger. Each node is moved <code>O(log n)</code> times, so subtree-map problems become <code>O(n log n)</code>.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/dfs-and-components.html">DFS & Components</a>,
       <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A whole family of tree problems wants, for every node, some statistic of its subtree: number of distinct colours, the most frequent colour, a map of values. Building a fresh <code>HashMap</code> per node and inserting every descendant is <code>O(n&sup2;)</code>.</p>
-<p>Small-to-large (also called DSU-on-tree) keeps one map per subtree and always merges the smaller into the larger. When a value moves, the map it lives in at least doubles, so each value moves <code>O(log n)</code> times. Total is <code>O(n log n)</code> map operations.</p>
-<p>The implementation is a DFS that identifies the heaviest child, computes it first and <em>keeps</em> its map as the parent's sack, then merges the lighter children in. That is the same heavy-child idea as HLD, used for maps instead of paths.</p>
+<p>You are given a tree where every node has a colour, and you must report, for every node, how many distinct colours sit in its subtree. The honest code builds a fresh <code>HashSet</code> at each node and inserts every descendant. On a hundred thousand nodes that is about ten billion insertions if the tree is a straight line of parents, and the judge will not wait. The same quadratic wall appears for "most frequent colour in the subtree" and for any other statistic that wants the whole multiset of values under a node.</p>
+<p>Small-to-large merging, also called DSU-on-tree, keeps one map per subtree and always pours the smaller map into the larger one. That is the same habit as union-by-size on the disjoint-set page: hang the smaller group under the larger so a group only grows when it absorbs something no bigger than itself. Here the "group" is a <em>sack</em> &mdash; the map of values collected from a subtree. When a particular colour is copied out of a sack of <code>L</code> nodes into a sack that already holds at least <code>L</code> nodes, it now lives in a sack of size at least <code>2L</code>.</p>
+<p>A colour that starts in a singleton can therefore be copied at most <code>log&#8322; n</code> times before its host sack is the whole tree &mdash; about 17 moves when <code>n = 10&#8309;</code>, not <code>n</code> moves. One hundred thousand colours times seventeen copies is a couple of million map operations, which is the intended budget. The implementation is a DFS that identifies the heaviest child, computes it first, and <em>steals</em> its map as the parent's sack, then merges each lighter child in. That is the same heavy-child idea as heavy-light decomposition, used here for maps instead of path intervals.</p>
+<p>In a real statement the signal is a per-subtree map sitting next to <code>n &le; 10&#8309;</code>. If the queried set is a path rather than a subtree, this page is the wrong tool and you want HLD. If the queried set is pairs that cross a node, you want centroid decomposition. The three techniques share a logarithm; they do not share a query shape.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A value that is copied into a larger map now sits in a container at least twice as big. It can be copied at most <code>log n</code> times before the map is the whole tree.</p>
+    <p>A value that is copied into a larger sack now sits in a container at least twice as big, so it can be copied at most <code>log n</code> times before that container is the whole tree. Steal the heavy child's map rather than copying it, or you pay linear work at every ancestor and the bound collapses to quadratic.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a per-subtree map. HashMap operations make the hidden constant larger than a Fenwick tree; it still passes typical 2-second Java limits.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a statistic of the multiset of values in every subtree is the small-to-large signature. Building a fresh map at each node is about <code>n&sup2; / 2</code> insertions on a line, roughly five billion at this <code>n</code>. HashMap constants are larger than a Fenwick tree; a couple of million merges still pass a typical two-second Java limit.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>DFS computes subtree sizes, then processes the heavy child first <em>without clearing</em> its map. That map becomes the parent's sack. Each light child is computed, merged in, and can then be discarded.</p>
-<p>If you need the answer at every node, record it after the light children are merged and before you return. If a caller is a light child of someone else, you will rebuild this sack from scratch next time — that is paid for by the doubling bound.</p>
+<p>A first DFS fills <code>sz[u]</code> and <code>heavy[u]</code>, exactly as on the HLD page: the heavy child is the one with the largest subtree. The second DFS is the merge. Recurse into <code>heavy[u]</code> first and <em>steal the reference</em> to its map &mdash; do not write <code>new HashMap&lt;&gt;(heavyMap)</code>. That stolen map is now the sack of <code>u</code>. Then recurse into each light child, merge that child's map into the stolen one (iterating the smaller of the two, which is the light one), and drop the light map. Finally insert <code>u</code>'s own colour into the sack.</p>
+<p>If you need the answer at every node, write <code>ans[u]</code> after the light children are merged and the node's own value is in, and before you return the sack to the parent. When <code>u</code> itself is a light child of somebody else, that parent will copy every key in this sack into a larger one and then forget this map. Rebuilding it from scratch the next time you need those keys is exactly the work the doubling argument is paying for. When <code>u</code> is a heavy child, the parent steals the map and those keys are not copied at this level at all.</p>
+<p>Walk the seven-node sample with colours <code>[1, 2, 2, 3, 1, 3, 2]</code> at nodes 1 through 7. Leaves 4 and 5 hold singleton sacks <code>{3}</code> and <code>{1}</code>. Node 2 keeps 4's sack (the first child, size 1, a tie) and copies 5's colour in, then adds its own 2, ending with three distinct colours. Node 3 does the same with 6 and 7 and ends with two. The root keeps the larger child sack &mdash; node 2, three keys &mdash; and copies node 3's two keys in. Colour 2 moves from node 3's sack of two nodes into a sack that already holds three, and now lives in a sack of five; that is one doubling, and it will not move again.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>When a key is inserted into a larger map, the map size at least doubles. Each of the <code>n</code> values is therefore moved <code>O(log n)</code> times, and the whole DFS is <code>O(n log n)</code> map operations.</p>
+    <p>When a key is copied from a sack of <code>L</code> tree-nodes into a sack that already holds at least <code>L</code> tree-nodes, the key's new host has size at least <code>2L</code>. Each of the <code>n</code> values is therefore copied <code>O(log n)</code> times, and the whole DFS is <code>O(n log n)</code> map operations.</p><span class="eq">host after a copy &ge; 2 &times; host before it</span><p>In plain words, you only ever iterate the smaller sack, so every time a particular colour is touched it graduates to a club at least twice as big, and a club cannot double more than a logarithm of times before it is the whole tree. Interview sentence: <em>"I steal the heavy child's map and I only copy light children, so each value moves <code>log n</code> times."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why each element moves only log n times</span>
+    <p>Measure a sack by the number of tree nodes whose values currently live in it, not by the number of distinct keys. The heavy child's sack already holds at least as many nodes as any one light child. When you iterate a light sack of <code>L</code> nodes and pour it into that larger sack, every copied value now lives in a sack of size at least <code>L + L = 2L</code>. A value starts in a sack of 1 (itself) and the host can double at most <code>log&#8322; n</code> times before it contains the whole tree. Values that sit in a heavy sack are not copied at this node at all &mdash; the parent steals the reference &mdash; so the only copies that happen are the ones the doubling argument is counting. Copying the heavy map with <code>new HashMap&lt;&gt;(heavy)</code> charges <code>O(sz[heavy])</code> at every ancestor and the same node is copied <code>O(n)</code> times, which is the quadratic you were trying to avoid.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The DSU metaphor</span>
+    <p>Union-by-size hangs the smaller component under the larger one so a component only grows when it absorbs something no bigger than itself. Small-to-large does the same thing to subtree maps. There is no <code>parent[]</code> array and no path compression unless you add them; "DSU-on-tree" names the doubling habit, not the data structure.</p>
   </div>
 </aside>
 
@@ -166,7 +184,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Leaves first. Node 4 colour 3: sack {3:1}, distinct = 1.",
+          "note": "Start at the leaves. Node 4 has colour 3, so its sack is the singleton {3:1} and the distinct-count at 4 is 1.",
           "active": [
             3
           ],
@@ -177,7 +195,7 @@
           }
         },
         {
-          "note": "Node 5 colour 1: sack {1:1}.",
+          "note": "Node 5 is the other leaf under 2. Colour 1 gives the singleton sack {1:1} and distinct-count 1, ready to be merged upward.",
           "active": [
             4
           ],
@@ -188,7 +206,7 @@
           }
         },
         {
-          "note": "Node 2 colour 2, children 4 and 5. Keep 4's sack, merge 5: {3:1,1:1,2:1}, distinct = 3.",
+          "note": "Node 2 keeps 4's sack, copies 5's colour in, then adds its own colour 2. The sack is now {1, 2, 3} with distinct-count 3.",
           "active": [
             1
           ],
@@ -199,7 +217,7 @@
           }
         },
         {
-          "note": "Node 6 colour 3, node 7 colour 2 — leaves.",
+          "note": "On the other side, leaves 6 and 7 hold singleton sacks {3} and {2}. Each has distinct-count 1 and will be merged at node 3.",
           "active": [
             5,
             6
@@ -211,7 +229,7 @@
           }
         },
         {
-          "note": "Node 3 colour 2, merge 6 and 7: {3:1,2:2}, distinct = 2.",
+          "note": "Node 3 keeps one child's sack, copies the other, and adds colour 2. The sack is {2:2, 3:1} with distinct-count 2.",
           "active": [
             2
           ],
@@ -222,7 +240,7 @@
           }
         },
         {
-          "note": "Root 1 colour 1. Keep the larger child sack (node 2, size 3), merge node 3: distinct = 3.",
+          "note": "Root 1 steals the larger child sack (node 2, three keys), copies node 3 in, and adds colour 1. Distinct-count at the root is 3.",
           "active": [
             0
           ],
@@ -255,17 +273,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>DFS sizes</strong> so you know the heavy child.</li>
-  <li><strong>Recurse heavy first</strong> and steal its map — do not copy.</li>
-  <li><strong>Recurse each light child</strong>, merge its map into the stolen one, then drop it.</li>
-  <li><strong>Insert</strong> the node's own value.</li>
-  <li><strong>Record</strong> the answer for this node.</li>
-  <li><strong>If this node is a light child</strong> of its parent, the parent will rebuild; that is fine.</li>
+  <li><strong>DFS sizes first.</strong> Fill <code>sz[u]</code> and <code>heavy[u]</code> so the merge pass already knows which one child is allowed to keep its map and which children must be copied.</li>
+  <li><strong>Recurse into the heavy child and steal its map.</strong> Do not write <code>new HashMap&lt;&gt;(heavyMap)</code>; take the reference, because copying the heavy keys at every ancestor is exactly the quadratic the doubling argument forbids.</li>
+  <li><strong>Recurse each light child, then merge small into large.</strong> Iterate the light map, pour it into the stolen one, and drop it. If a helper ever sees the target smaller than the source, swap first so the doubling still holds.</li>
+  <li><strong>Insert the node's own value last.</strong> The sack of <code>u</code> is the union of its children plus <code>u</code> itself, so the node's colour has to land in the map before you read any statistic off it.</li>
+  <li><strong>Record <code>ans[u]</code> while the sack still belongs to <code>u</code>.</strong> After you return, a light parent will copy these keys and forget this map, so a later read of the same reference is no longer the subtree of <code>u</code>.</li>
+  <li><strong>A light child is allowed to be rebuilt.</strong> If <code>u</code> is itself a light child, the parent will copy every key; that rebuild is the one doubling this value is charged for, and it is why the total stays <code>O(n log n)</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Same seven-node tree, colours 1, 2, 2, 3, 1, 3, 2 at nodes 1 through 7. Watch each parent steal the heavier child's sack and copy only the lighter one in.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -273,12 +291,12 @@ graph TD
       <tr><th>u</th><th>sack</th><th>distinct</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>4</td><td>{3:1}</td><td>1</td><td>Leaves first. Node 4 colour 3: sack {3:1}, distinct = 1.</td></tr>
-      <tr><td>5</td><td>{1:1}</td><td>1</td><td>Node 5 colour 1: sack {1:1}.</td></tr>
-      <tr><td>2</td><td>{1,2,3}</td><td>3</td><td>Node 2 colour 2, children 4 and 5. Keep 4's sack, merge 5: {3:1,1:1,2:1}, distinct = 3.</td></tr>
-      <tr><td>6,7</td><td>{3},{2}</td><td>1</td><td>Node 6 colour 3, node 7 colour 2 — leaves.</td></tr>
-      <tr><td>3</td><td>{2:2,3:1}</td><td>2</td><td>Node 3 colour 2, merge 6 and 7: {3:1,2:2}, distinct = 2.</td></tr>
-      <tr><td>1</td><td>{1,2,3}</td><td>3</td><td>Root 1 colour 1. Keep the larger child sack (node 2, size 3), merge node 3: distinct = 3.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>{3:1}</td><td>1</td><td>Start at the leaves. Node 4 has colour 3, so its sack is the singleton {3:1} and the distinct-count at 4 is 1.</td></tr>
+      <tr><td>5</td><td>{1:1}</td><td>1</td><td>Node 5 is the other leaf under 2. Colour 1 gives the singleton sack {1:1} and distinct-count 1, ready to be merged upward.</td></tr>
+      <tr><td>2</td><td>{1,2,3}</td><td>3</td><td>Node 2 keeps 4's sack, copies 5's colour in, then adds its own colour 2. The sack is now {1, 2, 3} with distinct-count 3.</td></tr>
+      <tr><td>6,7</td><td>{3},{2}</td><td>1</td><td>On the other side, leaves 6 and 7 hold singleton sacks {3} and {2}. Each has distinct-count 1 and will be merged at node 3.</td></tr>
+      <tr><td>3</td><td>{2:2,3:1}</td><td>2</td><td>Node 3 keeps one child's sack, copies the other, and adds colour 2. The sack is {2:2, 3:1} with distinct-count 2.</td></tr>
+      <tr><td>1</td><td>{1,2,3}</td><td>3</td><td>Root 1 steals the larger child sack (node 2, three keys), copies node 3 in, and adds colour 1. Distinct-count at the root is 3.</td></tr>
     </tbody>
   </table>
 </div>
@@ -415,7 +433,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each time a key is copied, it lands in a map at least twice as large. A key starting in a singleton can be copied at most <code>log n</code> times. <code>n</code> keys give <code>O(n log n)</code>.</p>
+    <p>Measure each sack by the number of tree nodes in it. The heavy child's sack is already at least as large as any one light child. Copying a light sack of <code>L</code> nodes into that larger sack places every copied value in a host of size at least <code>2L</code>. A value starts in a sack of 1 and the host can double at most <code>log&#8322; n</code> times before it is the whole tree, so each of the <code>n</code> values is copied <code>O(log n)</code> times. Heavy keys are not copied at the current node &mdash; the parent steals the reference &mdash; so they are charged only when this whole node later sits on the light side of somebody else.</p>
+    <p><span class="eq">T = n values &times; O(log n) copies = O(n log n) map operations</span></p>
+    <p>Putting real numbers in: at <code>n = 10&#8309;</code> you have at most about 17 copies per value, for a couple of million HashMap operations. Java's hash constant is larger than a Fenwick hop, but two million still fits a two-second limit. Copy the heavy map instead and each of the <code>n</code> ancestors of a leaf on a line pays linear work, which is <code>n&sup2; / 2</code> insertions, about five billion, and the solution TLEs. The space is one map entry per live key; stolen references mean you do not keep <code>n</code> full copies at once.</p>
   </div>
 
   <table class="complexity__compare">
@@ -437,28 +457,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Copying the heavy child's map</span>
-    <div class="pitfalls__bug"><code>new HashMap<>(heavyMap)</code> destroys the bound — you pay linear in the heavy size at every level.</div>
-    <div class="pitfalls__fix">Steal the reference. The heavy child does not need its map after you have recorded <code>ans[heavy]</code>.</div>
+    <div class="pitfalls__bug"><code>new HashMap&lt;&gt;(heavyMap)</code> looks tidy and is correct: the parent really does hold a copy of the heavy keys. It also charges <code>O(sz[heavy])</code> at every ancestor, so a line of nodes copies the same leaf <code>n</code> times and the doubling bound collapses to quadratic.</div>
+    <div class="pitfalls__fix">Steal the reference. The heavy child does not need its map after you have recorded <code>ans[heavy]</code>. Test on a path graph: the heavy spine must not allocate a new map at every node.</div>
   </li>
   <li>
     <span class="pitfalls__title">Merging large into small</span>
-    <div class="pitfalls__bug">The doubling argument requires the <em>target</em> to be the larger map.</div>
-    <div class="pitfalls__fix">Swap if <code>a.size() &lt; b.size()</code> before iterating.</div>
+    <div class="pitfalls__bug">Always iterating <code>b</code> into <code>a</code> looks fine when the caller already passed (heavy, light). A helper that does not swap will, on a tie or a swapped call, copy the larger map into the smaller one and a single value can move a linear number of times.</div>
+    <div class="pitfalls__fix">Swap if <code>a.size() &lt; b.size()</code> before iterating, the same way DSU hangs the smaller root under the larger. Test by merging a singleton into a map of size 100 and then the other way around; both must iterate the singleton.</div>
   </li>
   <li>
     <span class="pitfalls__title">Recording the answer after discarding the sack</span>
-    <div class="pitfalls__bug">You merge, return, then try to read a map you already cleared.</div>
-    <div class="pitfalls__fix">Write <code>ans[u]</code> while the merged map still belongs to <code>u</code>.</div>
+    <div class="pitfalls__bug">Returning the map and then writing <code>ans[u] = sack.get(u).size()</code> at the parent looks like a clean split of "merge" and "read". By then a light parent may already have copied and dropped this map, so you read an empty or reused object.</div>
+    <div class="pitfalls__fix">Write <code>ans[u]</code> while the merged map still belongs to <code>u</code>, before the function returns. Test that every <code>ans[u]</code> matches a brute-force set built from the descendants of <code>u</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using this for path queries</span>
-    <div class="pitfalls__bug">A sack is the subtree multiset, not the path. Path problems look similar in the statement and are HLD.</div>
-    <div class="pitfalls__fix">Ask: is the queried set a subtree or a path? Subtree &rarr; small-to-large; path &rarr; HLD.</div>
+    <div class="pitfalls__bug">"Distinct values from <code>u</code> to <code>v</code>" looks like the same map problem, and a sack of descendants is sitting right there. A sack is the subtree multiset, not the path; using it for a path counts nodes that are off the path and misses nodes that are on it.</div>
+    <div class="pitfalls__fix">Ask: is the queried set a subtree or a path? Subtree &rarr; small-to-large; path &rarr; HLD. Test on a path that is not a subtree: the sack answer and the true path answer must differ.</div>
   </li>
   <li>
     <span class="pitfalls__title">HashMap on tight limits without reserving</span>
-    <div class="pitfalls__bug">Rehash storms on Java 8 HashMap can TLE at n = 2e5.</div>
-    <div class="pitfalls__fix">Size-hint the first map, or use arrays when values are compressed to <code>[1, n]</code>.</div>
+    <div class="pitfalls__bug">A default-capacity <code>HashMap</code> per sack looks harmless and is correct. Java 8 rehash storms on a stream of <code>n = 2&times;10&#8309;</code> insertions can push a tight limit into TLE even though the asymptotic bound holds.</div>
+    <div class="pitfalls__fix">Size-hint the first map you allocate, or switch to arrays when values are compressed to <code>[1, n]</code>. Test the worst-case line with distinct colours and a two-second cap.</div>
   </li>
 </ul>
 
@@ -500,28 +520,28 @@ graph TD
   <details class="followup">
     <summary>Why is this also called DSU-on-tree?</summary>
     <div class="followup__body">
-      <p>You are unioning child sacks into a parent the same way DSU unions components — always small into large. The "DSU" is a metaphor; there is no rollback-free disjoint-set structure unless you add one.</p>
+      <p>You are unioning child sacks into a parent the same way disjoint-set union merges components: always the smaller into the larger, so an element moves only when its host at least doubles. The "DSU" is a metaphor for that doubling habit. There is no <code>parent[]</code> array, no path compression, and no rollback-free disjoint-set structure unless you add one on top for a different part of the problem.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you answer path queries this way?</summary>
     <div class="followup__body">
-      <p>No. A sack is the subtree. For a path you need HLD, or a persistent segment tree on the Euler / DFS order.</p>
+      <p>No. A sack is the multiset of values in a subtree, which is a contiguous DFS interval but not a path. For a path you need heavy-light decomposition, or a persistent segment tree on the Euler or DFS order. If you catch yourself merging maps to answer "from <code>u</code> to <code>v</code>", stop and switch tools.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What if values are large (1e9)?</summary>
     <div class="followup__body">
-      <p>HashMap is fine. If you need order statistics, compress coordinates first and use a Fenwick of counts inside the sack.</p>
+      <p>A <code>HashMap</code> keyed on the raw values is fine for distinct-count and mode. If you need order statistics inside the sack (the k-th colour, a range of values), compress coordinates down to <code>[1, n]</code> first and keep a Fenwick tree of counts, still merging small into large. Compression is a preprocess; it does not change the doubling bound.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you handle updates to a node's colour?</summary>
     <div class="followup__body">
-      <p>Small-to-large is a static DFS. Updates need a different structure: HLD + fenwick-of-colours, or a segment tree with sets.</p>
+      <p>Small-to-large is a static DFS: the sacks are built once on the way back from the leaves. A colour change invalidates every sack on the path to the root, and there is no cheap way to patch them. Updates need a different structure, typically HLD plus a Fenwick of colours, or a segment tree whose nodes store sets. If the updates are offline, you can sometimes rebuild after each change for tiny <code>n</code> only.</p>
     </div>
   </details>
 </div>

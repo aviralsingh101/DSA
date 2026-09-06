@@ -22,7 +22,7 @@
   <p class="hero__tagline">When keys live in a small universe, you can sort in linear time by counting, bucketing, or peeling digits &mdash; the &Omega;(n log n) barrier only applies to comparison sorts.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">24 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="sorting-and-comparators.html">Sorting & Comparators</a>,
       <a href="../00-foundations/constraints-to-complexity.html">Constraints → Complexity</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The information-theoretic lower bound of <code>n log n</code> assumes the only question you can ask is "is A less than B?". If you can index an array by the key itself, you can tally frequencies in <code>O(n + R)</code> and write the output in order. That is counting sort, and it is the right tool whenever <code>R</code> is on the order of <code>n</code> or a small constant (0/1/2, grades, ages, colours).</p>
-<p>Radix sort is counting sort applied to one digit at a time, LSD or MSD. It turns a huge numeric range into <code>w</code> passes of a tiny range (base 10 or 2&#8312;). Bucket sort assumes a known distribution, scatters into <code>n</code> buckets, and sorts each; maximum-gap (LC 164) is the pigeonhole form of the same idea.</p>
-<p>In interviews this family shows up as Dutch national flag (three colours), "sort an array of 0s and 1s", H-index with citations in <code>0..n</code>, and maximum gap. Contests use counting as soon as values are coordinates you can compress, or as a histogram of a small alphabet.</p>
+<p>You are given 200,000 exam scores, each an integer from 0 to 100, and you must print them in increasing order. Calling the library sort will do roughly <code>200000 &times; 18 &approx; 3.6&times;10&#8310;</code> comparisons. You do not need any of those comparisons: walk the list once, increment a 101-slot tally for whatever score you see, then walk those 101 slots and write each score out as many times as you counted it. That is 200,101 writes &mdash; about eighteen times fewer operations &mdash; because the score itself is already the address of the bucket it belongs in.</p>
+<p>That tally-and-emit idea is called <em>counting sort</em>, and it is linear in <code>n</code> plus <code>R</code>, where <code>R</code> is the size of the universe of keys (101 in the exam example). The catch is memory: if the keys were 64-bit ids instead of scores, <code>R</code> would be <code>2&#8310;&#8308;</code> and you could not allocate the tally. When <code>R</code> is huge but each key still has a fixed number of digits, <em>radix sort</em> &mdash; counting sort applied to one digit at a time, least-significant digit first &mdash; turns one impossible range into a handful of tiny ones. Four passes of base 256 sort every 32-bit int.</p>
+<p>A <em>bucket sort</em> is the same idea with a known distribution: scatter the <code>n</code> values into <code>n</code> buckets, sort each bucket, and concatenate. Maximum-gap is the pigeonhole form, where you prove the largest adjacent gap after sorting cannot sit inside a bucket. In a real statement the tell is values in <code>0..n</code>, or "sort colours / 0s and 1s", or H-index with citations already clamped to <code>n</code>. Those limits make a comparison sort legal but wasteful: <code>n = 10&#8309;</code> and <code>R = n</code> is about <code>2&times;10&#8309;</code> array writes versus <code>1.7&times;10&#8310;</code> comparisons.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Comparison sorts are optimal among comparison sorts. If the key is an integer in a small range, index by it. Linear time is then a histogram plus a prefix of counts.</p>
+    <p>If the key is already an integer in a small range, do not compare keys: use the key as an array index. Linear time is then a histogram plus a walk that writes each value out as many times as you counted it, or a stable scatter from a prefix of those counts.</p>
   </div>
 </aside>
 
@@ -122,13 +122,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Counting sort: allocate <code>cnt[R]</code>, increment <code>cnt[a[i]]</code>, then either emit <code>v</code> repeated <code>cnt[v]</code> times (not stable in that form) or turn counts into starting positions with a prefix sum and scatter the original elements into an output array (stable). Stability matters when the payload is a pair and you are inside radix sort.</p>
-<p>Dutch national flag is counting sort specialised to <code>R = 3</code> in-place: pointers <code>lo, mid, hi</code>. <code>a[mid] == 0</code> swaps with <code>lo++</code>; <code>== 2</code> swaps with <code>hi--</code>; <code>== 1</code> just <code>mid++</code>. Radix LSD applies stable counting to each digit from least significant, so the previous digit's order is preserved.</p>
+<p>Start by allocating an array <code>cnt</code> of length <code>R</code>, every slot 0. For each value <code>v</code> in the input, increment <code>cnt[v]</code>. You now hold a <em>histogram</em>: <code>cnt[v]</code> is how many times <code>v</code> appeared. The simplest emit walks <code>v</code> from 0 to <code>R-1</code> and writes <code>v</code>, <code>cnt[v]</code> times. That is correct but not <em>stable</em> &mdash; stable means items that share a key keep their original relative order, which you need when the payload is a pair and this pass is one digit of a radix sort. The stable form turns the counts into starting positions with a prefix sum <code>pos[v] = cnt[0]+&hellip;+cnt[v-1]</code>, then walks the original array and writes each item to <code>output[pos[key]++]</code>.</p>
+<p>When <code>R</code> is only 3, you do not need the extra arrays. <em>Dutch national flag</em> &mdash; the three-colour in-place partition named after the Dutch flag's red-white-blue bands &mdash; keeps three pointers <code>lo</code>, <code>mid</code>, <code>hi</code>. Everything left of <code>lo</code> is 0, everything right of <code>hi</code> is 2, and <code>mid</code> walks the unknown middle. Seeing a 0 swaps with <code>lo</code> and advances both; seeing a 2 swaps with <code>hi</code> and does not advance <code>mid</code>, because the value that just arrived has not been inspected; seeing a 1 just advances <code>mid</code>. Radix LSD is then just the stable counting scatter, once per digit from least significant, so the previous digit's order survives.</p>
+<p>Walk <code>[2, 0, 2, 1, 1, 0]</code> through the flag. Start with <code>lo = 0</code>, <code>mid = 0</code>, <code>hi = 5</code>. <code>a[0]</code> is 2, so swap with index 5: the array becomes <code>[0, 0, 2, 1, 1, 2]</code> and <code>hi</code> falls to 4 while <code>mid</code> stays. <code>a[0]</code> is now 0, so swap with <code>lo</code> (a no-op) and both pointers step: <code>lo = 1</code>, <code>mid = 1</code>. The next 0 does the same, leaving <code>lo = 2</code>, <code>mid = 2</code>. Then <code>a[2]</code> is 2, swap with <code>hi = 4</code> to get <code>[0, 0, 1, 1, 2, 2]</code>, and <code>hi</code> becomes 3. Two ones remain; <code>mid</code> walks past them and the loop stops with zeros on the left, twos on the right, and ones in the middle.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After counting, <code>cnt[v]</code> is how many keys equal <code>v</code>, and the prefix <code>pos[v] = cnt[0]+&hellip;+cnt[v-1]</code> is the first output index for <code>v</code>.</p><span class="eq">output[pos[a[i]]++] = a[i]</span><p>Interview sentence: <em>"I index by the key instead of comparing keys, so the sort is a histogram plus a scatter."</em></p>
+    <p>After counting, <code>cnt[v]</code> is how many keys equal <code>v</code>, and the prefix <code>pos[v] = cnt[0]+&hellip;+cnt[v-1]</code> is the first output index for <code>v</code>:</p><span class="eq">output[pos[a[i]]++] = a[i]</span><p>In plain words, you never compare two keys; you only increment the bucket a key already names, then write that bucket out in order. The prefix of counts is just "how many values smaller than v have I already reserved space for", so each scatter lands in the unique slot that key has earned.</p><p>Interview sentence: <em>"I index by the key instead of comparing keys, so the sort is a histogram plus a scatter."</em></p>
   </div>
 </aside>
 
@@ -304,18 +305,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Read the range.</strong> If keys are not integers in a small universe, stop.</li>
-  <li><strong>R ≤ 3:</strong> Dutch national flag, in-place, one pass.</li>
-  <li><strong>R = O(n):</strong> <code>int[] cnt = new int[R]</code>, tally, then emit or scatter.</li>
-  <li><strong>Stable scatter:</strong> prefix of counts → starting index; walk the input left-to-right or right-to-left as required.</li>
-  <li><strong>Radix LSD:</strong> for each digit from least significant, stable-count on that digit.</li>
-  <li><strong>Buckets / max gap:</strong> n-1 buckets over [min,max]; the max gap is not inside a bucket.</li>
-  <li><strong>Negatives:</strong> shift by <code>min</code>, or radix on unsigned bit patterns.</li>
+  <li><strong>Read the range first.</strong> If the keys are not integers in a universe you can allocate, counting is the wrong tool and you should fall back to a comparison sort.</li>
+  <li><strong>When R is 2 or 3, use Dutch national flag.</strong> Three pointers partition in one pass and O(1) extra memory, which is why interviews ask "sort colours" this way.</li>
+  <li><strong>When R is on the order of n, allocate <code>cnt[R]</code>.</strong> One tally pass plus one emit or scatter is <code>O(n + R)</code>, and that is the whole algorithm.</li>
+  <li><strong>For a stable scatter, prefix the counts.</strong> <code>pos[v]</code> is then the first free output slot for key <code>v</code>, so walking the input writes each item into the unique place it has earned.</li>
+  <li><strong>Radix LSD applies that stable scatter to one digit at a time.</strong> Starting at the least significant digit is what lets the previous digit's order survive into the next pass.</li>
+  <li><strong>For maximum gap, use n-1 buckets over [min, max].</strong> The pigeonhole argument says the largest adjacent gap after sorting cannot sit inside a bucket, so you only compare neighbouring non-empty buckets.</li>
+  <li><strong>Shift negatives by <code>min</code> before indexing.</strong> A raw negative key is not a legal array index; subtracting the minimum, or radix on unsigned bits, is what makes the histogram well-defined.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Dutch national flag on <code>[2, 0, 2, 1, 1, 0]</code>: watch lo, mid and hi carve zeros to the left and twos to the right until mid walks past hi.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -471,8 +472,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Counting: one tally pass and one emit/scatter pass over n items plus R buckets: <span class="eq">T(n,R) = Θ(n + R)</span>. Memory is the same order.</p>
-    <p>LSD radix with digit width w (e.g. 4 bytes): <span class="eq">T(n) = Θ(w(n + B))</span> with B = 256. That is linear in n for fixed-width ints. DNF is one pass, three pointers, no extra histogram.</p>
+    <p>Counting is one tally pass and one emit or scatter pass over n items plus R buckets: <span class="eq">T(n,R) = Θ(n + R)</span>. Memory is the same order. At <code>n = 10&#8309;</code> and <code>R = n</code> that is about <code>2&times;10&#8309;</code> writes, versus the <code>1.7&times;10&#8310;</code> comparisons of a library sort.</p>
+    <p>LSD radix with digit width w (four bytes, base 256) is <span class="eq">T(n) = Θ(w(n + B))</span> with B = 256, so a 32-bit array is four linear passes &mdash; still a small multiple of n. Dutch national flag is one pass, three pointers, and no extra histogram, which is why it is the right answer when the universe is only the three colours.</p>
   </div>
 
   <table class="complexity__compare">
@@ -495,28 +496,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Indexing cnt[a[i]] on a negative key</span>
-    <div class="pitfalls__bug"><code>ArrayIndexOutOfBoundsException</code> or a huge R if you shift wrong.</div>
-    <div class="pitfalls__fix">Subtract <code>min</code> first, or radix on unsigned bits (<code>&gt;&gt;&gt;</code>).</div>
+    <div class="pitfalls__bug">A negative key looks like a valid integer, so writing <code>cnt[a[i]]++</code> either throws <code>ArrayIndexOutOfBoundsException</code> or, after a sloppy shift, allocates a huge unused range.</div>
+    <div class="pitfalls__fix">Subtract <code>min</code> first so every key lands in <code>0..R-1</code>, or radix on unsigned bit patterns with <code>&gt;&gt;&gt;</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Incrementing mid after swapping a 2</span>
-    <div class="pitfalls__bug">The value swapped in from <code>hi</code> has not been inspected. You skip a 0.</div>
-    <div class="pitfalls__fix">On a 2: swap with hi and do <em>not</em> increment mid. On a 0: increment both.</div>
+    <div class="pitfalls__bug">The value swapped in from <code>hi</code> has not been inspected, so incrementing <code>mid</code> on a 2 skips a 0 that just arrived and leaves a 2 in the middle.</div>
+    <div class="pitfalls__fix">On a 2, swap with <code>hi</code> and do <em>not</em> increment <code>mid</code>. On a 0, increment both pointers because the swapped-in value came from the already-settled left.</div>
   </li>
   <li>
     <span class="pitfalls__title">Unstable counting inside radix</span>
-    <div class="pitfalls__bug">Emitting by walking v = 0..R destroys the previous digit's order.</div>
-    <div class="pitfalls__fix">Scatter via prefix positions, walking the input in a consistent direction.</div>
+    <div class="pitfalls__bug">Emitting by walking <code>v = 0..R</code> rebuilds each digit's group from scratch and destroys the order the previous digit had already established.</div>
+    <div class="pitfalls__fix">Scatter via prefix positions, walking the input in a consistent direction, so equal current digits keep their previous-digit order.</div>
   </li>
   <li>
     <span class="pitfalls__title">R = 1e9 with n = 1e5</span>
-    <div class="pitfalls__bug"><code>new int[1_000_000_000]</code> is a memory error, not a linear sort.</div>
-    <div class="pitfalls__fix">Coordinate-compress, or comparison-sort the n values.</div>
+    <div class="pitfalls__bug"><code>new int[1_000_000_000]</code> looks linear in the range, but it is a memory error, not a linear sort: you cannot afford an array of a billion counts.</div>
+    <div class="pitfalls__fix">Coordinate-compress the n values down to 0..n-1, or just comparison-sort those n numbers and drop counting entirely.</div>
   </li>
   <li>
     <span class="pitfalls__title">Max-gap putting n values into n buckets of width (max-min)/n</span>
-    <div class="pitfalls__bug">The max adjacent gap in the sorted array can sit inside a bucket if you use n buckets carelessly, or you divide by zero when max==min.</div>
-    <div class="pitfalls__fix">Use n-1 buckets over the exclusive range, handle max==min, scan adjacent non-empty buckets.</div>
+    <div class="pitfalls__bug">The max adjacent gap in the sorted array can sit inside a bucket if you use n buckets carelessly, or you divide by zero when max equals min and the width formula collapses.</div>
+    <div class="pitfalls__fix">Use n-1 buckets over the exclusive range, handle max==min as a special case, and scan only adjacent non-empty buckets.</div>
   </li>
 </ul>
 
@@ -558,28 +559,28 @@ flowchart TD
   <details class="followup">
     <summary>Why does radix need a stable inner sort?</summary>
     <div class="followup__body">
-      <p>After sorting on digit k, items with the same digit k must keep their order from digits 0..k-1. An unstable inner sort reshuffles those, and the higher-digit pass cannot recover it. Counting-with-scatter is stable; dual-pivot quicksort is not.</p>
+      <p>After sorting on digit k, items that share that digit must keep the order they already earned from digits 0..k-1. An unstable inner sort reshuffles those ties, and the next higher-digit pass cannot recover the lost information. Counting-with-scatter is stable; dual-pivot quicksort is not, which is why you never radix with <code>Arrays.sort</code> as the inner step.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can counting sort be in-place?</summary>
     <div class="followup__body">
-      <p>The histogram is extra R memory. You can cycle-swap into place using the prefix positions, but it is not worth it in an interview. DNF is the in-place special case for R=3.</p>
+      <p>The histogram is still extra R memory, so you have not removed the space cost. You can cycle-swap items into the prefix positions, but the code is easy to get wrong and not worth it in an interview. Dutch national flag is the in-place special case that actually gets asked, and it only works because R is 3.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you handle 32-bit negatives in radix?</summary>
     <div class="followup__body">
-      <p>XOR with 1&lt;&lt;31 to flip the sign bit so negatives come first as unsigned, sort, then flip back. Or shift by subtracting Integer.MIN_VALUE as long.</p>
+      <p>XOR every key with <code>1 &lt;&lt; 31</code> to flip the sign bit so the negatives, which have that bit set, sort first when you treat the bits as unsigned; sort; then flip the bit back. Alternatively subtract <code>Integer.MIN_VALUE</code> as a long so every pattern lands in the unsigned 32-bit range <code>0 .. 4294967295</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When is counting slower than Arrays.sort?</summary>
     <div class="followup__body">
-      <p>When R is millions and n is thousands: you touch a huge cold array. Constants matter. Rule of thumb: counting wins when R is a small multiple of n and the array fits in cache.</p>
+      <p>When R is millions and n is only thousands: you touch a huge cold array of counts that does not fit in cache, while the library sort only touches the n keys. Rule of thumb: counting wins when R is a small multiple of n and the tally array stays hot. Otherwise just call <code>Arrays.sort</code>.</p>
     </div>
   </details>
 </div>

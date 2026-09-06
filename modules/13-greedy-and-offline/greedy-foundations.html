@@ -22,7 +22,7 @@
   <p class="hero__tagline">A greedy choice is legal only with an exchange argument or a matroid / stay-ahead proof &mdash; "it looks locally good" is not a proof.</p>
   <div class="hero__meta">
     <span class="pill pill--easy">Easy</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../00-foundations/problem-solving-framework.html">Problem-Solving Framework</a>,
       <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Half of the "just sort it" interview problems are greedy, and half of the wrong contest submissions are greedy on a problem that needed DP. The difference is a proof: exchange (any optimal solution can be rewritten to include your first choice) or stay-ahead (your prefix is always at least as good as any other).</p>
-<p>The mechanical test: if swapping two inversions of your order never hurts, the order is optimal. Activity selection, Huffman, Kruskal, and scheduling by deadline all have one-paragraph exchange proofs. Coin change with US denominations happens to work; arbitrary coin sets do not &mdash; that is the DP counterexample you should name.</p>
-<p>This page is the proof toolkit. The next page is the list of classic problem shapes. If you cannot sketch the exchange, do not code the greedy.</p>
+<p>You are given a list of meetings, each with a start time and a finish time, and you must pack as many as possible into one room so that no two overlap. Trying every subset is perfectly correct: with twenty meetings that is about a million subsets, and with a hundred thousand meetings it is not an option the judge will wait for. A tempting shortcut is "always take the meeting that starts first", but one long meeting that opens at time 0 and closes at noon then blocks every short meeting that could have fitted after nine. The technique on this page is the proof that tells you which shortcut is legal.</p>
+<p>The subset scan costs <code>2<sup>n</sup></code> times a linear overlap check. At <code>n = 40</code> that is already a trillion steps, and dynamic programming on "which meetings I have used" is the same exponential unless you invent a small numeric state. What a legal greedy buys is a sort plus one pass: each of the <code>n</code> meetings is compared during the sort at <code>log n</code> cost, then scanned once, which is about <code>1.7 &times; 10<sup>6</sup></code> operations at <code>n = 10<sup>5</sup></code>. That budget only works when you can prove the first choice you make already appears in some optimal answer.</p>
+<p>The proof is an <em>exchange argument</em>, said in words before any symbol appears: take any optimal answer, and if its first choice is not mine, swap that first choice for mine without making the answer worse. After the swap you still have a legal schedule, it is still optimal, and it now agrees with you on the first pick. Repeat on whatever is left. If every swap stays feasible and never loses quality, your whole sequence is optimal. <em>Stay-ahead</em> is the cousin: after <code>k</code> picks, your <code>k</code>-th event is already at least as good as anyone else's, so the last step is optimal by itself.</p>
+<p>In a real problem statement the signal is a request to pick, schedule, or order items sitting next to limits such as <code>n &le; 10<sup>5</sup></code>, with no extra weight on each item. That combination rules out subset enumeration and usually rules out DP. The same paragraph covers Huffman merging, Kruskal's lightest-edge rule, and deadline scheduling. Coin change is the counterexample you should name: US denominations happen to work, but the set <code>{1, 3, 4}</code> making 6 prefers <code>3+3</code> over the greedy <code>4+1+1</code>, so the swap can lose and you write DP instead.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Write the first greedy choice, take an optimal solution that disagrees as early as possible, and swap. If the swap never loses, induction finishes the proof.</p>
+    <p>Take any optimal answer and swap its first choice for mine without making it worse; if that swap is always legal, induction says the whole greedy sequence is optimal. Stay-ahead is the same idea on prefixes: after <code>k</code> picks you are already no worse than any other feasible <code>k</code>-set.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Greedy is usually O(n log n) from the sort. If the constraint is n=100 and values look like knapsack, it is DP even if a greedy runs.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> A sort-plus-scan at <code>n &le; 10<sup>5</sup></code> is the signature: about <code>n log n</code> comparisons, which a judge accepts, while <code>2<sup>n</sup></code> subsets are not. If the constraint is <code>n = 100</code> and the values look like a knapsack (weights, capacities, "at most W"), it is DP even when a greedy happens to pass the sample. Weighted activity selection is the same trap.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Exchange: let G be greedy and O optimal, first index i where they differ. Build O' by putting G's item i into O (possibly dropping a later O item). Show cost(O') le cost(O) (or ge for max). Then O' is optimal and closer to G. Repeat.</p>
-<p>Stay-ahead: after k choices, greedy's k-th event happens no later (or its load is no larger) than any other feasible k-set. The last step implies optimality.</p>
+<p>Call the greedy sequence <code>G</code> and some optimal sequence <code>O</code>, both written in the order of the sort key. Walk them from the left until the first index <code>i</code> where they disagree: <code>G</code> took item <code>g</code> and <code>O</code> took item <code>o</code>. Build a new sequence <code>O'</code> by putting <code>g</code> into <code>O</code> in place of <code>o</code> (or in place of whichever later <code>O</code>-item conflicts with <code>g</code>). The exchange argument is the claim that <code>O'</code> is still feasible and that <code>cost(O')</code> is no worse than <code>cost(O)</code> &mdash; for a maximum-count problem, <code>|O'| &ge; |O|</code>. Then <code>O'</code> is optimal and agrees with <code>G</code> one step longer.</p>
+<p>Stay-ahead names a different pair of quantities. After <code>k</code> choices, let <code>t<sub>G</sub>(k)</code> be the time (or load, or finish) of greedy's <code>k</code>-th event, and let <code>t<sub>O</sub>(k)</code> be the same number for any other feasible <code>k</code>-set. The invariant is <code>t<sub>G</sub>(k) &le; t<sub>O</sub>(k)</code> (or the reverse, depending on the measure). Because the next greedy pick is the locally best remaining item, the inequality survives one more step. When the sequences end, greedy is at least as good as <code>O</code>, so it is optimal. Dijkstra's extracted distances and Huffman's merged weights are stay-ahead arguments of this shape.</p>
+<p>Walk the six activities <code>(1,4)</code>, <code>(3,5)</code>, <code>(0,6)</code>, <code>(5,7)</code>, <code>(8,9)</code>, <code>(5,9)</code> after sorting by finish time. Greedy takes index 0 because it finishes first, at time 4. Indices 1 and 2 start before 4 so they are skipped; index 3 starts at 5 and is taken; index 4 starts at 8 and is taken; index 5 overlaps. The set <code>{0, 3, 4}</code> has size 3. Any optimal that skipped 0 must have taken some later job that overlaps 0; swapping that job for 0 frees the timeline no later than before, so the count does not drop, and the rest of the proof is induction.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>If a swap that aligns the next greedy choice with some optimal solution never worsens that solution, the greedy prefix is contained in some optimal solution. That is the interview sentence.</p>
+    <p>If a swap that aligns the next greedy choice with some optimal solution never worsens that solution, the greedy prefix is contained in some optimal solution.</p><p>In plain words, take any optimal answer, swap its first choice for mine, and check that you did not make it worse &mdash; if that sentence is true, you may code the sort.</p><p>Interview sentence: <em>"I take any optimal answer and swap its first choice for mine without making it worse."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The exchange in one breath</span>
+    <p>Take any optimal answer. Swap its first choice for mine. If the swap never makes that answer worse, induction finishes the proof. If you cannot finish that paragraph on the whiteboard, do not ship the greedy.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Nearby keys have counters</span>
+    <p>Earliest start and shortest duration look locally smart and fail on tiny instances. Coin change on <code>{1,3,4}</code> for 6 is the other classic: greedy takes 4 and then two 1s, while <code>3+3</code> is better, so the swap can lose.</p>
   </div>
 </aside>
 
@@ -164,7 +182,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Activities (start,fin): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sort by finish: 0,1,2,3,4,5 wait — sorted by fin: idx 0 (4), 1 (5), 2 (6), 3 (7), 4 (9), 5 (9).",
+          "note": "Six meetings (start, finish): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sorting by finish puts them in index order 0, 1, 2, 3, 4, 5.",
           "active": [
             0
           ],
@@ -175,7 +193,7 @@
           }
         },
         {
-          "note": "Take earliest finish: idx 0, fin=4.",
+          "note": "The earliest finish is index 0 at time 4, so that is the first greedy pick and lastFin becomes 4.",
           "active": [
             0
           ],
@@ -186,7 +204,7 @@
           }
         },
         {
-          "note": "idx 1 starts at 3 < 4, skip. idx 2 starts 0 < 4, skip. idx 3 starts 5 ≥ 4, take. lastFin=7.",
+          "note": "Index 1 starts at 3, which is before 4, so skip it; index 2 starts at 0, skip; index 3 starts at 5 and is taken, lastFin becomes 7.",
           "active": [
             3
           ],
@@ -197,7 +215,7 @@
           }
         },
         {
-          "note": "idx 4 starts 8 ≥ 7, take. idx 5 starts 5 < 9, skip.",
+          "note": "Index 4 starts at 8, which is after 7, so take it; index 5 starts at 5 and overlaps the new finish 9, so skip it.",
           "active": [
             4
           ],
@@ -208,7 +226,7 @@
           }
         },
         {
-          "note": "Three activities. Optimal. Exchange: any schedule that skipped 0 could swap in 0 for the first overlapping job without losing count.",
+          "note": "The set {0, 3, 4} has size 3. Any optimal that skipped 0 can swap 0 in for its first overlapping job without losing a slot.",
           "active": [
             0,
             3,
@@ -221,7 +239,7 @@
           }
         },
         {
-          "note": "Wrong greedy \"shortest duration\" would take (8,9) first and can still do well here, but fails on other instances — so we needed the finish-time proof.",
+          "note": "Shortest-duration greedy would grab (8,9) first and still looks fine here, but it fails on other instances, which is why the finish-time proof is required.",
           "active": [
             4
           ],
@@ -254,17 +272,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the choice:</strong> which item is taken first, and by which key?</li>
-  <li><strong>Sort</strong> by that key (and a tie-break you can justify).</li>
-  <li><strong>Scan</strong> and take every item that is still feasible given what you took.</li>
-  <li><strong>Write the exchange</strong> in comments or on the whiteboard before coding.</li>
-  <li><strong>Hunt a counterexample</strong> for the next-most-tempting key (shortest, earliest start, …).</li>
-  <li><strong>Implement</strong> the scan; greedy code is usually ten lines after the sort.</li>
+  <li><strong>Name the first choice and the key.</strong> Say out loud which item is taken first and by which number (finish time, density, deadline), because that sentence is the thing the exchange has to defend.</li>
+  <li><strong>Sort by that key, with a justified tie-break.</strong> The order is the candidate greedy sequence; a tie-break you cannot explain is usually a sign that the key is still fuzzy.</li>
+  <li><strong>Scan once and take every still-feasible item.</strong> After each take, update the resource you spent (last finish, remaining capacity) so the next check is a constant-time comparison.</li>
+  <li><strong>Write the exchange before you code.</strong> Take any optimal answer, swap its first choice for yours, and check that the swap does not make that answer worse; if the sentence stalls, stop.</li>
+  <li><strong>Hunt a counterexample for the next-most-tempting key.</strong> Earliest start and shortest duration look locally smart; a two-meeting instance that breaks them is what you recite when the interviewer asks "why this key".</li>
+  <li><strong>Implement the scan only after the paragraph works.</strong> Greedy code is usually ten lines after the sort, which is exactly why a wrong key ships so easily and why the proof comes first.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Six meetings sorted by finish time. Each row is one scan step: the meeting under consideration, the last finish we committed to, and the set we have taken so far.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -272,12 +290,12 @@ flowchart TD
       <tr><th>pick</th><th>lastFin</th><th>set</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>sort</td><td>—</td><td>[]</td><td>Activities (start,fin): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sort by finish: 0,1,2,3,4,5 wait — sorted by fin: idx 0 (4), 1 (5), 2 (6), 3 (7), 4 (9), 5 (9).</td></tr>
-      <tr><td>0</td><td>4</td><td>{0}</td><td>Take earliest finish: idx 0, fin=4.</td></tr>
-      <tr><td>3</td><td>7</td><td>{0,3}</td><td>idx 1 starts at 3 < 4, skip. idx 2 starts 0 < 4, skip. idx 3 starts 5 ≥ 4, take. lastFin=7.</td></tr>
-      <tr><td>4</td><td>9</td><td>{0,3,4}</td><td>idx 4 starts 8 ≥ 7, take. idx 5 starts 5 < 9, skip.</td></tr>
-      <tr><td>done</td><td>9</td><td>size 3</td><td>Three activities. Optimal. Exchange: any schedule that skipped 0 could swap in 0 for the first overlapping job without losing count.</td></tr>
-      <tr><td>counter</td><td>—</td><td>wrong rule</td><td>Wrong greedy "shortest duration" would take (8,9) first and can still do well here, but fails on other instances — so we needed the finish-time proof.</td></tr>
+      <tr class="trace-table__row--change"><td>sort</td><td>—</td><td>[]</td><td>Six meetings (start, finish): (1,4), (3,5), (0,6), (5,7), (8,9), (5,9). Sorting by finish puts them in index order 0, 1, 2, 3, 4, 5.</td></tr>
+      <tr><td>0</td><td>4</td><td>{0}</td><td>The earliest finish is index 0 at time 4, so that is the first greedy pick and lastFin becomes 4.</td></tr>
+      <tr><td>3</td><td>7</td><td>{0,3}</td><td>Index 1 starts at 3, which is before 4, so skip it; index 2 starts at 0, skip; index 3 starts at 5 and is taken, lastFin becomes 7.</td></tr>
+      <tr><td>4</td><td>9</td><td>{0,3,4}</td><td>Index 4 starts at 8, which is after 7, so take it; index 5 starts at 5 and overlaps the new finish 9, so skip it.</td></tr>
+      <tr><td>done</td><td>9</td><td>size 3</td><td>The set {0, 3, 4} has size 3. Any optimal that skipped 0 can swap 0 in for its first overlapping job without losing a slot.</td></tr>
+      <tr><td>counter</td><td>—</td><td>wrong rule</td><td>Shortest-duration greedy would grab (8,9) first and still looks fine here, but it fails on other instances, which is why the finish-time proof is required.</td></tr>
     </tbody>
   </table>
 </div>
@@ -372,7 +390,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>The sort dominates. The scan is linear. Brute subsets are O(2^n n).</p>
+    <p>Each of the <code>n</code> items is compared during the sort, and a comparison-based sort costs <code>log n</code> per item, which is <code>n log n</code> operations in total. The later scan touches each item once and does a constant-time feasibility check, so it is absorbed. Putting real numbers in: at <code>n = 10<sup>5</sup></code> the sort is about <code>1.7 &times; 10<sup>6</sup></code> comparisons and finishes in milliseconds.</p>
+    <p>The brute alternative enumerates <code>2<sup>n</sup></code> subsets and spends a linear scan on each, which is already a trillion steps at <code>n = 40</code> and is why the exchange has to exist. When the exchange fails you fall back to DP whose cost is whatever the state space is, not this <code>n log n</code> bound.</p>
   </div>
 
   <table class="complexity__compare">
@@ -394,28 +413,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Sorting by start time</span>
-    <div class="pitfalls__bug">A long early activity blocks everything. Classic counterexample vs finish-time greedy.</div>
-    <div class="pitfalls__fix">Earliest finish, not earliest start.</div>
+    <div class="pitfalls__bug">Earliest-start looks right because it fills the room immediately, but a long early meeting then blocks every short one that could have fitted later, so the count can drop by one on a three-meeting instance.</div>
+    <div class="pitfalls__fix">Sort by earliest finish, not earliest start. Test it on <code>(0,10), (1,2), (3,4)</code>: start-time greedy takes one, finish-time greedy takes two.</div>
   </li>
   <li>
     <span class="pitfalls__title">Skipping the proof because the sample passed</span>
-    <div class="pitfalls__bug">Coin change on [1,3,4] for 6: greedy 4+1+1 vs 3+3.</div>
-    <div class="pitfalls__fix">If you cannot exchange, write DP.</div>
+    <div class="pitfalls__bug">Coin change on <code>{1,3,4}</code> for 6 looks like the US-coin habit, so greedy takes 4 then two 1s and reports 3 coins, which matches a wrong mental model of "largest first always works".</div>
+    <div class="pitfalls__fix">If you cannot finish the swap paragraph, write DP. The counter is <code>3+3</code>, two coins; recite it when someone says "coins are greedy".</div>
   </li>
   <li>
     <span class="pitfalls__title">Wrong tie-break</span>
-    <div class="pitfalls__bug">Equal finish times: taking the one with later start can still be OK for count, but reconstruction may differ. For weighted activity you need DP anyway.</div>
-    <div class="pitfalls__fix">Unweighted count: any tie-break. Weighted: not this greedy.</div>
+    <div class="pitfalls__bug">Equal finish times make any pick look interchangeable for the unweighted count, so taking the later start still passes samples, while the weighted version silently needs DP and a reconstruction that this greedy cannot give.</div>
+    <div class="pitfalls__fix">Unweighted count: any tie-break is fine. Weighted activity: this greedy is the wrong algorithm, so switch to DP on sorted finishes.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mutating the original index order</span>
-    <div class="pitfalls__bug">You sort the finish array but not the starts, pairing the wrong jobs.</div>
-    <div class="pitfalls__fix">Sort indices, or sort pairs.</div>
+    <div class="pitfalls__bug">Sorting the finish array in place and leaving starts unmoved looks like a harmless reorder, but it pairs each finish with the wrong start and the scan then accepts overlapping jobs.</div>
+    <div class="pitfalls__fix">Sort an index array, or sort pairs <code>(start, finish)</code> together. Check that after the sort, <code>s[id[i]]</code> still belongs to <code>f[id[i]]</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Claiming Huffman / Kruskal without naming the structure</span>
-    <div class="pitfalls__bug">Interviewers ask "why greedy". "Because Kruskal" is not a reason.</div>
-    <div class="pitfalls__fix">Cut property / matroid / exchange in one sentence.</div>
+    <div class="pitfalls__bug">"Because Kruskal is greedy" sounds like a reason in an interview, but it names an algorithm instead of a property, so a follow-up of "why does the swap not lose?" has nowhere to go.</div>
+    <div class="pitfalls__fix">Say the exchange, the cut property, or "it is a matroid" in one sentence. The algorithm name is not the proof.</div>
   </li>
 </ul>
 
@@ -457,28 +476,28 @@ flowchart TD
   <details class="followup">
     <summary>Give a one-line exchange for earliest-finish.</summary>
     <div class="followup__body">
-      <p>Among jobs that overlap greedy's first pick, greedy's pick finishes first, so replacing the optimal's first overlapping job with it frees the timeline no later and keeps feasibility.</p>
+      <p>Take any optimal answer and look at the first job in it that overlaps greedy's first pick. Greedy's pick finishes no later than that job, so swapping it in frees the timeline at least as early and the rest of the optimal schedule stays feasible. The count does not drop, so the new answer is still optimal and now agrees on the first choice.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When is coin greedy correct?</summary>
     <div class="followup__body">
-      <p>Canonical coin systems (like US coins). Proof is not obvious. In contests, assume DP unless the statement says the canonical set or n is huge and values are 1,5,10,25.</p>
+      <p>It is correct on <em>canonical</em> coin systems such as US denominations, where each coin is at least twice the next smaller one in a way that makes the swap never lose. The proof is not obvious and is easy to get wrong. In a contest, assume DP unless the statement names a canonical set or the limits are huge and the coins are exactly <code>1, 5, 10, 25</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Matroid in one sentence?</summary>
     <div class="followup__body">
-      <p>A family of independent sets closed under subsets, with the exchange property (you can always grow the smaller). Kruskal is the graphic matroid. Greedy on weights works on every matroid.</p>
+      <p>A <em>matroid</em> is a family of independent sets that is closed under taking subsets and has an exchange property: you can always grow the smaller of two independent sets by stealing an element from the larger. Kruskal is greedy on the graphic matroid (forests of a graph). Weighted greedy is optimal on every matroid, which is why "it is a matroid" is a complete interview reason.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Stay-ahead vs exchange?</summary>
     <div class="followup__body">
-      <p>Stay-ahead compares prefixes (Dijkstra, Huffman sometimes). Exchange rewrites a full optimal solution. Both are induction. Use whichever is shorter.</p>
+      <p>Stay-ahead compares prefixes: after <code>k</code> picks, greedy's <code>k</code>-th event is already no worse than any other feasible <code>k</code>-set, and the last step is then optimal by itself. Exchange rewrites a full optimal solution until it matches greedy. Both are induction. Use whichever paragraph is shorter for the problem in front of you; Dijkstra and Huffman are usually stay-ahead, activity selection is usually exchange.</p>
     </div>
   </details>
 </div>

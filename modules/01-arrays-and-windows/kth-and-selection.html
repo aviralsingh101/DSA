@@ -38,9 +38,9 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Sorting then indexing is always correct and almost always good enough: <code>O(n log n)</code> to read <code>a[k]</code>. Selection problems exist because some constraints are tighter, and because the <em>median of two sorted arrays</em> question is a Google classic that sorting would turn into a merge.</p>
-<p>Quickselect is quicksort that only recurses into the side that contains rank k. Average <code>O(n)</code>, worst-case <code>O(n&sup2;)</code> unless you add median-of-medians or a random pivot. The two-array median is a binary search on how many elements you take from the shorter array.</p>
-<p>Both are discard-half arguments. Once you see them that way, k-th in a sorted matrix and k-th pair distance become the same idea with a different feasible.</p>
+<p>You are given an unsorted array and asked for the element that would sit at index <code>k</code> after sorting &mdash; the 4th-smallest of <code>[7, 2, 1, 6, 8, 5, 3]</code> is 5. Sorting then indexing is always correct and almost always good enough: <code>O(n log n)</code> to read <code>a[k]</code>, about <code>1.7&times;10&#8310;</code> comparisons at <code>n = 10&#8309;</code>. Selection problems exist because some constraints are tighter, and because the <em>median of two sorted arrays</em> question is a Google classic that sorting would turn into a linear merge of two <code>10&#8309;</code>-length arrays when a logarithmic cut search exists.</p>
+<p>Quickselect is quicksort that only recurses into the side that contains rank <code>k</code>: partition around a pivot, then throw away the side that cannot hold <code>k</code>. Average <code>O(n)</code>, because a random pivot discards about half the remaining items; worst-case <code>O(n&sup2;)</code> if every pivot is the smallest or largest remaining element, unless you add median-of-medians or a random pivot. The two-array median is a different discard-half: a binary search on how many elements you take from the shorter array, so that the left of the cut is the first half of the merged sequence.</p>
+<p>Both are discard-half arguments. Once you see them that way, k-th in a sorted matrix and k-th pair distance become the same idea with a different feasible: count how many values are at most <code>mid</code>, then search the first <code>mid</code> whose count is at least <code>k</code>. The constraint line that signals this page is <code>n &le; 10&#8309;</code> with "k-th only" &mdash; you do not need the other <code>n &minus; 1</code> ranks &mdash; or two already-sorted arrays of length <code>10&#8309;</code> where a merge would be linear but a cut search is about twenty comparisons.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -106,13 +106,14 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> and "k-th only" &rarr; heap O(n log k) or quickselect. Two arrays of length 1e5 already sorted &rarr; O(log(m+n)) cut search, not merge.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> and "return the k-th only" points at a size-k heap in <code>O(n log k)</code> or quickselect in expected linear time. Two arrays of length <code>10&#8309;</code> that are already sorted point at an <code>O(log min(m, n))</code> cut search, not a merge that would spend <code>2&times;10&#8309;</code> writes.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Quickselect: pick a pivot, partition so everything smaller is on the left. If the pivot lands at index k you are done. If it lands to the right, recurse left; otherwise recurse right. Expected linear because each step throws away a constant fraction on average.</p>
-<p>Two-array median: imagine the merged array. A valid cut takes i elements from A and (half-i) from B such that every value on the left of the cut is ≤ every value on the right. Binary-search i. The conditions are <code>A[i-1] ≤ B[j]</code> and <code>B[j-1] ≤ A[i]</code> (with sentinels for empty sides).</p>
+<p>Quickselect: pick a pivot, then partition the active range so everything smaller sits on the left and the pivot lands at some index <code>p</code>. If <code>p</code> equals <code>k</code> you are done &mdash; that value is the k-th smallest, even though the two sides are not themselves sorted. If <code>p</code> is to the right of <code>k</code>, every index at or above <code>p</code> is larger than the answer, so recurse left; otherwise recurse right. The expected cost is linear because a random pivot's rank is uniform and each step throws away a constant fraction of the remaining items on average, just as a balanced quicksort would, except you only pay for one child.</p>
+<p>Two-array median: imagine the merged array of <code>A</code> and <code>B</code>. A valid cut takes <code>i</code> elements from <code>A</code> and <code>(half &minus; i)</code> from <code>B</code> such that every value on the left of the cut is &le; every value on the right. Binary-search <code>i</code> on the shorter array. The two crossing conditions are <code>A[i-1] &le; B[j]</code> and <code>B[j-1] &le; A[i]</code>, with sentinels &plusmn;&infin; for empty sides so you never read off the end. When both hold, the left side is exactly the first half of the merge, and the median is either the max of the two left ends (odd total) or the average of that max and the min of the two right starts (even total).</p>
+<p>Walk the two-array case on <code>A = [1, 3]</code> and <code>B = [2]</code>. The merged sequence would be <code>[1, 2, 3]</code> and the median is 2, but we never merge. <code>half = (2+1+1)/2 = 2</code>, so we want two elements on the left of the cut. Trying <code>i = 1</code> takes one from <code>A</code> and one from <code>B</code>: <code>Aleft = 1</code>, <code>Bright = 2</code>, <code>Bleft = 2</code>, <code>Aright = 3</code>. Both crossings hold (<code>1 &le; 2</code> and <code>2 &le; 3</code>), the total is odd, and <code>max(1, 2) = 2</code>. The same walk on <code>[1, 2]</code> and <code>[3, 4]</code> takes <code>i = 1</code>, <code>half = 2</code>, and averages <code>max(1, 3)</code> with <code>min(2, 4)</code> to get 2.5.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -265,13 +266,13 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Quickselect.</strong> Pick a pivot (random or last). Partition <code>[lo, hi]</code> so the pivot sits at <code>p</code>.</li>
+  <li><strong>Quickselect.</strong> Pick a pivot (random is safer than last). Partition <code>[lo, hi]</code> so the pivot sits at <code>p</code> and every smaller value is to its left.</li>
   <li><strong>If <code>p == k</code></strong> return <code>a[p]</code>. If <code>k &lt; p</code> set <code>hi = p-1</code>, else <code>lo = p+1</code>. Repeat.</li>
-  <li><strong>Two-array median.</strong> Ensure A is the shorter. Binary-search i = how many to take from A.</li>
+  <li><strong>Two-array median.</strong> Swap so that <code>A</code> is the shorter array, then binary-search <code>i</code>, the number of elements to take from <code>A</code>.</li>
   <li><strong>j = half - i</strong> where half = (m+n+1)/2 (left side is the larger half when the total is odd).</li>
   <li><strong>If Aleft &gt; Bright</strong> i is too big; if Bleft &gt; Aright, i is too small. Otherwise the cut is valid.</li>
-  <li><strong>Odd total:</strong> answer is max(Aleft, Bleft). <strong>Even:</strong> average of that and min(Aright, Bright).</li>
-  <li><strong>Use sentinels</strong> ±∞ when a side is empty so the comparisons stay uniform.</li>
+  <li><strong>Odd total:</strong> the answer is max(Aleft, Bleft), the last element of the left half. <strong>Even:</strong> average that with min(Aright, Bright).</li>
+  <li><strong>Use sentinels</strong> &plusmn;&infin; when a side is empty, so <code>A[i-1]</code> and <code>B[j-1]</code> stay defined and the comparisons stay uniform.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -410,7 +411,7 @@ graph LR
 
   <div class="complexity__derivation">
     <p>Quickselect: a random pivot leaves expected half the work, so <code>T(n) = T(n/2) + O(n) = O(n)</code>. Adversarial pivots give the full quicksort recurrence <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>. Randomise the pivot.</p>
-    <p>Two-array median: the search space is the shorter length, halved each step, and each step is O(1) comparisons, so <code>O(log min(m,n))</code>.</p>
+    <p>Two-array median: the search space is the shorter length, halved each step, and each step is O(1) comparisons, so <code>O(log min(m,n))</code>. At <code>n = 10&#8309;</code>, expected quickselect is a few hundred thousand comparisons; the two-array search on lengths <code>10&#8309;</code> and <code>10&#8309;</code> is about 17 comparisons. Sorting both problems would be <code>1.7&times;10&#8310;</code> comparisons and <code>2&times;10&#8309;</code> writes respectively.</p>
   </div>
 
   <table class="complexity__compare">
@@ -434,32 +435,32 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">k is 1-based in the problem and 0-based in your code</span>
-    <div class="pitfalls__bug">LC 215 asks for the k-th <em>largest</em>, which is rank <code>n-k</code> in 0-based ascending order.</div>
+    <div class="pitfalls__bug">LC 215 asks for the k-th <em>largest</em>, which looks like rank <code>k</code>, but in 0-based ascending order it is rank <code>n-k</code>, so <code>k = 1</code> returns the last element, not <code>a[0]</code>.</div>
     <div class="pitfalls__fix">Convert once at the top: <code>int rank = a.length - k;</code> for k-th largest, and never touch k again.</div>
   </li>
   <li>
     <span class="pitfalls__title">Worst-case quadratic on sorted input</span>
-    <div class="pitfalls__bug">Always pivoting on <code>a[hi]</code> of an already-sorted array degenerates.</div>
+    <div class="pitfalls__bug">Always pivoting on <code>a[hi]</code> of an already-sorted array makes every partition drop only one element, so the expected-linear algorithm becomes the quadratic worst case.</div>
     <div class="pitfalls__fix">Swap a random index into the pivot slot. In an interview, say this out loud.</div>
   </li>
   <li>
     <span class="pitfalls__title">Off-by-one on empty sides of the two-array cut</span>
-    <div class="pitfalls__bug">Accessing <code>A[i-1]</code> when <code>i == 0</code>.</div>
-    <div class="pitfalls__fix">Sentinels: empty left is MIN_VALUE, empty right is MAX_VALUE.</div>
+    <div class="pitfalls__bug">Accessing <code>A[i-1]</code> when <code>i == 0</code> throws, and the same crash happens on <code>B[j-1]</code> when the cut takes nothing from <code>B</code>.</div>
+    <div class="pitfalls__fix">Sentinels: treat an empty left as <code>MIN_VALUE</code> and an empty right as <code>MAX_VALUE</code> so the crossing tests stay branch-free.</div>
   </li>
   <li>
     <span class="pitfalls__title">Averaging two ints for the even case</span>
-    <div class="pitfalls__bug"><code>(leftMax + rightMin) / 2</code> truncates and can overflow.</div>
-    <div class="pitfalls__fix"><code>(leftMax + (double) rightMin) / 2.0</code> or <code>/ 2.0</code> with a long cast.</div>
+    <div class="pitfalls__bug"><code>(leftMax + rightMin) / 2</code> looks like the even-case median, but integer addition overflows near <code>2&times;10&#8313;</code> and integer division truncates <code>5 / 2</code> to 2.</div>
+    <div class="pitfalls__fix">Cast first: <code>(leftMax + (double) rightMin) / 2.0</code>, or add as <code>long</code> then divide by 2.0, so neither overflow nor truncation survives.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mutating the caller's array</span>
-    <div class="pitfalls__bug">In-place quickselect reorders <code>a</code>. Tests that reuse the array then fail.</div>
-    <div class="pitfalls__fix">Clone if the caller still needs the original, or document the mutation.</div>
+    <div class="pitfalls__bug">In-place quickselect reorders <code>a</code>, which looks free, but later tests that reuse the same array then see a permutation and fail.</div>
+    <div class="pitfalls__fix">Clone if the caller still needs the original order, or document the mutation in the method contract before you ship it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Duplicate-heavy arrays and <code>&lt;</code> vs <code>&le;</code> in partition</span>
-    <div class="pitfalls__bug">A partition that sends equals to one side unbalances on all-equal input.</div>
+    <div class="pitfalls__bug">A partition that sends every equal to one side looks correct on distinct data, but on an all-equal array it leaves the pivot at an end and becomes quadratic.</div>
     <div class="pitfalls__fix">3-way partition (Dutch flag) around the pivot, then check whether k falls in the equal block.</div>
   </li>
 </ul>
@@ -502,35 +503,35 @@ graph LR
   <details class="followup">
     <summary>Why is the expected time linear?</summary>
     <div class="followup__body">
-      <p>A random pivot's rank is uniform. The expected remaining size is the average of 0,1,…,n-1 which is n/2, and T(n) = T(n/2)+O(n) solves to O(n). More carefully the constant is 4n or so, not n.</p>
+      <p>A random pivot's rank is uniform. The expected remaining size is the average of 0,1,…,n-1 which is n/2, and T(n) = T(n/2)+O(n) solves to O(n). More carefully the constant is 4n or so, not n. At <code>n = 10&#8309;</code> that is a few hundred thousand comparisons in expectation, versus about <code>1.7&times;10&#8310;</code> for a full sort.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you make it worst-case linear?</summary>
     <div class="followup__body">
-      <p>Median-of-medians picks a pivot guaranteed to be in the 30th–70th percentile, so you discard at least 30% each time. The recurrence is T(n)=T(n/5)+T(7n/10)+O(n)=O(n). Nobody wants you to code it in an interview; naming it is enough.</p>
+      <p>Median-of-medians picks a pivot guaranteed to be in the 30th–70th percentile, so you discard at least 30% each time. The recurrence is T(n)=T(n/5)+T(7n/10)+O(n)=O(n). The extra T(n/5) is the cost of finding the pivot, and it is still linear because 1/5 + 7/10 = 0.9 &lt; 1. Nobody wants you to code it in an interview; naming it is enough.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Generalise LC 4 to the k-th of two sorted arrays.</summary>
     <div class="followup__body">
-      <p>The same cut search with half = k (1-based) instead of (m+n+1)/2. Return max(Aleft, Bleft). This is how you also solve "k-th of n sorted arrays" with a heap or a binary search on value.</p>
+      <p>The same cut search with half = k (1-based) instead of (m+n+1)/2. Return max(Aleft, Bleft). This is how you also solve "k-th of n sorted arrays" with a heap or a binary search on value. The crossing inequalities do not change; only the target left-side size does.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>The matrix is sorted by rows only, not columns.</summary>
     <div class="followup__body">
-      <p>You lose the staircase count. Heap the heads of each row (O(k log n)) or binary-search the value and binary-search each row (O(n log RANGE log n)).</p>
+      <p>You lose the staircase count that walks one row-and-column-sorted matrix in <code>O(n)</code>. Heap the heads of each row in <code>O(k log n)</code>, or binary-search the value and binary-search each row in <code>O(n log RANGE log n)</code>. Neither is as pretty as the staircase, but both are correct without column order.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Must not mutate the array and must be O(1) extra memory.</summary>
     <div class="followup__body">
-      <p>You cannot quickselect. Heap of size k uses O(k). For k-th of one array under these constraints you are stuck with sorting if you cannot overwrite, unless you are allowed O(n) extra to copy.</p>
+      <p>You cannot quickselect. Heap of size k uses O(k). For k-th of one array under these constraints you are stuck with sorting if you cannot overwrite, unless you are allowed O(n) extra to copy. Interviewers who add both constraints are usually steering you toward "just sort a copy" and then talking about the trade-off.</p>
     </div>
   </details>
 </div>

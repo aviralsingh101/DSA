@@ -39,14 +39,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Almost every greedy proof starts with "sort the input". Intervals by start or by end, tasks by deadline, points by polar angle, strings by <code>a+b vs b+a</code> &mdash; the algorithm is often two lines after the sort. If the comparator is wrong, the rest of the code is theatre.</p>
-<p>Interviews test comparators because they mix language trivia with algorithmic honesty. <code>Integer.compare</code> versus subtraction (overflow), stability of <code>Arrays.sort</code> on objects versus primitives, and the contract <code>sgn(a,b) == -sgn(b,a)</code> are the three traps that turn a correct idea into a WA or a runtime exception on a single pair of values.</p>
-<p>The reformulation is: you are not sorting values, you are sorting <em>keys you invented</em>. Once the key is a number or a pair that is totally ordered, TimSort does the rest in <code>O(n log n)</code>. Inventing that key is the problem; calling sort is the punctuation.</p>
+<p>You are handed 100,000 job records and told to print them oldest-deadline first, breaking ties by putting the shorter job earlier. The obvious way to do that by hand is to scan the whole list for the record that should go first, print it, remove it, and scan again. That is about <code>100000 &times; 100000 / 2 = 5&times;10&#8313;</code> comparisons, close to a minute of CPU time, and an instant time-limit failure on any judge. The library sort finishes the same job in roughly <code>1.7&times;10&#8310;</code> comparisons &mdash; three thousand times fewer &mdash; provided you can hand it one small function that answers a single question: given two records, which of these two must be printed first?</p>
+<p>That small function is called a <em>comparator</em>. Its entire job is to take two items <code>u</code> and <code>v</code> and return a negative number when <code>u</code> must come first, a positive number when <code>v</code> must come first, and zero when the order between those two does not matter. The sort never inspects your data directly; it only ever asks your comparator, so the order you get back is exactly the order your function describes &mdash; including any nonsense in it. That is why so many algorithms open with the words "sort the input": the sort call is three tokens of typing and all of the thinking lives in the function you pass to it.</p>
+<p>There is one catch that turns a plausible-looking comparator into a wrong answer. The library assumes your function describes a <em>total order</em>, which means two things. It must be <em>antisymmetric</em>: if <code>cmp(u, v)</code> is negative then <code>cmp(v, u)</code> has to be positive, never negative as well. And it must be <em>transitive</em>: if <code>u</code> comes before <code>v</code> and <code>v</code> comes before <code>w</code>, then <code>u</code> must come before <code>w</code>. Break either rule and the behaviour is undefined &mdash; usually a quietly mis-ordered array, sometimes an exception thrown from deep inside the sort on one unlucky input in a thousand.</p>
+<p>In a real problem statement the tell is a sentence like "order the results by score descending, then by name ascending" sitting next to a limit such as <code>n &le; 10&#8309;</code>. That limit is permission for exactly one <code>O(n log n)</code> sort and nothing heavier per element. The same two lines then cover a surprisingly wide spread of problems: arranging numbers so that the digits they spell out form the largest possible value, ranking teams by how many first-place votes they collected, ordering points by squared distance from the origin, and sorting meetings by finish time so that a single greedy pass can accept them one at a time.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Write the comparator so that it answers one question: "if I can only keep one of these two items first, which one must come first for the rest of the algorithm to work?" If that answer is not transitive, the sort is undefined and so is your greedy.</p>
+    <p>Write the comparator so that it answers exactly one question: if I may only put one of these two items first, which one has to go first for the rest of my algorithm to still work? Then check that the answer is transitive, because a sort built on a non-transitive rule is not a sort at all, and the greedy standing on top of it proves nothing.</p>
   </div>
 </aside>
 
@@ -118,18 +119,36 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> is the signature for one <code>O(n log n)</code> sort. Keys that themselves take <code>O(L)</code> (strings of length L) make the true cost <code>O(n L log n)</code>. Subtraction comparators overflow when values reach <code>&plusmn;10&#8313;</code>; use <code>Integer.compare</code> or <code>Long.compare</code>.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> is the signature for one <code>O(n log n)</code> sort: about <code>1.7&times;10&#8310;</code> comparisons, comfortably under a second, where the quadratic alternative is <code>5&times;10&#8313;</code> and hopeless. Watch for two hidden multipliers. If one comparison itself costs <code>O(L)</code> because the keys are strings of length <code>L</code>, the true total is <code>O(n L log n)</code>. And if the values reach <code>&plusmn;10&#8313;</code>, a comparator written as <code>a - b</code> can wrap past 32 bits and return the wrong sign, so reach for <code>Integer.compare</code> or <code>Long.compare</code> instead.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p><code>Arrays.sort</code> on <code>int[]</code> is dual-pivot quicksort (not stable). On objects it is TimSort (stable). For a custom order, box to <code>Integer[]</code> or sort an index array. The comparator must be a total order: antisymmetric, transitive, and zero only on equivalents. Violating transitivity ("put a before b because of a local rule that does not extend") is undefined behaviour and shows up as a rare shuffle, not an exception.</p>
-<p>The standard Java pattern is <code>(u, v) -&gt; Integer.compare(key(u), key(v))</code> or <code>Comparator.comparingInt(...).thenComparingInt(...)</code>. Never <code>return u - v</code> on arbitrary ints. For concatenation, compare <code>a+b</code> with <code>b+a</code> as strings; do not parse them as integers. After the sort, the greedy scan is usually a single pass that only looks at neighbours.</p>
+<p>Start with what the library actually runs, because the two cases behave differently. <code>Arrays.sort(int[] a)</code> is a dual-pivot quicksort: very fast, but not <em>stable</em>. <em>Stable</em> means that two items your comparator reports as equal come out in the same relative order they went in. <code>Arrays.sort(T[] a, cmp)</code> on objects runs TimSort, which is a merge sort and therefore stable, and which additionally notices stretches of the input that are already in order and merges them instead of re-discovering them. So if any part of your logic depends on the original order of ties surviving the sort, you must sort objects: box the values into an <code>Integer[]</code>, or build an index array and sort that.</p>
+<p>Now the comparator itself. The pattern worth memorising is <code>(u, v) -&gt; Integer.compare(key(u), key(v))</code>, where <code>key</code> is whatever number you decided each item should be judged by, and <code>u</code> and <code>v</code> are the only two items in scope &mdash; the comparator cannot see the rest of the array and does not need to. For a two-level order, <code>Comparator.comparingInt(u -&gt; u[0]).thenComparingInt(u -&gt; u[1])</code> reads the second key only when the first one ties. Never write <code>return u - v</code>: the subtraction happens in 32 bits, so <code>Integer.MIN_VALUE - 1</code> wraps round to a positive number and tells the sort that the smallest possible value is the larger of the two.</p>
+<p>Some orders are not numeric at all. For "arrange these numbers so that the digits they spell out form the largest possible number", the correct rule for two strings <code>a</code> and <code>b</code> is to compare the concatenation <code>a+b</code> against <code>b+a</code> and put first whichever produces the bigger text. With 3 and 30 that is "330" against "303", so 3 must go first even though 30 is the larger number. Do not try to parse those concatenations back into integers &mdash; joining two ten-digit inputs already overflows anything Java can hold. Because both concatenations have identical length, plain string comparison gives the same answer and costs nothing extra.</p>
+<p>Walk five records through the two-key version to see the questions the library asks. The pairs are <code>[3,9] [1,5] [3,2] [2,7] [1,1]</code> and the order is "first key ascending, then second key ascending". The comparator is asked about <code>[3,9]</code> and <code>[1,5]</code>: the first keys 3 and 1 differ, so it returns a positive number and <code>[1,5]</code> wins without the second key ever being read. Asked about <code>[3,9]</code> against <code>[3,2]</code>, the first keys tie, the tie-breaker runs, and 2 beats 9. TimSort repeats that one question a few dozen times and lands on <code>[1,1] [1,5] [2,7] [3,2] [3,9]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After <code>Arrays.sort(a, cmp)</code>, for every <code>i &lt; j</code>:</p><span class="eq">cmp(a[i], a[j]) &le; 0</span><p>Interview sentence: <em>"I sort by a key that makes the remaining decision local &mdash; each item only needs to look at its sorted neighbour."</em></p>
+    <p>After <code>Arrays.sort(a, cmp)</code> returns, the array is in comparator order: for every pair of positions <code>i &lt; j</code>,</p><span class="eq">cmp(a[i], a[j]) &le; 0</span><p>In plain words, nowhere in the array is an item followed by an item that your own function says should have come earlier. That is the only promise you are given, and it is worth reading literally: the sort guarantees nothing about the order you had in mind, only about the function you actually wrote. A bug in the comparator therefore shows up as a silently wrong array rather than as a crash.</p><p>Interview sentence: <em>"I sort by a key that makes the remaining decision local &mdash; each item only needs to look at its sorted neighbour."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Three spellings, one meaning</span>
+    <p><code>(u, v) -&gt; Integer.compare(u.k, v.k)</code> is the explicit form. <code>Comparator.comparingInt(u -&gt; u.k)</code> is the same thing with the boilerplate removed. <code>Comparator.comparingInt(u -&gt; u.k).reversed()</code> flips it; writing <code>Integer.compare(v.k, u.k)</code> by hand does the same and is easier to read when you also chain a tie-breaker.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">"Comparison method violates its general contract"</span>
+    <p>This exception is TimSort catching you red-handed: it found three items whose order your comparator cannot decide consistently. It is not a library bug and there is no flag to disable it. Reduce your rule to one number (or a chain of numbers) per item and the exception cannot occur.</p>
   </div>
 </aside>
 
@@ -163,7 +182,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Input [5, 2, 4, 6, 1, 3]. Merge-sort: split until singles, then merge adjacent runs.",
+          "note": "Input [5, 2, 4, 6, 1, 3]. A merge sort first splits down to single elements, because a run of one element is already sorted for free.",
           "dim": [
             0,
             1,
@@ -180,7 +199,7 @@
           }
         },
         {
-          "note": "Merge [5] and [2] → [2, 5]. Left half starts to take shape.",
+          "note": "Merge the runs [5] and [2]. One call to the comparator says 2 is smaller, so the pair is written back as [2, 5].",
           "active": [
             0,
             1
@@ -199,7 +218,7 @@
           }
         },
         {
-          "note": "Merge [4] and [6] → [4, 6].",
+          "note": "The same single comparison on the next pair merges [4] and [6] into [4, 6], which happened to be in order already.",
           "active": [
             2,
             3
@@ -220,7 +239,7 @@
           }
         },
         {
-          "note": "Merge [2,5] and [4,6] → [2, 4, 5, 6]. Left half sorted.",
+          "note": "Merge the two-element runs [2,5] and [4,6]. Comparing the fronts repeatedly interleaves them into [2, 4, 5, 6], so the left half is sorted.",
           "window": [
             0,
             3
@@ -243,7 +262,7 @@
           }
         },
         {
-          "note": "Right half: merge [1] and [3] → [1, 3].",
+          "note": "Move to the right half and merge [1] with [3], producing the run [1, 3]. Two sorted runs now cover the whole array.",
           "active": [
             4,
             5
@@ -262,7 +281,7 @@
           }
         },
         {
-          "note": "Final merge [2,4,5,6] with [1,3] → [1, 2, 3, 4, 5, 6]. Comparator was Integer.compare.",
+          "note": "The final merge walks [2,4,5,6] and [1,3] once each and emits [1, 2, 3, 4, 5, 6]. Every decision came from Integer.compare.",
           "best": [
             0,
             1,
@@ -279,7 +298,7 @@
           }
         },
         {
-          "note": "Same skeleton with a custom key: sort strings so that a+b >= b+a (LC 179). The merge is identical; only cmp changes.",
+          "note": "Notice that nothing above depended on the values being numbers. Swap in a comparator that ranks a+b against b+a and this identical merge sorts strings for LC 179.",
           "done": [
             0,
             1,
@@ -323,18 +342,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the key</strong> that makes the rest of the algorithm a neighbour scan.</li>
-  <li><strong>Prove transitivity</strong> on paper for two minutes. If A before B and B before C does not imply A before C, the comparator is illegal.</li>
-  <li><strong>Implement with <code>Integer.compare</code></strong> / <code>Comparator.comparingInt</code>. Never subtract ints.</li>
-  <li><strong>Stability:</strong> need it? Sort <code>Integer[]</code> or indices. Primitive <code>int[]</code> sort is not stable.</li>
-  <li><strong>Sort once</strong> with <code>Arrays.sort(a, cmp)</code> or <code>Arrays.sort(idx, (i, j) -&gt; cmp)</code>.</li>
-  <li><strong>Scan linearly.</strong> The greedy decision should now look only at <code>a[i]</code> vs <code>a[i-1]</code>.</li>
-  <li><strong>State <code>O(n log n)</code></strong> plus the cost of the key. String keys of length L cost <code>O(n L log n)</code>.</li>
+  <li><strong>Name the key first, on paper.</strong> Ask what order would let the rest of your algorithm look at nothing but the item immediately to its left. That order is the key, and discovering it is the actual work of the problem.</li>
+  <li><strong>Check transitivity before you type anything.</strong> Pick any three items and confirm that A-before-B together with B-before-C forces A-before-C. If it does not, no valid sorted order exists for your rule, so the greedy on top of it cannot be proved.</li>
+  <li><strong>Spell it with <code>Integer.compare</code></strong> or <code>Comparator.comparingInt</code> rather than subtraction, because subtracting two <code>int</code>s can wrap around 32 bits and hand the sort the opposite sign on extreme values.</li>
+  <li><strong>Decide whether you need stability.</strong> If items the comparator calls equal must keep their input order, sort an <code>Integer[]</code> or an index array so that TimSort runs; the primitive <code>int[]</code> sort is free to reorder ties however it likes.</li>
+  <li><strong>Sort exactly once</strong> with <code>Arrays.sort(a, cmp)</code>, or <code>Arrays.sort(idx, cmp)</code> when the original positions matter. Re-sorting inside a loop is the most common way an <code>O(n log n)</code> solution quietly becomes cubic.</li>
+  <li><strong>Then scan linearly.</strong> The greedy decision should now involve only <code>a[i]</code> and <code>a[i-1]</code>; if it still needs to search further, the key was wrong and the honest fix is to change the key rather than patch the scan.</li>
+  <li><strong>Quote the honest cost.</strong> It is <code>O(n log n)</code> comparisons multiplied by the price of one comparison, so string keys of length <code>L</code> make the real figure <code>O(n L log n)</code> and not the headline number.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>The walkthrough merges <code>[5, 2, 4, 6, 1, 3]</code> from single-element runs up to a fully sorted array, one comparator question at a time.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -342,13 +361,13 @@ flowchart TD
       <tr><th>pass</th><th>i</th><th>j</th><th>a</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>split</td><td>—</td><td>—</td><td>[5,2,4,6,1,3]</td><td>Input [5, 2, 4, 6, 1, 3]. Merge-sort: split until singles, then merge adjacent runs.</td></tr>
-      <tr><td>merge</td><td>0</td><td>1</td><td>[2,5,4,6,1,3]</td><td>Merge [5] and [2] → [2, 5]. Left half starts to take shape.</td></tr>
-      <tr><td>merge</td><td>2</td><td>3</td><td>[2,5,4,6,1,3]</td><td>Merge [4] and [6] → [4, 6].</td></tr>
-      <tr><td>merge</td><td>0</td><td>3</td><td>[2,4,5,6,1,3]</td><td>Merge [2,5] and [4,6] → [2, 4, 5, 6]. Left half sorted.</td></tr>
-      <tr><td>merge</td><td>4</td><td>5</td><td>[2,4,5,6,1,3]</td><td>Right half: merge [1] and [3] → [1, 3].</td></tr>
-      <tr class="trace-table__row--change"><td>done</td><td>0</td><td>5</td><td>[1,2,3,4,5,6]</td><td>Final merge [2,4,5,6] with [1,3] → [1, 2, 3, 4, 5, 6]. Comparator was Integer.compare.</td></tr>
-      <tr><td>custom</td><td>—</td><td>—</td><td>same merge, new cmp</td><td>Same skeleton with a custom key: sort strings so that a+b >= b+a (LC 179). The merge is identical; only cmp changes.</td></tr>
+      <tr class="trace-table__row--change"><td>split</td><td>—</td><td>—</td><td>[5,2,4,6,1,3]</td><td>Input [5, 2, 4, 6, 1, 3]. A merge sort first splits down to single elements, because a run of one element is already sorted for free.</td></tr>
+      <tr><td>merge</td><td>0</td><td>1</td><td>[2,5,4,6,1,3]</td><td>Merge the runs [5] and [2]. One call to the comparator says 2 is smaller, so the pair is written back as [2, 5].</td></tr>
+      <tr><td>merge</td><td>2</td><td>3</td><td>[2,5,4,6,1,3]</td><td>The same single comparison on the next pair merges [4] and [6] into [4, 6], which happened to be in order already.</td></tr>
+      <tr><td>merge</td><td>0</td><td>3</td><td>[2,4,5,6,1,3]</td><td>Merge the two-element runs [2,5] and [4,6]. Comparing the fronts repeatedly interleaves them into [2, 4, 5, 6], so the left half is sorted.</td></tr>
+      <tr><td>merge</td><td>4</td><td>5</td><td>[2,4,5,6,1,3]</td><td>Move to the right half and merge [1] with [3], producing the run [1, 3]. Two sorted runs now cover the whole array.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>0</td><td>5</td><td>[1,2,3,4,5,6]</td><td>The final merge walks [2,4,5,6] and [1,3] once each and emits [1, 2, 3, 4, 5, 6]. Every decision came from Integer.compare.</td></tr>
+      <tr><td>custom</td><td>—</td><td>—</td><td>same merge, new cmp</td><td>Notice that nothing above depended on the values being numbers. Swap in a comparator that ranks a+b against b+a and this identical merge sorts strings for LC 179.</td></tr>
     </tbody>
   </table>
 </div>
@@ -488,8 +507,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>A comparison sort must distinguish <code>n!</code> permutations, so <span class="eq">&Omega;(n log n)</span> comparisons in the worst case. Java's object sort is TimSort, adaptive and stable; primitive sort is dual-pivot quicksort.</p>
-    <p>If each comparison costs <code>O(L)</code> (string keys of length L), multiply: <span class="eq">T(n) = O(n L log n)</span>. Concatenation comparators allocate, so they are slower than they look; still the right complexity class for <code>n &le; 10&#8309;</code>, <code>L &le; 20</code>.</p>
+    <p>A comparison sort must distinguish <code>n!</code> permutations, so <span class="eq">&Omega;(n log n)</span> comparisons in the worst case. Java's object sort is TimSort, adaptive and stable; primitive sort is dual-pivot quicksort. At <code>n = 10&#8309;</code> that is about <code>1.7&times;10&#8310;</code> comparisons, comfortably under a second.</p>
+    <p>If each comparison costs <code>O(L)</code> (string keys of length L), multiply: <span class="eq">T(n) = O(n L log n)</span>. Concatenation comparators allocate, so they are slower than they look; still the right complexity class for <code>n &le; 10&#8309;</code>, <code>L &le; 20</code>, which is a few tens of millions of character compares rather than the hopeless <code>5&times;10&#8313;</code> of a nested scan.</p>
   </div>
 
   <table class="complexity__compare">
@@ -512,28 +531,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Subtraction overflow in the comparator</span>
-    <div class="pitfalls__bug"><code>return a - b</code> with <code>a = Integer.MIN_VALUE</code> and <code>b = 1</code> wraps and reports the wrong sign.</div>
-    <div class="pitfalls__fix"><code>Integer.compare(a, b)</code> or <code>Long.compare</code>. Never subtract.</div>
+    <div class="pitfalls__bug"><code>return a - b</code> with <code>a = Integer.MIN_VALUE</code> and <code>b = 1</code> looks like a tidy numeric compare, but the subtraction wraps in 32 bits and reports the wrong sign, so the sort silently puts the smallest int after 1.</div>
+    <div class="pitfalls__fix">Use <code>Integer.compare(a, b)</code> or <code>Long.compare</code>, which compare without subtracting. A unit test of <code>MIN_VALUE</code> against 1 catches the wrap.</div>
   </li>
   <li>
     <span class="pitfalls__title">Unstable primitive sort</span>
-    <div class="pitfalls__bug">Sorting <code>int[]</code> of equal keys shuffles their original order, then a tie-breaking scan is wrong.</div>
-    <div class="pitfalls__fix">Box to <code>Integer[]</code>, or sort an index array with a stable object sort.</div>
+    <div class="pitfalls__bug">Sorting an <code>int[]</code> of equal keys lets dual-pivot quicksort shuffle their original order, so a later scan that assumed ties kept their input order is wrong.</div>
+    <div class="pitfalls__fix">Box to <code>Integer[]</code>, or sort an index array with TimSort so equal keys keep their original relative order.</div>
   </li>
   <li>
     <span class="pitfalls__title">Illegal transitive order</span>
-    <div class="pitfalls__bug">Comparator says A&lt;B, B&lt;C, C&lt;A. TimSort may throw <code>IllegalArgumentException: Comparison method violates its general contract!</code></div>
-    <div class="pitfalls__fix">The key must be a total order. Test a cycle of three items by hand.</div>
+    <div class="pitfalls__bug">A comparator that says A before B, B before C, and C before A looks locally plausible on each pair, but TimSort may throw <code>IllegalArgumentException: Comparison method violates its general contract!</code> when it notices the cycle.</div>
+    <div class="pitfalls__fix">Reduce the rule to one number (or a chain of numbers) per item so the order is total and transitive. Test any three items by hand before you trust the sort.</div>
   </li>
   <li>
     <span class="pitfalls__title">Parsing concatenated numbers as ints</span>
-    <div class="pitfalls__bug">LC 179 with numbers that concatenate past 2&#8313;1. <code>parseInt(a+b)</code> throws.</div>
-    <div class="pitfalls__fix">Compare strings. Leading-zero answer is the single character <code>"0"</code>.</div>
+    <div class="pitfalls__bug">On LC 179, concatenating two ten-digit strings and calling <code>parseInt(a+b)</code> throws or wraps because the joined text no longer fits in a 32-bit int, even though the comparison itself only needed the text.</div>
+    <div class="pitfalls__fix">Compare the two concatenations as strings. If the sorted result starts with zero, the whole answer is the single character <code>"0"</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting that sort mutates</span>
-    <div class="pitfalls__bug">You sort the caller's array and a later assertion on the original order fails.</div>
-    <div class="pitfalls__fix">Clone first, or sort indices and leave the source untouched.</div>
+    <div class="pitfalls__bug"><code>Arrays.sort</code> rewrites the caller's array, so a later assertion or a second pass that expected the original order fails even though the comparator was correct.</div>
+    <div class="pitfalls__fix">Clone first, or sort an index array and leave the source untouched. Print the original after the sort as a sanity check.</div>
   </li>
 </ul>
 
@@ -575,28 +594,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is primitive Arrays.sort not stable?</summary>
     <div class="followup__body">
-      <p>It is a dual-pivot quicksort tuned for ints. Stability requires extra memory to remember original positions. Objects go through TimSort, which is stable. If you need stability on ints, sort boxed values or indices.</p>
+      <p>It is a dual-pivot quicksort tuned for raw ints, and a quicksort cannot keep equal keys in their original order without extra memory to remember those positions. Object arrays go through TimSort, which is a merge sort and therefore stable. If you need stability on ints, box them or sort an index array so TimSort runs.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you sort by a key that is a long without boxing the array?</summary>
     <div class="followup__body">
-      <p>Sort indices: <code>Integer[] idx</code> and <code>Comparator.comparingLong(i -&gt; key[i])</code>. The values stay primitive; only the permutation is boxed.</p>
+      <p>Keep the values primitive and sort an <code>Integer[]</code> of indices with <code>Comparator.comparingLong(i -&gt; key[i])</code>. Only the permutation is boxed; the long keys stay in a primitive array. That avoids both overflow in <code>Integer.compare</code> and the cost of boxing every payload, which matters when n is a hundred thousand.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is a lambda comparator allocated every call?</summary>
     <div class="followup__body">
-      <p>The lambda is a singleton invokedynamic handle; it is not allocated per comparison. What is allocated is any string you build inside it (concatenation comparators). Cache keys if L is large.</p>
+      <p>The lambda is a singleton invokedynamic handle; it is not allocated per comparison. What is allocated is any string you build inside it, which is why concatenation comparators are slower than they look. Precompute the string form of each number once if the keys are long.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When is n log n not good enough after a sort?</summary>
     <div class="followup__body">
-      <p>When the true bottleneck is the key, not the sort: string keys with large L, or when you only needed the k-th element. Also when the range is tiny and counting sort is linear.</p>
+      <p>When the true bottleneck is the key, not the sort: string keys of length <code>L</code> make the real cost <code>O(n L log n)</code>, and at <code>L = 100</code> and <code>n = 10&#8309;</code> that is already tens of millions of character compares. You also do not need a full sort if you only wanted the k-th element, or if the range is tiny enough for counting sort.</p>
     </div>
   </details>
 </div>

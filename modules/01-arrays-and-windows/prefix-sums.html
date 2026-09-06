@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>"What is the sum of <code>a[l..r]</code>?" answered naively costs <code>O(r - l)</code>, so <code>q</code> queries cost <code>O(nq)</code>, which dies at <code>n = q = 10&#8309;</code>. One preprocessing pass that stores every prefix total makes each query a single subtraction. That is the entire idea, and it recurs everywhere: two dimensions, XOR instead of addition, counts instead of values, and reversed as a difference array for range <em>updates</em>.</p>
-<p>It matters more than its simplicity suggests because it is a component rather than a solution. Prefix sums plus a hash map solves "count subarrays with sum <code>k</code>". Prefix sums plus binary search solves "shortest subarray with sum at least <code>k</code>" on positive arrays. Prefix XOR plus a trie solves maximum-XOR-subarray. Prefix parity solves "longest subarray with equal zeros and ones". Each of those is a top-50 interview question, and each is a two-line transform on top of this page.</p>
-<p>The reformulation to internalise is that a subarray is a <em>difference of two prefixes</em>. Once you see <code>sum(l, r) = P[r+1] - P[l]</code>, every question about subarrays becomes a question about <em>pairs of prefix values</em>, and questions about pairs are the natural home of sorting, hashing and binary search.</p>
+<p>You have a year of daily sales in an array and your manager keeps asking questions of one shape: "how much did we sell between day <code>l</code> and day <code>r</code>?" Take a tiny version first, <code>a = [3, 1, 4, 1, 5, 9]</code>, and the question "days 2 to 4". The obvious answer is to walk across those three positions adding as you go, <code>4 + 1 + 5 = 10</code>. That is fine once. Now use realistic sizes: <code>10&#8309;</code> days and <code>10&#8309;</code> questions, each of which may span the whole array. That is up to <code>10&#8309; &times; 10&#8309; = 10&sup1;&#8304;</code> additions, ten billion of them, which takes a modern processor well over a minute &mdash; and a judge stops you after one or two seconds.</p>
+<p>The way out is to answer one harder question in advance instead of many easy ones later. Before any query arrives, build a second array <code>P</code> in which <code>P[i]</code> is the total of the first <code>i</code> entries, so <code>P = [0, 3, 4, 8, 9, 14, 23]</code>. That costs a single addition per element. "Days 2 to 4" is now the total of the first five days minus the total of the first two, <code>P[5] &minus; P[2] = 14 &minus; 4 = 10</code>: one subtraction, and it stays one subtraction even if the range covers a million elements. Such an array is called a <em>prefix sum</em> array, because entry <code>i</code> holds the sum of the prefix of the data that stops just before position <code>i</code>.</p>
+<p>In a real problem statement the tell is a line like <code>n, q &le; 2&times;10&#8309;</code> sitting next to "the array does not change" and a pile of range queries. Those numbers forbid re-adding per query but comfortably allow one linear pass, which is precisely what this technique costs. And it is worth far more than its four lines suggest, because it is a <em>component</em> rather than a solution: prefix sums plus a hash map count the subarrays whose sum equals <code>k</code>; prefix sums plus binary search find the shortest subarray with sum at least <code>k</code> on a non-negative array; prefix XOR plus a trie maximise the XOR of a subarray; and rewriting every zero as <code>-1</code> turns "equally many zeros and ones" into the far easier "sum is zero".</p>
+<p>One sentence carries all of that: a subarray is the <em>difference of two prefixes</em>. Once <code>sum(l, r) = P[r+1] &minus; P[l]</code> is in your head, every question about segments turns into a question about <em>pairs of prefix values</em> &mdash; and finding pairs is exactly what hash maps, sorting and binary search are built for. Read the same identity backwards and you get the difference array, which flips the cost model: each range <em>update</em> becomes two writes, and you pay one linear pass at the very end to read all the results out.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A subarray is the difference of two prefixes. Rewrite every subarray condition as a condition on two prefix values, then attack the pair problem with a hash map, a sort, or a binary search.</p>
+    <p>A subarray is the difference of two prefixes, so rewrite every subarray condition as a condition on two prefix values. The question stops being "which segment?" and becomes "which pair of prefix indices?" &mdash; and locating a pair is what a hash map, a sort or a binary search does in linear or near-linear time.</p>
   </div>
 </aside>
 
@@ -127,14 +128,14 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with range-sum queries is the standard signature. Sums of <code>10&#8309;</code> values up to <code>10&#8313;</code> reach <code>10&sup1;&#8308;</code>, so the prefix array is <code>long[]</code>, always.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with many range-sum queries and no updates in between is the standard signature: re-adding for every query would be about <code>4&times;10&sup1;&#8304;</code> operations, whereas one build pass plus <code>q</code> subtractions is about <code>4&times;10&#8309;</code>, a hundred thousand times less work. Read the value range as well &mdash; <code>10&#8309;</code> elements of size <code>10&#8313;</code> sum to <code>10&sup1;&#8308;</code>, which is far beyond the <code>2.1&times;10&#8313;</code> ceiling of an <code>int</code>, so the prefix array is <code>long[]</code>, always.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
 <p>Define <code>P[0] = 0</code> and <code>P[i] = a[0] + a[1] + &hellip; + a[i-1]</code>. The leading zero is not decoration: it removes every special case, because with it <code>sum(l, r) = P[r+1] - P[l]</code> holds for all valid <code>l &le; r</code> including <code>l = 0</code>. Implementations that start at <code>P[0] = a[0]</code> need a branch for <code>l = 0</code>, and that branch is where the bugs live.</p>
 <p>The difference array is the same identity read backwards. To add <code>v</code> to <code>a[l..r]</code>, write <code>d[l] += v</code> and <code>d[r+1] -= v</code>; after all updates, the prefix sum of <code>d</code> is the array of totals added to each position. So prefix sums turn <em>point updates and range queries</em> into <em>range updates and point queries</em>, at <code>O(1)</code> per update and one <code>O(n)</code> pass at the end.</p>
-<p>In two dimensions the same identity needs inclusion-exclusion, because the rectangle above and the rectangle to the left overlap in the corner. With <code>P[i][j]</code> the sum of the submatrix from <code>(0,0)</code> to <code>(i-1, j-1)</code>, the build step is <code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] &minus; P[i-1][j-1]</code>, and the query reverses the signs.</p>
+<p>In two dimensions the same identity needs inclusion-exclusion, because the rectangle above and the rectangle to the left overlap in the corner. With <code>P[i][j]</code> the sum of the submatrix from <code>(0,0)</code> to <code>(i-1, j-1)</code>, the build step is <code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] &minus; P[i-1][j-1]</code>, and the query reverses the signs. Take the 2-by-2 grid <code>[[1, 2], [3, 4]]</code>: after the build, <code>P[2][2] = 10</code> is the whole-grid sum, and the bottom-right cell alone is <code>P[2][2] &minus; P[1][2] &minus; P[2][1] + P[1][1] = 10 &minus; 3 &minus; 4 + 1 = 4</code>. Four reads, and the same four reads would answer any rectangle in a million-by-million grid.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -265,7 +266,7 @@
           }
         },
         {
-          "note": "P[2] = 3 + 1 = 4.",
+          "note": "P[2] = 3 + 1 = 4, the sum of the first two elements.",
           "arr": [
             0,
             3,
@@ -295,7 +296,7 @@
           }
         },
         {
-          "note": "P[3] = 4 + 4 = 8.",
+          "note": "P[3] = 4 + 4 = 8, now covering the first three elements.",
           "arr": [
             0,
             3,
@@ -325,7 +326,7 @@
           }
         },
         {
-          "note": "P[4] = 8 + 1 = 9.",
+          "note": "P[4] = 8 + 1 = 9, adding a[3] into the running prefix.",
           "arr": [
             0,
             3,
@@ -355,7 +356,7 @@
           }
         },
         {
-          "note": "P[5] = 9 + 5 = 14.",
+          "note": "P[5] = 9 + 5 = 14, the prefix that later answers the sample query.",
           "arr": [
             0,
             3,
@@ -638,7 +639,7 @@
           }
         },
         {
-          "note": "Subtract the strip above: P[1][3] = 6.",
+          "note": "Subtract the strip above the query: P[1][3] = 6.",
           "cells": [
             {
               "r": 3,
@@ -754,13 +755,13 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>long[] P</code> of length <code>n + 1</code></strong> and leave <code>P[0] = 0</code>.</li>
-  <li><strong>Fill it in one pass:</strong> <code>P[i] = P[i-1] + a[i-1]</code> for <code>i = 1 &hellip; n</code>.</li>
-  <li><strong>Answer each query</strong> as <code>P[r+1] - P[l]</code> using inclusive <code>l</code> and <code>r</code>.</li>
+  <li><strong>Allocate <code>long[] P</code> of length <code>n + 1</code></strong> and leave <code>P[0] = 0</code>, so a range that starts at index 0 needs no special case.</li>
+  <li><strong>Fill it in one pass:</strong> <code>P[i] = P[i-1] + a[i-1]</code> for <code>i = 1 &hellip; n</code>, which costs exactly one addition per element.</li>
+  <li><strong>Answer each query</strong> as <code>P[r+1] - P[l]</code> using inclusive <code>l</code> and <code>r</code>, so a single-element range <code>sum(i, i)</code> equals <code>a[i]</code>.</li>
   <li><strong>For 2D,</strong> build with a zero border and <code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] - P[i-1][j-1]</code>.</li>
   <li><strong>For range updates,</strong> use a difference array: <code>d[l] += v</code>, <code>d[r+1] -= v</code>, then prefix-sum <code>d</code> once at the end.</li>
   <li><strong>For subarray-property counting,</strong> restate the condition as a relation between two prefix values, then use a <code>HashMap</code> from prefix value to count, seeded with <code>{0: 1}</code>.</li>
-  <li><strong>Choose the accumulator type deliberately.</strong> <code>long</code> whenever <code>n &times; max|a<sub>i</sub>|</code> can exceed <code>2.1&times;10&#8313;</code>.</li>
+  <li><strong>Choose the accumulator type deliberately.</strong> Use <code>long</code> whenever <code>n &times; max|a<sub>i</sub>|</code> can exceed <code>2.1&times;10&#8313;</code>, which is the usual contest bound.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->

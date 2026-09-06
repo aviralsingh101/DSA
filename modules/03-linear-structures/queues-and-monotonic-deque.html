@@ -22,7 +22,7 @@
   <p class="hero__tagline">A deque drops candidates from both ends: the front expires by age, the back is dominated by a better newer value &mdash; sliding-window maximum in O(n).</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="stacks-and-monotonic-stack.html">Stacks & Monotonic Stack</a>,
       <a href="../01-arrays-and-windows/sliding-window.html">Sliding Window</a>
@@ -39,14 +39,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A queue is FIFO: BFS, moving averages, "first task that arrived". The structure that actually wins interviews is the <em>monotonic deque</em>: indices of candidates for the window maximum (or minimum), increasing in index and decreasing in value. The front is the answer for the current window; the back is where new arrivals land after popping everything they dominate.</p>
-<p>Without the deque, window-max is O(nk) or O(n log k) with a heap that cannot cheaply delete the element that just left. The deque deletes expired indices from the front in O(1) and dominated indices from the back in amortised O(1). Same bound as a monotonic stack, plus age.</p>
-<p>The same deque solves shortest subarray with sum ≥ k (on prefixes), jump game VI, and constrained subsequence sum. Structural queues (recent calls, circular queue, implement queue with stacks) are a different, easier family.</p>
+<p>You are given the array <code>[1, 3, -1, -3, 5, 3, 6, 7]</code> and asked for the maximum of every contiguous window of length 3. The first window <code>[1, 3, -1]</code> answers 3; the next <code>[3, -1, -3]</code> is still 3; then <code>[-1, -3, 5]</code> jumps to 5. The program that writes itself scans each window from scratch. On five or eight numbers that is instant. On <code>n = 10&#8309;</code> and a window around <code>n/2</code> that is about <code>2.5&times;10&#8313;</code> comparisons, and the judge's one-second budget is gone long before you finish.</p>
+<p>A heap of the live window looks smarter because peek is the max, but Java's <code>PriorityQueue</code> cannot delete the element that just slid out of the left edge in logarithmic time. You either scan the heap &mdash; back to quadratic &mdash; or leave the stale value in and skip it later, which is <code>n log n</code> with extra bookkeeping. The wasted work has a shape: once a newer, larger-or-equal value arrives, every older and smaller neighbour is <em>dominated</em> &mdash; permanently useless as a window maximum &mdash; and can be thrown away forever.</p>
+<p>A <em>deque</em> is a double-ended queue: you may add or remove from either end, unlike a stack (one end only) or a plain FIFO queue (add back, remove front). Keep a deque of indices of still-useful candidates, increasing in index from front to back and decreasing in value. That never-turning-around ordering is what <em>monotonic</em> means here. At any instant the front is the maximum of the current window, because everything older and smaller has already been popped from the back, and everything too old has already been popped from the front. An index is pushed once and popped at most once from each end, so the nested loops are still linear.</p>
+<p>In a real statement the signal is <code>n &le; 10&#8309;</code> sitting next to "maximum of every window of size <code>k</code>", or a DP recurrence whose inner max is itself a sliding window. The same deque, flipped so values increase, solves shortest subarray with sum <code>&ge; k</code> on prefix sums, because negatives make a two-pointer shrink illegal. Structural queues &mdash; recent calls, circular buffers, implement a queue with two stacks &mdash; are a different and easier family: they never compare values, they only remember insertion order.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>The front of a decreasing deque is the max of the live window because everything older and smaller has been popped from the back, and everything too old has been popped from the front.</p>
+    <p>At any instant the deque holds only live candidates, oldest at the front and newest at the back, values decreasing so the front is the window max. An index leaves the back because a newer arrival dominates it, or the front because it aged out of the window. Each index is pushed once and popped once, so the nested loops stay linear.</p>
   </div>
 </aside>
 
@@ -118,18 +119,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, window k up to n: the deque must be O(n), not O(n log k). Prefix sums for LC 862 need <code>long</code>. Use ArrayDeque, not LinkedList (cache) and not Stack.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a window <code>k</code> up to <code>n</code> is the linear-deque signature: a heap of the window is about <code>n log n</code> and a scan of each window is about <code>n k</code>, while this pass is about <code>2&times;10&#8309;</code> deque operations. Prefix sums for shortest-subarray need <code>long</code>. Use <code>ArrayDeque</code>, not <code>LinkedList</code> and not <code>Stack</code>.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Maintain indices with a[dq] strictly decreasing. For each i: pop back while <code>a[dq.peekLast()] ≤ a[i]</code> (i is better and newer); push i; pop front while <code>dq.peekFirst() ≤ i-k</code> (expired). The answer for window ending at i is <code>a[dq.peekFirst()]</code>. Push after cleaning so the new index is live.</p>
-<p>For prefix-minima (shortest subarray sum ≥ k): the deque holds increasing prefixes. If <code>P[i] - P[dq.front] ≥ k</code>, the front can be popped as a candidate start (later starts only make the subarray shorter once this one already works). Negatives make sliding-window-on-values illegal; the deque on prefixes is the repair.</p>
+<p>The container is an <code>ArrayDeque&lt;Integer&gt;</code> called <code>dq</code>, and it holds <em>indices</em>, never values. At any instant during the scan, <code>dq</code> contains exactly the live candidates for the window ending at the current index <code>i</code>: their indices increase from front to back, and the values <code>a[dq]</code> decrease, so the front is the current maximum. An index is popped from the back when a newer arrival is at least as large &mdash; it can never be the answer for any later window that also contains the newcomer. An index is popped from the front when it has aged out of the window of size <code>k</code>, because it is no longer a legal candidate even if it is still the biggest number you have seen.</p>
+<p>The scan is a single loop over <code>i</code> from 0 to <code>n-1</code>. Before pushing <code>i</code>, pop the back while <code>a[dq.peekLast()] &le; a[i]</code>, because <code>i</code> is both larger-or-equal and newer. Then push <code>i</code>. Then pop the front while <code>dq.peekFirst() &le; i-k</code>, because that index sits strictly outside the window ending at <code>i</code>. Once <code>i &ge; k-1</code> the window is full, and the answer is <code>a[dq.peekFirst()]</code>. The inner loops look nested and dangerous; they are not, because each index enters once and leaves at most once from each end &mdash; the same <em>amortised</em> argument as the monotonic stack, plus an age test at the front.</p>
+<p>Trace <code>[1, 3, -1, -3, 5, 3, 6, 7]</code> with <code>k = 3</code>. At <code>i = 0</code> the deque is <code>[0]</code>. At <code>i = 1</code> the value 3 beats 1, so index 0 pops from the back and <code>dq = [1]</code>. At <code>i = 2</code> the value -1 loses to 3, so it sits at the back: <code>[1, 2]</code>, and the first full window answers 3. At <code>i = 3</code> the value -3 sits down: <code>[1, 2, 3]</code>; front 1 is still inside (<code>1 &gt; 3-3</code>). At <code>i = 4</code> the value 5 dominates everything still on the deque, so -3, -1 and 3 all pop from the back, and front 1 also expires (<code>1 &le; 4-3</code>); <code>dq</code> becomes <code>[4]</code> and the answer is 5. The remaining windows answer 5, then 6, then 7.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The deque is increasing in index and decreasing in value (for window max):</p><span class="eq">idx0 &lt; idx1 &lt; … and a[idx0] ≥ a[idx1] ≥ … , all idx in (i-k, i]</span><p>Interview sentence: <em>"Front is the max of the live window; back pops everyone the new arrival dominates."</em></p>
+    <p>The deque holds live candidates, increasing in index and decreasing in value (for window max). At the top of every iteration:</p><span class="eq">idx0 &lt; idx1 &lt; … and a[idx0] ≥ a[idx1] ≥ … , all idx in (i-k, i]</span><p>In plain words, the front is the maximum of the current window, the back is where the newest arrival lands after kicking off everyone it dominates, and any index that has left either end is finished: it will never be a candidate again. If a pop ever happens without one of those two reasons, or a push ever leaves a smaller value in front of a larger one, the claim is broken and the output will be wrong.</p><p>Interview sentence: <em>"Front is the max of the live window; back pops everyone the new arrival dominates."</em></p>
   </div>
 </aside>
 
@@ -165,7 +167,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, push 0. Deque [0].",
+          "note": "Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, the deque is empty so index 0 is pushed and waits as the only live candidate.",
           "active": [
             0
           ],
@@ -186,7 +188,7 @@
           }
         },
         {
-          "note": "i=1, a=3 ≥ 1, pop 0, push 1. Deque [1].",
+          "note": "i=1, value 3 dominates the back value 1, so index 0 pops from the back and index 1 becomes the only candidate.",
           "active": [
             1
           ],
@@ -206,7 +208,7 @@
           }
         },
         {
-          "note": "i=2, a=-1 < 3, push 2. First full window: max = a[1]=3.",
+          "note": "i=2, value -1 loses to 3, so it sits at the back. The first full window answers with the front value 3.",
           "window": [
             0,
             2
@@ -222,7 +224,7 @@
           }
         },
         {
-          "note": "i=3, a=-3. Push 3. Front 1 is still in window (3-3=0, 1>0). Max still 3.",
+          "note": "i=3, value -3 sits at the back. Front 1 is still inside the window, so the max stays 3.",
           "window": [
             1,
             3
@@ -238,7 +240,7 @@
           }
         },
         {
-          "note": "i=4, a=5. Pop back -3,-1,3 (all ≤ 5). Front 1 expires (1≤4-3). Push 4. Max=5.",
+          "note": "i=4, value 5 pops every smaller back, then front 1 expires by age. Index 4 is the new max.",
           "window": [
             2,
             4
@@ -254,7 +256,7 @@
           }
         },
         {
-          "note": "i=5, a=3 < 5, push 5. Max=5. Then 6 and 7 will drain the deque to a new max each time.",
+          "note": "i=5, value 3 loses to 5 and joins the back. Later 6 and 7 will each drain the deque and become the new front.",
           "window": [
             3,
             5
@@ -270,7 +272,7 @@
           }
         },
         {
-          "note": "Finish: windows maxima [3,3,5,5,6,7]. Each index entered and left the deque at most once.",
+          "note": "Done. Window maxima are [3,3,5,5,6,7]. Each index entered once and left at most once, so the nested pops stayed linear.",
           "done": [
             0,
             1,
@@ -314,18 +316,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Window max:</strong> decreasing deque of indices.</li>
-  <li><strong>For each i:</strong> pop back while a[back] ≤ a[i].</li>
-  <li><strong>Push i.</strong> Then pop front while front ≤ i-k.</li>
-  <li><strong>Record</strong> a[peekFirst] once i ≥ k-1.</li>
-  <li><strong>Prefix variant:</strong> increasing deque of P[i]; pop front when P[i]-P[front] ≥ k.</li>
-  <li><strong>BFS:</strong> addLast / pollFirst; never mix with peekLast unless it is a 0-1 BFS.</li>
-  <li><strong>ArrayDeque</strong>, 4-space, long for prefix sums.</li>
+  <li><strong>Name a decreasing deque of indices</strong> for window maximum, because the front must stay the largest live value and the back is the only place a new arrival is allowed to land.</li>
+  <li><strong>For each index i, pop the back first</strong> while <code>a[back] &le; a[i]</code>. Those older values can never win a later window that also contains <code>i</code>, so keeping them would only waste space and poison the front later.</li>
+  <li><strong>Push i, then pop the front by age</strong> while <code>front &le; i-k</code>. The new index is now live, and anything that has slid out of the window of size <code>k</code> must leave even if it is still the biggest number you have seen.</li>
+  <li><strong>Record the front only once the window is full</strong>, that is when <code>i &ge; k-1</code>. Writing earlier invents a short prefix window the statement did not ask for.</li>
+  <li><strong>For shortest subarray with sum &ge; k</strong>, flip the deque to increasing prefixes. Pop the front when <code>P[i] - P[front] &ge; k</code> because that start already works and a later start can only make the same end shorter.</li>
+  <li><strong>Keep structural BFS on a plain FIFO</strong>: <code>addLast</code> / <code>pollFirst</code> only. Mixing in <code>peekLast</code> is reserved for 0-1 BFS, not for a monotonic window.</li>
+  <li><strong>Use ArrayDeque and long prefix sums</strong> so the structure is contiguous in memory and a sum of <code>10&#8309;</code> values near <code>10&#8313;</code> does not wrap a Java <code>int</code> before you compare it to <code>k</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Walk <code>[1, 3, -1, -3, 5, 3, 6, 7]</code> with window <code>k = 3</code>. The deque holds live candidate indices; the front is the max of the current window once it is full.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -333,13 +335,13 @@ flowchart TD
       <tr><th>i</th><th>window</th><th>deque</th><th>max</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>[1]</td><td>[0]</td><td>—</td><td>Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, push 0. Deque [0].</td></tr>
-      <tr><td>1</td><td>[1,3]</td><td>[1]</td><td>—</td><td>i=1, a=3 ≥ 1, pop 0, push 1. Deque [1].</td></tr>
-      <tr class="trace-table__row--change"><td>2</td><td>[1,3,-1]</td><td>[1,2]</td><td>3</td><td>i=2, a=-1 < 3, push 2. First full window: max = a[1]=3.</td></tr>
-      <tr class="trace-table__row--change"><td>3</td><td>[3,-1,-3]</td><td>[1,2,3]</td><td>3</td><td>i=3, a=-3. Push 3. Front 1 is still in window (3-3=0, 1>0). Max still 3.</td></tr>
-      <tr class="trace-table__row--change"><td>4</td><td>[-1,-3,5]</td><td>[4]</td><td>5</td><td>i=4, a=5. Pop back -3,-1,3 (all ≤ 5). Front 1 expires (1≤4-3). Push 4. Max=5.</td></tr>
-      <tr class="trace-table__row--change"><td>5</td><td>[-3,5,3]</td><td>[4,5]</td><td>5</td><td>i=5, a=3 < 5, push 5. Max=5. Then 6 and 7 will drain the deque to a new max each time.</td></tr>
-      <tr><td>done</td><td>all</td><td>[7]</td><td>[3,3,5,5,6,7]</td><td>Finish: windows maxima [3,3,5,5,6,7]. Each index entered and left the deque at most once.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>[1]</td><td>[0]</td><td>—</td><td>Window k=3 on [1,3,-1,-3,5,3,6,7]. i=0, the deque is empty so index 0 is pushed and waits as the only live candidate.</td></tr>
+      <tr><td>1</td><td>[1,3]</td><td>[1]</td><td>—</td><td>i=1, value 3 dominates the back value 1, so index 0 pops from the back and index 1 becomes the only candidate.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>[1,3,-1]</td><td>[1,2]</td><td>3</td><td>i=2, value -1 loses to 3, so it sits at the back. The first full window answers with the front value 3.</td></tr>
+      <tr class="trace-table__row--change"><td>3</td><td>[3,-1,-3]</td><td>[1,2,3]</td><td>3</td><td>i=3, value -3 sits at the back. Front 1 is still inside the window, so the max stays 3.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>[-1,-3,5]</td><td>[4]</td><td>5</td><td>i=4, value 5 pops every smaller back, then front 1 expires by age. Index 4 is the new max.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>[-3,5,3]</td><td>[4,5]</td><td>5</td><td>i=5, value 3 loses to 5 and joins the back. Later 6 and 7 will each drain the deque and become the new front.</td></tr>
+      <tr><td>done</td><td>all</td><td>[7]</td><td>[3,3,5,5,6,7]</td><td>Done. Window maxima are [3,3,5,5,6,7]. Each index entered once and left at most once, so the nested pops stayed linear.</td></tr>
     </tbody>
   </table>
 </div>
@@ -472,8 +474,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each index is pushed at most once and popped at most once from each end:</p><span class="eq">T(n) = Θ(n)</span>
-    <p>A heap of size k is O(n log k) and cannot delete the expired max without a lazy deletion map. The deque wins whenever you only need min or max, not k-th.</p>
+    <p>Each index is pushed at most once and popped at most once from each end:</p><span class="eq">T(n) = n pushes + P_back + P_front, each P ≤ n, so T(n) = Θ(n)</span>
+    <p>The nested loops are therefore not a hidden quadratic: one arrival may drain the whole back, but those indices never return. A heap of size <code>k</code> is <code>O(n log k)</code> and cannot delete the expired max without a lazy-deletion map. At <code>n = 10&#8309;</code> the deque is about <code>3&times;10&#8309;</code> operations; the heap is closer to <code>1.7&times;10&#8310;</code>. The deque wins whenever you only need min or max, not the k-th.</p>
   </div>
 
   <table class="complexity__compare">
@@ -496,28 +498,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Popping the front with < instead of ≤ i-k</span>
-    <div class="pitfalls__bug">An index exactly k ago stays and poisons the max.</div>
-    <div class="pitfalls__fix">while peekFirst ≤ i-k (strictly outside the window of size k ending at i).</div>
+    <div class="pitfalls__bug">An index exactly k ago stays on the front and poisons every later max. It looks correct because the off-by-one is still inside a slightly larger window than the spec asked for.</div>
+    <div class="pitfalls__fix">Pop while peekFirst ≤ i-k, so anything strictly outside the window of size k ending at i is gone.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using < instead of ≤ when popping the back</span>
-    <div class="pitfalls__bug">Equal values pile up; the older equal expires later and you keep a stale index.</div>
-    <div class="pitfalls__fix">Pop back on ≤ so the newest equal sits at the front when the older expires.</div>
+    <div class="pitfalls__bug">Equal values pile up at the back; the older equal expires later and you keep a stale index as the front after the newer twin has already left.</div>
+    <div class="pitfalls__fix">Pop the back on ≤ so the newest equal sits at the front when the older one expires.</div>
   </li>
   <li>
     <span class="pitfalls__title">Recording the max before the window is full</span>
-    <div class="pitfalls__bug">ans[0] written at i=0 for k=3.</div>
-    <div class="pitfalls__fix">Only record when i ≥ k-1.</div>
+    <div class="pitfalls__bug">ans[0] is written at i=0 when k=3, inventing a one-element window. The sample of n=k still passes, so the bug hides until a longer array arrives.</div>
+    <div class="pitfalls__fix">Only record a[peekFirst] once i ≥ k-1, when the window ending at i actually has k elements.</div>
   </li>
   <li>
     <span class="pitfalls__title">Sliding window on values when negatives exist</span>
-    <div class="pitfalls__bug">Two pointers for sum≥k is wrong if a[i] can be negative.</div>
-    <div class="pitfalls__fix">Prefix + increasing deque (LC 862), not a shrinkable positive window.</div>
+    <div class="pitfalls__bug">Two pointers for sum ≥ k look right from the positive-window lecture, but a negative in the middle means shrinking the left end can make the sum larger, not smaller.</div>
+    <div class="pitfalls__fix">Build prefix sums and keep an increasing deque of prefix indices (LC 862), not a shrinkable window on the raw values.</div>
   </li>
   <li>
     <span class="pitfalls__title">LinkedList as a deque</span>
-    <div class="pitfalls__bug">Pointer chasing, extra objects. Correct but slow in Java.</div>
-    <div class="pitfalls__fix">ArrayDeque. pollFirst/Last, peekFirst/Last, addFirst/Last.</div>
+    <div class="pitfalls__bug">LinkedList works as a deque and the API looks identical, so the code is correct, but every node is a separate object and the judge's time limit is tighter than it looks.</div>
+    <div class="pitfalls__fix">Use ArrayDeque with pollFirst/Last, peekFirst/Last, addFirst/Last. It is the contiguous Java deque and the one the judge expects.</div>
   </li>
 </ul>
 
@@ -559,28 +561,28 @@ flowchart TD
   <details class="followup">
     <summary>Why not a max-heap of the window?</summary>
     <div class="followup__body">
-      <p>You can, with lazy deletion of indices ≤ i-k when they appear at the top. It is O(n log n) and more code. The deque is linear and the intended answer.</p>
+      <p>You can, with lazy deletion of indices <code>&le; i-k</code> when they appear at the top. That is correct and <code>O(n log n)</code>, but it is more code and a worse bound. The deque is linear because each index is pushed once and popped once, and it is the answer an interviewer wants when the query is only min or max, not the k-th.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can the deque store values instead of indices?</summary>
     <div class="followup__body">
-      <p>Only if you also store the index beside the value (a pair). Age tests need the index. A value-only deque cannot tell whether the front has left the window.</p>
+      <p>Only if you also store the index beside the value as a pair. The age test <code>front &le; i-k</code> needs the position, and a value-only deque cannot tell whether the front has already left the window. Storing indices is the default: the value is one lookup away as <code>a[dq.peekFirst()]</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Shortest subarray with sum ≥ k and all positives?</summary>
     <div class="followup__body">
-      <p>Then a two-pointer sliding window on the array itself is enough (prefix is increasing). The deque is what you reach for once negatives appear.</p>
+      <p>Then a two-pointer sliding window on the array itself is enough, because every prefix is strictly increasing and shrinking the left end can only decrease the sum. The deque on prefixes is what you reach for once negatives appear, since a negative breaks that shrink-makes-smaller assumption.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Implement a queue with two stacks?</summary>
     <div class="followup__body">
-      <p>Inbox stack for push, outbox stack for pop: dump inbox into outbox when outbox is empty. Amortised O(1). ArrayDeque already is a queue; this is the design question.</p>
+      <p>Use an inbox stack for push and an outbox stack for pop: dump the whole inbox into the outbox only when the outbox is empty, so each element moves at most twice. That is amortised <code>O(1)</code> per operation. <code>ArrayDeque</code> already is a queue; this trick is the design-question version, not the window-maximum version.</p>
     </div>
   </details>
 </div>

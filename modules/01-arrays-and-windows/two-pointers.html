@@ -38,7 +38,7 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>An enormous number of array problems have an obvious <code>O(n&sup2;)</code> solution built from two nested loops over indices <code>i &lt; j</code>. Two pointers is the observation that, when the data has the right monotonic structure, you never need to revisit a position: each pointer advances only forward, so the total work is <code>O(n)</code> rather than <code>O(n&sup2;)</code>.</p>
+<p>An enormous number of array problems have an obvious <code>O(n&sup2;)</code> solution built from two nested loops over indices <code>i &lt; j</code>. Two pointers is the observation that, when the data has the right monotonic structure, you never need to revisit a position: each pointer advances only forward, so the total work is <code>O(n)</code> rather than <code>O(n&sup2;)</code>. On a sorted array of <code>n = 10&#8309;</code>, the nested loops check about <code>5&times;10&#8313;</code> pairs and time out; two pointers examine each index once, about <code>10&#8309;</code> additions after the sort.</p>
 <p>The technique comes in three distinct shapes that people often conflate. <strong>Opposite ends:</strong> <code>l</code> starts at 0, <code>r</code> at <code>n-1</code>, and they converge &mdash; used for pair sums on sorted arrays, container with most water, and palindromes. <strong>Same direction:</strong> both start at 0 and <code>r</code> outruns <code>l</code> &mdash; that is the <a href="sliding-window.html">sliding window</a>, plus in-place partitioning and merging. <strong>Fast and slow:</strong> one pointer moves twice as fast &mdash; cycle detection and finding the middle of a list.</p>
 <p>What makes it an interview favourite is that the correctness argument is short but not trivial. "Why is it safe to move <code>l</code> here?" has a real answer &mdash; usually an exchange argument showing that every pair you skip is dominated by one you keep &mdash; and being able to give that answer separates people who memorised the pattern from people who understand it.</p>
 
@@ -543,14 +543,14 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Identify the shape</strong>: opposite ends, same direction, or fast/slow.</li>
+  <li><strong>Identify the shape</strong> first: opposite ends, same direction, or fast/slow, because each shape has a different correctness argument.</li>
   <li><strong>Sort if needed</strong>, and first check whether the problem wants original indices &mdash; if it does, sorting is wrong.</li>
   <li><strong>Initialise</strong>: <code>l = 0, r = n - 1</code> for opposite ends; <code>l = r = 0</code> for same direction.</li>
-  <li><strong>Write down the exchange argument</strong> for which pointer moves. If you cannot, the technique may not apply.</li>
-  <li><strong>Loop while <code>l &lt; r</code></strong> (opposite ends) or while <code>r &lt; n</code> (same direction).</li>
-  <li><strong>Update the answer</strong> before moving pointers, so no candidate is skipped.</li>
+  <li><strong>Write down the exchange argument</strong> for which pointer moves. If you cannot state it in one sentence, the technique may not apply.</li>
+  <li><strong>Loop while <code>l &lt; r</code></strong> for opposite ends, or while <code>r &lt; n</code> for the same-direction form, so every index is examined once.</li>
+  <li><strong>Update the answer</strong> before moving either pointer, so the pair or window you are about to leave is not skipped.</li>
   <li><strong>Handle duplicates explicitly</strong> in <code>k</code>-sum problems: after recording a hit, advance past all equal values on both sides.</li>
-  <li><strong>Verify the termination condition:</strong> every iteration must move at least one pointer, or the loop hangs.</li>
+  <li><strong>Verify the termination condition:</strong> every iteration must move at least one pointer, or the loop hangs and the judge reports a timeout.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -939,7 +939,7 @@ flowchart TD
   </li>
   <li>
     <span class="pitfalls__title">Incomplete duplicate handling in <code>k</code>-sum</span>
-    <div class="pitfalls__bug">Skipping duplicates for the anchor <code>i</code> but not after a successful hit. <code>[0,0,0,0]</code> then produces <code>[[0,0,0],[0,0,0]]</code>.</div>
+    <div class="pitfalls__bug">Skipping duplicates for the anchor <code>i</code> but not after a successful hit looks finished, yet <code>[0,0,0,0]</code> then produces <code>[[0,0,0],[0,0,0]]</code>.</div>
     <div class="pitfalls__fix">Three guards: skip <code>i</code> when <code>a[i] == a[i-1]</code>, and after recording a triplet advance <code>l</code> past all equal values and retreat <code>r</code> past all equal values.</div>
   </li>
   <li>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Java's red-black tree in a box: floor, ceiling, first/last and subMap turn "nearest key" and "live set of intervals" into O(log n) per operation.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="heaps-and-priority-queue.html">Heaps & Priority Queue</a>,
       <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
@@ -40,14 +40,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A HashMap answers "is this exact key present?" and cannot tell you the next key to the left. A heap answers "what is the min?" and cannot tell you the predecessor of an arbitrary value. A balanced BST answers both: floor, ceiling, higher, lower, first, last, and a view of a key range. Java ships that tree as TreeMap / TreeSet.</p>
-<p>The second cluster is interval bookkeeping. My Calendar, overlapping-range counts, "can I book [s, e)?": store start → end in a TreeMap, and the predecessor / successor of a query start are the only two intervals that can conflict. Sweep-line problems (covered points, skyline) are the same tree with a running counter as the payload.</p>
-<p>This is P1 because it is how you write the O(n log n) solution when a deque is too specialised and a heap is too weak, and because Codeforces uses it constantly. The Java API is the whole skill: floorKey vs lowerKey is closed vs open intervals.</p>
+<p>You must decide whether each new booking <code>[s, e)</code> overlaps any existing one. The first request <code>[10, 20)</code> is free; <code>[15, 25)</code> collides with it; <code>[20, 30)</code> only touches 20 and is legal on a half-open spec. Scanning every previous booking is correct and costs one pass per request. After <code>n = 10&#8309;</code> bookings that is about <code>5&times;10&#8313;</code> comparisons, and the judge will cut you off. You need the nearest neighbour of <code>s</code>, not a scan.</p>
+<p>A <code>HashMap</code> answers "is this exact key present?" and cannot tell you the next key to the left. A heap answers "what is the current min?" and cannot tell you the predecessor of an arbitrary value. A balanced binary search tree answers both: <em>floor</em> (greatest key <code>&le; x</code>), <em>ceiling</em> (least key <code>&ge; x</code>), higher, lower, first, last, and a view of a key range. Java ships that tree as <code>TreeMap</code> / <code>TreeSet</code>. For calendar, store start <code>&rarr;</code> end; the predecessor and successor of the query start are the only two intervals that can conflict.</p>
+<p>Sweep-line problems &mdash; covered points, skyline, running coverage of the number line &mdash; are the same tree with a running counter as the payload: put a <code>+1</code> at each left endpoint and a <code>-1</code> at each right, then walk the keys in order. This page is how you write the <code>O(n log n)</code> solution when a deque is too specialised and a heap is too weak. The Java API is the whole skill: <code>floorKey</code> versus <code>lowerKey</code> is closed versus open, and unboxing a null floor is the NPE that only fires on the minimum query.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>HashMap is exact match. Heap is current extreme. TreeMap is nearest key and ordered range. Floor / ceiling / subMap are the three methods that justify the log n.</p>
+    <p>HashMap is exact match. Heap is the current extreme. TreeMap is the nearest key and an ordered range. Floor, ceiling and subMap are the three methods that justify paying <code>log n</code> instead of hashing.</p>
   </div>
 </aside>
 
@@ -119,18 +119,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n ≤ 10&#8309;</code> with n ordered inserts plus n predecessor queries is the TreeMap signature: O(n log n) is the budget. Null-check floor/ceiling before unboxing.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with n ordered inserts plus n predecessor queries is the TreeMap signature: <code>O(n log n)</code> is the budget, about <code>1.7&times;10&#8310;</code> node visits, not a quadratic scan of previous intervals. Null-check every floor and ceiling before unboxing; the miss is a real answer, not an error.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>TreeMap&lt;K,V&gt; is a red-black tree of keys. floorKey(x) is the greatest key ≤ x, or null. ceilingKey(x) is the least key ≥ x. lowerKey / higherKey are the strict versions. TreeSet is a TreeMap with dummy values. Null return is "no such key"; unboxing it is an NPE.</p>
-<p>Interval bookkeeping: store each booked interval as map.put(start, end) with half-open [start, end). To test [s, e): prev = floorKey(s), next = ceilingKey(s). Overlap iff prev exists and map.get(prev) > s, or next exists and next < e. Two lookups, not a scan. subMap is a live view, not a copy.</p>
+<p><code>TreeMap&lt;K,V&gt;</code> is a red-black tree of keys &mdash; a self-balancing binary search tree, so every walk from the root to a leaf is <code>O(log n)</code>. <code>floorKey(x)</code> is the greatest key <code>&le; x</code>, or null if none exists. <code>ceilingKey(x)</code> is the least key <code>&ge; x</code>. <code>lowerKey</code> and <code>higherKey</code> are the strict versions. <code>TreeSet</code> is the same tree with dummy values. A null return means "no such key"; writing <code>int f = set.floor(x)</code> unboxes that null into a <code>NullPointerException</code> the first time x is smaller than every key.</p>
+<p>Interval bookkeeping stores each booked interval as <code>map.put(start, end)</code> on the half-open range <code>[start, end)</code>. To test a new <code>[s, e)</code>, look up <code>prev = floorKey(s)</code> and <code>next = ceilingKey(s)</code>. They overlap if <code>prev</code> exists and its end is strictly after <code>s</code>, or if <code>next</code> exists and starts strictly before <code>e</code>. Two lookups replace a scan of every booking. <code>subMap</code> is a live view of a key range, not a copy: mutating it mutates the tree.</p>
+<p>Trace My Calendar on an empty map. Book <code>[10, 20)</code>: both neighbours are null, so store <code>10 &rarr; 20</code>. Book <code>[15, 25)</code>: floor of 15 is 10 and that interval ends at 20, which is past 15, so reject. Book <code>[20, 30)</code>: floor of 20 is still 10, but the end 20 is not strictly after 20, and there is no ceiling before 30, so the touch is legal and you store <code>20 &rarr; 30</code>. Two probes, never a walk over the bookings you already accepted.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>The map's keys are totally ordered. After every put / remove:</p><span class="eq">floor(x) = max { k in keys | k ≤ x }  (or none)</span><p>For intervals stored as start → end, the only intervals that can overlap a query [s, e) are the predecessor of s and the successor of s. Checking those two is complete.</p>
+    <p>The map's keys are totally ordered. After every put / remove:</p><span class="eq">floor(x) = max { k in keys | k ≤ x }  (or none)</span><p>For intervals stored as start → end, the only intervals that can overlap a query [s, e) are the predecessor of s and the successor of s. Checking those two is complete.</p><p>In plain words, the tree always knows the nearest key on the left and on the right of any query, and for a calendar those two neighbours are the only bookings that can collide with the new request. If a book ever scans the whole map, or a floor is unboxed without a null check, one half of that claim is already broken.</p>
   </div>
 </aside>
 
@@ -288,13 +289,13 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the key.</strong> What is ordered? Values, start-times, coordinates?</li>
-  <li><strong>Pick TreeSet vs TreeMap.</strong> Set if you only need presence and neighbours; map if each key carries a payload.</li>
-  <li><strong>Choose floor/ceiling vs lower/higher</strong> from whether equality counts. Null-check before unboxing.</li>
-  <li><strong>For intervals:</strong> store [s, e) as start → end. Probe floorKey(s) and ceilingKey(s).</li>
-  <li><strong>For a window of values:</strong> merge(+1) on enter, decrement-and-remove on leave, then lastKey() - firstKey().</li>
-  <li><strong>For a sweep:</strong> TreeMap of coordinate → delta, then iterate entrySet in order.</li>
-  <li><strong>Do not iterate the whole map</strong> to find a neighbour.</li>
+  <li><strong>Name the ordered key first</strong> so the tree is not built on the wrong field. Decide whether you are ordering values, start times, or coordinates; everything else is a payload.</li>
+  <li><strong>Pick TreeSet versus TreeMap from the payload.</strong> A set is enough when you only need presence and neighbours; a map is required when each key carries an end time, a count, or a delta.</li>
+  <li><strong>Choose floor/ceiling versus lower/higher</strong> from whether an exact match counts as a neighbour. Assign the result to <code>Integer</code> or <code>Long</code> and null-check before unboxing, because "no such key" is a real answer.</li>
+  <li><strong>For intervals, store [s, e) as start to end</strong> and probe <code>floorKey(s)</code> and <code>ceilingKey(s)</code> only. Those two neighbours are the only bookings that can overlap the new request.</li>
+  <li><strong>For a window of values, keep a frequency TreeMap</strong>: merge +1 on enter, decrement and remove on leave, then <code>lastKey() - firstKey()</code> is max minus min without scanning the window.</li>
+  <li><strong>For a sweep, put coordinate deltas in the tree first</strong>, then iterate <code>entrySet</code> in key order. Building the map and walking it are two separate passes so you never mutate while iterating.</li>
+  <li><strong>Do not iterate the whole map to find a neighbour.</strong> That walk is linear and throws away the reason you paid for a tree. Floor and ceiling are the <code>O(log n)</code> API.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -458,8 +459,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>A red-black tree of n keys has height O(log n). Each API call walks a root-to-leaf path:</p><span class="eq">T(n ops) = n · O(log n) = O(n log n)</span>
-    <p>The brute interval scan is O(n) per book, O(n²) total. Two TreeMap probes replace that scan. A window as a TreeMap of frequencies is O(n log n) versus O(n) for two deques.</p>
+    <p>A red-black tree of n keys has height <code>O(log n)</code>. Each API call walks a root-to-leaf path:</p><span class="eq">T(n ops) = n · O(log n) = O(n log n)</span>
+    <p>At <code>n = 10&#8309;</code> that is about <code>1.7&times;10&#8310;</code> node visits. The brute interval scan is <code>O(n)</code> per book and <code>O(n&sup2;)</code> total, around <code>5&times;10&#8313;</code> comparisons. Two TreeMap probes replace that scan. A window as a TreeMap of frequencies is <code>O(n log n)</code> versus <code>O(n)</code> for two deques, which is why you mention both and write the tree unless they push for linear.</p>
   </div>
 
   <table class="complexity__compare">
@@ -483,33 +484,33 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Unboxing a null floor/ceiling</span>
-    <div class="pitfalls__bug">int f = set.floor(x); when x is smaller than every key. NPE, often only on the minimum query.</div>
-    <div class="pitfalls__fix">Assign to Integer / Long, null-check, then unbox. Same for floorKey.</div>
+    <div class="pitfalls__bug">int f = set.floor(x) throws when x is smaller than every key. It looks like a normal lookup, and the NPE often fires only on the minimum query after the sample passed.</div>
+    <div class="pitfalls__fix">Assign to Integer or Long, null-check, then unbox. The same rule applies to floorKey and ceilingKey.</div>
   </li>
   <li>
     <span class="pitfalls__title">floor vs lower on a closed interval</span>
-    <div class="pitfalls__bug">Using lowerKey(s) when an interval that starts at s should count as a conflict.</div>
-    <div class="pitfalls__fix">Conflict with an interval that starts at s is a floor (inclusive).</div>
+    <div class="pitfalls__bug">Using lowerKey(s) skips an interval that starts exactly at s, so a same-start booking is accepted. Inclusive conflict needs the key that equals s, not the one before it.</div>
+    <div class="pitfalls__fix">Conflict with an interval that starts at s is a floor (inclusive). Stick to floor plus ceiling on the start.</div>
   </li>
   <li>
     <span class="pitfalls__title">Closed vs half-open overlap test</span>
-    <div class="pitfalls__bug">prev.end >= s on a half-open spec rejects a legal touch.</div>
-    <div class="pitfalls__fix">LC 729 is [s, e) so overlap is end > s and next < e.</div>
+    <div class="pitfalls__bug">Testing prev.end >= s on a half-open spec rejects a legal touch at the shared endpoint. [10, 20) and [20, 30) are allowed to meet at 20.</div>
+    <div class="pitfalls__fix">LC 729 is [s, e), so overlap is end > s on the predecessor and next < e on the successor.</div>
   </li>
   <li>
     <span class="pitfalls__title">TreeSet.remove of duplicate values in a window</span>
-    <div class="pitfalls__bug">A set cannot hold two equal values. Nearby-duplicate with t=0 silently drops one.</div>
-    <div class="pitfalls__fix">If duplicates of the values themselves matter, store indices or use a TreeMap of counts.</div>
+    <div class="pitfalls__bug">A set cannot hold two equal values, so nearby-duplicate with t=0 silently drops one of a pair and later reports no duplicate.</div>
+    <div class="pitfalls__fix">If duplicates of the values themselves matter, store indices or use a TreeMap of counts as a multiset.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mutating a map while iterating entrySet</span>
-    <div class="pitfalls__bug">ConcurrentModificationException, or skipped entries, during a sweep.</div>
-    <div class="pitfalls__fix">Build the delta map first, then iterate. Or snapshot keySet into an ArrayList.</div>
+    <div class="pitfalls__bug">Putting a new delta while walking entrySet throws ConcurrentModificationException, or silently skips an entry, because the tree's iterator is fail-fast.</div>
+    <div class="pitfalls__fix">Build the whole delta map first, then iterate. Or snapshot keySet into an ArrayList before mutating.</div>
   </li>
   <li>
     <span class="pitfalls__title">Comparator inconsistent with equals</span>
-    <div class="pitfalls__bug">A TreeMap with (a,b) → a.x - b.x treats two objects with the same x as the same key.</div>
-    <div class="pitfalls__fix">If keys can tie on the sort field, add a unique id. Never subtract ints.</div>
+    <div class="pitfalls__bug">A TreeMap with (a, b) -> a.x - b.x treats two objects with the same x as the same key, so the second silently overwrites the first. Subtraction also overflows.</div>
+    <div class="pitfalls__fix">If keys can tie on the sort field, add a unique id as a tie-break. Never subtract ints to compare.</div>
   </li>
 </ul>
 
@@ -557,28 +558,28 @@ flowchart TD
   <details class="followup">
     <summary>floorKey vs lowerKey: which one for interval overlap?</summary>
     <div class="followup__body">
-      <p>You need the interval that starts at or before s, so floor (inclusive). If an interval starts at s it overlaps [s, e) for any e > s. Stick to floor + ceiling on the start.</p>
+      <p>You need the interval that starts at or before <code>s</code>, so floor (inclusive). If an interval starts exactly at <code>s</code> it overlaps <code>[s, e)</code> for any <code>e &gt; s</code>. <code>lowerKey</code> would skip that same-start booking and accept a collision. Stick to floor plus ceiling on the start and ignore lower/higher for this pattern.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When do you prefer two deques over a TreeMap for max-min of a window?</summary>
     <div class="followup__body">
-      <p>When they want O(n) and the window is on an array you scan once. A TreeMap of frequencies is O(log n) per step, shorter to write. LC 1438 accepts both. Say both, write the TreeMap unless they push for linear.</p>
+      <p>When they want <code>O(n)</code> and the window is on an array you scan once. A TreeMap of frequencies is <code>O(log n)</code> per step and shorter to write. LC 1438 accepts both. Say both out loud, write the TreeMap unless they push for the linear bound, and switch to two monotonic deques if they do.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How does this relate to a policy-based tree on Codeforces?</summary>
     <div class="followup__body">
-      <p>TreeMap cannot answer "k-th key" in log n without walking, because Java's red-black tree does not store subtree sizes. headMap(x).size() is O(n), not log n. Use Fenwick / segment tree on compressed keys, or accept linear for order statistics.</p>
+      <p>TreeMap cannot answer "k-th key" in <code>log n</code> without walking, because Java's red-black tree does not store subtree sizes. <code>headMap(x).size()</code> is <code>O(n)</code>, not logarithmic. Use a Fenwick tree or segment tree on compressed keys, or accept a linear scan for order statistics. Policy-based trees in C++ are the structure Java is missing here.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can a TreeMap replace a heap?</summary>
     <div class="followup__body">
-      <p>Yes, with worse constants: firstKey is min, pollFirstEntry is delete-min, and you also get floor/ceiling and arbitrary delete in log n. Stay with PriorityQueue when you only ever need the extreme. A TreeMap of counts is the cleanest multiset Java has.</p>
+      <p>Yes, with worse constants: <code>firstKey</code> is min, <code>pollFirstEntry</code> is delete-min, and you also get floor, ceiling, and arbitrary delete in <code>log n</code>. Stay with <code>PriorityQueue</code> when you only ever need the extreme. A TreeMap of counts is still the cleanest multiset Java has, because a heap cannot delete an arbitrary key in log time.</p>
     </div>
   </details>
 </div>

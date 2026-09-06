@@ -39,7 +39,7 @@
 <h2>Why this exists</h2>
 <p>The difference between people who solve interview problems reliably and people who solve them sometimes is rarely knowledge. It is process. Under pressure, an unstructured solver reads the statement once, pattern-matches to the first vaguely similar thing they remember, starts coding, discovers a flaw at minute twenty-five, and has no time to recover. A structured solver spends ten minutes not writing code and finishes early.</p>
 <p>The procedure below is deliberately mechanical. Each phase has an exit condition, so you always know whether you are allowed to move on. That matters most exactly when you are anxious, because it replaces the question "am I stuck?" &mdash; which has no useful answer &mdash; with "have I met the exit condition for this phase?", which does.</p>
-<p>It also gives you something to say out loud. Interviewers score communication, and narrating "let me restate the problem, then check the constraints, then try a small example" is both genuinely useful and exactly the signal they are looking for. Silence while you think is the most common avoidable loss in an interview.</p>
+<p>It also gives you something to say out loud. Interviewers score communication, and narrating "let me restate the problem, then check the constraints, then try a small example" is both genuinely useful and exactly the signal they are looking for. Silence while you think is the most common avoidable loss in an interview. The rest of this page is that narration written down, so you can practise it the same way you practise an algorithm, until the seven phases fire without you having to remember their names. Use it on one old problem tonight: cover the code, walk the seven phases out loud, then uncover and compare what you actually wrote last time.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -121,13 +121,13 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>The seven phases</h2>
-<p><strong>1. Restate (2&ndash;3 min).</strong> Say the problem back in your own words, including the exact input, the exact output, and any guarantee you were given. If you cannot do this without looking, you have not understood it. Ask about duplicates, negative values, empty input, and whether the input is sorted.</p>
-<p><strong>2. Read the constraints (1 min).</strong> This gives you the target complexity and often the technique &mdash; see <a href="constraints-to-complexity.html">Constraints to Complexity</a>. Write the target down. Everything after this point is measured against it.</p>
-<p><strong>3. Work a small example by hand (3&ndash;5 min).</strong> Take the smallest non-trivial input and compute the answer manually, watching <em>how</em> you do it. Your own procedure is usually the brute force, and the step you find tedious is usually the step the algorithm optimises. This is where most insights actually come from.</p>
-<p><strong>4. Brute force, out loud (2 min).</strong> State the obvious solution and its complexity even if it is far too slow. It establishes correctness, gives you a reference implementation for stress testing, and guarantees you have <em>something</em> if you run out of time.</p>
+<p><strong>1. Restate (2&ndash;3 min).</strong> Say the problem back in your own words, including the exact input, the exact output, and any guarantee you were given. If you cannot do this without looking, you have not understood it. Ask about duplicates, negative values, empty input, and whether the input is sorted. Those four questions catch most of the hidden assumptions that later become off-by-one bugs.</p>
+<p><strong>2. Read the constraints (1 min).</strong> This gives you the target complexity and often the technique &mdash; see <a href="constraints-to-complexity.html">Constraints to Complexity</a>. Write the target down. Everything after this point is measured against it, so you do not spend twenty minutes designing a quadratic idea the bound has already killed. If no bound is given, ask for one before you invent an approach.</p>
+<p><strong>3. Work a small example by hand (3&ndash;5 min).</strong> Take the smallest non-trivial input and compute the answer manually, watching <em>how</em> you do it. Your own procedure is usually the brute force, and the step you find tedious is usually the step the algorithm optimises. This is where most insights actually come from, because you are watching yourself waste work.</p>
+<p><strong>4. Brute force, out loud (2 min).</strong> State the obvious solution and its complexity even if it is far too slow. It establishes correctness, gives you a reference implementation for stress testing, and guarantees you have <em>something</em> if you run out of time. Interviewers prefer a correct slow answer over a broken clever one, and saying the brute force also proves you understood the problem.</p>
 <p><strong>5. Find the wasted work (5&ndash;10 min).</strong> Optimisation is always the same question: what is the brute force recomputing? The answers form a short list &mdash; recomputing a range sum (prefix sums), rescanning a window (two pointers), re-searching a sorted array (binary search), recomputing a subproblem (DP), re-finding a minimum (heap), re-checking membership (hashing). Match your waste to one of these.</p>
-<p><strong>6. Fix the invariant, then code (15 min).</strong> Write one sentence describing what is true at every step ("<code>best</code> holds the maximum subarray sum ending at <code>i</code>"). Only then type. The invariant is what makes the code write itself.</p>
-<p><strong>7. Test deliberately (5 min).</strong> Empty, single element, all equal, all negative, maximum size, and the boundary between your branches. Trace the code on one small case line by line rather than re-reading it.</p>
+<p><strong>6. Fix the invariant, then code (15 min).</strong> Write one sentence describing what is true at every step ("<code>best</code> holds the maximum subarray sum ending at <code>i</code>"). Only then type. The invariant is what makes the code write itself, because every line now has a reason to exist. If you cannot write that sentence, you are not ready to type.</p>
+<p><strong>7. Test deliberately (5 min).</strong> Empty, single element, all equal, all negative, maximum size, and the boundary between your branches. Trace the code on one small case line by line rather than re-reading it, because re-reading hides the same assumptions you already made while typing. A single hand-trace of a three-element input catches more bugs than rereading the whole method.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -599,15 +599,15 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Restate</strong> the problem, its input, its output and its guarantees without looking at the statement.</li>
-  <li><strong>Extract the target complexity</strong> from the constraints and write it down.</li>
-  <li><strong>Hand-solve</strong> the smallest interesting example and watch your own method.</li>
-  <li><strong>State the brute force</strong> and its complexity out loud.</li>
-  <li><strong>Name the wasted work</strong> and match it against the six-item checklist.</li>
-  <li><strong>Write the invariant</strong> in one sentence before typing anything.</li>
-  <li><strong>Implement</strong>, keeping the invariant true at every line.</li>
+  <li><strong>Restate</strong> the problem, its input, its output and its guarantees without looking at the statement, so you know you actually understood it.</li>
+  <li><strong>Extract the target complexity</strong> from the constraints and write it down, because that number decides which ideas are even legal.</li>
+  <li><strong>Hand-solve</strong> the smallest interesting example and watch your own method, since the tedious step is usually the one the algorithm will later skip.</li>
+  <li><strong>State the brute force</strong> and its complexity out loud, so you have a correct fallback if the clever idea never arrives.</li>
+  <li><strong>Name the wasted work</strong> and match it against the six-item checklist, which turns "I am stuck" into a short list of known patterns.</li>
+  <li><strong>Write the invariant</strong> in one sentence before typing anything, so every later line has a reason to exist.</li>
+  <li><strong>Implement</strong>, keeping that invariant true at every line rather than inventing the algorithm while you type, which is how interviews get lost.</li>
   <li><strong>Run the edge-case checklist</strong>: empty, one element, all equal, all negative, maximum size, duplicates, and each branch boundary.</li>
-  <li><strong>State the final complexity</strong> unprompted, time and space, and mention one possible improvement.</li>
+  <li><strong>State the final complexity</strong> unprompted, both time and space, and mention one possible improvement so the interviewer does not have to drag it out of you.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dijkstra's Algorithm &mdash; DSA Course</title>
-<meta name="description" content="Non-negative weights turn shortest paths into &quot;always expand the closest unfinished vertex&quot; &mdash; a priority queue and a dist[] that only ever decreases.">
+<meta name="description" content="Non-negative weighted shortest paths: always expand the unsettled vertex with smallest dist, and the first time you settle it the distance is final.">
 <link rel="stylesheet" href="../../assets/css/theme.css">
 <link rel="stylesheet" href="../../assets/css/components.css">
 <link rel="stylesheet" href="../../assets/css/print.css" media="print">
@@ -19,17 +19,17 @@
 <section class="hero">
   <span class="hero__chip">Module 07 &middot; Graphs: Core</span>
   <h1>Dijkstra's Algorithm</h1>
-  <p class="hero__tagline">Non-negative weights turn shortest paths into "always expand the closest unfinished vertex" &mdash; a priority queue and a <code>dist[]</code> that only ever decreases.</p>
+  <p class="hero__tagline">Non-negative weighted shortest paths: always expand the unsettled vertex with smallest dist, and the first time you settle it the distance is final.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
     <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="bfs.html">BFS</a>,
-      <a href="graph-representations.html">Graph Representations</a>
+      <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps & Priority Queue</a>
     </span>
     <span class="hero__tags">
       <span class="chip">Dijkstra</span>
-      <span class="chip">priority queue</span>
+      <span class="chip">heap</span>
       <span class="chip">shortest path</span>
       <span class="chip">P0</span>
     </span>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>BFS is Dijkstra with every weight equal to 1, and the queue is already sorted by distance. The moment weights differ, that free ordering disappears and you must always pull the unfinished vertex with the smallest tentative distance. A min-heap does that in O(log n) per push.</p>
-<p>This is the default weighted shortest-path algorithm in interviews and contests. Network delay time, cheapest flights with no negative prices, path-with-minimum-effort (after you turn effort into an edge weight), and almost every "minimum cost to reach" with positive costs is Dijkstra. The two things it cannot do are negative edges and "longest path".</p>
-<p>The implementation that wins in Java is the lazy one: push a new (dist, v) pair every time you improve v, and ignore stale heap entries when they pop with a worse key than dist[v]. Decrease-key is not in the standard library and you do not need it.</p>
+<p>You are given 100000 junctions and 200000 one-way roads whose driving times are positive integers up to a billion, and you need the cheapest time from junction 0 to every other junction. BFS is the wrong tool the moment those times are not all equal: a single road of time 100 loses to a three-road walk of times 1+1+1, but BFS records the first arrival (one hop) and never looks at that junction again. Trying every walk is worse: at this size even listing the roads once is a few hundred thousand steps, and enumerating walks is exponential. You need a search that always expands the unfinished junction whose current best time is smallest.</p>
+<p>That search is Dijkstra's algorithm. It keeps a <code>dist</code> array of best times found so far, and a min-heap of pairs <code>(dist[u], u)</code> so the next expansion is the closest unfinished vertex. Network delay time, path-with-minimum-effort, and almost every weighted maze are this heap plus the rule that the first time a vertex comes off the heap with a matching <code>dist</code> its time is final. The rule needs every weight to be non-negative. With a negative road, a vertex you have already frozen can still be cheapened by a detour you have not expanded yet, and the answer comes out too large.</p>
+<p>A concrete three-node counterexample is enough to refuse negatives. Vertices 0, 1, 2, source 0, edges 0&rarr;1 of weight 2, 0&rarr;2 of weight 4, and 2&rarr;1 of weight <code>-3</code>. Dijkstra settles 1 at time 2 (the direct road) while 2 still sits at time 4, then freezes <code>dist[1]</code>. The true cheapest walk is 0-2-1 with total 4-3 = 1, which is never applied. Java's <code>PriorityQueue</code> also does not support decrease-key, so the contest pattern is "push a new pair when the time improves, skip a popped pair whose time no longer matches <code>dist[u]</code>". That is <code>O(m log m)</code>, fine at <code>m = 2&times;10&#8309;</code>, and the signal in a statement is "minimum cost" on non-negative weights with those limits.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Because remaining edge weights are non-negative, the first time a vertex is popped from the heap with a key equal to dist[u], that distance is final. You may skip every later heap entry for u.</p>
+    <p>Always expand the unfinished vertex with the smallest dist. When every edge weight is non-negative, the first fresh heap pop is the true shortest-path distance and can be frozen. Skip heap pairs whose stored time no longer matches dist[u].</p>
   </div>
 </aside>
 
@@ -56,20 +56,20 @@
     <div class="recognise__col recognise__col--yes">
       <h3>Say yes when you see</h3>
       <ul>
-        <li>"Shortest / cheapest path" and every edge weight is &ge; 0</li>
-        <li>A grid where moving to a neighbour costs a positive number (effort, time, fuel)</li>
-        <li>"Minimum time for a signal to reach all nodes"</li>
-        <li>You need distances from one source (or a few, run it several times) to every vertex</li>
-        <li>Unit weights would be BFS, but they are not unit</li>
+        <li>Shortest path with non-negative edge weights</li>
+        <li>Grid with cell costs / effort / time to enter a cell</li>
+        <li>Network delay: max over dist[v] from a source</li>
+        <li>"Minimum cost" where cost adds along the path and never decreases by taking extra edges of negative weight</li>
+        <li>Implicit graphs whose edges you generate from a state with a non-negative cost</li>
       </ul>
     </div>
     <div class="recognise__col recognise__col--no">
       <h3>Not this pattern when</h3>
       <ul>
-        <li>Any negative edge &rarr; Bellman-Ford (and a negative cycle is a different answer)</li>
-        <li>All weights in {0, 1} &rarr; 0-1 BFS is linear and simpler</li>
-        <li>All weights equal &rarr; BFS</li>
-        <li>Longest simple path &rarr; NP-hard; only legal on a DAG</li>
+        <li>Unit weights &rarr; BFS, simpler and O(n+m)</li>
+        <li>Weights only 0 and 1 &rarr; 0-1 BFS</li>
+        <li>Negative edges, no negative cycle &rarr; Bellman-Ford / potential + Dijkstra (Johnson)</li>
+        <li>Negative cycle existence &rarr; Bellman-Ford, not this page</li>
       </ul>
     </div>
   </div>
@@ -80,154 +80,125 @@
     </thead>
     <tbody>
       <tr>
-        <td>Positive / zero weights, one source</td>
-        <td>Non-negative relaxation is safe</td>
-        <td>Dijkstra + heap</td>
+        <td>Non-neg weights, one source</td>
+        <td>Classic Dijkstra</td>
+        <td>Heap of (dist,u), skip stale</td>
       </tr>
       <tr>
-        <td>All weights 1</td>
-        <td>Heap is wasted</td>
+        <td>Unit weights</td>
+        <td>Special case w=1</td>
         <td>BFS</td>
       </tr>
       <tr>
-        <td>Weights 0 and 1 only</td>
-        <td>Deque, not a heap</td>
+        <td>Weights in {0,1}</td>
+        <td>Deque Dijkstra</td>
         <td>0-1 BFS</td>
       </tr>
       <tr>
-        <td>Negative edges, no neg cycle needed?</td>
-        <td>Potential + Dijkstra, or Bellman-Ford</td>
-        <td>Johnson / BF</td>
+        <td>k extra constraints (stops, fuel)</td>
+        <td>State = (vertex, extra)</td>
+        <td>Dijkstra on the product graph</td>
       </tr>
       <tr>
-        <td>All-pairs, n ≤ 400</td>
-        <td>Dense DP</td>
-        <td>Floyd-Warshall</td>
-      </tr>
-      <tr>
-        <td>Grid min effort / min max-edge</td>
-        <td>Bottleneck path = Dijkstra on the max</td>
-        <td>LC 1631</td>
+        <td>Negative weights</td>
+        <td>Proof fails</td>
+        <td>Bellman-Ford</td>
       </tr>
       <tr>
         <td><strong>Confused with:</strong> Prim</td>
-        <td>Prim grows an MST, Dijkstra grows a shortest-path tree</td>
-        <td>Same heap shape, different relax rule</td>
+        <td>Prim grows an MST by min edge to the tree; Dijkstra grows an SPT by min dist from s</td>
+        <td>Same heap shape, different key</td>
       </tr>
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, <code>m &le; 2&times;10&#8309;</code> is the binary-heap range: O((n+m) log n) fits. Dense n = 1e4, m = n&sup2; needs a different plan (n&sup2; Dijkstra or Floyd if n is smaller). Distances are long if weights sum past 2e9.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> with weights up to <code>10&#8313;</code> is the usual heap-Dijkstra prompt: store <code>dist</code> in <code>long</code>, because a path of a hundred thousand billion-weight edges overflows an <code>int</code>. The duplicate-heap version is <code>O(m log m)</code>, about <code>2&times;10&#8309;</code> times 18, which fits. A dense <code>O(n&sup2;)</code> scan of the closest unsettled vertex is better only when the graph is a matrix with <code>n</code> around 1000.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
-<h2>Lazy heap Dijkstra</h2>
-<p>dist[s] = 0, every other dist[u] = +inf. Push (0, s). While the heap is not empty, pop (d, u). If d != dist[u] this entry is stale: skip. Otherwise u is final. For each edge u &rarr; v of weight w, if dist[u] + w &lt; dist[v], write the new distance and push (dist[v], v).</p>
-<p>Stale entries exist because we never decrease a key in the heap; we push a better pair instead. The check <code>if (d != dist[u]) continue;</code> makes each vertex finalise at most once. Edges are then relaxed only from a final distance, which is the proof that later pops cannot improve them given non-negative w.</p>
-<p>On a grid, pack the cell id and use the four (or eight) implicit edges. On a graph with a second parameter (k stops, fuel left), the state is (vertex, extra) and the heap key is still the cost; that is Dijkstra on a product graph.</p>
+<h2>Core idea and the invariant</h2>
+<p>You need a <code>long[] dist</code> filled with a huge sentinel INF, <code>dist[s] = 0</code>, and a min-heap of pairs <code>(d, u)</code>. To <em>relax</em> an edge <code>u &rarr; v</code> of weight <code>w</code> is to ask: is <code>dist[u] + w</code> smaller than the current <code>dist[v]</code>? If yes, overwrite <code>dist[v]</code> and push the new pair <code>(dist[v], v)</code> onto the heap. That is the same question BFS asked with <code>w = 1</code>, now asked with a real weight. The loop is: pop the pair with the smallest <code>d</code>; if <code>d</code> is not equal to <code>dist[u]</code> the pair is stale (an older, worse time) and you skip it; otherwise <code>u</code> is <em>settled</em> &mdash; its distance is frozen &mdash; and you relax every outgoing edge.</p>
+<p>INF must be larger than any real path, so use <code>Long.MAX_VALUE / 4</code>, about <code>2&times;10&#185;&#8304;</code>. Adding a weight to <code>Integer.MAX_VALUE</code> wraps negative and then "improves" every vertex. Never relax from a stale pop: that re-expands a settled vertex and can grow the heap without bound. A <code>parent[v] = u</code> write on a successful relaxation reconstructs the path. The non-negative hypothesis is what makes the first fresh pop final: every remaining unsettled vertex is at least as far as <code>u</code>, and an extra non-negative edge cannot jump in front of a closer vertex you have already frozen.</p>
+<p>Walk the running weighted sample from 0: edges 0&rarr;1 of 4, 0&rarr;2 of 2, 2&rarr;1 of 1, 1&rarr;3 of 1, 2&rarr;4 of 7. Start with <code>dist[0] = 0</code> and heap <code>[(0, 0)]</code>. Settle 0, relax 0&rarr;1 to 4 and 0&rarr;2 to 2. The next fresh pop is 2 at 2; relaxing 2&rarr;1 improves 1 from 4 to 3, and 2&rarr;4 writes 9. The next fresh pop is 1 at 3 (the leftover pair (4, 1) is stale and will be skipped). Relax 1&rarr;3 to 4, then settle 3 and 4. The finished array is <code>[0, 3, 2, 4, 9]</code>, and every first settlement was final because every weight was non-negative.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The invariant</span>
-    <p>After u is dequeued with d == dist[u], no remaining path to u can be shorter, because any other path would have to leave the finished set through a non-negative edge and would already have been at least as long.</p><span class="eq">first pop of u with d == dist[u]  ⇒  dist[u] is optimal</span>
+    <p>When <code>u</code> is first popped with a pair whose time equals <code>dist[u]</code>, that time is the true shortest-path distance from the source, and every remaining heap key is at least as large.</p><span class="eq">w &ge; 0  &rArr;  settled set grows by true &delta;(s, u)</span><p>In plain words, you always freeze the closest unfinished junction, and because no road has a negative time, nobody you have not yet visited can sneak in with a cheaper total than a junction you already froze.</p>
   </div>
 </aside>
 
 <aside class="callout callout--warn">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">Negative edges break the argument</span>
-    <p>A later cheap (even negative) edge could improve a finished vertex. The algorithm may then return a wrong distance without crashing. If the statement does not say weights are non-negative, do not use Dijkstra.</p>
+    <span class="callout__title">Three nodes are enough to break Dijkstra with a negative edge</span>
+    <p>Source 0, edges 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight <code>-3</code>. Dijkstra freezes vertex 1 at 2 before it expands 2. The walk 0-2-1 has total 1 and is never applied. Use Bellman-Ford (or Johnson) when any weight can be negative.</p>
   </div>
 </aside>
 
-<aside class="callout callout--tip">
-  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">Java heap of int[]</span>
-    <p><code>PriorityQueue&lt;int[]&gt;</code> with a comparator on <code>a[0] - b[0]</code> overflows. Compare with <code>Integer.compare(a[0], b[0])</code>, or pack <code>(dist &lt;&lt; 32) | v</code> into a long if dist fits in 32 bits. Store dist as long in the array itself.</p>
+    <span class="callout__title">Relax means "is dist[u] + w a cheaper way to v?"</span>
+    <p>Overwrite <code>dist[v]</code> and push a new heap pair only when the answer is yes. The first time a popped pair matches the current <code>dist[u]</code>, that value is final &mdash; but only while every <code>w</code> is at least 0.</p>
   </div>
 </aside>
 
 <!-- ============================================= 5. VISUAL WALKTHROUGH -->
 <h2>Visual walkthrough</h2>
 
-<h3>Weighted graph, source 0</h3>
+<h3>Dijkstra from 0: edges 0-1:4, 0-2:2, 2-1:1, 1-3:1, 2-4:7</h3>
 
-<p>Edges 0-1:2, 0-2:5, 1-2:1, 1-3:4, 2-3:1. The shortest path to 3 is 0-1-2-3 of cost 4, not the direct-looking 0-1-3 of cost 6.</p>
-
-<figure class="viz">
-  <div class="mermaid">
-graph LR
-  n0["0  dist 0"] --&gt;|"2"| n1["1  dist 2"]
-  n0 --&gt;|"5"| n2["2  dist 3"]
-  n1 --&gt;|"1"| n2
-  n1 --&gt;|"4"| n3["3  dist 4"]
-  n2 --&gt;|"1"| n3
-  </div>
-  <figcaption>Dijkstra from 0. Tentative distances shrink: 2 is first seen at 5 via 0, then improved to 3 via 1.</figcaption>
-</figure>
-
-<h3>dist[] as the heap pops</h3>
-
-<p>The array is current best distance. inf means unseen. Watch 2 improve from 5 to 3, and 3 improve from 6 to 4.</p>
+<p>Step through the sample. Amber is the live region; the note is the invariant at this step.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="dijDist"></div>
-  <div class="viz-player" data-viz-target="dijDist">
+  <div class="array-viz" data-viz-id="dijkstraViz"></div>
+  <div class="viz-player" data-viz-target="dijkstraViz">
     <script type="application/json" class="viz-frames">
     {
-      "label": "dist[u]  (99 = inf)",
+      "label": "dist[u] as vertices settle",
       "array": [
         0,
-        99,
-        99,
-        99
+        4,
+        2,
+        5,
+        9
       ],
       "indexLabels": [
         "0",
         "1",
         "2",
-        "3"
+        "3",
+        "4"
       ],
       "vars": [
         "u",
-        "heap",
-        "dist[u]"
+        "d",
+        "relax",
+        "heap"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
-          "note": "Seed dist[0] = 0, heap = [(0,0)].",
-          "arr": [
-            0,
-            99,
-            99,
-            99
-          ],
+          "note": "Source 0 starts at distance 0 in the heap; the other four vertices still hold the INF sentinel and have never been relaxed.",
           "active": [
             0
           ],
           "dim": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "values": {
-            "u": "seed",
-            "heap": "[(0,0)]",
-            "dist[u]": 0
+            "u": 0,
+            "d": 0,
+            "relax": "start",
+            "heap": "[(0,0)]"
           }
         },
         {
-          "note": "Pop (0,0). Relax 0-1: dist[1]=2. Relax 0-2: dist[2]=5. Heap = [(2,1),(5,2)].",
-          "arr": [
-            0,
-            2,
-            5,
-            99
-          ],
+          "note": "Settle 0 and relax both outgoing edges: vertex 1 is written at 4 and vertex 2 at 2, so the heap is now ordered [(2, 2), (4, 1)].",
           "active": [
             1,
             2
@@ -235,67 +206,49 @@ graph LR
           "done": [
             0
           ],
-          "dim": [
-            3
-          ],
           "values": {
             "u": 0,
-            "heap": "[(2,1),(5,2)]",
-            "dist[u]": 0
+            "d": 0,
+            "relax": "1=4, 2=2",
+            "heap": "[(2,2),(4,1)]"
           }
         },
         {
-          "note": "Pop (2,1). 1 is final. Relax 1-2: 2+1=3 < 5, so dist[2]=3. Relax 1-3: dist[3]=6.",
-          "arr": [
-            0,
-            2,
-            3,
-            6
-          ],
+          "note": "The fresh pop (2, 2) settles 2. Relaxing 2 to 1 improves 4 down to 3, and relaxing 2 to 4 writes 9 for the first time.",
           "active": [
-            2,
-            3
-          ],
-          "done": [
-            0,
-            1
-          ],
-          "values": {
-            "u": 1,
-            "heap": "[(3,2),(5,2),(6,3)]",
-            "dist[u]": 2
-          }
-        },
-        {
-          "note": "Pop (3,2). 2 is final (the later stale (5,2) will be skipped). Relax 2-3: 3+1=4 < 6.",
-          "arr": [
-            0,
-            2,
-            3,
+            1,
             4
           ],
-          "active": [
-            3
-          ],
           "done": [
             0,
-            1,
             2
           ],
           "values": {
             "u": 2,
-            "heap": "[(4,3),(5,2),(6,3)]",
-            "dist[u]": 3
+            "d": 2,
+            "relax": "1=3, 4=9",
+            "heap": "[(3,1),(4,1),(9,4)]"
           }
         },
         {
-          "note": "Pop (4,3). 3 is final at 4. Path 0-1-2-3.",
-          "arr": [
-            0,
-            2,
-            3,
-            4
+          "note": "The fresh pop (3, 1) settles 1 at the improved time. The leftover pair (4, 1) is now stale. Relaxing 1 to 3 writes 4.",
+          "active": [
+            3
           ],
+          "done": [
+            0,
+            1,
+            2
+          ],
+          "values": {
+            "u": 1,
+            "d": 3,
+            "relax": "3=4",
+            "heap": "[(4,1 stale),(4,3),(9,4)]"
+          }
+        },
+        {
+          "note": "The stale pair (4, 1) is popped and skipped because 4 no longer equals dist[1]. The next fresh pop (4, 3) settles 3.",
           "done": [
             0,
             1,
@@ -304,86 +257,75 @@ graph LR
           ],
           "values": {
             "u": 3,
-            "heap": "[stale...]",
-            "dist[u]": 4
+            "d": 4,
+            "relax": "—",
+            "heap": "[(9,4)]"
           }
         },
         {
-          "note": "Stale (5,2) pops: 5 != dist[2]=3, skip. Stale (6,3): 6 != 4, skip. Heap empty.",
-          "arr": [
-            0,
-            2,
-            3,
-            4
-          ],
-          "done": [
-            0,
-            1,
-            2,
-            3
-          ],
-          "dim": [],
-          "values": {
-            "u": "stale",
-            "heap": "[]",
-            "dist[u]": "skip"
-          }
-        },
-        {
-          "note": "Final dist = [0, 2, 3, 4]. First-pop-is-final held for every vertex.",
-          "arr": [
-            0,
-            2,
-            3,
-            4
-          ],
+          "note": "Settle 4 at 9 and the heap empties. The finished distances [0, 3, 2, 4, 9] are final because every weight was non-negative.",
           "best": [
             0,
             1,
             2,
-            3
+            3,
+            4
           ],
           "values": {
-            "u": "ans",
-            "heap": "[]",
-            "dist[u]": 4
+            "u": 4,
+            "d": 9,
+            "relax": "done",
+            "heap": "[]"
           }
         }
       ]
     }
     </script>
   </div>
-  <figcaption>Each final pop locks a cell. Stale heap pairs for an already-final vertex are skipped. Queue column shows heap keys, not FIFO order.</figcaption>
+  <figcaption>Concrete trace of the algorithm on the sample used in the dry-run table.</figcaption>
+</figure>
+
+<h3>Weighted 5-node graph</h3>
+
+<figure class="viz">
+  <div class="mermaid">
+graph TD
+  n0["0"] --&gt;|"4"| n1["1"]
+  n0 --&gt;|"2"| n2["2"]
+  n2 --&gt;|"1"| n1
+  n1 --&gt;|"1"| n3["3"]
+  n2 --&gt;|"7"| n4["4"]
+  </div>
+  <figcaption>How the pieces depend on each other.</figcaption>
 </figure>
 
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>long[] dist</code></strong> filled with a sentinel inf (<code>Long.MAX_VALUE / 4</code> so additions cannot overflow).</li>
-  <li><strong>dist[s] = 0</strong>, push <code>(0, s)</code> into a min-heap.</li>
-  <li><strong>Pop (d, u)</strong>. If <code>d != dist[u]</code> skip (stale).</li>
-  <li><strong>Otherwise u is final.</strong> Optionally break if u is the only target.</li>
-  <li><strong>For each edge u &rarr; v of weight w:</strong> nd = d + w. If nd &lt; dist[v], set dist[v] = nd and push (nd, v).</li>
-  <li><strong>Do not mark visited before relaxing</strong> &mdash; a vertex may be improved several times before it is popped as final.</li>
-  <li><strong>Unreachable vertices stay inf.</strong> Convert to -1 if the problem asks.</li>
+  <li><strong>Fill a long[] dist with INF = Long.MAX_VALUE/4, set dist[s] = 0, and push (0, s).</strong> A 32-bit INF plus a positive weight wraps negative and then "improves" every vertex, which is why the array is long from the first line.</li>
+  <li><strong>Pop the pair (d, u) with the smallest time. If d != dist[u], skip it as stale.</strong> That pair is an older, worse time you pushed before a later relaxation improved u, and re-expanding it would grow the heap for no gain.</li>
+  <li><strong>Otherwise u is settled: relax each outgoing edge u &rarr; v of weight w.</strong> Relaxing means: if d + w is smaller than dist[v], overwrite dist[v] and push the new pair. That is the only write that can change an answer.</li>
+  <li><strong>Stop when the heap is empty, or return as soon as you settle t if you only need s-t.</strong> All-destinations must drain the heap; a single target can exit early because every later pop is at least as far as t.</li>
+  <li><strong>Leave unreachable vertices at INF, and never add a weight onto INF.</strong> Overflow of a sentinel is the usual way a distant vertex suddenly looks cheaper than the source.</li>
+  <li><strong>Refuse any negative weight; the freeze-on-first-pop proof needs w &ge; 0.</strong> The three-node graph 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight -3 freezes 1 at 2 and misses the true total 1.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Lazy Dijkstra from 0 on the five-edge graph. Heap shown as (key, vertex).</p>
+<p>Dijkstra from 0 on the weighted five-node sample. Each fresh heap pop freezes a distance, and a leftover pair whose time no longer matches dist[u] is skipped as stale.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
     <thead>
-      <tr><th>pop</th><th>stale?</th><th>dist after relax</th><th>heap after</th><th>Action / why</th></tr>
+      <tr><th>u</th><th>d</th><th>relax</th><th>heap</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>(0,0)</td><td>no</td><td>[0, 2, 5, inf]</td><td>[(2,1), (5,2)]</td><td>First pop, 0 final.</td></tr>
-      <tr class="trace-table__row--change"><td>(2,1)</td><td>no</td><td>[0, 2, 3, 6]</td><td>[(3,2), (5,2), (6,3)]</td><td>Improve 2 via 1; set 3 via 1.</td></tr>
-      <tr><td>(3,2)</td><td>no</td><td>[0, 2, 3, 4]</td><td>[(4,3), (5,2), (6,3)]</td><td>Improve 3 via 2.</td></tr>
-      <tr><td>(4,3)</td><td>no</td><td>[0, 2, 3, 4]</td><td>[(5,2), (6,3)]</td><td>3 final.</td></tr>
-      <tr><td>(5,2)</td><td>yes</td><td>unchanged</td><td>[(6,3)]</td><td>5 != dist[2].</td></tr>
-      <tr class="trace-table__row--change"><td>(6,3)</td><td>yes</td><td>unchanged</td><td>[]</td><td>Done. dist = [0,2,3,4].</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>start</td><td>[(0,0)]</td><td>Source 0 starts at distance 0 in the heap; the other four vertices still hold the INF sentinel and have never been relaxed.</td></tr>
+      <tr><td>0</td><td>0</td><td>1=4, 2=2</td><td>[(2,2),(4,1)]</td><td>Settle 0 and relax both outgoing edges: vertex 1 is written at 4 and vertex 2 at 2, so the heap is now ordered [(2, 2), (4, 1)].</td></tr>
+      <tr><td>2</td><td>2</td><td>1=3, 4=9</td><td>[(3,1),(4,1),(9,4)]</td><td>The fresh pop (2, 2) settles 2. Relaxing 2 to 1 improves 4 down to 3, and relaxing 2 to 4 writes 9 for the first time.</td></tr>
+      <tr><td>1</td><td>3</td><td>3=4</td><td>[(4,1 stale),(4,3),(9,4)]</td><td>The fresh pop (3, 1) settles 1 at the improved time. The leftover pair (4, 1) is now stale. Relaxing 1 to 3 writes 4.</td></tr>
+      <tr><td>3</td><td>4</td><td>—</td><td>[(9,4)]</td><td>The stale pair (4, 1) is popped and skipped because 4 no longer equals dist[1]. The next fresh pop (4, 3) settles 3.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>9</td><td>done</td><td>[]</td><td>Settle 4 at 9 and the heap empties. The finished distances [0, 3, 2, 4, 9] are final because every weight was non-negative.</td></tr>
     </tbody>
   </table>
 </div>
@@ -393,163 +335,132 @@ graph LR
 
 <div class="tabs">
   <div class="tabs__list" role="tablist" aria-label="Dijkstra's Algorithm implementations">
-    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute (Bellman-Ford n-1)</button>
-    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal Dijkstra</button>
+    <button class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="t0">Brute</button>
+    <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t1">Optimal</button>
     <button class="tabs__tab" role="tab" aria-selected="false" data-tab="t2">Template</button>
   </div>
 
   <div class="tabs__panel is-active" data-panel="Brute">
-    <p>Relax every edge n-1 times. Correct for non-negative weights, slower, and the right fallback if a negative edge appears.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DijBrute.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DenseDijkstra.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.Arrays;
-    
-    public class DijBrute {
-    
-        static long[] bf(int n, int[][] edges, int s) {
+    public class DenseDijkstra {
+        static long[] dijkstra(int[][] w, int s) {
+            int n = w.length;
             long[] dist = new long[n];
+            boolean[] used = new boolean[n];
             Arrays.fill(dist, Long.MAX_VALUE / 4);
             dist[s] = 0;
-            for (int i = 0; i &lt; n - 1; i++) {
-                boolean any = false;
-                for (int[] e : edges) {
-                    int u = e[0], v = e[1], w = e[2];
-                    if (dist[u] + w &lt; dist[v]) {
-                        dist[v] = dist[u] + w;
-                        any = true;
-                    }
-                }
-                if (!any) {
-                    break;
-                }
+            for (int it = 0; it &lt; n; it++) {
+                int u = -1;
+                for (int i = 0; i &lt; n; i++)
+                    if (!used[i] &amp;&amp; (u &lt; 0 || dist[i] &lt; dist[u])) u = i;
+                if (u &lt; 0 || dist[u] &gt;= Long.MAX_VALUE / 4) break;
+                used[u] = true;
+                for (int v = 0; v &lt; n; v++)
+                    if (w[u][v] &lt; Integer.MAX_VALUE / 4)
+                        dist[v] = Math.min(dist[v], dist[u] + w[u][v]);
             }
             return dist;
         }
-    
         public static void main(String[] args) {
-            int[][] edges = {{0, 1, 2}, {0, 2, 5}, {1, 2, 1}, {1, 3, 4}, {2, 3, 1},
-                    {1, 0, 2}, {2, 0, 5}, {2, 1, 1}, {3, 1, 4}, {3, 2, 1}};
-            System.out.println(Arrays.toString(bf(4, edges, 0)));
+            int INF = Integer.MAX_VALUE / 4;
+            int[][] w = new int[5][5];
+            for (int[] row : w) Arrays.fill(row, INF);
+            w[0][1] = 4; w[0][2] = 2; w[2][1] = 1; w[1][3] = 1; w[2][4] = 7;
+            System.out.println(java.util.Arrays.toString(dijkstra(w, 0)));
         }
-        // Input : undirected weighted graph as pairs both ways
-        // Output: [0, 2, 3, 4]
+        // Input : dense matrix of the sample
+        // Output: [0, 3, 2, 4, 9]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Optimal">
-    <p>Lazy binary-heap Dijkstra. Stale pops are ignored. Distances are long.</p>
-    <div class="code" data-highlight="22-26">
+    <div class="code">
       <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">Dijkstra.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
     <pre><code>import java.util.ArrayList;
     import java.util.Arrays;
+    import java.util.Comparator;
     import java.util.List;
     import java.util.PriorityQueue;
     
     public class Dijkstra {
-    
         static long[] dijkstra(List&lt;List&lt;int[]&gt;&gt; g, int s) {
             int n = g.size();
             long[] dist = new long[n];
             Arrays.fill(dist, Long.MAX_VALUE / 4);
-            PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;((a, b) -&gt; Long.compare(a[0], b[0]));
+            PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingLong(a -&gt; a[0]));
             dist[s] = 0;
-            pq.offer(new long[] {0, s});
+            pq.add(new long[] {0, s});
             while (!pq.isEmpty()) {
                 long[] cur = pq.poll();
-                long d = cur[0];
                 int u = (int) cur[1];
-                if (d != dist[u]) {
-                    continue;
-                }
+                long d = cur[0];
+                if (d != dist[u]) continue;
                 for (int[] e : g.get(u)) {
                     int v = e[0], w = e[1];
-                    long nd = d + w;
-                    if (nd &lt; dist[v]) {
-                        dist[v] = nd;
-                        pq.offer(new long[] {nd, v});
+                    if (d + w &lt; dist[v]) {
+                        dist[v] = d + w;
+                        pq.add(new long[] {dist[v], v});
                     }
                 }
             }
             return dist;
         }
-    
         public static void main(String[] args) {
             List&lt;List&lt;int[]&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1, 2}, {0, 2, 5}, {1, 2, 1}, {1, 3, 4}, {2, 3, 1}};
-            for (int[] x : e) {
-                g.get(x[0]).add(new int[] {x[1], x[2]});
-                g.get(x[1]).add(new int[] {x[0], x[2]});
-            }
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1,4},{0,2,2},{2,1,1},{1,3,1},{2,4,7}};
+            for (int[] x : e) g.get(x[0]).add(new int[] {x[1], x[2]});
             System.out.println(Arrays.toString(dijkstra(g, 0)));
         }
-        // Input : undirected, weights as in the figure, source 0
-        // Output: [0, 2, 3, 4]
+        // Input : directed sample, source 0
+        // Output: [0, 3, 2, 4, 9]
     }</code></pre>
     </div>
   </div>
 
   <div class="tabs__panel" data-panel="Template">
-    <p>Same algorithm with parent[] for reconstruction. Stop early when the target is final.</p>
     <div class="code">
-      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DijkstraTemplate.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
-    <pre><code>import java.util.ArrayList;
-    import java.util.Arrays;
-    import java.util.List;
-    import java.util.PriorityQueue;
-    
-    public class DijkstraTemplate {
-    
-        static long[] dijkstra(List&lt;List&lt;int[]&gt;&gt; g, int s, int t, int[] parent) {
+      <div class="code__bar"><span class="code__lang">Java</span><span class="code__file">DijkstraUndirected.java</span><button class="code__copy" aria-label="Copy code">Copy</button></div>
+    <pre><code>import java.util.*;
+    public class DijkstraUndirected {
+        static long to(List&lt;List&lt;int[]&gt;&gt; g, int s, int t) {
             int n = g.size();
             long[] dist = new long[n];
             Arrays.fill(dist, Long.MAX_VALUE / 4);
-            Arrays.fill(parent, -1);
-            PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;((a, b) -&gt; Long.compare(a[0], b[0]));
+            PriorityQueue&lt;long[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingLong(a -&gt; a[0]));
             dist[s] = 0;
-            pq.offer(new long[] {0, s});
+            pq.add(new long[]{0, s});
             while (!pq.isEmpty()) {
                 long[] cur = pq.poll();
-                long d = cur[0];
                 int u = (int) cur[1];
-                if (d != dist[u]) {
-                    continue;
-                }
-                if (u == t) {
-                    break;
-                }
+                long d = cur[0];
+                if (d != dist[u]) continue;
+                if (u == t) return d;
                 for (int[] e : g.get(u)) {
                     int v = e[0], w = e[1];
-                    long nd = d + w;
-                    if (nd &lt; dist[v]) {
-                        dist[v] = nd;
-                        parent[v] = u;
-                        pq.offer(new long[] {nd, v});
+                    if (d + w &lt; dist[v]) {
+                        dist[v] = d + w;
+                        pq.add(new long[]{dist[v], v});
                     }
                 }
             }
-            return dist;
+            return -1;
         }
-    
         public static void main(String[] args) {
             List&lt;List&lt;int[]&gt;&gt; g = new ArrayList&lt;&gt;();
-            for (int i = 0; i &lt; 4; i++) {
-                g.add(new ArrayList&lt;&gt;());
-            }
-            int[][] e = {{0, 1, 2}, {0, 2, 5}, {1, 2, 1}, {1, 3, 4}, {2, 3, 1}};
+            for (int i = 0; i &lt; 5; i++) g.add(new ArrayList&lt;&gt;());
+            int[][] e = {{0,1,4},{0,2,2},{2,1,1},{1,3,1},{2,4,7}};
             for (int[] x : e) {
-                g.get(x[0]).add(new int[] {x[1], x[2]});
-                g.get(x[1]).add(new int[] {x[0], x[2]});
+                g.get(x[0]).add(new int[]{x[1], x[2]});
+                g.get(x[1]).add(new int[]{x[0], x[2]});
             }
-            int[] parent = new int[4];
-            long[] dist = dijkstra(g, 0, 3, parent);
-            System.out.println(dist[3] + " parent[3]=" + parent[3]);
+            System.out.println(to(g, 0, 4));
         }
-        // Input : target 3
-        // Output: 4 parent[3]=2
+        // Input : undirected sample, 0 to 4
+        // Output: 9
     }</code></pre>
     </div>
   </div>
@@ -560,14 +471,14 @@ graph LR
 
 <div class="complexity">
   <div class="complexity__badges">
-    <span class="badge badge--time">Time O((n + m) log n) lazy binary heap</span>
-    <span class="badge badge--space">Space O(n + m) plus O(m) heap entries in the worst case</span>
+    <span class="badge badge--time">Time O((n + m) log m) with a binary heap of duplicates</span>
+    <span class="badge badge--space">Space O(n + m)</span>
   </div>
 
   <div class="complexity__derivation">
-    <p>Each improving relaxation pushes one heap entry. A vertex can improve many times, but in the worst case the number of pushes is O(m). Each push/pop is O(log (heap)):</p>
-    <p><span class="eq">T = O((n + m) log m) = O((n + m) log n)</span></p>
-    <p>Fibonacci heaps with real decrease-key are O(m + n log n) and not worth it in Java. On a dense graph the O(n&sup2;) array-Dijkstra (pick the min unfinished with a scan) wins for n ≤ ~3000.</p>
+    <p>Each successful relaxation pushes one new pair, so the heap holds at most m entries in the duplicate-key version. Each push or pop on a binary heap costs O(log m), and each edge is examined once per settlement of its tail.</p>
+    <p><span class="eq">T = O(m log m), S = O(n + m)</span></p>
+    <p>At m = 2&times;10&#8309; that is about 2&times;10&#8309; times 18 heap operations, a few million steps, which fits in two seconds. A Fibonacci heap would be O(m + n log n) and nobody implements it in an interview. When the graph is a dense matrix with n around 1000, scanning the closest unsettled vertex in O(n&sup2;) is faster than paying a log on n&sup2; heap entries.</p>
   </div>
 
   <table class="complexity__compare">
@@ -575,11 +486,10 @@ graph LR
       <tr><th>Approach</th><th>Time</th><th>Space</th><th>When it is enough</th></tr>
     </thead>
     <tbody>
-      <tr><td>Lazy binary heap</td><td>O((n+m) log n)</td><td>O(m) heap</td><td>Default</td></tr>
-      <tr><td>Array Dijkstra</td><td>O(n²)</td><td>O(n)</td><td>Dense, n ≤ ~3000</td></tr>
-      <tr><td>BFS</td><td>O(n + m)</td><td>O(n)</td><td>Unit weights</td></tr>
-      <tr><td>0-1 BFS</td><td>O(n + m)</td><td>O(n)</td><td>Weights in {0,1}</td></tr>
-      <tr><td>Bellman-Ford</td><td>O(n m)</td><td>O(n)</td><td>Negative edges</td></tr>
+      <tr><td>BFS</td><td>O(n+m)</td><td>O(n)</td><td>Unit weights</td></tr>
+      <tr><td>0-1 BFS</td><td>O(n+m)</td><td>O(n)</td><td>Weights in {0,1}</td></tr>
+      <tr><td>Heap Dijkstra</td><td>O(m log m)</td><td>O(n+m)</td><td>Non-negative weights, sparse</td></tr>
+      <tr><td>Dense Dijkstra</td><td>O(n²)</td><td>O(n²)</td><td>n<=1000 matrix</td></tr>
     </tbody>
   </table>
 </div>
@@ -589,34 +499,29 @@ graph LR
 
 <ul class="pitfalls">
   <li>
-    <span class="pitfalls__title">Marking visited when you push</span>
-    <div class="pitfalls__bug">The first time you see v is via some path, not necessarily the shortest. Marking then freezes a wrong distance (BFS habit).</div>
-    <div class="pitfalls__fix">A vertex becomes final only when it is popped with d == dist[u]. Relax freely until then.</div>
+    <span class="pitfalls__title">int overflow of dist</span>
+    <div class="pitfalls__bug">INF = Integer.MAX_VALUE looks like a safe sentinel, then INF + w wraps to a negative number and every later comparison treats that overflow as a cheaper path.</div>
+    <div class="pitfalls__fix">Use long[] dist and INF = Long.MAX_VALUE / 4. A path of n billion-weight edges then still sits well below the sentinel.</div>
   </li>
   <li>
-    <span class="pitfalls__title">int subtraction comparator</span>
-    <div class="pitfalls__bug"><code>(a, b) -&gt; a[0] - b[0]</code> overflows when keys differ by more than 2^31, silently breaking the heap.</div>
-    <div class="pitfalls__fix">Long.compare / Integer.compare. Never subtract keys.</div>
-  </li>
-  <li>
-    <span class="pitfalls__title">inf + w overflow</span>
-    <div class="pitfalls__bug">dist[u] is Integer.MAX_VALUE, w is positive, the sum wraps negative and looks like a better path.</div>
-    <div class="pitfalls__fix">Use long distances and inf = Long.MAX_VALUE / 4, or skip relaxation when dist[u] is still inf.</div>
+    <span class="pitfalls__title">Not skipping stale pops</span>
+    <div class="pitfalls__bug">You re-expand u with an old d, relax its edges again, and push even more leftover pairs. The heap grows and the algorithm can look like it is looping.</div>
+    <div class="pitfalls__fix">Immediately after each pop, if (d != dist[u]) continue. Only a pair that still matches the current best time is allowed to settle and relax.</div>
   </li>
   <li>
     <span class="pitfalls__title">Negative weights</span>
-    <div class="pitfalls__bug">The first-pop-is-final proof uses w ≥ 0. A negative edge can improve a finished vertex.</div>
-    <div class="pitfalls__fix">Refuse Dijkstra. Bellman-Ford or potentials (Johnson) only after you know there is no negative cycle.</div>
+    <div class="pitfalls__bug">A later cheaper walk through a negative edge never gets to improve a vertex you already froze, so the printed answer is too large. The three-node graph 0&rarr;1=2, 0&rarr;2=4, 2&rarr;1=-3 is the usual silent wrong answer.</div>
+    <div class="pitfalls__fix">Refuse Dijkstra the moment any weight can be negative. Use Bellman-Ford, or Johnson's reweighting if you need many sources and there is no negative cycle.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Using Dijkstra for longest path</span>
-    <div class="pitfalls__bug">Negating weights invents negatives; flipping the heap to max does not work with cycles (you would walk forever).</div>
-    <div class="pitfalls__fix">Longest simple path is NP-hard. Only do it on a DAG, in topo order.</div>
+    <span class="pitfalls__title">Using TreeSet of vertices without updating</span>
+    <div class="pitfalls__bug">A TreeSet of (d, u) used as decrease-key needs a remove of the old pair before the add of the new one; forgetting the remove leaves two keys for one vertex and the set order lies.</div>
+    <div class="pitfalls__fix">The duplicate-heap pattern is simpler and is the contest default. TreeSet decrease-key is optional and only worth it if you already know you will not miss the remove.</div>
   </li>
   <li>
-    <span class="pitfalls__title">Rebuilding the graph as undirected when it is directed</span>
-    <div class="pitfalls__bug">Flights, one-way roads, and "from a to b with cost w" are directed. Adding the reverse invents paths.</div>
-    <div class="pitfalls__fix">Read the statement. Add one directed edge unless it says bidirectional.</div>
+    <span class="pitfalls__title">Undirected input stored one way</span>
+    <div class="pitfalls__bug">The statement says the roads are two-way but you inserted each pair once, so the shortest walk cannot use a road backwards and a reachable target looks unreachable.</div>
+    <div class="pitfalls__fix">Insert both directions with the same weight unless the statement is directed. The reverse insert belongs in the same loop body as the forward one.</div>
   </li>
 </ul>
 
@@ -630,28 +535,22 @@ graph LR
     </thead>
     <tbody>
       <tr>
-        <td>Early exit at the target</td>
-        <td>Once t is popped as final, stop. Other distances may still be unfinished.</td>
-        <td><code>if (u == t) break;</code></td>
-        <td>Single-pair queries</td>
+        <td>k-shortest / k stops</td>
+        <td>State (u, usedStops) or stop when visits exceed k+1.</td>
+        <td><code>dist[u][k], pq on (d,u,k)</code></td>
+        <td>Cheapest flights within k stops</td>
       </tr>
       <tr>
-        <td>k-parameter product graph</td>
-        <td>State (u, k) with k = stops left / fuel. Heap key is still cost.</td>
-        <td><code>id = u * (K+1) + k;  or a 2D dist[][]</code></td>
-        <td>LC 787, LC 2093</td>
+        <td>0-1 Dijkstra</td>
+        <td>Deque instead of heap.</td>
+        <td><code>addFirst if w==0</code></td>
+        <td>Next page</td>
       </tr>
       <tr>
-        <td>Bottleneck / min-max edge</td>
-        <td>Relax with nd = max(dist[u], w) and a min-heap on that key.</td>
-        <td><code>nd = Math.max(d, w); if (nd &lt; dist[v]) ...</code></td>
-        <td>LC 1631, min-effort path</td>
-      </tr>
-      <tr>
-        <td>Count shortest paths</td>
-        <td>When nd == dist[v], ways[v] += ways[u]; when nd < dist[v], ways[v] = ways[u].</td>
-        <td><code>Need long and a modulus.</code></td>
-        <td>LC 1976</td>
+        <td>Potentials (Johnson)</td>
+        <td>h[u] from Bellman-Ford, reweight w'=w+h[u]-h[v] >= 0, then Dijkstra.</td>
+        <td><code>wPrime = w + h[u] - h[v];</code></td>
+        <td>All-pairs with negatives, no neg cycle</td>
       </tr>
     </tbody>
   </table>
@@ -662,30 +561,30 @@ graph LR
 
 <div class="followups">
   <details class="followup">
-    <summary>Why can I skip stale heap entries?</summary>
+    <summary>Why non-negative is required?</summary>
     <div class="followup__body">
-      <p>When a better dist[u] is written, every older pair (d, u) has d &gt; dist[u]. Popping it cannot be the first-final pop (that already happened or will happen with the current dist). Ignoring it is exactly as if we had deleted it.</p>
+      <p>The settled vertex u is the closest unfinished vertex, and freezing it is safe only if nobody you have not yet expanded can produce a smaller total. A negative edge can do exactly that. On vertices 0, 1, 2 with edges 0&rarr;1 weight 2, 0&rarr;2 weight 4, 2&rarr;1 weight -3, Dijkstra freezes 1 at 2; the walk 0-2-1 totals 1 and arrives too late. The heap order then describes a world that is no longer true.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>Dijkstra vs Prim, in one sentence?</summary>
+    <summary>Dijkstra vs Prim?</summary>
     <div class="followup__body">
-      <p>Both grow a tree with a min-heap. Dijkstra's key is distance from s; Prim's key is the cheapest edge out of the tree. Same skeleton, different relax, different problem.</p>
+      <p>The loop shape is the same &mdash; a min-heap of vertices, grow a set one vertex at a time &mdash; but the key is different. Dijkstra's key is the best distance from the source. Prim's key is the cheapest edge that touches the tree so far. Mixing them is a common interview slip when you have just implemented one: you grow an MST when the question asked for shortest paths, or the other way around.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>When is O(n squared) Dijkstra better?</summary>
+    <summary>Early exit?</summary>
     <div class="followup__body">
-      <p>When the graph is dense (m ~ n^2) the heap version is O(n^2 log n) because there are O(n^2) pushes. Scanning for the closest unfinished vertex is O(n) per vertex, O(n^2) total, and has better constants. Use it for n around 2000 with a matrix.</p>
+      <p>If you only need dist[t], return the moment you settle t. Every later fresh pop is at a distance at least as large, so it cannot improve t. The heap may still hold other vertices; that is fine. If you need distances to every vertex you must drain the heap. Do not exit on the first time t is pushed, only on the first time it is settled.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>How do I reconstruct the path?</summary>
+    <summary>How do you print the path?</summary>
     <div class="followup__body">
-      <p>Set parent[v] = u at every improving relaxation. Walk from t to s and reverse. If several equal-cost parents exist, the last improvement wins; that is still a shortest path.</p>
+      <p>On each successful relaxation write parent[v] = u, the tail of the edge that just improved v. After the search, start at t and follow parent until you reach s, then reverse the list. If several walks tie, the first relaxation (or a &le; versus &lt; policy) picks one of the shortest paths, not all of them.</p>
     </div>
   </details>
 </div>
@@ -704,67 +603,57 @@ graph LR
         <td><a href="https://leetcode.com/problems/network-delay-time/" target="_blank" rel="noopener">Network Delay Time</a></td>
         <td><span class="badge badge--lc">LC 743</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Dijkstra, answer is max dist</td></tr>
+        <td>Dijkstra, answer = max dist</td></tr>
       <tr><td>2</td>
         <td><a href="https://leetcode.com/problems/path-with-minimum-effort/" target="_blank" rel="noopener">Path With Minimum Effort</a></td>
         <td><span class="badge badge--lc">LC 1631</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Bottleneck Dijkstra on a grid</td></tr>
+        <td>Dijkstra on effort, or BS+BFS</td></tr>
       <tr><td>3</td>
+        <td><a href="https://leetcode.com/problems/path-with-maximum-probability/" target="_blank" rel="noopener">Path With Maximum Probability</a></td>
+        <td><span class="badge badge--lc">LC 1514</span></td>
+        <td><span class="pill pill--medium">Medium</span></td>
+        <td>Max-heap of probability</td></tr>
+      <tr><td>4</td>
         <td><a href="https://leetcode.com/problems/cheapest-flights-within-k-stops/" target="_blank" rel="noopener">Cheapest Flights Within K Stops</a></td>
         <td><span class="badge badge--lc">LC 787</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Product graph (city, stops)</td></tr>
-      <tr><td>4</td>
-        <td><a href="https://leetcode.com/problems/path-with-maximum-probability/" target="_blank" rel="noopener">Path with Maximum Probability</a></td>
-        <td><span class="badge badge--lc">LC 1514</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Max-heap on probability products</td></tr>
+        <td>State Dijkstra or k-Bellman</td></tr>
       <tr><td>5</td>
-        <td><a href="https://leetcode.com/problems/swim-in-rising-water/" target="_blank" rel="noopener">Swim in Rising Water</a></td>
-        <td><span class="badge badge--lc">LC 778</span></td>
+        <td><a href="https://leetcode.com/problems/minimum-cost-to-make-at-least-one-valid-path/" target="_blank" rel="noopener">Minimum Cost To Make At Least One Valid Path</a></td>
+        <td><span class="badge badge--lc">LC 1368</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Min-max Dijkstra or binary search + BFS</td></tr>
+        <td>0-1 BFS actually</td></tr>
       <tr><td>6</td>
-        <td><a href="https://cses.fi/problemset/task/1671" target="_blank" rel="noopener">Shortest Routes I</a></td>
-        <td><span class="badge badge--gfg">CSES</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Directed Dijkstra, long distances</td></tr>
-      <tr><td>7</td>
         <td><a href="https://codeforces.com/problemset/problem/20/C" target="_blank" rel="noopener">Dijkstra?</a></td>
         <td><span class="badge badge--cf">CF 20C</span></td>
         <td><span class="pill pill--medium">Medium</span></td>
-        <td>Classic, reconstruct the path</td></tr>
+        <td>Classic, print the path</td></tr>
+      <tr><td>7</td>
+        <td><a href="https://codeforces.com/problemset/problem/1473/E" target="_blank" rel="noopener">Minimum Path</a></td>
+        <td><span class="badge badge--cf">CF 1473E</span></td>
+        <td><span class="pill pill--hard">Hard</span></td>
+        <td>Dijkstra with 0/2 extra states</td></tr>
       <tr><td>8</td>
-        <td><a href="https://www.geeksforgeeks.org/problems/implementing-dijkstra-set-1-adjacency-matrix/1" target="_blank" rel="noopener">The Shortest Path</a></td>
-        <td><span class="badge badge--gfg">GfG</span></td>
-        <td><span class="pill pill--medium">Medium</span></td>
-        <td>Implement and return dist[]</td></tr>
-      <tr><td>9</td>
-        <td><a href="https://atcoder.jp/contests/abc061/tasks/abc061_d" target="_blank" rel="noopener">ABC 061 D Score Attack</a></td>
-        <td><span class="badge badge--atc">ABC 061D</span></td>
+        <td><a href="https://leetcode.com/problems/swim-in-rising-water/" target="_blank" rel="noopener">Swim In Rising Water</a></td>
+        <td><span class="badge badge--lc">LC 778</span></td>
         <td><span class="pill pill--hard">Hard</span></td>
-        <td>Negative weights: not Dijkstra</td></tr>
-      <tr><td>10</td>
-        <td><a href="https://leetcode.com/problems/minimum-cost-to-make-at-least-one-valid-path-in-a-grid/" target="_blank" rel="noopener">Minimum Cost to Make at Least One Valid Path</a></td>
-        <td><span class="badge badge--lc">LC 1368</span></td>
-        <td><span class="pill pill--hard">Hard</span></td>
-        <td>0-1 BFS in disguise; Dijkstra also works</td></tr>
+        <td>Dijkstra / BS+BFS on time</td></tr>
     </tbody>
   </table>
 </div>
 
 <details class="spoiler">
-  <summary>Hint for LC 1631 &mdash; the cost is a bottleneck, not a sum</summary>
+  <summary>Hint for the hardest practice problem</summary>
   <div class="spoiler__body">
-    <p>Effort of a path is the max absolute height-diff of a step. Dijkstra's key at a cell is the min achievable bottleneck to that cell: nd = max(d, |h[u]-h[v]|). Binary search on the effort plus BFS is the other solution; both are O(RC log).</p>
+    <p>Name the state / invariant first. The code is then mechanical.</p>
   </div>
 </details>
 
 <details class="spoiler">
-  <summary>Hint for CF 20C &mdash; reconstruct and watch 64-bit</summary>
+  <summary>Hint for the second-hardest</summary>
   <div class="spoiler__body">
-    <p>n, m up to 1e5, weights up to 1e6, so dist up to 1e5 * 1e6 needs long. parent[v] = u on every improve. If dist[n] is still inf, -1. Else walk n back to 1 and reverse. Graph is undirected.</p>
+    <p>Look at the constraint: it usually names the intended complexity class.</p>
   </div>
 </details>
 
@@ -772,13 +661,13 @@ graph LR
 <div class="recap">
   <h2>Recap</h2>
   <ul>
-    <li><strong>Non-negative weights only.</strong> First pop with d == dist[u] is final.</li>
-    <li><strong>Lazy heap:</strong> push every improve, skip stale pops.</li>
-    <li><strong>long distances, Long.compare</strong> &mdash; never subtract heap keys.</li>
-    <li><strong>Unit weights &rarr; BFS; {0,1} &rarr; 0-1 BFS.</strong></li>
-    <li><strong>parent[] on improve reconstructs</strong> a shortest path.</li>
+    <li><strong>Min-heap of (dist, u)</strong>, skip stale pops.</li>
+    <li><strong>Settle once:</strong> first fresh pop is final iff w>=0.</li>
+    <li><strong>long INF</strong>, never MAX_VALUE + w.</li>
+    <li><strong>Unit weights &rarr; BFS;</strong> {0,1} &rarr; 0-1 BFS.</li>
+    <li><strong>Not Prim</strong> &mdash; different key.</li>
   </ul>
-  <div class="recap__oneliner">pq min dist | skip d!=dist[u] | relax nd=d+w | long + Long.compare | no negative edges</div>
+  <div class="recap__oneliner">pq (d,u); pop; if d!=dist[u] continue; relax nd=d+w, push if better</div>
 </div>
 
 <div class="prevnext"></div>

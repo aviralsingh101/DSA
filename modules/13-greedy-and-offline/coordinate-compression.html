@@ -22,7 +22,7 @@
   <p class="hero__tagline">Replace huge or sparse values by their ranks 0..k-1 so Fenwick trees, arrays, and DP tables fit in memory &mdash; the ranks preserve order.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../06-range-queries/fenwick-tree.html">Fenwick Tree</a>,
       <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Values live in 1..1e9 but there are only n of them. A Fenwick of size 1e9 is impossible; a Fenwick of size n on ranks is O(n). Compression is the map value → rank that keeps &lt; and =.</p>
-<p>Offline algorithms collect every coordinate that will ever appear (array values, query bounds, rectangle y's), sort-unique, then replace each by lower_bound. Online structures that must accept new keys use a balanced tree instead.</p>
-<p>It shows up in inversion counts, 2D Fenwick, sweep-line y-axes, and DP on "the next larger value". Forgetting to unique duplicates maps two equal values to different ranks if you used a raw sort index.</p>
+<p>You are given <code>n</code> numbers that live anywhere in <code>1 .. 10<sup>9</sup></code>, and you must index a Fenwick tree, a segment tree, or a frequency array by those numbers. Allocating an array of size a billion is not an option: that is four billion bytes on a 32-bit cell, and the process is dead before the first update. There are only <code>n</code> numbers, so only <code>n</code> distinct ranks can ever appear. Coordinate compression is the map that sends each value to its rank in <code>0 .. k-1</code> while keeping every less-than and every equal intact.</p>
+<p>The obvious alternative is a <code>TreeMap</code> or a dynamic segment tree keyed by the raw values. Both work online and both pay heavier constants. Compression is the offline bargain: collect every integer that will ever be used as an index (array values, query bounds, rectangle y-endpoints), sort them, squeeze equal runs into one slot, then replace each original by a binary search into that unique list. A Fenwick of size <code>k</code> then runs in <code>n log k</code>, about two million operations at <code>n = 10<sup>5</sup></code>, instead of an allocation that cannot exist.</p>
+<p>In a real problem statement the signal is values or coordinates up to <code>10<sup>9</sup></code> sitting next to a structure that wants an array index: inversion count, 2D Fenwick, sweep-line y-axes, "next larger value" DP. If the values are already in <code>1 .. n</code> there is nothing to compress. If new keys arrive after you have built the tree, you cannot pre-assign ranks without leaving gaps, and you want a balanced tree instead. Forgetting to unique the sorted list is the classic wrong version: two equal values then receive different ranks from a raw sort index, and "equal" silently dies.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Order is all you need. Ranks 0..k-1 are a strictly increasing relabelling of the distinct keys.</p>
+    <p>Order is all the later structure needs. Ranks <code>0 .. k-1</code> are a strictly increasing relabelling of the distinct keys, so every comparison that used to say <code>x &lt; y</code> still says <code>rank(x) &lt; rank(y)</code>, and equals stay equal.</p>
   </div>
 </aside>
 
@@ -112,18 +112,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> k distinct ≤ n or 3n (values + query bounds). Java <code>Arrays.binarySearch</code> on the unique array is the rank.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> The number of distinct keys <code>k</code> is at most <code>n</code>, or about <code>3n</code> once query bounds and both rectangle y-endpoints are collected. That is the size of the Fenwick, not <code>10<sup>9</sup></code>. Java's <code>Arrays.binarySearch</code> on the unique array is the rank, and a missing key returns the insertion point you must treat as a lower bound.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Copy all relevant numbers into a list, sort, unique. Rank of x is the lowest index with unique[i]==x (binary search). Replace a[i] with rank(a[i]).</p>
-<p>Queries with bounds [L,R] on the value axis: rankL = lower_bound(L), rankR = upper_bound(R)-1. Off-by-one here is the usual WA.</p>
+<p>Collect every integer that will be used as an index into one list: the array values, every query <code>L</code> and <code>R</code>, every rectangle <code>y1</code> and <code>y2</code>. Sort that list, then compact equal runs so each distinct key appears once; call the compact array <code>unique</code> and let <code>k</code> be its length. The <em>rank</em> of a collected value <code>x</code> is the unique index <code>i</code> with <code>unique[i] = x</code>, found by binary search. Rewrite the working array by replacing each <code>a[i]</code> with <code>rank(a[i])</code>, and size the Fenwick at <code>k</code> (or <code>k+2</code> if you prefer a 1-based tree with a dummy).</p>
+<p>Queries that ask about a value range <code>[L, R]</code>, not an index range, need two extra binary searches. <code>lower_bound(L)</code> is the first stored key that is at least <code>L</code>, and that is the first rank you want included. <code>upper_bound(R)</code> is the first stored key strictly greater than <code>R</code>, so the last included rank is one less. Off-by-one on those two calls is the usual wrong answer: including a key just below <code>L</code>, or dropping the key that equals <code>R</code>. Keys that never appeared in the array must still have been collected, or you must use the insertion point as the rank.</p>
+<p>Walk <code>a = [100, 3, 100, 50]</code>. The collected sorted list is <code>3, 50, 100, 100</code>; after unique it is <code>[3, 50, 100]</code> and <code>k = 3</code>. The ranks are 2, 0, 2, 1, so the compressed array is <code>[2, 0, 2, 1]</code>. A Fenwick of size 3 can now count frequencies or inversions: walking left to right, query how many already-seen ranks are larger than the current one. A later query "how many values lie in <code>[40, 100]</code>" becomes ranks <code>[1, 2]</code>, because 40 lower-bounds to 50 and 100 upper-bounds just past the last key.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>rank(x) &lt; rank(y) iff x &lt; y, and rank(x)==rank(y) iff x==y, for every x,y that appeared in the collected set.</p>
+    <p>For every pair of keys that appeared in the collected set, <code>rank(x) &lt; rank(y)</code> if and only if <code>x &lt; y</code>, and <code>rank(x) = rank(y)</code> if and only if <code>x = y</code>.</p><p>In plain words, the new labels are just a denser spelling of the same order: equals stay glued together, and a smaller original still receives a smaller rank. Lengths and differences still use the original numbers, because ranks throw the gaps away.</p><p>Interview sentence: <em>"I collect, sort, unique, then binary-search; ranks preserve order, not distance."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--pitfall">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Ranks are indices, not lengths</span>
+    <p>A rectangle of width <code>10<sup>9</sup></code> still has width <code>10<sup>9</sup></code> after compression. The rank difference between its two x-endpoints may be 1. Multiply original coordinates for area; use ranks only to index the tree.</p>
   </div>
 </aside>
 
@@ -154,7 +163,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "a = [100, 3, 100, 50]. Collect, sort: 3,50,100,100.",
+          "note": "The array [100, 3, 100, 50] is collected and sorted into 3, 50, 100, 100, still carrying the duplicate 100.",
           "active": [
             0,
             1,
@@ -168,7 +177,7 @@
           }
         },
         {
-          "note": "Unique: [3, 50, 100]. k=3.",
+          "note": "Compacting equal runs leaves the unique list [3, 50, 100], so only three ranks will ever be issued.",
           "active": [
             1
           ],
@@ -179,7 +188,7 @@
           }
         },
         {
-          "note": "3 → 0, 50 → 1, 100 → 2. Compressed a = [2,0,2,1].",
+          "note": "3 becomes rank 0, 50 becomes rank 1, and both copies of 100 become rank 2, so the compressed array is [2, 0, 2, 1].",
           "active": [
             0
           ],
@@ -190,7 +199,7 @@
           }
         },
         {
-          "note": "Fenwick of size 3 now counts frequencies. Inversions: walk left-to-right, query how many ranks already seen are larger.",
+          "note": "A Fenwick of size 3 can now count frequencies. An inversion walk queries how many already-seen ranks are larger than the current one.",
           "active": [
             1
           ],
@@ -201,7 +210,7 @@
           }
         },
         {
-          "note": "Query \"count values in [40,100]\": lower_bound 40 = 1 (50), upper_bound 100 = 3, ranks [1,2].",
+          "note": "The value-range query [40, 100] lower-bounds 40 to rank 1 (the key 50) and upper-bounds 100 just past rank 2, so it reads ranks 1 through 2.",
           "active": [
             0,
             2,
@@ -214,7 +223,7 @@
           }
         },
         {
-          "note": "If you needed a[i+1]-a[i] as a length, you would still use original values for the length and ranks only as indices.",
+          "note": "A length such as a[i+1] - a[i] still uses the original numbers; ranks only index the tree and must not be subtracted as distances.",
           "active": [
             3
           ],
@@ -247,17 +256,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Collect</strong> every integer that will be an index (values, query L/R, y1/y2).</li>
-  <li><strong>Sort</strong> and <code>unique</code> (compact equal runs).</li>
-  <li><strong>rank(x)</strong> = lower_bound in the unique array.</li>
-  <li><strong>Rewrite</strong> the data. Fenwick size = unique.length (or +2).</li>
-  <li><strong>Query [L,R]</strong> on values: [lower_bound(L), upper_bound(R)-1].</li>
-  <li><strong>Keep originals</strong> if you still need numeric differences.</li>
+  <li><strong>Collect every integer that will be used as an index.</strong> Array values, query bounds, and both y-endpoints of every rectangle belong on the list; a bound you forget cannot be ranked later without guessing an insertion point.</li>
+  <li><strong>Sort the list and compact equal runs.</strong> Unique is not optional: a raw sort index would give two copies of 100 two different ranks, and the later Fenwick would treat equals as ordered.</li>
+  <li><strong>Define rank(x) as the lower_bound in the unique array.</strong> For a key that was collected, binary search returns its exact slot; for a missing bound, the insertion point is the first rank that should be included.</li>
+  <li><strong>Rewrite the working data and size the tree at k.</strong> Replace each <code>a[i]</code> with its rank, allocate the Fenwick at <code>unique.length</code> (plus one if you are 1-based), and never allocate <code>10<sup>9</sup></code>.</li>
+  <li><strong>Translate a value-range [L, R] into ranks.</strong> The inclusive rank interval is <code>[lower_bound(L), upper_bound(R) - 1]</code>; off-by-one on either end includes a key you did not ask for or drops one you did.</li>
+  <li><strong>Keep the original numbers wherever a length is needed.</strong> Area, gap, and difference queries still subtract originals. Ranks throw those gaps away on purpose, which is why they fit in memory.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Four values collected, uniqued, and rewritten as ranks. Later rows show a Fenwick-sized inversion walk and a value-range query on the same unique array.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -265,12 +274,12 @@ flowchart TD
       <tr><th>x</th><th>unique</th><th>rank</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>all</td><td>3,50,100,100</td><td>—</td><td>a = [100, 3, 100, 50]. Collect, sort: 3,50,100,100.</td></tr>
-      <tr><td>uniq</td><td>[3,50,100]</td><td>—</td><td>Unique: [3, 50, 100]. k=3.</td></tr>
-      <tr><td>100</td><td>[3,50,100]</td><td>2</td><td>3 → 0, 50 → 1, 100 → 2. Compressed a = [2,0,2,1].</td></tr>
-      <tr><td>3</td><td>bit n=3</td><td>0</td><td>Fenwick of size 3 now counts frequencies. Inversions: walk left-to-right, query how many ranks already seen are larger.</td></tr>
-      <tr><td>q</td><td>lb/ub</td><td>1..2</td><td>Query "count values in [40,100]": lower_bound 40 = 1 (50), upper_bound 100 = 3, ranks [1,2].</td></tr>
-      <tr><td>gap</td><td>keep 50</td><td>index 1</td><td>If you needed a[i+1]-a[i] as a length, you would still use original values for the length and ranks only as indices.</td></tr>
+      <tr class="trace-table__row--change"><td>all</td><td>3,50,100,100</td><td>—</td><td>The array [100, 3, 100, 50] is collected and sorted into 3, 50, 100, 100, still carrying the duplicate 100.</td></tr>
+      <tr><td>uniq</td><td>[3,50,100]</td><td>—</td><td>Compacting equal runs leaves the unique list [3, 50, 100], so only three ranks will ever be issued.</td></tr>
+      <tr><td>100</td><td>[3,50,100]</td><td>2</td><td>3 becomes rank 0, 50 becomes rank 1, and both copies of 100 become rank 2, so the compressed array is [2, 0, 2, 1].</td></tr>
+      <tr><td>3</td><td>bit n=3</td><td>0</td><td>A Fenwick of size 3 can now count frequencies. An inversion walk queries how many already-seen ranks are larger than the current one.</td></tr>
+      <tr><td>q</td><td>lb/ub</td><td>1..2</td><td>The value-range query [40, 100] lower-bounds 40 to rank 1 (the key 50) and upper-bounds 100 just past rank 2, so it reads ranks 1 through 2.</td></tr>
+      <tr><td>gap</td><td>keep 50</td><td>index 1</td><td>A length such as a[i+1] - a[i] still uses the original numbers; ranks only index the tree and must not be subtracted as distances.</td></tr>
     </tbody>
   </table>
 </div>
@@ -373,7 +382,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Sort + unique is O(n log n). Each rank is a binary search. The later Fenwick is O(n log k).</p>
+    <p>Collecting <code>n</code> (or a few times <code>n</code>) keys and sorting them is <code>n log n</code> comparisons. Compacting equals is a linear pass. Each later rank is one binary search on a list of length <code>k</code>, so rewriting the array is another <code>n log k</code>. The Fenwick or segment tree you build afterwards is <code>O(n log k)</code> updates and queries on a structure of size <code>k</code>.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> and <code>k</code> about the same, the sort is roughly <code>1.7 &times; 10<sup>6</sup></code> comparisons and the tree is a few million bit operations, which is fine. The thing compression avoids is an array of length <code>10<sup>9</sup></code>, which is four gigabytes on a 32-bit cell and will not allocate. A <code>TreeMap</code> Fenwick is the same <code>n log n</code> class with slower constants, useful only when keys arrive online.</p>
   </div>
 
   <table class="complexity__compare">
@@ -395,28 +405,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Not uniquing</span>
-    <div class="pitfalls__bug">binarySearch on a sorted array with duplicates returns an arbitrary duplicate index; equal values get different ranks across calls.</div>
-    <div class="pitfalls__fix">Unique first, then search on the compact array.</div>
+    <div class="pitfalls__bug"><code>Arrays.binarySearch</code> on a sorted array that still holds duplicates returns an arbitrary copy of the key, so two calls on the same value can receive two different ranks and "equal" silently becomes ordered.</div>
+    <div class="pitfalls__fix">Compact equal runs first, then search only on the unique array. Two copies of 100 must share one rank; that is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting query bounds in the collected set</span>
-    <div class="pitfalls__bug">A query L that never appeared has no rank; binarySearch returns -insertion-1, which you must treat as lower_bound.</div>
-    <div class="pitfalls__fix">Insert all L/R into the list before unique, or use the insertion point as rank.</div>
+    <div class="pitfalls__bug">A query <code>L</code> that never appeared as an array value has no slot, so <code>binarySearch</code> returns <code>-insertion - 1</code>, and treating that negative number as a rank either crashes or reads the wrong prefix.</div>
+    <div class="pitfalls__fix">Push every query <code>L</code> and <code>R</code> into the collected list before you unique, or decode the insertion point as a lower bound and never use the raw negative return.</div>
   </li>
   <li>
     <span class="pitfalls__title">Compressing an axis you still measure</span>
-    <div class="pitfalls__bug">Rectangle width becomes rank difference 1, area is wrong.</div>
-    <div class="pitfalls__fix">Store original coordinates for lengths; ranks only index the tree.</div>
+    <div class="pitfalls__bug">A rectangle whose x-span is a billion looks like width 1 after ranking, so area becomes the rank difference and the sample with tiny coordinates still passes.</div>
+    <div class="pitfalls__fix">Store original coordinates for every length and area product. Ranks index the tree and nothing else; subtract originals when you need a gap.</div>
   </li>
   <li>
     <span class="pitfalls__title">1-based Fenwick vs 0-based ranks</span>
-    <div class="pitfalls__bug">rank 0 never updates bit[0] which is unused — you skip all minima, or you AIOOB.</div>
-    <div class="pitfalls__fix">Use rank+1 as Fenwick index.</div>
+    <div class="pitfalls__bug">Rank 0 looks like a legal index into <code>bit[]</code>, but a Fenwick leaves <code>bit[0]</code> unused, so the smallest key is never updated, or <code>j -= j &amp; -j</code> walks off the array.</div>
+    <div class="pitfalls__fix">Use <code>rank + 1</code> as the Fenwick index, or allocate <code>k + 2</code> and ignore slot 0. Query a single minimum and check that it appears in the tree.</div>
   </li>
   <li>
     <span class="pitfalls__title">long vs int keys</span>
-    <div class="pitfalls__bug">1e18 coordinates in int[] overflow.</div>
-    <div class="pitfalls__fix"><code>long[]</code> unique.</div>
+    <div class="pitfalls__bug">Coordinates up to <code>10<sup>18</sup></code> fit the problem statement and look like they belong in an <code>int[]</code>, then they overflow on the way into the unique array and two distant keys collide.</div>
+    <div class="pitfalls__fix">Store the unique list in a <code>long[]</code> (or a <code>Long</code> list) whenever the statement's range exceeds <code>2<sup>31</sup></code>. Rank comparisons must use the same type.</div>
   </li>
 </ul>
 
@@ -458,28 +468,28 @@ flowchart TD
   <details class="followup">
     <summary>lower_bound vs rank of an absent L?</summary>
     <div class="followup__body">
-      <p>lower_bound(L) is the first stored key ≥ L. That is the first rank that should be included in "values ≥ L". upper_bound(R) is the first key &gt; R.</p>
+      <p><code>lower_bound(L)</code> is the first stored key that is at least <code>L</code>. That is exactly the first rank that should be included in "values &ge; L", even when <code>L</code> itself never appeared. <code>upper_bound(R)</code> is the first stored key strictly greater than <code>R</code>, so the last included rank is one less. If you collected <code>L</code> up front, both calls are ordinary binary searches on the unique array.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why not HashMap to dense ids?</summary>
     <div class="followup__body">
-      <p>HashMap assignment order is insertion, not value order. Fenwick prefix would no longer mean "all smaller values".</p>
+      <p>A HashMap can pack values into <code>0 .. n-1</code>, but it assigns ids in insertion order, not value order. A Fenwick prefix then means "the keys I happened to see first", not "every smaller value". Compression exists specifically so that a smaller original still receives a smaller rank; hashing throws that property away.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you compress online?</summary>
     <div class="followup__body">
-      <p>If all keys are known up front, yes (offline). If not, you cannot pre-assign ranks without leaving gaps. Use a BBST.</p>
+      <p>If every key is known before the first update, yes: that is the offline collect-sort-unique pipeline on this page. If a brand-new key can arrive later, you cannot pre-assign a dense rank without leaving gaps or rebuilding. Use a balanced tree, a treap, or a dynamic segment tree keyed by the raw value.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>2D compression?</summary>
     <div class="followup__body">
-      <p>Compress x and y independently. A 2D Fenwick is then k_x by k_y. If that product is too big, sweep one axis and Fenwick the other.</p>
+      <p>Compress the x-coordinates and the y-coordinates independently, each with its own unique list. A 2D Fenwick is then <code>k<sub>x</sub></code> by <code>k<sub>y</sub></code>. If that product is too large for memory, sweep one axis (sort by x) and Fenwick only the other (compressed y), which is the offline rectangle-count sweep from the previous page.</p>
     </div>
   </details>
 </div>

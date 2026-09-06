@@ -22,7 +22,7 @@
   <p class="hero__tagline">A suffix array is the permutation of starting indices in lexicographic order; Kasai then fills the LCP array in <code>O(n)</code> and string problems become range-min on LCP.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">28 min read</span>
+    <span class="hero__time">32 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../02-sorting-hashing-bits/sorting-and-comparators.html">Sorting & Comparators</a>,
       <a href="../06-range-queries/sparse-table-and-rmq.html">Sparse Table & RMQ</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Every substring is a prefix of some suffix. Sorting the suffixes therefore sorts all substrings, and the longest common prefix of two suffixes is the min LCP on the interval between them in the array. Distinct-substring count, longest repeated substring, and k-th substring fall out of that picture.</p>
-<p>O(n log n) doubling (or SA-IS in O(n)) builds the array. Kasai's lemma: if suffix i has LCP h with its predecessor in the order, suffix i+1 has LCP at least h-1 with its predecessor. That one observation makes LCP linear.</p>
-<p>Suffix automata / suffix trees are more powerful and more code. In Java contests the suffix array plus a sparse table on LCP is the structure you actually submit.</p>
+<p>You are given a string and a question about its slices: how many distinct ones are there, what is the longest slice that appears twice, what is the longest slice two strings share, or what is the <code>k</code>-th slice in dictionary order. Every slice of a string is a prefix of one of its suffixes, so if you sort the suffixes you have sorted every slice. The obvious sort compares those suffixes with <code>compareTo</code>, which can read <code>O(n)</code> characters per comparison and costs something like <code>n<sup>2</sup> log n</code> in the worst case. At <code>n = 10<sup>5</sup></code> that is not a contest-legal runtime.</p>
+<p>A <em>suffix array</em> is just the permutation of starting indices in that sorted order. Once you have it, the useful second array is the <em>LCP array</em>: <code>lcp[i]</code> is how many leading characters suffix <code>sa[i-1]</code> and suffix <code>sa[i]</code> share. The longest common prefix of any two suffixes is then the minimum LCP on the interval of ranks between them, which a sparse table answers in constant time. Distinct-substring count, longest repeated slice, and the <code>k</code>-th slice all fall out of that picture without ever listing the slices.</p>
+<p>Building the permutation in <code>O(n log n)</code> uses doubling: at step <code>k</code> you already know the order of every block of length <code>2<sup>k</sup></code>, and you sort pairs of those blocks to get length <code>2<sup>k+1</sup></code>. Filling the LCP array looks like it should be another <code>O(n<sup>2</sup>)</code> of character walking, but Kasai's observation kills that: if suffix <code>i</code> shares <code>h</code> characters with its sorted predecessor, then suffix <code>i+1</code> shares at least <code>h-1</code> with <em>its</em> predecessor. You walk the suffixes in text order, not sorted order, and you carry that leftover height down.</p>
+<p>In a Java contest this pair plus a sparse table on LCP is the structure you actually submit. Suffix trees and suffix automata are more powerful and more code. If the question is one pattern in one text, do not build this: write KMP. If characters are appended online, a suffix automaton is the better fit. The usual limit is <code>n &le; 4 &times; 10<sup>5</sup></code> for the doubling-plus-Java-sort build on this page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>LCP of any two suffixes = RMQ of the LCP array between their ranks. Kasai fills that array by walking suffixes in text order, not sorted order.</p>
+    <p>Sort the suffixes once; the LCP of any two of them is the range-minimum of the adjacent-LCP array between their ranks. Kasai fills that adjacent array in linear time by walking the suffixes in text order and reusing <code>h-1</code> characters of height, which is the observation that stops the fill from going quadratic.</p>
   </div>
 </aside>
 
@@ -111,18 +112,36 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 4&times;10&#8309;</code> for O(n log n) doubling in Java; O(n log^2) with sort-of-pairs is tight at 4e5. Alphabet can be mapped to 1..n.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 4 &times; 10<sup>5</sup></code> is the usual Java window for the doubling build on this page. Each of the <code>log n</code> rounds calls <code>Arrays.sort</code> on <code>n</code> pairs, which is <code>O(n log<sup>2</sup> n)</code> and is tight near the top of that range. A radix sort on the pairs drops the extra log and is what you write if the same limit is <code>10<sup>6</sup></code>. Map a large alphabet down to <code>1..n</code> before you start.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Doubling: rank by first 2^k characters. At step k you sort suffixes by (rank[i], rank[i+2^k]). After log n steps the order is full. Use a stable counting sort on ranks, not Timsort, if you need O(n log n).</p>
-<p>Kasai: inv[sa[i]]=i. Walk i=0..n-1 in text order, keep k = current LCP. Compare sa[rank-1] starting at i. Then k = max(k-1, 0).</p>
+<p>You need a permutation <code>sa</code> and a rank array <code>r</code>. Initially <code>sa[i] = i</code> and <code>r[i]</code> is the first character of suffix <code>i</code>. At round <code>k</code> (with <code>k</code> a power of two) two suffixes are compared by the pair <code>(r[i], r[i+k])</code>, using <code>-1</code> when the second half runs off the end so a shorter leftover loses. After you sort <code>sa</code> by those pairs you reassign ranks: equal pairs keep the same new rank, a different pair gets the next integer. Swap the rank buffers and stop early once every rank is unique. After <code>log n</code> rounds you have compared prefixes of length <code>n</code>, which is a full suffix comparison.</p>
+<p>Kasai then fills <code>lcp</code> without sorting anything else. Build the inverse <code>inv[sa[i]] = i</code> so you can ask "where in the sorted order does suffix <code>i</code> sit?". Walk the starting indices in text order, not sorted order, and keep an integer <code>h</code> for the leftover height. For suffix <code>i</code>, look at the suffix that sits immediately before it in <code>sa</code>, and extend <code>h</code> while the two still match. Write that value into <code>lcp[inv[i]]</code>, then if <code>h</code> is positive decrement it before you move to suffix <code>i+1</code>. That decrement is the lemma: deleting the first character of a match of length <code>h</code> leaves a match of length <code>h-1</code> as a lower bound on the next pair.</p>
+<p>Why the decrement cannot go wrong is the same kind of "we never lose a match" argument as KMP's fallback. Suffix <code>i</code> and its sorted predecessor share <code>h</code> characters, so the suffixes <code>i+1</code> and "predecessor plus one" share the last <code>h-1</code> of those. The actual sorted predecessor of suffix <code>i+1</code> is some suffix that is at least as large as "predecessor plus one", and therefore its LCP with <code>i+1</code> is at least that leftover <code>h-1</code> (it can be longer, which is what the extend loop finds). You never restart from zero except when <code>h</code> was already zero or when suffix <code>i</code> is the smallest in the array. Because <code>h</code> grows by at most one per successful comparison and drops by at most one per index, the whole fill is linear.</p>
+<p>Walk <code>banana</code>. The six suffixes, already sorted, start at indices 5 (<code>a</code>), 3 (<code>ana</code>), 1 (<code>anana</code>), 0 (<code>banana</code>), 4 (<code>na</code>), 2 (<code>nana</code>), so <code>sa = [5, 3, 1, 0, 4, 2]</code>. Adjacent LCPs are 1, 3, 0, 0, 2. The longest repeated slice is the maximum of those, which is 3, the string <code>ana</code> starting at 1 and at 3. The number of distinct slices is the number of prefixes of suffixes, <code>n(n+1)/2 = 21</code>, minus the ones the LCPs counted twice, which is <code>21 - 6 = 15</code>. Any later "LCP of suffix 3 and suffix 1" is the range-minimum of the adjacent values strictly between their ranks, here just 3.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>sa[i] is the start of the i-th smallest suffix. lcp[i] = LCP(suffix sa[i-1], suffix sa[i]). For any i &lt; j, LCP(sa[i], sa[j]) = min(lcp[i+1], …, lcp[j]).</p>
+    <p>The suffix array is the lex order of starting indices, and adjacent LCPs generate every pairwise LCP:</p><span class="eq">sa[i] = start of the i-th smallest suffix,&nbsp; lcp[i] = LCP(sa[i-1], sa[i]),&nbsp; LCP(sa[i], sa[j]) = min(lcp[i+1..j]) for i &lt; j</span><p>In plain words, two suffixes share everything their neighbours on the path between them share, and the shortest of those neighbour-shares is the answer. Interview sentence: <em>"I sort suffixes by doubling, Kasai walks text order with <code>h = max(h-1, 0)</code>, and any LCP is an RMQ on that array."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Forgetting k-- turns Kasai quadratic</span>
+    <p>Restarting the character walk from 0 at every suffix still produces the right LCP array, so the bug hides behind a correct sample. You have thrown away the lemma and the fill is <code>O(n<sup>2</sup>)</code> on a string of all <code>a</code>s. The line after you write <code>lcp[inv[i]]</code> has to be <code>if (h &gt; 0) h--;</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Out-of-range rank is -1, not 0</span>
+    <p>A suffix that has no second half must lose to every suffix that still has characters there. Treating the missing half as rank 0 ties it with a real character that mapped to 0, and the ranks never become unique. The listing uses <code>-1</code>, strictly smaller than any character rank.</p>
   </div>
 </aside>
 
@@ -163,7 +182,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "s = banana. Suffixes: 0 banana, 1 anana, 2 nana, 3 ana, 4 na, 5 a.",
+          "note": "The string is banana. Its six suffixes start at 0 banana, 1 anana, 2 nana, 3 ana, 4 na, and 5 a, which is the list we are about to sort.",
           "active": [
             0,
             1,
@@ -179,7 +198,7 @@
           }
         },
         {
-          "note": "Sorted: 5(a), 3(ana), 1(anana), 0(banana), 4(na), 2(nana). sa = [5,3,1,0,4,2].",
+          "note": "Dictionary order of those suffixes is a, ana, anana, banana, na, nana, so the suffix array of starting indices is [5, 3, 1, 0, 4, 2].",
           "active": [
             5
           ],
@@ -190,7 +209,7 @@
           }
         },
         {
-          "note": "Kasai: LCP(a, ana)=1, LCP(ana, anana)=3, LCP(anana, banana)=0.",
+          "note": "Kasai on the left half: a shares 1 with ana, ana shares 3 with anana, and anana shares nothing with banana.",
           "active": [
             0,
             1,
@@ -203,7 +222,7 @@
           }
         },
         {
-          "note": "LCP(banana, na)=0, LCP(na, nana)=2. lcp = [0,1,3,0,0,2] depending on 1-based lcp[0] unused.",
+          "note": "Kasai on the right half: banana shares nothing with na, and na shares 2 with nana. Slot lcp[0] stays unused at 0.",
           "active": [
             3,
             4,
@@ -216,7 +235,7 @@
           }
         },
         {
-          "note": "Longest repeated = max lcp = 3, \"ana\" starting at 1 and 3.",
+          "note": "The longest repeated slice is the maximum adjacent LCP, which is 3, the string ana starting at indices 1 and 3.",
           "active": [
             1,
             3
@@ -228,7 +247,7 @@
           }
         },
         {
-          "note": "Distinct substrings = 21 - (1+3+0+0+2) = 15.",
+          "note": "Distinct slices equal 21 minus the sum of those LCPs, which is 21 minus 6, so banana has 15 different substrings.",
           "active": [
             0,
             1,
@@ -267,17 +286,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Map</strong> characters to ranks 1..sigma. Append a sentinel 0.</li>
-  <li><strong>Doubling:</strong> for k=0,1,2,... sort by (rank[i], rank[i+2^k]) and reassign ranks.</li>
-  <li><strong>Stop</strong> when all ranks are unique.</li>
-  <li><strong>Kasai:</strong> inv[sa[i]]=i; k=0; for i=0..n-1 compute lcp[inv[i]].</li>
-  <li><strong>Sparse table</strong> on lcp for range min.</li>
-  <li><strong>Answer</strong> the actual string problem (distinct, LCS, k-th, search).</li>
+  <li><strong>Map characters to small ranks.</strong> Replace the alphabet with integers <code>1..sigma</code> and treat a missing second half as <code>-1</code>, never as 0. This is what keeps two suffixes that run off the end from tying forever.</li>
+  <li><strong>Double the compared length each round.</strong> For <code>k = 1, 2, 4, ...</code> sort the current permutation by the pair <code>(rank[i], rank[i+k])</code> and write a new rank array in that order. Equal pairs keep the same rank; a different pair gets the next integer.</li>
+  <li><strong>Stop once every rank is unique.</strong> When <code>r[sa[n-1]] == n-1</code> the permutation is a full suffix order and further rounds do no work. At worst you need <code>log n</code> rounds.</li>
+  <li><strong>Fill LCP with Kasai in text order.</strong> Build <code>inv[sa[i]] = i</code>, start <code>h = 0</code>, and for each starting index <code>i</code> extend against the sorted predecessor, write <code>lcp[inv[i]]</code>, then decrement <code>h</code> if it is positive. That decrement is the linear-time lemma.</li>
+  <li><strong>Put a sparse table on the LCP array.</strong> Any later "how much do suffix <code>x</code> and suffix <code>y</code> share?" is a range-minimum strictly between their ranks, which is constant time after an <code>O(n log n)</code> table.</li>
+  <li><strong>Answer the actual string question from those two arrays.</strong> Distinct slices are <code>n(n+1)/2 - sum lcp</code>, the longest repeat is <code>max lcp</code>, two-string LCS is the max LCP across a separator, and a pattern search is a binary search on <code>sa</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>The six suffixes of banana in listed order, then in dictionary order, then the adjacent LCPs Kasai writes, then the two standard applications of that array.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -285,12 +304,12 @@ flowchart TD
       <tr><th>step</th><th>sa</th><th>lcp</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>list</td><td>0..5</td><td>—</td><td>s = banana. Suffixes: 0 banana, 1 anana, 2 nana, 3 ana, 4 na, 5 a.</td></tr>
-      <tr><td>sort</td><td>[5,3,1,0,4,2]</td><td>—</td><td>Sorted: 5(a), 3(ana), 1(anana), 0(banana), 4(na), 2(nana). sa = [5,3,1,0,4,2].</td></tr>
-      <tr><td>lcp left</td><td>[5,3,1]</td><td>[1,3,0]</td><td>Kasai: LCP(a, ana)=1, LCP(ana, anana)=3, LCP(anana, banana)=0.</td></tr>
-      <tr><td>lcp right</td><td>[0,4,2]</td><td>[0,2]</td><td>LCP(banana, na)=0, LCP(na, nana)=2. lcp = [0,1,3,0,0,2] depending on 1-based lcp[0] unused.</td></tr>
-      <tr><td>repeat</td><td>1 and 3</td><td>3</td><td>Longest repeated = max lcp = 3, "ana" starting at 1 and 3.</td></tr>
-      <tr><td>distinct</td><td>all</td><td>sum 6</td><td>Distinct substrings = 21 - (1+3+0+0+2) = 15.</td></tr>
+      <tr class="trace-table__row--change"><td>list</td><td>0..5</td><td>—</td><td>The string is banana. Its six suffixes start at 0 banana, 1 anana, 2 nana, 3 ana, 4 na, and 5 a, which is the list we are about to sort.</td></tr>
+      <tr><td>sort</td><td>[5,3,1,0,4,2]</td><td>—</td><td>Dictionary order of those suffixes is a, ana, anana, banana, na, nana, so the suffix array of starting indices is [5, 3, 1, 0, 4, 2].</td></tr>
+      <tr><td>lcp left</td><td>[5,3,1]</td><td>[1,3,0]</td><td>Kasai on the left half: a shares 1 with ana, ana shares 3 with anana, and anana shares nothing with banana.</td></tr>
+      <tr><td>lcp right</td><td>[0,4,2]</td><td>[0,2]</td><td>Kasai on the right half: banana shares nothing with na, and na shares 2 with nana. Slot lcp[0] stays unused at 0.</td></tr>
+      <tr><td>repeat</td><td>1 and 3</td><td>3</td><td>The longest repeated slice is the maximum adjacent LCP, which is 3, the string ana starting at indices 1 and 3.</td></tr>
+      <tr><td>distinct</td><td>all</td><td>sum 6</td><td>Distinct slices equal 21 minus the sum of those LCPs, which is 21 minus 6, so banana has 15 different substrings.</td></tr>
     </tbody>
   </table>
 </div>
@@ -419,7 +438,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>log n doubling steps, each a sort of n pairs. Java Timsort is O(n log n) per step → O(n log^2 n). Kasai is strictly O(n) because k increases at most n times.</p>
+    <p>Doubling runs at most <code>log n</code> rounds. Each round sorts <code>n</code> pairs; Java Timsort is <code>O(n log n)</code> per round, so the build is <code>O(n log<sup>2</sup> n)</code>. Replacing that sort with a two-pass radix sort on ranks drops the extra log and is the usual next step when the same code TLEs. Kasai is a different argument: the height <code>h</code> grows by at most one per successful character comparison and drops by at most one per starting index, so the extend loop runs at most <code>2n</code> times and the fill is strictly linear.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> you have about 17 sort rounds of a hundred thousand pairs, which is a few tens of millions of comparisons and fits in Java. At <code>n = 4 &times; 10<sup>5</sup></code> the extra log starts to pinch and a radix sort, or SA-IS, is the safer submit. The naive <code>substring</code> sort is <code>O(n<sup>2</sup> log n)</code>, about <code>10<sup>11</sup></code> character reads at the smaller size, which is the runtime this page exists to avoid.</p>
   </div>
 
   <table class="complexity__compare">
@@ -441,28 +461,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Kasai forgetting k--</span>
-    <div class="pitfalls__bug">You re-compare from 0 every suffix and go quadratic.</div>
-    <div class="pitfalls__fix">After writing lcp, <code>if (k>0) k--;</code> — the lemma.</div>
+    <div class="pitfalls__bug">Restarting the character walk from zero at every suffix still writes the correct LCP array, so the sample looks finished. You have thrown away the leftover-height lemma, and a string of all <code>a</code>s makes the fill quadratic.</div>
+    <div class="pitfalls__fix">After you write <code>lcp[inv[i]]</code>, do <code>if (h &gt; 0) h--;</code>. Time the fill on a string of a hundred thousand <code>a</code>s; without the decrement it will miss the limit.</div>
   </li>
   <li>
     <span class="pitfalls__title">No sentinel / ties</span>
-    <div class="pitfalls__bug">Two suffixes with a common prefix to EOF compare equal and ranks collide forever.</div>
-    <div class="pitfalls__fix">Treat out-of-range rank as -1, strictly smaller than any char.</div>
+    <div class="pitfalls__bug">Two suffixes that share characters all the way to the end of the string compare equal if the missing half is treated as a real rank. Their ranks never split, doubling never finishes, and the permutation is not a total order.</div>
+    <div class="pitfalls__fix">Treat an out-of-range second half as <code>-1</code>, strictly smaller than any character. That is the sentinel this build uses instead of appending a 0 to the string.</div>
   </li>
   <li>
     <span class="pitfalls__title">lcp[0] meaning</span>
-    <div class="pitfalls__bug">Some codes leave lcp[0]=0 unused; summing then subtracts an extra 0 (fine) but RMQ between ranks 0 and 1 must not read lcp[0] as a real LCP.</div>
-    <div class="pitfalls__fix">lcp[i] = LCP(sa[i-1], sa[i]) for i&ge;1. RMQ on (i+1..j).</div>
+    <div class="pitfalls__bug">Leaving <code>lcp[0] = 0</code> unused looks harmless, and summing then subtracts an extra zero. A range-minimum between ranks 0 and 1 that accidentally reads <code>lcp[0]</code> as a real adjacent LCP reports 0 when the true share is <code>lcp[1]</code>.</div>
+    <div class="pitfalls__fix">The convention on this page is <code>lcp[i] = LCP(sa[i-1], sa[i])</code> for <code>i &ge; 1</code>. A pairwise query between ranks <code>i &lt; j</code> reads the minimum on <code>lcp[i+1..j]</code> and never <code>lcp[i]</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Building SA of s+t without a separator</span>
-    <div class="pitfalls__bug">LCS of two strings: suffixes can cross the join.</div>
-    <div class="pitfalls__fix">A char smaller than both alphabets between them.</div>
+    <div class="pitfalls__bug">Concatenating two strings and sorting the suffixes looks like the standard longest-common-substring trick. A suffix can cross the join, so an LCP can mix the tail of the first string with the head of the second and report a slice that lives in neither input.</div>
+    <div class="pitfalls__fix">Put a character smaller than both alphabets between them, the same idea as KMP's sentinel. Only accept an LCP whose two suffixes sit on opposite sides of that character.</div>
   </li>
   <li>
     <span class="pitfalls__title">Integer overflow on n(n+1)/2</span>
-    <div class="pitfalls__bug">n=1e5 → 5e9. int dies.</div>
-    <div class="pitfalls__fix"><code>long</code>.</div>
+    <div class="pitfalls__bug">The distinct-substring formula is sitting there as a textbook identity, and <code>n * (n+1) / 2</code> in an <code>int</code> looks like the whole answer. At <code>n = 10<sup>5</sup></code> that product is five billion and the 32-bit cell wraps.</div>
+    <div class="pitfalls__fix">Do the arithmetic in a <code>long</code>. The template tab already does; copy that, not a whiteboard <code>int</code>.</div>
   </li>
 </ul>
 
@@ -504,28 +524,28 @@ flowchart TD
   <details class="followup">
     <summary>Prove Kasai's k--.</summary>
     <div class="followup__body">
-      <p>If suffix i shares h chars with its SA-predecessor, deleting the first character leaves h-1 as a lower bound on the LCP of suffix i+1 with whatever sits just before it in the SA (that predecessor is at least as large as the shifted previous predecessor).</p>
+      <p>Suppose suffix <code>i</code> shares <code>h</code> characters with the suffix that sits immediately before it in the suffix array. Delete the first character of both: the leftovers are suffix <code>i+1</code> and "that predecessor, plus one", and they share <code>h-1</code> characters. The true sorted predecessor of suffix <code>i+1</code> is some suffix that is at least as large as "predecessor plus one", so its LCP with <code>i+1</code> is at least <code>h-1</code>. You start the next extend from that leftover rather than from zero, and you only ever add more matching characters, never fewer. That is why decrementing cannot under-report and why restarting from zero is only wasted work.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>SA vs suffix automaton for distinct substrings?</summary>
     <div class="followup__body">
-      <p>Both O(n). SA needs Kasai and a formula. SAM is one DAG whose endpos sizes sum to the answer. SAM is nicer online; SA is nicer for LCP/RMQ and k-th substring.</p>
+      <p>Both can answer in linear time after a linear (or <code>n log n</code>) build. The suffix array needs Kasai and the formula <code>n(n+1)/2 - sum lcp</code>. A suffix automaton is a DAG whose states already are the distinct slices, and the answer is a sum of their lengths. The automaton is nicer if characters arrive online. The suffix array is nicer if you also want LCP queries, a <code>k</code>-th slice, or a range-minimum structure on those heights.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you get LCP of two arbitrary suffixes?</summary>
     <div class="followup__body">
-      <p>Rank them, RMQ-min the lcp array strictly between those ranks. Sparse table is O(1).</p>
+      <p>Look up their ranks in the inverse array, then take the range-minimum of <code>lcp</code> strictly between those two ranks. A sparse table makes that one combine of two power-of-two blocks, which is constant time, because minimum is idempotent. Do not include <code>lcp</code> at the left rank itself; that slot is the share with the previous neighbour, not with the other suffix you asked about.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why not always SA-IS?</summary>
     <div class="followup__body">
-      <p>It is O(n) and long. Doubling is 40 lines and passes n=1e5 in Java. Learn SA-IS later if constants bite.</p>
+      <p>SA-IS is linear and long, and a mistyped induced sort is a silent wrong permutation. Doubling is about forty lines, it matches the listing on this page, and it passes <code>n = 10<sup>5</sup></code> in Java without drama. Learn SA-IS when the extra log factor actually bites, or when you are implementing a library rather than a contest solution.</p>
     </div>
   </details>
 </div>

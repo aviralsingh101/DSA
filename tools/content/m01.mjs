@@ -14,26 +14,45 @@ export const topics = [
 
   why: {
     paras: [
-      "\"What is the sum of <code>a[l..r]</code>?\" answered naively costs <code>O(r - l)</code>, " +
-      "so <code>q</code> queries cost <code>O(nq)</code>, which dies at " +
-      "<code>n = q = 10&#8309;</code>. One preprocessing pass that stores every prefix total makes " +
-      "each query a single subtraction. That is the entire idea, and it recurs everywhere: two " +
-      "dimensions, XOR instead of addition, counts instead of values, and reversed as a " +
-      "difference array for range <em>updates</em>.",
-      "It matters more than its simplicity suggests because it is a component rather than a " +
-      "solution. Prefix sums plus a hash map solves \"count subarrays with sum <code>k</code>\". " +
-      "Prefix sums plus binary search solves \"shortest subarray with sum at least <code>k</code>\" " +
-      "on positive arrays. Prefix XOR plus a trie solves maximum-XOR-subarray. Prefix parity " +
-      "solves \"longest subarray with equal zeros and ones\". Each of those is a top-50 interview " +
-      "question, and each is a two-line transform on top of this page.",
-      "The reformulation to internalise is that a subarray is a <em>difference of two prefixes</em>. " +
-      "Once you see <code>sum(l, r) = P[r+1] - P[l]</code>, every question about subarrays becomes " +
-      "a question about <em>pairs of prefix values</em>, and questions about pairs are the natural " +
-      "home of sorting, hashing and binary search.",
+      "You have a year of daily sales in an array and your manager keeps asking questions of one " +
+      "shape: \"how much did we sell between day <code>l</code> and day <code>r</code>?\" Take a " +
+      "tiny version first, <code>a = [3, 1, 4, 1, 5, 9]</code>, and the question \"days 2 to " +
+      "4\". The obvious answer is to walk across those three positions adding as you go, " +
+      "<code>4 + 1 + 5 = 10</code>. That is fine once. Now use realistic sizes: " +
+      "<code>10&#8309;</code> days and <code>10&#8309;</code> questions, each of which may span " +
+      "the whole array. That is up to <code>10&#8309; &times; 10&#8309; = 10&sup1;&#8304;</code> " +
+      "additions, ten billion of them, which takes a modern processor well over a minute &mdash; " +
+      "and a judge stops you after one or two seconds.",
+      "The way out is to answer one harder question in advance instead of many easy ones later. " +
+      "Before any query arrives, build a second array <code>P</code> in which <code>P[i]</code> " +
+      "is the total of the first <code>i</code> entries, so " +
+      "<code>P = [0, 3, 4, 8, 9, 14, 23]</code>. That costs a single addition per element. \"Days " +
+      "2 to 4\" is now the total of the first five days minus the total of the first two, " +
+      "<code>P[5] &minus; P[2] = 14 &minus; 4 = 10</code>: one subtraction, and it stays one " +
+      "subtraction even if the range covers a million elements. Such an array is called a " +
+      "<em>prefix sum</em> array, because entry <code>i</code> holds the sum of the prefix of the " +
+      "data that stops just before position <code>i</code>.",
+      "In a real problem statement the tell is a line like <code>n, q &le; 2&times;10&#8309;</code> " +
+      "sitting next to \"the array does not change\" and a pile of range queries. Those numbers " +
+      "forbid re-adding per query but comfortably allow one linear pass, which is precisely what " +
+      "this technique costs. And it is worth far more than its four lines suggest, because it is " +
+      "a <em>component</em> rather than a solution: prefix sums plus a hash map count the " +
+      "subarrays whose sum equals <code>k</code>; prefix sums plus binary search find the " +
+      "shortest subarray with sum at least <code>k</code> on a non-negative array; prefix XOR " +
+      "plus a trie maximise the XOR of a subarray; and rewriting every zero as <code>-1</code> " +
+      "turns \"equally many zeros and ones\" into the far easier \"sum is zero\".",
+      "One sentence carries all of that: a subarray is the <em>difference of two prefixes</em>. " +
+      "Once <code>sum(l, r) = P[r+1] &minus; P[l]</code> is in your head, every question about " +
+      "segments turns into a question about <em>pairs of prefix values</em> &mdash; and finding " +
+      "pairs is exactly what hash maps, sorting and binary search are built for. Read the same " +
+      "identity backwards and you get the difference array, which flips the cost model: each " +
+      "range <em>update</em> becomes two writes, and you pay one linear pass at the very end to " +
+      "read all the results out.",
     ],
-    insight: "A subarray is the difference of two prefixes. Rewrite every subarray condition as a " +
-      "condition on two prefix values, then attack the pair problem with a hash map, a sort, or a " +
-      "binary search.",
+    insight: "A subarray is the difference of two prefixes, so rewrite every subarray condition " +
+      "as a condition on two prefix values. The question stops being \"which segment?\" and " +
+      "becomes \"which pair of prefix indices?\" &mdash; and locating a pair is what a hash map, " +
+      "a sort or a binary search does in linear or near-linear time.",
   },
 
   recognise: {
@@ -71,9 +90,14 @@ export const topics = [
         "Prefix is no longer monotonic, so binary search is invalid",
         "Prefix + <a href=\"../03-linear-structures/queues-and-monotonic-deque.html\">monotonic deque</a>"],
     ],
-    constraint: "<code>n, q &le; 2&times;10&#8309;</code> with range-sum queries is the standard " +
-      "signature. Sums of <code>10&#8309;</code> values up to <code>10&#8313;</code> reach " +
-      "<code>10&sup1;&#8308;</code>, so the prefix array is <code>long[]</code>, always.",
+    constraint: "<code>n, q &le; 2&times;10&#8309;</code> with many range-sum queries and no " +
+      "updates in between is the standard signature: re-adding for every query would be about " +
+      "<code>4&times;10&sup1;&#8304;</code> operations, whereas one build pass plus " +
+      "<code>q</code> subtractions is about <code>4&times;10&#8309;</code>, a hundred thousand " +
+      "times less work. Read the value range as well &mdash; <code>10&#8309;</code> elements of " +
+      "size <code>10&#8313;</code> sum to <code>10&sup1;&#8308;</code>, which is far beyond the " +
+      "<code>2.1&times;10&#8313;</code> ceiling of an <code>int</code>, so the prefix array is " +
+      "<code>long[]</code>, always.",
   },
 
   core: {
@@ -95,7 +119,10 @@ export const topics = [
       "<code>P[i][j]</code> the sum of the submatrix from <code>(0,0)</code> to " +
       "<code>(i-1, j-1)</code>, the build step is " +
       "<code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] &minus; P[i-1][j-1]</code>, and the " +
-      "query reverses the signs.",
+      "query reverses the signs. Take the 2-by-2 grid <code>[[1, 2], [3, 4]]</code>: after the " +
+      "build, <code>P[2][2] = 10</code> is the whole-grid sum, and the bottom-right cell alone is " +
+      "<code>P[2][2] &minus; P[1][2] &minus; P[2][1] + P[1][1] = 10 &minus; 3 &minus; 4 + 1 = 4</code>. " +
+      "Four reads, and the same four reads would answer any rectangle in a million-by-million grid.",
     ],
     invariantTitle: "The invariant",
     invariant: "<p><code>P[i]</code> holds the sum of the first <code>i</code> elements, so that " +
@@ -151,16 +178,16 @@ export const topics = [
           { note: "P[1] = P[0] + a[0] = 0 + 3 = 3.",
             arr: [0, 3, "", "", "", "", ""], active: [1], done: [0], dim: [2,3,4,5,6],
             values: { i: 1, "a[i-1]": 3, "P[i]": 3 } },
-          { note: "P[2] = 3 + 1 = 4.",
+          { note: "P[2] = 3 + 1 = 4, the sum of the first two elements.",
             arr: [0, 3, 4, "", "", "", ""], active: [2], done: [0,1], dim: [3,4,5,6],
             values: { i: 2, "a[i-1]": 1, "P[i]": 4 } },
-          { note: "P[3] = 4 + 4 = 8.",
+          { note: "P[3] = 4 + 4 = 8, now covering the first three elements.",
             arr: [0, 3, 4, 8, "", "", ""], active: [3], done: [0,1,2], dim: [4,5,6],
             values: { i: 3, "a[i-1]": 4, "P[i]": 8 } },
-          { note: "P[4] = 8 + 1 = 9.",
+          { note: "P[4] = 8 + 1 = 9, adding a[3] into the running prefix.",
             arr: [0, 3, 4, 8, 9, "", ""], active: [4], done: [0,1,2,3], dim: [5,6],
             values: { i: 4, "a[i-1]": 1, "P[i]": 9 } },
-          { note: "P[5] = 9 + 5 = 14.",
+          { note: "P[5] = 9 + 5 = 14, the prefix that later answers the sample query.",
             arr: [0, 3, 4, 8, 9, 14, ""], active: [5], done: [0,1,2,3,4], dim: [6],
             values: { i: 5, "a[i-1]": 5, "P[i]": 14 } },
           { note: "P[6] = 14 + 9 = 23. Build complete in one O(n) pass.",
@@ -205,7 +232,7 @@ export const topics = [
           { note: "Query: the sum of rows 1-2, columns 1-2 of the original matrix, i.e. 5 + 6 + 8 + 9 = 28. Start from the big rectangle P[3][3] = 45.",
             cells: [{ r: 3, c: 3, val: "45", cls: "target" }],
             values: { step: "big rect", formula: "P[r2+1][c2+1]", value: "45" } },
-          { note: "Subtract the strip above: P[1][3] = 6.",
+          { note: "Subtract the strip above the query: P[1][3] = 6.",
             cells: [{ r: 3, c: 3, val: "45", cls: "target" }, { r: 1, c: 3, val: "6", cls: "block" }],
             values: { step: "minus top", formula: "- P[r1][c2+1]", value: "45 - 6 = 39" } },
           { note: "Subtract the strip to the left: P[3][1] = 12.",
@@ -245,11 +272,12 @@ export const topics = [
 
   steps: [
     "<strong>Allocate <code>long[] P</code> of length <code>n + 1</code></strong> and leave " +
-      "<code>P[0] = 0</code>.",
+      "<code>P[0] = 0</code>, so a range that starts at index 0 needs no special case.",
     "<strong>Fill it in one pass:</strong> <code>P[i] = P[i-1] + a[i-1]</code> for " +
-      "<code>i = 1 &hellip; n</code>.",
+      "<code>i = 1 &hellip; n</code>, which costs exactly one addition per element.",
     "<strong>Answer each query</strong> as <code>P[r+1] - P[l]</code> using inclusive " +
-      "<code>l</code> and <code>r</code>.",
+      "<code>l</code> and <code>r</code>, so a single-element range <code>sum(i, i)</code> equals " +
+      "<code>a[i]</code>.",
     "<strong>For 2D,</strong> build with a zero border and " +
       "<code>P[i][j] = a[i-1][j-1] + P[i-1][j] + P[i][j-1] - P[i-1][j-1]</code>.",
     "<strong>For range updates,</strong> use a difference array: <code>d[l] += v</code>, " +
@@ -257,8 +285,9 @@ export const topics = [
     "<strong>For subarray-property counting,</strong> restate the condition as a relation between " +
       "two prefix values, then use a <code>HashMap</code> from prefix value to count, seeded with " +
       "<code>{0: 1}</code>.",
-    "<strong>Choose the accumulator type deliberately.</strong> <code>long</code> whenever " +
-      "<code>n &times; max|a<sub>i</sub>|</code> can exceed <code>2.1&times;10&#8313;</code>.",
+    "<strong>Choose the accumulator type deliberately.</strong> Use <code>long</code> whenever " +
+      "<code>n &times; max|a<sub>i</sub>|</code> can exceed <code>2.1&times;10&#8313;</code>, " +
+      "which is the usual contest bound.",
   ],
 
   dryRun: {
@@ -750,7 +779,10 @@ public class PrefixHashing {
       "from two nested loops over indices <code>i &lt; j</code>. Two pointers is the observation " +
       "that, when the data has the right monotonic structure, you never need to revisit a " +
       "position: each pointer advances only forward, so the total work is " +
-      "<code>O(n)</code> rather than <code>O(n&sup2;)</code>.",
+      "<code>O(n)</code> rather than <code>O(n&sup2;)</code>. On a sorted array of " +
+      "<code>n = 10&#8309;</code>, the nested loops check about <code>5&times;10&#8313;</code> " +
+      "pairs and time out; two pointers examine each index once, about <code>10&#8309;</code> " +
+      "additions after the sort.",
       "The technique comes in three distinct shapes that people often conflate. " +
       "<strong>Opposite ends:</strong> <code>l</code> starts at 0, <code>r</code> at " +
       "<code>n-1</code>, and they converge &mdash; used for pair sums on sorted arrays, container " +
@@ -954,20 +986,22 @@ public class PrefixHashing {
   ],
 
   steps: [
-    "<strong>Identify the shape</strong>: opposite ends, same direction, or fast/slow.",
+    "<strong>Identify the shape</strong> first: opposite ends, same direction, or fast/slow, " +
+      "because each shape has a different correctness argument.",
     "<strong>Sort if needed</strong>, and first check whether the problem wants original indices " +
       "&mdash; if it does, sorting is wrong.",
     "<strong>Initialise</strong>: <code>l = 0, r = n - 1</code> for opposite ends; " +
       "<code>l = r = 0</code> for same direction.",
-    "<strong>Write down the exchange argument</strong> for which pointer moves. If you cannot, the " +
-      "technique may not apply.",
-    "<strong>Loop while <code>l &lt; r</code></strong> (opposite ends) or while " +
-      "<code>r &lt; n</code> (same direction).",
-    "<strong>Update the answer</strong> before moving pointers, so no candidate is skipped.",
+    "<strong>Write down the exchange argument</strong> for which pointer moves. If you cannot " +
+      "state it in one sentence, the technique may not apply.",
+    "<strong>Loop while <code>l &lt; r</code></strong> for opposite ends, or while " +
+      "<code>r &lt; n</code> for the same-direction form, so every index is examined once.",
+    "<strong>Update the answer</strong> before moving either pointer, so the pair or window you " +
+      "are about to leave is not skipped.",
     "<strong>Handle duplicates explicitly</strong> in <code>k</code>-sum problems: after recording " +
       "a hit, advance past all equal values on both sides.",
     "<strong>Verify the termination condition:</strong> every iteration must move at least one " +
-      "pointer, or the loop hangs.",
+      "pointer, or the loop hangs and the judge reports a timeout.",
   ],
 
   dryRun: {
@@ -1339,8 +1373,8 @@ public class SameDirection {
       fix: "Either use a <code>HashMap&lt;value, index&gt;</code> in one pass (<code>O(n)</code>, " +
         "and simpler), or sort an array of <code>{value, originalIndex}</code> pairs." },
     { title: "Incomplete duplicate handling in <code>k</code>-sum",
-      bug: "Skipping duplicates for the anchor <code>i</code> but not after a successful hit. " +
-        "<code>[0,0,0,0]</code> then produces <code>[[0,0,0],[0,0,0]]</code>.",
+      bug: "Skipping duplicates for the anchor <code>i</code> but not after a successful hit " +
+        "looks finished, yet <code>[0,0,0,0]</code> then produces <code>[[0,0,0],[0,0,0]]</code>.",
       fix: "Three guards: skip <code>i</code> when <code>a[i] == a[i-1]</code>, and after " +
         "recording a triplet advance <code>l</code> past all equal values and retreat " +
         "<code>r</code> past all equal values." },
@@ -1556,7 +1590,9 @@ public class SameDirection {
       "threshold left endpoint such that every window starting at or after it is valid and every " +
       "window starting before it is invalid. That threshold never moves backwards as the right " +
       "endpoint advances, so the left pointer only ever goes forward and the whole scan is " +
-      "<code>O(n)</code>.",
+      "<code>O(n)</code>. On <code>n = 10&#8309;</code> that is at most two pointer movements per " +
+      "element, about <code>2&times;10&#8309;</code> updates, versus a nested scan of every pair " +
+      "of endpoints, which is about <code>5&times;10&#8313;</code> windows and a timeout.",
       "Two things separate people who solve these reliably. First, knowing the three templates " +
       "(fixed size, longest-valid, shortest-valid) and which one a question maps to. Second, " +
       "knowing the <strong>exactly-K trick</strong>: \"exactly K\" is not directly window-able, but " +
@@ -1788,20 +1824,22 @@ public class SameDirection {
   ],
 
   steps: [
-    "<strong>Confirm the window is legal:</strong> contiguous segment, and non-negative values if " +
-      "the condition involves sums.",
+    "<strong>Confirm the window is legal:</strong> the answer must be a contiguous segment, and " +
+      "values must be non-negative if the condition involves sums.",
     "<strong>Pick the template</strong> from the flowchart: fixed size, longest valid, shortest " +
-      "valid, or a counting variant.",
+      "valid, or a counting variant, before writing any loop.",
     "<strong>Design the <code>O(1)</code>-updatable state.</strong> Usually a count array plus one " +
       "scalar summary (<code>distinct</code>, <code>satisfied</code>, <code>sum</code>).",
-    "<strong>Write the add step</strong> for <code>a[r]</code>, updating both the counts and the " +
-      "scalar.",
+    "<strong>Write the add step</strong> for <code>a[r]</code> first, updating both the count " +
+      "array and the scalar summary in one place.",
     "<strong>Write the remove step</strong> for <code>a[l]</code> as the exact mirror image. " +
       "Asymmetry here is the most common bug.",
-    "<strong>Place the answer update correctly:</strong> after the repair loop for longest, inside " +
-      "the shrink loop for shortest.",
-    "<strong>For counting, accumulate <code>r - l + 1</code></strong> instead of taking a maximum.",
-    "<strong>For \"exactly K\", call the at-most helper twice</strong> and subtract.",
+    "<strong>Place the answer update correctly:</strong> after the repair loop for longest-valid, " +
+      "and inside the shrink loop for shortest-valid.",
+    "<strong>For counting, accumulate <code>r - l + 1</code></strong> at each right endpoint " +
+      "instead of taking a running maximum.",
+    "<strong>For \"exactly K\", call the at-most helper twice</strong> and subtract, because " +
+      "exactly-K is not itself a monotone window.",
   ],
 
   dryRun: {
@@ -2329,7 +2367,9 @@ public class ExactlyK {
       "are always the same three: an infinite loop from the wrong midpoint rounding, an " +
       "off-by-one from <code>hi = mid</code> versus <code>hi = mid - 1</code>, and an overflow " +
       "from <code>(lo + hi) / 2</code>. The cure is not care; it is committing to a single " +
-      "template and never deviating.",
+      "template and never deviating. At <code>n = 10&#8313;</code> a linear scan is impossible, " +
+      "but about thirty predicate evaluations finish the search, so the template has to be right " +
+      "the first time.",
       "That template is <strong>find the first index where a predicate is true</strong>. Every " +
       "other search is a rewrite of it. Looking for an exact value is \"first index where " +
       "<code>a[i] &ge; target</code>, then check\". Upper bound is \"first index where " +
@@ -2555,16 +2595,20 @@ public class ExactlyK {
       "true back to false across the range.",
     "<strong>Set the half-open interval:</strong> <code>lo = 0</code>, <code>hi = n</code>. Use " +
       "<code>hi = n</code>, not <code>n - 1</code>, so \"no answer\" falls out naturally.",
-    "<strong>Loop while <code>lo &lt; hi</code></strong> &mdash; strict inequality, never " +
-      "<code>&le;</code> with this template.",
-    "<strong>Compute <code>mid = lo + (hi - lo) / 2</code></strong> to avoid overflow.",
+    "<strong>Loop while <code>lo &lt; hi</code></strong> &mdash; use the strict inequality, never " +
+      "<code>&le;</code>, because this half-open template exits when <code>lo</code> equals " +
+      "<code>hi</code>.",
+    "<strong>Compute <code>mid = lo + (hi - lo) / 2</code></strong> so the midpoint cannot " +
+      "overflow even when both bounds sit near <code>2&times;10&#8313;</code>.",
     "<strong>If the predicate holds at <code>mid</code>, set <code>hi = mid</code></strong>; " +
       "otherwise <code>lo = mid + 1</code>. Never <code>lo = mid</code>.",
-    "<strong>Return <code>lo</code></strong>, which is the first true index or <code>n</code>.",
+    "<strong>Return <code>lo</code></strong>, which is the first true index, or <code>n</code> " +
+      "when the predicate is false everywhere on the range.",
     "<strong>For an exact match, check afterwards:</strong> " +
-      "<code>lo &lt; n && a[lo] == target</code>.",
-    "<strong>Test on the three boundary cases:</strong> target below everything, above everything, " +
-      "and equal to a duplicated value.",
+      "<code>lo &lt; n && a[lo] == target</code>, because <code>lowerBound</code> returns an " +
+      "insertion point even on a miss.",
+    "<strong>Test on the three boundary cases:</strong> a target below everything, a target above " +
+      "everything, and a target equal to a duplicated value.",
   ],
 
   dryRun: {
@@ -3079,10 +3123,19 @@ public class LibrarySearch {
       "enough &mdash; then the first true budget is the answer, and you already have a " +
       "<a href=\"binary-search-basics.html\">firstTrue</a> template for it. The search space is " +
       "no longer an index range; it is the range of feasible answers, often " +
-      "<code>[1, sum(a)]</code> or <code>[max(a), sum(a)]</code>.",
+      "<code>[1, sum(a)]</code> or <code>[max(a), sum(a)]</code>. At <code>n = 10&#8309;</code> " +
+      "and a range of <code>10&#8313;</code>, thirty probes of a linear check are about " +
+      "<code>3&times;10&#8310;</code> operations; scanning every capacity is " +
+      "<code>10&sup1;&#8308;</code> and is dead on arrival.",
       "This is the single highest-leverage binary-search skill after the basic template. Google " +
-      "and Meta ask it constantly because it looks like DP or greedy until you name the " +
-      "predicate.",
+      "and Meta ask it constantly because the statement looks like dynamic programming or a " +
+      "greedy construction until you name the predicate. The tell in a real statement is a " +
+      "min-max or max-min sentence sitting next to <code>n &le; 10&#8309;</code> and an answer " +
+      "range up to <code>10&#8313;</code> or <code>10&sup1;&#8308;</code>: you cannot try every " +
+      "capacity, but you can afford about thirty linear checks. If you catch yourself designing " +
+      "a DP table whose state is \"best split of the first <code>i</code> items into " +
+      "<code>j</code> groups\", pause and ask whether a candidate budget has a monotone yes/no " +
+      "check &mdash; that one question is usually the whole problem.",
     ],
     insight: "Do not search for the construction. Search for the <em>smallest number</em> " +
       "<code>x</code> such that a greedy/check function <code>feasible(x)</code> returns true. " +
@@ -3127,17 +3180,33 @@ public class LibrarySearch {
       "<code>lo</code> that is always feasible-or-too-small (often <code>max(a)</code> or 0) and " +
       "an exclusive upper bound <code>hi</code> that is always feasible (often <code>sum(a)+1</code>). " +
       "Write <code>feasible(x)</code> so that it is false for every <code>x</code> below the " +
-      "optimum and true for every <code>x</code> at or above it.",
-      "Then run the half-open firstTrue template. When the loop ends, <code>lo</code> is the " +
-      "smallest feasible answer. The loop invariant is identical to ordinary binary search: " +
-      "everything below <code>lo</code> is known infeasible, everything at or above <code>hi</code> " +
-      "is known feasible.",
+      "optimum and true for every <code>x</code> at or above it. For split-array, that check " +
+      "walks left to right, starts a new part whenever adding the next value would exceed " +
+      "<code>x</code>, and asks whether the number of parts is at most <code>k</code>. The same " +
+      "scan, with hours or days instead of parts, is Koko and the shipping problem.",
+      "Then run the half-open firstTrue template you already know: while <code>lo &lt; hi</code>, " +
+      "<code>mid = lo + (hi - lo) / 2</code>, and set <code>hi = mid</code> if " +
+      "<code>feasible(mid)</code> else <code>lo = mid + 1</code>. When the loop ends, " +
+      "<code>lo</code> is the smallest feasible answer. The loop invariant is identical to " +
+      "ordinary binary search: everything below <code>lo</code> is known infeasible, everything " +
+      "at or above <code>hi</code> is known feasible. The only new work is writing and proving " +
+      "the check; the five search lines do not change.",
+      "Walk <code>[7, 2, 5, 10, 8]</code> split into two parts. <code>lo</code> starts at " +
+      "<code>max(a) = 10</code>, because one item alone needs at least that much; " +
+      "<code>hi</code> starts at <code>sum + 1 = 33</code>, because one part containing " +
+      "everything always works. <code>feasible(14)</code> needs three parts, so every capacity " +
+      "at or below 14 is discarded. <code>feasible(18)</code> produces the split " +
+      "<code>[7, 2, 5] | [10, 8]</code> and uses exactly two parts, so 18 is feasible and the " +
+      "search collapses onto it. The construction was never built by a clever split; it fell " +
+      "out of the first true capacity.",
     ],
     invariantTitle: "Say this out loud",
     invariant: "<p><em>\"I am binary-searching the answer <code>x</code>. " +
       "<code>feasible(x)</code> asks whether a budget of <code>x</code> is enough. That predicate " +
       "is monotone, so the first true <code>x</code> is the optimum. I keep the half-open " +
-      "invariant: <code>[0, lo)</code> infeasible, <code>[hi, \u221e)</code> feasible.\"</em></p>",
+      "invariant: <code>[0, lo)</code> infeasible, <code>[hi, \u221e)</code> feasible.\"</em></p>" +
+      "<p>In plain words, every value we have rejected is too small, every value we have " +
+      "accepted is big enough, and the answer is the first accepted value.</p>",
     extra: [
       { kind: "key", title: "The only new work is the check",
         html: "<p>If you cannot write <code>feasible</code> in ten lines, you have not found the " +
@@ -3210,13 +3279,17 @@ public class LibrarySearch {
   ],
 
   steps: [
-    "<strong>Name the answer type <code>x</code></strong> &mdash; a capacity, a rate, a distance, a day count.",
-    "<strong>Write <code>feasible(x)</code></strong> as a boolean: true iff a budget of <code>x</code> is enough. Prove it is monotone.",
+    "<strong>Name the answer type <code>x</code></strong> first &mdash; a capacity, a rate, a " +
+      "distance, or a day count &mdash; so the search space is a number line, not an array index.",
+    "<strong>Write <code>feasible(x)</code></strong> as a boolean: true if and only if a budget " +
+      "of <code>x</code> is enough, and prove in one sentence that it is monotone.",
     "<strong>Bound the search.</strong> <code>lo</code> = smallest conceivable answer (often <code>max(a)</code> or 0). <code>hi</code> = one past a proven-feasible value (often <code>sum(a)+1</code>).",
     "<strong>Run firstTrue:</strong> <code>while (lo &lt; hi) { mid = lo + (hi-lo)/2; if (feasible(mid)) hi = mid; else lo = mid + 1; }</code>",
-    "<strong>Return <code>lo</code>.</strong> It is the smallest feasible <code>x</code>.",
+    "<strong>Return <code>lo</code>.</strong> After the loop it is the smallest feasible " +
+      "<code>x</code>, because everything below it failed the check.",
     "<strong>If the problem wants the largest feasible <code>x</code></strong>, search the first infeasible and return <code>lo - 1</code>, or invert the predicate.",
-    "<strong>Reconstruct if asked:</strong> walk the same greedy with <code>x = lo</code> and record the cuts.",
+    "<strong>Reconstruct if asked:</strong> walk the same greedy with <code>x = lo</code> and " +
+      "record the cuts, so the partition is recovered in one extra linear pass.",
   ],
 
   dryRun: {
@@ -3340,7 +3413,10 @@ public class BinarySearchAnswer {
       "<p>RANGE is typically <code>sum(a)</code> &le; <code>n &middot; max|a[i]|</code>. At " +
       "<code>n = 10&#8309;</code> and <code>max = 10&#8313;</code> that is 30 probes, about " +
       "3 &times; 10&#8310; additions &mdash; fine. The brute linear scan of the answer space is " +
-      "<code>O(n &middot; RANGE)</code> and dies immediately.</p>",
+      "<code>O(n &middot; RANGE)</code> and dies immediately. At <code>n = 10&#8309;</code> and " +
+      "<code>RANGE = 10&#8313;</code> the binary-search version does about " +
+      "<code>30 &times; 10&#8309; = 3&times;10&#8310;</code> additions, under ten milliseconds, " +
+      "which is why the constraints are written that way.</p>",
     ],
     compare: [
       ["Linear scan of capacities", "O(n &middot; RANGE)", "O(1)", "RANGE tiny only"],
@@ -3352,19 +3428,22 @@ public class BinarySearchAnswer {
 
   pitfalls: [
     { title: "Off-by-one in the ceiling division",
-      bug: "<code>hours += piles[i] / speed;</code> truncates. Koko needs " +
-        "<code>ceil(p / speed)</code> hours for a pile.",
+      bug: "<code>hours += piles[i] / speed;</code> truncates toward zero, so a pile of 7 at " +
+        "speed 3 is counted as 2 hours instead of the 3 that Koko actually needs.",
       fix: "<code>hours += (p + (long) speed - 1) / speed;</code>. Cast to <code>long</code> first " +
         "or <code>p + speed</code> overflows." },
     { title: "Starting <code>lo</code> at 0 when 0 is not a legal answer",
-      bug: "Koko with <code>speed = 0</code> divides by zero. Split-array with " +
-        "<code>cap = 0</code> is meaningless if items are positive.",
+      bug: "Koko with <code>speed = 0</code> divides by zero, and split-array with " +
+        "<code>cap = 0</code> is meaningless if items are positive, yet both look like a " +
+        "natural lower bound.",
       fix: "Lower bound is the tightest necessary value: <code>1</code> for a rate, " +
         "<code>max(a)</code> for a capacity." },
     { title: "Using <code>int</code> for the accumulator inside <code>feasible</code>",
       bug: "<code>int hours</code> on Koko with <code>piles[i] = 1e9</code> and " +
-        "<code>speed = 1</code> overflows and the predicate flips.",
-      fix: "<code>long</code> for every running sum / count inside the check." },
+        "<code>speed = 1</code> overflows past <code>2&times;10&#8313;</code>, wraps negative, " +
+        "and the predicate flips from false to true.",
+      fix: "Use <code>long</code> for every running sum or count inside the check, including " +
+        "the hours or parts accumulator." },
     { title: "Assuming feasibility is monotone without proving it",
       bug: "\"Minimise the number of groups whose XOR is 0\" is not monotone in a useful way. " +
         "Binary search returns a plausible lie.",
@@ -3406,22 +3485,28 @@ public class BinarySearchAnswer {
     ["Prove that feasible is monotone for split-array.",
       "<p>If a split exists with every part &le; x, the same split has every part &le; x+1. " +
       "So the set of feasible capacities is a suffix of the integers, and the first true value " +
-      "is well-defined.</p>"],
+      "is well-defined. That suffix property is exactly the false-then-true shape firstTrue " +
+      "expects, so the search is legal and the smallest true capacity is the min-max sum.</p>"],
     ["Now return the actual parts, not just the min-max sum.",
       "<p>Run the same greedy with the optimal capacity: start a new part whenever adding the " +
       "next element would exceed it. Because the capacity is optimal, this uses at most k parts. " +
-      "If you need exactly k, split leftover singleton parts from the right.</p>"],
+      "If you need exactly k, split leftover singleton parts from the right. Either way you " +
+      "reuse the check you already wrote; you do not invent a second construction.</p>"],
     ["What if k can be as large as n?",
       "<p>Then the answer is max(a): every element is its own part. Your lower bound already " +
-      "handles this; just make sure feasible returns true for cap = max(a) when k &ge; n.</p>"],
+      "handles this; just make sure feasible returns true for cap = max(a) when k &ge; n. At " +
+      "<code>n = 10&#8309;</code> this is a single pass to find the max, not a special case in " +
+      "the binary search, and a quick unit test is <code>splitArray(a, n) == max(a)</code>.</p>"],
     ["Can you do it in O(n) expected time?",
       "<p>The decision tree of the search depends on the data, so you cannot skip the log in " +
       "the comparison model for an arbitrary feasible. In practice the log is 30 and is not " +
-      "worth removing.</p>"],
+      "worth removing. A heap or a linear-time selection would need a different question, such " +
+      "as \"k-th capacity\", which this is not.</p>"],
     ["The answer is a real number and the judge uses 1e-6 absolute error.",
       "<p>Loop 80 times (2^{-80} is far smaller than 1e-6 over any reasonable range) or iterate " +
       "while hi-lo &gt; 1e-7. Returning (lo+hi)/2 is fine. Do not mix integer mid-rounding with " +
-      "doubles.</p>"],
+      "doubles. Eighty iterations cost nothing next to the feasible check, and they remove any " +
+      "worry about the last bit of rounding.</p>"],
   ],
 
   problems: [
@@ -3485,16 +3570,30 @@ public class BinarySearchAnswer {
 
   why: {
     paras: [
-      "Sorting then indexing is always correct and almost always good enough: " +
-      "<code>O(n log n)</code> to read <code>a[k]</code>. Selection problems exist because some " +
+      "You are given an unsorted array and asked for the element that would sit at index " +
+      "<code>k</code> after sorting &mdash; the 4th-smallest of <code>[7, 2, 1, 6, 8, 5, 3]</code> " +
+      "is 5. Sorting then indexing is always correct and almost always good enough: " +
+      "<code>O(n log n)</code> to read <code>a[k]</code>, about <code>1.7&times;10&#8310;</code> " +
+      "comparisons at <code>n = 10&#8309;</code>. Selection problems exist because some " +
       "constraints are tighter, and because the <em>median of two sorted arrays</em> question is " +
-      "a Google classic that sorting would turn into a merge.",
-      "Quickselect is quicksort that only recurses into the side that contains rank k. Average " +
-      "<code>O(n)</code>, worst-case <code>O(n&sup2;)</code> unless you add median-of-medians " +
-      "or a random pivot. The two-array median is a binary search on how many elements you take " +
-      "from the shorter array.",
+      "a Google classic that sorting would turn into a linear merge of two " +
+      "<code>10&#8309;</code>-length arrays when a logarithmic cut search exists.",
+      "Quickselect is quicksort that only recurses into the side that contains rank " +
+      "<code>k</code>: partition around a pivot, then throw away the side that cannot hold " +
+      "<code>k</code>. Average <code>O(n)</code>, because a random pivot discards about half the " +
+      "remaining items; worst-case <code>O(n&sup2;)</code> if every pivot is the smallest or " +
+      "largest remaining element, unless you add median-of-medians or a random pivot. The " +
+      "two-array median is a different discard-half: a binary search on how many elements you " +
+      "take from the shorter array, so that the left of the cut is the first half of the merged " +
+      "sequence.",
       "Both are discard-half arguments. Once you see them that way, k-th in a sorted matrix and " +
-      "k-th pair distance become the same idea with a different feasible.",
+      "k-th pair distance become the same idea with a different feasible: count how many values " +
+      "are at most <code>mid</code>, then search the first <code>mid</code> whose count is at " +
+      "least <code>k</code>. The constraint line that signals this page is " +
+      "<code>n &le; 10&#8309;</code> with \"k-th only\" &mdash; you do not need the other " +
+      "<code>n &minus; 1</code> ranks &mdash; or two already-sorted arrays of length " +
+      "<code>10&#8309;</code> where a merge would be linear but a cut search is about twenty " +
+      "comparisons.",
     ],
     insight: "You do not need full order to know rank k. You only need to know, for a candidate " +
       "cut, how many items lie on each side \u2014 then throw one side away.",
@@ -3522,19 +3621,42 @@ public class BinarySearchAnswer {
         "O(n log k) is simpler and often fast enough; mention it first in an interview",
         "Prefer heap unless they ask for linear expected"],
     ],
-    constraint: "<code>n &le; 10&#8309;</code> and \"k-th only\" &rarr; heap O(n log k) or " +
-      "quickselect. Two arrays of length 1e5 already sorted &rarr; O(log(m+n)) cut search, not merge.",
+    constraint: "<code>n &le; 10&#8309;</code> and \"return the k-th only\" points at a size-k " +
+      "heap in <code>O(n log k)</code> or quickselect in expected linear time. Two arrays of " +
+      "length <code>10&#8309;</code> that are already sorted point at an " +
+      "<code>O(log min(m, n))</code> cut search, not a merge that would spend " +
+      "<code>2&times;10&#8309;</code> writes.",
   },
 
   core: {
     paras: [
-      "Quickselect: pick a pivot, partition so everything smaller is on the left. If the pivot " +
-      "lands at index k you are done. If it lands to the right, recurse left; otherwise recurse " +
-      "right. Expected linear because each step throws away a constant fraction on average.",
-      "Two-array median: imagine the merged array. A valid cut takes i elements from A and " +
-      "(half-i) from B such that every value on the left of the cut is \u2264 every value on the " +
-      "right. Binary-search i. The conditions are <code>A[i-1] \u2264 B[j]</code> and " +
-      "<code>B[j-1] \u2264 A[i]</code> (with sentinels for empty sides).",
+      "Quickselect: pick a pivot, then partition the active range so everything smaller sits on " +
+      "the left and the pivot lands at some index <code>p</code>. If <code>p</code> equals " +
+      "<code>k</code> you are done &mdash; that value is the k-th smallest, even though the two " +
+      "sides are not themselves sorted. If <code>p</code> is to the right of <code>k</code>, every " +
+      "index at or above <code>p</code> is larger than the answer, so recurse left; otherwise " +
+      "recurse right. The expected cost is linear because a random pivot's rank is uniform and " +
+      "each step throws away a constant fraction of the remaining items on average, just as a " +
+      "balanced quicksort would, except you only pay for one child.",
+      "Two-array median: imagine the merged array of <code>A</code> and <code>B</code>. A valid " +
+      "cut takes <code>i</code> elements from <code>A</code> and <code>(half &minus; i)</code> " +
+      "from <code>B</code> such that every value on the left of the cut is &le; every value on " +
+      "the right. Binary-search <code>i</code> on the shorter array. The two crossing conditions " +
+      "are <code>A[i-1] &le; B[j]</code> and <code>B[j-1] &le; A[i]</code>, with sentinels " +
+      "&plusmn;&infin; for empty sides so you never read off the end. When both hold, the left " +
+      "side is exactly the first half of the merge, and the median is either the max of the two " +
+      "left ends (odd total) or the average of that max and the min of the two right starts " +
+      "(even total).",
+      "Walk the two-array case on <code>A = [1, 3]</code> and <code>B = [2]</code>. The merged " +
+      "sequence would be <code>[1, 2, 3]</code> and the median is 2, but we never merge. " +
+      "<code>half = (2+1+1)/2 = 2</code>, so we want two elements on the left of the cut. Trying " +
+      "<code>i = 1</code> takes one from <code>A</code> and one from <code>B</code>: " +
+      "<code>Aleft = 1</code>, <code>Bright = 2</code>, <code>Bleft = 2</code>, " +
+      "<code>Aright = 3</code>. Both crossings hold (<code>1 &le; 2</code> and " +
+      "<code>2 &le; 3</code>), the total is odd, and <code>max(1, 2) = 2</code>. The same walk " +
+      "on <code>[1, 2]</code> and <code>[3, 4]</code> takes <code>i = 1</code>, " +
+      "<code>half = 2</code>, and averages <code>max(1, 3)</code> with <code>min(2, 4)</code> " +
+      "to get 2.5.",
     ],
     invariant: "<p><em>After a partition at p, ranks [lo..p] live in a[lo..p] and ranks " +
       "(p+1..hi] live in a[p+1..hi]. Rank k is in exactly one of those two pieces, so I can " +
@@ -3584,13 +3706,18 @@ public class BinarySearchAnswer {
   ],
 
   steps: [
-    "<strong>Quickselect.</strong> Pick a pivot (random or last). Partition <code>[lo, hi]</code> so the pivot sits at <code>p</code>.",
+    "<strong>Quickselect.</strong> Pick a pivot (random is safer than last). Partition " +
+      "<code>[lo, hi]</code> so the pivot sits at <code>p</code> and every smaller value is to " +
+      "its left.",
     "<strong>If <code>p == k</code></strong> return <code>a[p]</code>. If <code>k &lt; p</code> set <code>hi = p-1</code>, else <code>lo = p+1</code>. Repeat.",
-    "<strong>Two-array median.</strong> Ensure A is the shorter. Binary-search i = how many to take from A.",
+    "<strong>Two-array median.</strong> Swap so that <code>A</code> is the shorter array, then " +
+      "binary-search <code>i</code>, the number of elements to take from <code>A</code>.",
     "<strong>j = half - i</strong> where half = (m+n+1)/2 (left side is the larger half when the total is odd).",
     "<strong>If Aleft &gt; Bright</strong> i is too big; if Bleft &gt; Aright, i is too small. Otherwise the cut is valid.",
-    "<strong>Odd total:</strong> answer is max(Aleft, Bleft). <strong>Even:</strong> average of that and min(Aright, Bright).",
-    "<strong>Use sentinels</strong> \u00b1\u221e when a side is empty so the comparisons stay uniform.",
+    "<strong>Odd total:</strong> the answer is max(Aleft, Bleft), the last element of the left " +
+      "half. <strong>Even:</strong> average that with min(Aright, Bright).",
+    "<strong>Use sentinels</strong> &plusmn;&infin; when a side is empty, so <code>A[i-1]</code> " +
+      "and <code>B[j-1]</code> stay defined and the comparisons stay uniform.",
   ],
 
   dryRun: {
@@ -3696,7 +3823,11 @@ public class Quickselect {
       "<code>T(n) = T(n/2) + O(n) = O(n)</code>. Adversarial pivots give the full quicksort " +
       "recurrence <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>. Randomise the pivot.</p>",
       "<p>Two-array median: the search space is the shorter length, halved each step, and each " +
-      "step is O(1) comparisons, so <code>O(log min(m,n))</code>.</p>",
+      "step is O(1) comparisons, so <code>O(log min(m,n))</code>. At <code>n = 10&#8309;</code>, " +
+      "expected quickselect is a few hundred thousand comparisons; the two-array search on " +
+      "lengths <code>10&#8309;</code> and <code>10&#8309;</code> is about 17 comparisons. " +
+      "Sorting both problems would be <code>1.7&times;10&#8310;</code> comparisons and " +
+      "<code>2&times;10&#8309;</code> writes respectively.</p>",
     ],
     compare: [
       ["Sort + index", "O(n log n)", "O(n)", "Default; mention first"],
@@ -3710,22 +3841,34 @@ public class Quickselect {
 
   pitfalls: [
     { title: "k is 1-based in the problem and 0-based in your code",
-      bug: "LC 215 asks for the k-th <em>largest</em>, which is rank <code>n-k</code> in 0-based ascending order.",
+      bug: "LC 215 asks for the k-th <em>largest</em>, which looks like rank <code>k</code>, but " +
+        "in 0-based ascending order it is rank <code>n-k</code>, so <code>k = 1</code> returns " +
+        "the last element, not <code>a[0]</code>.",
       fix: "Convert once at the top: <code>int rank = a.length - k;</code> for k-th largest, and never touch k again." },
     { title: "Worst-case quadratic on sorted input",
-      bug: "Always pivoting on <code>a[hi]</code> of an already-sorted array degenerates.",
+      bug: "Always pivoting on <code>a[hi]</code> of an already-sorted array makes every " +
+        "partition drop only one element, so the expected-linear algorithm becomes the " +
+        "quadratic worst case.",
       fix: "Swap a random index into the pivot slot. In an interview, say this out loud." },
     { title: "Off-by-one on empty sides of the two-array cut",
-      bug: "Accessing <code>A[i-1]</code> when <code>i == 0</code>.",
-      fix: "Sentinels: empty left is MIN_VALUE, empty right is MAX_VALUE." },
+      bug: "Accessing <code>A[i-1]</code> when <code>i == 0</code> throws, and the same crash " +
+        "happens on <code>B[j-1]</code> when the cut takes nothing from <code>B</code>.",
+      fix: "Sentinels: treat an empty left as <code>MIN_VALUE</code> and an empty right as " +
+        "<code>MAX_VALUE</code> so the crossing tests stay branch-free." },
     { title: "Averaging two ints for the even case",
-      bug: "<code>(leftMax + rightMin) / 2</code> truncates and can overflow.",
-      fix: "<code>(leftMax + (double) rightMin) / 2.0</code> or <code>/ 2.0</code> with a long cast." },
+      bug: "<code>(leftMax + rightMin) / 2</code> looks like the even-case median, but integer " +
+        "addition overflows near <code>2&times;10&#8313;</code> and integer division truncates " +
+        "<code>5 / 2</code> to 2.",
+      fix: "Cast first: <code>(leftMax + (double) rightMin) / 2.0</code>, or add as " +
+        "<code>long</code> then divide by 2.0, so neither overflow nor truncation survives." },
     { title: "Mutating the caller's array",
-      bug: "In-place quickselect reorders <code>a</code>. Tests that reuse the array then fail.",
-      fix: "Clone if the caller still needs the original, or document the mutation." },
+      bug: "In-place quickselect reorders <code>a</code>, which looks free, but later tests that " +
+        "reuse the same array then see a permutation and fail.",
+      fix: "Clone if the caller still needs the original order, or document the mutation in the " +
+        "method contract before you ship it." },
     { title: "Duplicate-heavy arrays and <code>&lt;</code> vs <code>&le;</code> in partition",
-      bug: "A partition that sends equals to one side unbalances on all-equal input.",
+      bug: "A partition that sends every equal to one side looks correct on distinct data, but " +
+        "on an all-equal array it leaves the pivot at an end and becomes quadratic.",
       fix: "3-way partition (Dutch flag) around the pivot, then check whether k falls in the equal block." },
   ],
 
@@ -3745,21 +3888,30 @@ public class Quickselect {
     ["Why is the expected time linear?",
       "<p>A random pivot's rank is uniform. The expected remaining size is the average of " +
       "0,1,\u2026,n-1 which is n/2, and T(n) = T(n/2)+O(n) solves to O(n). More carefully the " +
-      "constant is 4n or so, not n.</p>"],
+      "constant is 4n or so, not n. At <code>n = 10&#8309;</code> that is a few hundred " +
+      "thousand comparisons in expectation, versus about <code>1.7&times;10&#8310;</code> for a " +
+      "full sort.</p>"],
     ["Can you make it worst-case linear?",
       "<p>Median-of-medians picks a pivot guaranteed to be in the 30th\u201370th percentile, so " +
       "you discard at least 30% each time. The recurrence is T(n)=T(n/5)+T(7n/10)+O(n)=O(n). " +
-      "Nobody wants you to code it in an interview; naming it is enough.</p>"],
+      "The extra T(n/5) is the cost of finding the pivot, and it is still linear because " +
+      "1/5 + 7/10 = 0.9 &lt; 1. Nobody wants you to code it in an interview; naming it is " +
+      "enough.</p>"],
     ["Generalise LC 4 to the k-th of two sorted arrays.",
       "<p>The same cut search with half = k (1-based) instead of (m+n+1)/2. Return max(Aleft, Bleft). " +
-      "This is how you also solve \"k-th of n sorted arrays\" with a heap or a binary search on value.</p>"],
+      "This is how you also solve \"k-th of n sorted arrays\" with a heap or a binary search on value. " +
+      "The crossing inequalities do not change; only the target left-side size does.</p>"],
     ["The matrix is sorted by rows only, not columns.",
-      "<p>You lose the staircase count. Heap the heads of each row (O(k log n)) or binary-search " +
-      "the value and binary-search each row (O(n log RANGE log n)).</p>"],
+      "<p>You lose the staircase count that walks one row-and-column-sorted matrix in " +
+      "<code>O(n)</code>. Heap the heads of each row in <code>O(k log n)</code>, or " +
+      "binary-search the value and binary-search each row in " +
+      "<code>O(n log RANGE log n)</code>. Neither is as pretty as the staircase, but both are " +
+      "correct without column order.</p>"],
     ["Must not mutate the array and must be O(1) extra memory.",
       "<p>You cannot quickselect. Heap of size k uses O(k). For k-th of one array under these " +
       "constraints you are stuck with sorting if you cannot overwrite, unless you are allowed " +
-      "O(n) extra to copy.</p>"],
+      "O(n) extra to copy. Interviewers who add both constraints are usually steering you " +
+      "toward \"just sort a copy\" and then talking about the trade-off.</p>"],
   ],
 
   problems: [

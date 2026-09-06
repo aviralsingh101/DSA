@@ -22,7 +22,7 @@
   <p class="hero__tagline">Z[i] is the longest substring starting at i that matches the prefix of s. One linear pass maintains a rightmost Z-box.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="kmp-and-prefix-function.html">KMP & the Prefix Function</a>,
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Many string problems ask "how much of a prefix starts here?": pattern matching (Z of p+'#'+t), distinct substrings via suffixes, and string-period recovery. The Z-array answers every such question after one O(n) pass.</p>
-<p>The algorithm keeps a window [l, r] that is a prefix-match already computed (a Z-box). For a new i inside that box, Z[i] is at least min(Z[i-l], r-i+1), and you only extend when the known copy runs out. That is the same two-pointer idea as Manacher.</p>
-<p>Z and the prefix function determine each other. Prefer Z when the question is phrased as prefix matches at every index; prefer &pi; when you are building failure links.</p>
+<p>You are given a string, and at every starting index you want to know how many characters of a prefix of the whole string sit there. Pattern matching is the same question after you glue the pattern in front of the text; so are "shortest period" and a slow-but-honest count of distinct substrings. The obvious answer compares the prefix against the suffix that starts at each <code>i</code> from scratch. On a string of length <code>n</code> that is about <code>n<sup>2</sup> / 2</code> comparisons, and at <code>n = 10<sup>5</sup></code> that is five billion steps the judge will not wait for.</p>
+<p>The linear algorithm remembers the rightmost stretch it has already proved is a copy of a prefix. That stretch is called a <em>Z-box</em> and is stored as a closed interval <code>[l, r]</code>, meaning <code>s[l..r]</code> equals <code>s[0..r-l]</code>. When a new index <code>i</code> lands inside that box, the character at <code>i</code> corresponds to the character at <code>i-l</code> in the prefix, so you already know a lower bound on how far a prefix-match from <code>i</code> can run. You copy that bound, clip it so it does not claim more than the remaining box, and only then walk characters if the copy ran out of known ground.</p>
+<p>That reuse is the same two-pointer idea Manacher uses for palindromes: a window that only grows to the right, plus a mirror (here a prefix copy) that fills most cells in constant time. Z and the prefix function determine each other in linear time. Prefer Z when the question is already "how much prefix starts at each index"; prefer <code>&pi;</code> when you are building failure links or an automaton.</p>
+<p>In a real statement the signal is <code>n &le; 10<sup>6</sup></code> together with a question about prefix matches, periods, or one pattern in one text. If the statement asks for many different patterns, this page is the wrong tool; if it asks for palindromic radii, go to Manacher; if it asks for suffix order, go to the suffix array.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Inside a Z-box you already know a prefix copy. Reuse Z[i-l] instead of matching from scratch, and only extend when that copy is shorter than the remaining box.</p>
+    <p>Inside the rightmost Z-box you already hold a prefix copy, so <code>Z[i]</code> starts at <code>min(Z[i-l], r-i+1)</code> instead of at zero. You only compare fresh characters when that copy hits the box edge or when <code>i</code> sits outside the box, and because <code>r</code> never moves left the extra comparisons stay linear.</p>
   </div>
 </aside>
 
@@ -111,18 +112,36 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8310;</code>. The extend loop is amortised O(n) because r only moves right.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10<sup>6</sup></code> is the linear-string window. The extend loop is amortised <code>O(n)</code> because the right edge <code>r</code> only moves right, so each successful comparison is paid for once. If you forget to reuse the box you fall back to the quadratic scan and those limits will time out; if the statement wants many patterns or palindromes, this is the wrong array.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Z[0] is 0 or n by convention (we store 0 and never use it). Maintain [l, r] = rightmost segment that matches a prefix. For i=1..n-1: if i&le;r, Z[i] = min(r-i+1, Z[i-l]). Then while i+Z[i]&lt;n and s[Z[i]]==s[i+Z[i]], increment. If i+Z[i]-1 &gt; r, reset [l,r] to [i, i+Z[i]-1].</p>
-<p>Matching: Z-array of p+'#'+t. Every position in the t-half with Z[i]==|p| is a hit starting at i-(|p|+1).</p>
+<p>You need an array <code>Z</code> of length <code>n</code> and two integers <code>l</code> and <code>r</code>. The slot <code>Z[i]</code> will hold the longest length such that <code>s[i..i+Z[i])</code> equals <code>s[0..Z[i])</code>. Leave <code>Z[0] = 0</code> and never copy from it: some write-ups store <code>n</code> there, and then a later <code>i-l = 0</code> copies that <code>n</code> and walks off the string. The pair <code>[l, r]</code> is the rightmost Z-box found so far, meaning <code>s[l..r]</code> is already known to equal <code>s[0..r-l]</code>, and both start at 0 so the box is empty.</p>
+<p>For each <code>i</code> from 1 to <code>n-1</code> you first ask whether <code>i</code> sits inside the live box. If <code>i &le; r</code>, the prefix-copy says that a match of length <code>Z[i-l]</code> starts at the corresponding prefix index, but you must not claim more characters than the box still covers, so you set <code>Z[i] = min(r-i+1, Z[i-l])</code>. If <code>i</code> is past <code>r</code>, you start <code>Z[i]</code> at 0. Then you extend: while the next character past the current length still matches the corresponding prefix character, increment <code>Z[i]</code>. If the new match now ends to the right of <code>r</code>, move the box so <code>l = i</code> and <code>r = i+Z[i]-1</code>. You never shrink <code>r</code>.</p>
+<p>The clip is load-bearing. Suppose the copied value <code>Z[i-l]</code> is 5 but only 2 characters of the box remain. Those 2 are known to match; the third character past <code>r</code> has never been compared at this alignment, so claiming 5 would invent a match. Conversely, if the copied value equals the remaining box exactly, the match might continue past <code>r</code>, which is why you always run the extend loop after the copy and do not stop at the clip. The same picture is Manacher's mirror: copy, clip to the window, then try one more character.</p>
+<p>Walk <code>ababac</code>. At <code>i = 1</code> the character <code>b</code> disagrees with <code>s[0] = a</code>, so <code>Z[1] = 0</code> and the box stays empty. At <code>i = 2</code> you start from 0 and extend through <code>aba</code> against the prefix <code>aba</code>, stopping before the last <code>c</code>, so <code>Z[2] = 3</code> and the box becomes <code>[2, 4]</code>. At <code>i = 3</code> you are inside the box; the corresponding prefix index is 1 and <code>Z[1] = 0</code>, so the copy is 0 and you cannot extend, hence <code>Z[3] = 0</code>. At <code>i = 4</code> the copy wants <code>Z[2] = 3</code> but only one character of the box remains, so you start at 1; the next character past the box is <code>c</code> against <code>s[1] = b</code>, they disagree, and <code>Z[4] = 1</code>. At <code>i = 5</code> you are past the box and <code>c</code> disagrees with <code>a</code>, so <code>Z[5] = 0</code>. To match a pattern, build Z of <code>p + '#' + t</code>; every text index with <code>Z[i] == |p|</code> is a hit starting there.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>[l, r] is a prefix of s, copied at l. For every i in (l, r], the prefix of length Z[i-l] starting at i is already known to match, up to the box edge r.</p>
+    <p>The interval <code>[l, r]</code> is a prefix of <code>s</code> copied so that it starts at <code>l</code>:</p><span class="eq">s[l..r] = s[0..r-l], and for i in (l, r] we have Z[i] &ge; min(Z[i-l], r-i+1)</span><p>In plain words, everything strictly inside the rightmost prefix-copy is already answered except when that copy runs out of box, and those leftover characters are the only ones the extend loop is allowed to spend. Interview sentence: <em>"I reuse the rightmost Z-box, clip to its edge, then extend; <code>r</code> only moves right, so the pass is linear."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Always extend after the copy</span>
+    <p>Stopping at <code>min(r-i+1, Z[i-l])</code> looks complete because both numbers are known matches. When the copy hits the box edge the next character is unknown at this alignment and may still match. Skip the <code>while</code> and you under-report Z-values that reach past <code>r</code>, which then poisons later copies.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Leave Z[0] at 0</span>
+    <p>Storing <code>n</code> at index 0 is a convention for "the whole string matches itself". The algorithm then needs a special case when <code>i-l</code> is 0, because copying <code>n</code> walks off the array. Leaving <code>Z[0] = 0</code> makes the copy line safe and you never use that slot as a match start anyway.</p>
   </div>
 </aside>
 
@@ -163,7 +182,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "s = ababac. Z[0] unused (=0). i=1 'b'!= 'a'. Z[1]=0. Box empty.",
+          "note": "The string is ababac and Z[0] stays unused at 0. At i = 1 the character b disagrees with a, so Z[1] is 0 and the box is still empty.",
           "active": [
             1
           ],
@@ -174,7 +193,7 @@
           }
         },
         {
-          "note": "i=2 'a'==s[0]. Extend: abab vs abac, three chars. Z[2]=3. Box [2,4].",
+          "note": "At i = 2 the character a matches the prefix. Extending compares aba against aba and stops before c, so Z[2] becomes 3 and the box is now [2, 4].",
           "active": [
             2,
             3,
@@ -187,7 +206,7 @@
           }
         },
         {
-          "note": "i=3 inside the box. Z[3-2]=Z[1]=0, remaining box is 2. min(2,0)=0. Cannot extend. Z[3]=0.",
+          "note": "Index 3 sits inside the box. The corresponding prefix slot is Z[1] = 0, the remaining box is 2, and min(2, 0) is 0, so Z[3] stays 0.",
           "active": [
             3
           ],
@@ -198,7 +217,7 @@
           }
         },
         {
-          "note": "i=4 inside. Z[4-2]=Z[2]=3 but remaining is 1, so start with 1. s[1]='b'!=s[5]='c', stay 1. Z[4]=1.",
+          "note": "Index 4 sits inside the box. The copy wants Z[2] = 3 but only one character remains, so we start at 1; the next pair is b against c and Z[4] stays 1.",
           "active": [
             4
           ],
@@ -209,7 +228,7 @@
           }
         },
         {
-          "note": "i=5 'c'!= 'a'. Z[5]=0.",
+          "note": "Index 5 sits past the box. The character c disagrees with the prefix a, so Z[5] is 0 and the box is left untouched.",
           "active": [
             5
           ],
@@ -220,7 +239,7 @@
           }
         },
         {
-          "note": "Done. Z = [0,0,3,0,1,0]. A match of \"aba\" would show Z=3 at that start.",
+          "note": "The finished array is [0, 0, 3, 0, 1, 0]. A pattern aba would show up as a Z-value of 3 at every start where that prefix sits.",
           "active": [
             0,
             1,
@@ -263,17 +282,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Z[0]=0</strong> (or n, but then never treat it as a match start).</li>
-  <li><strong>l=r=0</strong>. For i=1..n-1:</li>
-  <li><strong>If i&le;r</strong> set Z[i]=min(r-i+1, Z[i-l]).</li>
-  <li><strong>Extend</strong> while in bounds and characters match.</li>
-  <li><strong>If i+Z[i]-1 &gt; r</strong> set l=i, r=i+Z[i]-1.</li>
-  <li><strong>Match</strong> on p+'#'+t as with KMP.</li>
+  <li><strong>Zero the unused prefix slot.</strong> Set <code>Z[0] = 0</code> so a later copy with <code>i-l = 0</code> cannot pick up the string length and walk off the array. You will never treat index 0 as a match start.</li>
+  <li><strong>Start with an empty box.</strong> Set <code>l = r = 0</code>, then walk <code>i</code> from 1 to <code>n-1</code>. The pair <code>[l, r]</code> will always be the rightmost prefix-copy discovered so far.</li>
+  <li><strong>Reuse the box when i sits inside it.</strong> If <code>i &le; r</code>, write <code>Z[i] = min(r-i+1, Z[i-l])</code>. The first number is how much box remains; the second is the known prefix-match at the corresponding prefix index.</li>
+  <li><strong>Extend with fresh comparisons.</strong> While <code>i + Z[i]</code> is in bounds and <code>s[Z[i]]</code> equals <code>s[i + Z[i]]</code>, increment. This is the only place new characters are compared, and it is what catches a match that continues past the old <code>r</code>.</li>
+  <li><strong>Widen the box, never shrink it.</strong> If <code>i + Z[i] - 1 &gt; r</code>, set <code>l = i</code> and <code>r = i + Z[i] - 1</code>. Charging every successful extend to a rightward move of <code>r</code> is the linear-time argument.</li>
+  <li><strong>Match a pattern on the concatenated string.</strong> Build Z of <code>p + '#' + t</code> with a sentinel outside both alphabets, then collect every text index where <code>Z[i] == |p|</code>. Those values are start indices, unlike the prefix-function hits which are ends.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Every index of ababac, showing when the rightmost Z-box is reused, when the copy is clipped to the remaining box, and when a fresh extend widens r.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -281,12 +300,12 @@ flowchart TD
       <tr><th>i</th><th>l,r</th><th>Z</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>1</td><td>0,0</td><td>[0,0]</td><td>s = ababac. Z[0] unused (=0). i=1 'b'!= 'a'. Z[1]=0. Box empty.</td></tr>
-      <tr><td>2</td><td>2,4</td><td>[0,0,3]</td><td>i=2 'a'==s[0]. Extend: abab vs abac, three chars. Z[2]=3. Box [2,4].</td></tr>
-      <tr><td>3</td><td>2,4</td><td>[0,0,3,0]</td><td>i=3 inside the box. Z[3-2]=Z[1]=0, remaining box is 2. min(2,0)=0. Cannot extend. Z[3]=0.</td></tr>
-      <tr><td>4</td><td>2,4</td><td>[0,0,3,0,1]</td><td>i=4 inside. Z[4-2]=Z[2]=3 but remaining is 1, so start with 1. s[1]='b'!=s[5]='c', stay 1. Z[4]=1.</td></tr>
-      <tr><td>5</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>i=5 'c'!= 'a'. Z[5]=0.</td></tr>
-      <tr><td>done</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>Done. Z = [0,0,3,0,1,0]. A match of "aba" would show Z=3 at that start.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>0,0</td><td>[0,0]</td><td>The string is ababac and Z[0] stays unused at 0. At i = 1 the character b disagrees with a, so Z[1] is 0 and the box is still empty.</td></tr>
+      <tr><td>2</td><td>2,4</td><td>[0,0,3]</td><td>At i = 2 the character a matches the prefix. Extending compares aba against aba and stops before c, so Z[2] becomes 3 and the box is now [2, 4].</td></tr>
+      <tr><td>3</td><td>2,4</td><td>[0,0,3,0]</td><td>Index 3 sits inside the box. The corresponding prefix slot is Z[1] = 0, the remaining box is 2, and min(2, 0) is 0, so Z[3] stays 0.</td></tr>
+      <tr><td>4</td><td>2,4</td><td>[0,0,3,0,1]</td><td>Index 4 sits inside the box. The copy wants Z[2] = 3 but only one character remains, so we start at 1; the next pair is b against c and Z[4] stays 1.</td></tr>
+      <tr><td>5</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>Index 5 sits past the box. The character c disagrees with the prefix a, so Z[5] is 0 and the box is left untouched.</td></tr>
+      <tr><td>done</td><td>2,4</td><td>[0,0,3,0,1,0]</td><td>The finished array is [0, 0, 3, 0, 1, 0]. A pattern aba would show up as a Z-value of 3 at every start where that prefix sits.</td></tr>
     </tbody>
   </table>
 </div>
@@ -392,7 +411,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each extend comparison that succeeds increases r. r never decreases. Failed comparisons happen at most once per i after the copied value. Total O(n).</p>
+    <p>The outer loop visits each of the <code>n-1</code> later indices once and the box-copy is a constant amount of arithmetic. The only loop that can run more than once per index is the extend. Every successful extend comparison increases <code>r</code> by at least one, and <code>r</code> never decreases, so successful extends total at most <code>n</code>. A failed extend comparison happens at most once per <code>i</code> after the copied value is installed, which is another <code>n</code> comparisons.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>6</sup></code> you do a couple of million character reads, which is a few milliseconds. The naive prefix-at-every-i scan is about <code>n<sup>2</sup> / 2</code> comparisons, five billion at <code>n = 10<sup>5</sup></code> already, and that is the runtime this box is designed to avoid.</p>
   </div>
 
   <table class="complexity__compare">
@@ -414,28 +434,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using Z[0]=n in the copy</span>
-    <div class="pitfalls__bug">i-l = 0 copies n and you run off the array.</div>
-    <div class="pitfalls__fix">Leave Z[0]=0, or special-case i=l.</div>
+    <div class="pitfalls__bug">Storing the string length at index 0 looks tidy because the whole string is a prefix of itself. The first time <code>i-l</code> is 0 the copy writes <code>n</code> into <code>Z[i]</code> and the extend loop walks off the array or invents a match past the end.</div>
+    <div class="pitfalls__fix">Leave <code>Z[0] = 0</code>, or special-case the copy when <code>i</code> equals <code>l</code>. Test a string that starts a new box at every other index, such as <code>ababab</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Updating [l,r] with a weaker box</span>
-    <div class="pitfalls__bug">Setting r to a smaller value loses the amortised bound and can even make Z too small if you skip extend.</div>
-    <div class="pitfalls__fix">Only widen when i+Z[i]-1 &gt; r.</div>
+    <div class="pitfalls__bug">Moving <code>r</code> left, or replacing the box whenever a new <code>i</code> has a positive Z, looks like you are keeping the window current. Shrinking <code>r</code> throws away known prefix-copies, breaks the amortised bound, and can make later Z-values too small if you then skip the extend.</div>
+    <div class="pitfalls__fix">Only widen when <code>i + Z[i] - 1 &gt; r</code>. The rightmost box is the only one whose remaining characters are still unused information.</div>
   </li>
   <li>
     <span class="pitfalls__title">min(r-i+1, Z[i-l]) without extend</span>
-    <div class="pitfalls__bug">When Z[i-l] hits the box edge, the match might continue past r.</div>
-    <div class="pitfalls__fix">Always run the while after the copy.</div>
+    <div class="pitfalls__bug">The clip already looks like the answer, because both arguments are proven matches. When the copied Z-value hits the box edge, the next character past <code>r</code> might still match the prefix and you are supposed to keep going.</div>
+    <div class="pitfalls__fix">Always run the extend <code>while</code> after the copy. A good test is a string whose Z-box ends in the middle of a longer prefix-match, such as <code>aaaabaaa</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Sentinel missing</span>
-    <div class="pitfalls__bug">Same as KMP: Z of p+t without '#' can cross the join.</div>
-    <div class="pitfalls__fix">A character outside the alphabet.</div>
+    <div class="pitfalls__bug">Building Z of <code>p+t</code> without a separator looks like the KMP concatenation trick with less punctuation. A Z-value can cross the join and report a hit that is half pattern and half text.</div>
+    <div class="pitfalls__fix">Insert a character outside both alphabets. Check that no Z-value in the text half exceeds <code>|p|</code> except at real occurrences.</div>
   </li>
   <li>
     <span class="pitfalls__title">Comparing chars with == on substrings</span>
-    <div class="pitfalls__bug">In Java, <code>s.substring(a)==s.substring(b)</code> is reference equality.</div>
-    <div class="pitfalls__fix">charAt in the extend loop, as written.</div>
+    <div class="pitfalls__bug">Writing <code>s.substring(a) == s.substring(b)</code> looks like an equality test and even compiles. In Java that is reference equality of two new String objects, so it is almost always false and the extend loop never runs.</div>
+    <div class="pitfalls__fix">Compare with <code>charAt</code> in the extend loop, as the listing does. If you ever need a whole-slice check, use <code>equals</code>, not <code>==</code>.</div>
   </li>
 </ul>
 
@@ -477,28 +497,28 @@ flowchart TD
   <details class="followup">
     <summary>Why copy min(r-i+1, Z[i-l])?</summary>
     <div class="followup__body">
-      <p>The box says s[l..r]==s[0..r-l]. Position i corresponds to i-l in the prefix. You cannot claim more than the remaining box, and you cannot claim more than Z[i-l].</p>
+      <p>The live box says <code>s[l..r]</code> equals <code>s[0..r-l]</code>, so the character at <code>i</code> is a copy of the character at <code>i-l</code> in the prefix. You cannot claim a longer prefix-match than <code>Z[i-l]</code>, because that is already the longest prefix sitting at the corresponding place. You also cannot claim more characters than the remaining box, because past <code>r</code> you have no copy. The minimum of those two numbers is the largest claim that is already proved; the extend loop is what tries to prove more.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Z vs KMP for matching?</summary>
     <div class="followup__body">
-      <p>Same complexity. Z is slightly more code for matching and slightly less conceptual load if the problem is already "prefix at i". KMP automata compose better with Aho.</p>
+      <p>Both are linear in <code>|p| + |t|</code>. Z is a little more code for matching and a little less conceptual load when the question is already "prefix at every index". The prefix function composes better with Aho-Corasick, because a failure link is exactly <code>&pi;[q-1]</code>. In an interview, pick the one whose array the rest of the problem already wants.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can Z handle wildcards?</summary>
     <div class="followup__body">
-      <p>Not by itself. Split the pattern on '?', Z-match each chunk, and check gaps. Or use FFT string matching.</p>
+      <p>Not by itself, because a Z-box is a claim that two concrete characters were equal. Split the pattern on each <code>?</code>, Z-match every concrete chunk against the text, and then check that the gaps between those hits have the right lengths. The other school is FFT string matching, which treats a wildcard as a coefficient that does not contribute to the mismatch count.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Manacher uses the same idea?</summary>
     <div class="followup__body">
-      <p>Yes: a palindrome box [l,r] and copy the mirrored radius, then extend. Once you can write Z, Manacher is a palindrome-flavoured Z.</p>
+      <p>Yes. Manacher keeps a rightmost palindrome instead of a rightmost prefix-copy, and the value it reuses is the radius at the mirrored centre rather than <code>Z[i-l]</code>. The rest of the skeleton is identical: clip to the window, extend if the copy hits the edge, and charge every successful extend to a rightward move of <code>r</code>. Once you can write Z, Manacher is the palindrome-flavoured version of the same pass.</p>
     </div>
   </details>
 </div>

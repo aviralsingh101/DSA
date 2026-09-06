@@ -38,8 +38,8 @@
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
 <p>A large family of interview problems ask for the <em>minimum maximum</em> or <em>maximum minimum</em>: smallest capacity that can ship all packages in <code>D</code> days, fewest bananas-per-hour so Koko finishes before the guards return, smallest largest sum after splitting an array into <code>k</code> parts. The construction is messy. The check is easy: given a candidate capacity, a single greedy pass tells you whether it works.</p>
-<p>If that check is monotone &mdash; once a budget is enough, every larger budget is also enough &mdash; then the first true budget is the answer, and you already have a <a href="binary-search-basics.html">firstTrue</a> template for it. The search space is no longer an index range; it is the range of feasible answers, often <code>[1, sum(a)]</code> or <code>[max(a), sum(a)]</code>.</p>
-<p>This is the single highest-leverage binary-search skill after the basic template. Google and Meta ask it constantly because it looks like DP or greedy until you name the predicate.</p>
+<p>If that check is monotone &mdash; once a budget is enough, every larger budget is also enough &mdash; then the first true budget is the answer, and you already have a <a href="binary-search-basics.html">firstTrue</a> template for it. The search space is no longer an index range; it is the range of feasible answers, often <code>[1, sum(a)]</code> or <code>[max(a), sum(a)]</code>. At <code>n = 10&#8309;</code> and a range of <code>10&#8313;</code>, thirty probes of a linear check are about <code>3&times;10&#8310;</code> operations; scanning every capacity is <code>10&sup1;&#8308;</code> and is dead on arrival.</p>
+<p>This is the single highest-leverage binary-search skill after the basic template. Google and Meta ask it constantly because the statement looks like dynamic programming or a greedy construction until you name the predicate. The tell in a real statement is a min-max or max-min sentence sitting next to <code>n &le; 10&#8309;</code> and an answer range up to <code>10&#8313;</code> or <code>10&sup1;&#8308;</code>: you cannot try every capacity, but you can afford about thirty linear checks. If you catch yourself designing a DP table whose state is "best split of the first <code>i</code> items into <code>j</code> groups", pause and ask whether a candidate budget has a monotone yes/no check &mdash; that one question is usually the whole problem.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -121,14 +121,15 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Pick the type of the answer (usually a positive integer). Find a lower bound <code>lo</code> that is always feasible-or-too-small (often <code>max(a)</code> or 0) and an exclusive upper bound <code>hi</code> that is always feasible (often <code>sum(a)+1</code>). Write <code>feasible(x)</code> so that it is false for every <code>x</code> below the optimum and true for every <code>x</code> at or above it.</p>
-<p>Then run the half-open firstTrue template. When the loop ends, <code>lo</code> is the smallest feasible answer. The loop invariant is identical to ordinary binary search: everything below <code>lo</code> is known infeasible, everything at or above <code>hi</code> is known feasible.</p>
+<p>Pick the type of the answer (usually a positive integer). Find a lower bound <code>lo</code> that is always feasible-or-too-small (often <code>max(a)</code> or 0) and an exclusive upper bound <code>hi</code> that is always feasible (often <code>sum(a)+1</code>). Write <code>feasible(x)</code> so that it is false for every <code>x</code> below the optimum and true for every <code>x</code> at or above it. For split-array, that check walks left to right, starts a new part whenever adding the next value would exceed <code>x</code>, and asks whether the number of parts is at most <code>k</code>. The same scan, with hours or days instead of parts, is Koko and the shipping problem.</p>
+<p>Then run the half-open firstTrue template you already know: while <code>lo &lt; hi</code>, <code>mid = lo + (hi - lo) / 2</code>, and set <code>hi = mid</code> if <code>feasible(mid)</code> else <code>lo = mid + 1</code>. When the loop ends, <code>lo</code> is the smallest feasible answer. The loop invariant is identical to ordinary binary search: everything below <code>lo</code> is known infeasible, everything at or above <code>hi</code> is known feasible. The only new work is writing and proving the check; the five search lines do not change.</p>
+<p>Walk <code>[7, 2, 5, 10, 8]</code> split into two parts. <code>lo</code> starts at <code>max(a) = 10</code>, because one item alone needs at least that much; <code>hi</code> starts at <code>sum + 1 = 33</code>, because one part containing everything always works. <code>feasible(14)</code> needs three parts, so every capacity at or below 14 is discarded. <code>feasible(18)</code> produces the split <code>[7, 2, 5] | [10, 8]</code> and uses exactly two parts, so 18 is feasible and the search collapses onto it. The construction was never built by a clever split; it fell out of the first true capacity.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
     <span class="callout__title">Say this out loud</span>
-    <p><em>"I am binary-searching the answer <code>x</code>. <code>feasible(x)</code> asks whether a budget of <code>x</code> is enough. That predicate is monotone, so the first true <code>x</code> is the optimum. I keep the half-open invariant: <code>[0, lo)</code> infeasible, <code>[hi, ∞)</code> feasible."</em></p>
+    <p><em>"I am binary-searching the answer <code>x</code>. <code>feasible(x)</code> asks whether a budget of <code>x</code> is enough. That predicate is monotone, so the first true <code>x</code> is the optimum. I keep the half-open invariant: <code>[0, lo)</code> infeasible, <code>[hi, ∞)</code> feasible."</em></p><p>In plain words, every value we have rejected is too small, every value we have accepted is big enough, and the answer is the first accepted value.</p>
   </div>
 </aside>
 
@@ -401,13 +402,13 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the answer type <code>x</code></strong> &mdash; a capacity, a rate, a distance, a day count.</li>
-  <li><strong>Write <code>feasible(x)</code></strong> as a boolean: true iff a budget of <code>x</code> is enough. Prove it is monotone.</li>
+  <li><strong>Name the answer type <code>x</code></strong> first &mdash; a capacity, a rate, a distance, or a day count &mdash; so the search space is a number line, not an array index.</li>
+  <li><strong>Write <code>feasible(x)</code></strong> as a boolean: true if and only if a budget of <code>x</code> is enough, and prove in one sentence that it is monotone.</li>
   <li><strong>Bound the search.</strong> <code>lo</code> = smallest conceivable answer (often <code>max(a)</code> or 0). <code>hi</code> = one past a proven-feasible value (often <code>sum(a)+1</code>).</li>
   <li><strong>Run firstTrue:</strong> <code>while (lo &lt; hi) { mid = lo + (hi-lo)/2; if (feasible(mid)) hi = mid; else lo = mid + 1; }</code></li>
-  <li><strong>Return <code>lo</code>.</strong> It is the smallest feasible <code>x</code>.</li>
+  <li><strong>Return <code>lo</code>.</strong> After the loop it is the smallest feasible <code>x</code>, because everything below it failed the check.</li>
   <li><strong>If the problem wants the largest feasible <code>x</code></strong>, search the first infeasible and return <code>lo - 1</code>, or invert the predicate.</li>
-  <li><strong>Reconstruct if asked:</strong> walk the same greedy with <code>x = lo</code> and record the cuts.</li>
+  <li><strong>Reconstruct if asked:</strong> walk the same greedy with <code>x = lo</code> and record the cuts, so the partition is recovered in one extra linear pass.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -558,7 +559,7 @@ flowchart TD
   <div class="complexity__derivation">
     <p>Each of the <code>O(log RANGE)</code> probes runs an <code>O(n)</code> scan, so</p>
     <p><span class="eq">T = O(n) &middot; log&#8322;(hi &minus; lo) = O(n log RANGE)</span></p>
-    <p>RANGE is typically <code>sum(a)</code> &le; <code>n &middot; max|a[i]|</code>. At <code>n = 10&#8309;</code> and <code>max = 10&#8313;</code> that is 30 probes, about 3 &times; 10&#8310; additions &mdash; fine. The brute linear scan of the answer space is <code>O(n &middot; RANGE)</code> and dies immediately.</p>
+    <p>RANGE is typically <code>sum(a)</code> &le; <code>n &middot; max|a[i]|</code>. At <code>n = 10&#8309;</code> and <code>max = 10&#8313;</code> that is 30 probes, about 3 &times; 10&#8310; additions &mdash; fine. The brute linear scan of the answer space is <code>O(n &middot; RANGE)</code> and dies immediately. At <code>n = 10&#8309;</code> and <code>RANGE = 10&#8313;</code> the binary-search version does about <code>30 &times; 10&#8309; = 3&times;10&#8310;</code> additions, under ten milliseconds, which is why the constraints are written that way.</p>
   </div>
 
   <table class="complexity__compare">
@@ -580,18 +581,18 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Off-by-one in the ceiling division</span>
-    <div class="pitfalls__bug"><code>hours += piles[i] / speed;</code> truncates. Koko needs <code>ceil(p / speed)</code> hours for a pile.</div>
+    <div class="pitfalls__bug"><code>hours += piles[i] / speed;</code> truncates toward zero, so a pile of 7 at speed 3 is counted as 2 hours instead of the 3 that Koko actually needs.</div>
     <div class="pitfalls__fix"><code>hours += (p + (long) speed - 1) / speed;</code>. Cast to <code>long</code> first or <code>p + speed</code> overflows.</div>
   </li>
   <li>
     <span class="pitfalls__title">Starting <code>lo</code> at 0 when 0 is not a legal answer</span>
-    <div class="pitfalls__bug">Koko with <code>speed = 0</code> divides by zero. Split-array with <code>cap = 0</code> is meaningless if items are positive.</div>
+    <div class="pitfalls__bug">Koko with <code>speed = 0</code> divides by zero, and split-array with <code>cap = 0</code> is meaningless if items are positive, yet both look like a natural lower bound.</div>
     <div class="pitfalls__fix">Lower bound is the tightest necessary value: <code>1</code> for a rate, <code>max(a)</code> for a capacity.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using <code>int</code> for the accumulator inside <code>feasible</code></span>
-    <div class="pitfalls__bug"><code>int hours</code> on Koko with <code>piles[i] = 1e9</code> and <code>speed = 1</code> overflows and the predicate flips.</div>
-    <div class="pitfalls__fix"><code>long</code> for every running sum / count inside the check.</div>
+    <div class="pitfalls__bug"><code>int hours</code> on Koko with <code>piles[i] = 1e9</code> and <code>speed = 1</code> overflows past <code>2&times;10&#8313;</code>, wraps negative, and the predicate flips from false to true.</div>
+    <div class="pitfalls__fix">Use <code>long</code> for every running sum or count inside the check, including the hours or parts accumulator.</div>
   </li>
   <li>
     <span class="pitfalls__title">Assuming feasibility is monotone without proving it</span>
@@ -654,35 +655,35 @@ flowchart TD
   <details class="followup">
     <summary>Prove that feasible is monotone for split-array.</summary>
     <div class="followup__body">
-      <p>If a split exists with every part &le; x, the same split has every part &le; x+1. So the set of feasible capacities is a suffix of the integers, and the first true value is well-defined.</p>
+      <p>If a split exists with every part &le; x, the same split has every part &le; x+1. So the set of feasible capacities is a suffix of the integers, and the first true value is well-defined. That suffix property is exactly the false-then-true shape firstTrue expects, so the search is legal and the smallest true capacity is the min-max sum.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Now return the actual parts, not just the min-max sum.</summary>
     <div class="followup__body">
-      <p>Run the same greedy with the optimal capacity: start a new part whenever adding the next element would exceed it. Because the capacity is optimal, this uses at most k parts. If you need exactly k, split leftover singleton parts from the right.</p>
+      <p>Run the same greedy with the optimal capacity: start a new part whenever adding the next element would exceed it. Because the capacity is optimal, this uses at most k parts. If you need exactly k, split leftover singleton parts from the right. Either way you reuse the check you already wrote; you do not invent a second construction.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What if k can be as large as n?</summary>
     <div class="followup__body">
-      <p>Then the answer is max(a): every element is its own part. Your lower bound already handles this; just make sure feasible returns true for cap = max(a) when k &ge; n.</p>
+      <p>Then the answer is max(a): every element is its own part. Your lower bound already handles this; just make sure feasible returns true for cap = max(a) when k &ge; n. At <code>n = 10&#8309;</code> this is a single pass to find the max, not a special case in the binary search, and a quick unit test is <code>splitArray(a, n) == max(a)</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you do it in O(n) expected time?</summary>
     <div class="followup__body">
-      <p>The decision tree of the search depends on the data, so you cannot skip the log in the comparison model for an arbitrary feasible. In practice the log is 30 and is not worth removing.</p>
+      <p>The decision tree of the search depends on the data, so you cannot skip the log in the comparison model for an arbitrary feasible. In practice the log is 30 and is not worth removing. A heap or a linear-time selection would need a different question, such as "k-th capacity", which this is not.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>The answer is a real number and the judge uses 1e-6 absolute error.</summary>
     <div class="followup__body">
-      <p>Loop 80 times (2^{-80} is far smaller than 1e-6 over any reasonable range) or iterate while hi-lo &gt; 1e-7. Returning (lo+hi)/2 is fine. Do not mix integer mid-rounding with doubles.</p>
+      <p>Loop 80 times (2^{-80} is far smaller than 1e-6 over any reasonable range) or iterate while hi-lo &gt; 1e-7. Returning (lo+hi)/2 is fine. Do not mix integer mid-rounding with doubles. Eighty iterations cost nothing next to the feasible check, and they remove any worry about the last bit of rounding.</p>
     </div>
   </details>
 </div>

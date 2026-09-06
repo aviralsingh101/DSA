@@ -22,7 +22,7 @@
   <p class="hero__tagline">Sort the interesting x-coordinates, keep an active set of segments that currently intersect the sweepline, and answer geometry / interval problems in one pass.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="greedy-classics.html">Greedy Classics</a>,
       <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps & Priority Queue</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Intersection of segments, union of rectangles, "how many intervals cover this point", closest pair, and meeting-rooms all become: sort events, process left-to-right, maintain the active y-structure.</p>
-<p>The sweepline is a vertical line that jumps from event to event (starts, ends, crossings). Between events the combinatorial structure is constant, so you only work at O(n) events.</p>
-<p>1D sweep is a sorted list of +1/-1 at endpoints (coverage). 2D sweep needs a balanced tree of y-coordinates. Closest pair is divide-and-conquer with a sweep strip.</p>
+<p>You are given a pile of intervals or rectangles on the plane, and you must answer something about how they overlap: how many rooms you need, the area of the union, whether any two segments cross, or the closest pair of points. Checking every pair is perfectly correct and costs about <code>n<sup>2</sup> / 2</code> comparisons. At a hundred thousand segments that is five billion pair tests, and the judge will cut you off long before you finish. The technique on this page is to stop looking at pairs and instead walk a vertical line from left to right, looking only at the objects that currently touch the line.</p>
+<p>That vertical line is the <em>sweepline</em>. It does not crawl continuously: it jumps from event to event, where an event is a start, an end, or a crossing. Between two consecutive events the set of objects that intersect the line cannot change, so the answer you care about (coverage, union height, closest pair in the strip) is constant on that whole open interval. You therefore do work only at <code>O(n)</code> x-coordinates instead of at every real x. A 1D coverage problem needs only a counter; a 2D union of rectangles needs a tree on the y-axis that can add a range and report how much of y is currently covered.</p>
+<p>In a real problem statement the signal is geometry or intervals sitting next to <code>n &le; 10<sup>5</sup></code>, with a question about overlap, union, or "right now as x moves". Meeting rooms, skyline, rectangle area, and closest pair all compress to the same three sentences: list the events, sort them, maintain an active structure. If the question is a static range sum on an array you already have prefix sums and you do not need a line. If the question is offline "count points in this rectangle", a Fenwick on compressed y after sorting x is the same idea with a different active structure.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Nothing interesting happens between event x-coordinates. Sort events, update an active set, query that set.</p>
+    <p>Nothing interesting happens between event x-coordinates, so you only work where the picture changes. Sort those events, update the set of objects that currently intersect the line, and query that set; the rest of the plane is combinatorially constant.</p>
   </div>
 </aside>
 
@@ -112,18 +112,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> for 1D. Rectangle union with a lazy segtree on compressed y is n log n. Closest pair n log n.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10<sup>5</sup></code> is the 1D signature: a sort of <code>2n</code> endpoints plus a counter. Rectangle union with a lazy segment tree on compressed y is the same <code>n log n</code> budget. Closest pair is also <code>n log n</code>. If <code>n</code> is a few thousand and you only need any-overlap, a pairwise check still works, but the sweep is the intended algorithm at the usual limits.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>1D: events (x, +1) and (x, -1) (process + before - or the reverse depending on closed/open intervals). Running counter is current coverage; max is the answer for meeting rooms.</p>
-<p>2D rectangles: events (x, y1, y2, +1/-1). A segment tree stores coverage of y-intervals and the measure of covered length. Area += (x_next - x) * covered_y.</p>
+<p>A 1D sweep stores events as pairs <code>(x, +1)</code> at each left endpoint and <code>(x, -1)</code> at each right endpoint. Sort by <code>x</code>, and at equal <code>x</code> decide the type order from the problem: for closed intervals where a touch counts as overlap, process the +1 first so coverage never dips to zero in between. A running integer <code>cover</code> is the number of intervals that currently contain the line; the maximum value <code>cover</code> ever takes is the number of meeting rooms, and the stretches where <code>cover &gt; 0</code> are the union of the intervals.</p>
+<p>A 2D sweep of rectangles uses the same x-events, but each event now carries a y-interval <code>[y1, y2]</code> and a sign. The active structure is a segment tree (or a Fenwick of coverage) on the compressed y-coordinates: it can add +1 or -1 on a y-range and report the <em>measure</em>, the total length of y that currently has coverage at least one. When the sweepline jumps from <code>x</code> to the next event <code>x_next</code>, you add <code>(x_next - x) &times; covered_y</code> to the area. That product is why the originals, not the ranks, are the lengths you multiply.</p>
+<p>Walk two intervals <code>[1, 3]</code> and <code>[2, 4]</code>. The events in order are +1 at 1, +1 at 2, -1 at 3, -1 at 4. After the first +1, coverage is 1. After the second, coverage is 2, which is the maximum overlap. The two minuses walk it back down to 0. If a third interval started exactly where the first ended, the type order at that shared x is what decides whether the touch counts. A skyline is the same walk with a multiset of heights instead of a counter: the active maximum height is the skyline y until the next wall.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After processing all events at x, the active structure represents exactly the objects that intersect the closed or half-open vertical line at x. The next event is the next x where that set changes.</p>
+    <p>After processing every event at a given <code>x</code>, the active structure represents exactly the objects that intersect the vertical line at <code>x</code> (closed or half-open, matching the type order you chose). The next event is the next x-coordinate where that set is allowed to change.</p><p>In plain words, the line only knows about objects it is currently stabbing, and between events that set is frozen, so you may charge a whole strip to one query of the active structure.</p><p>Interview sentence: <em>"I jump the line from event to event and query only the objects that currently touch it."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Equal-x order is part of the problem</span>
+    <p>A start and an end at the same <code>x</code> are not interchangeable. For closed intervals where a touch counts, process +1 before -1. For half-open intervals where a touch does not count, reverse it. Write the policy in a comment; do not leave it to <code>Arrays.sort</code> stability.</p>
   </div>
 </aside>
 
@@ -160,7 +169,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Intervals [1,3], [2,4]. Events: + at 1, + at 2, - at 3, - at 4.",
+          "note": "Intervals [1, 3] and [2, 4] produce four events: +1 at x=1, +1 at x=2, -1 at x=3, and -1 at x=4.",
           "active": [
             0
           ],
@@ -171,7 +180,7 @@
           }
         },
         {
-          "note": "+ at 2: cover=2. Max overlapping = 2.",
+          "note": "The second plus lands at x=2, coverage becomes 2, and that is the maximum overlap these two intervals ever reach.",
           "active": [
             1
           ],
@@ -182,7 +191,7 @@
           }
         },
         {
-          "note": "- at 3: cover=1.",
+          "note": "A minus at x=3 removes the first interval, so coverage drops back to 1 while the second interval is still active.",
           "active": [
             2
           ],
@@ -193,7 +202,7 @@
           }
         },
         {
-          "note": "- at 4: cover=0. Done.",
+          "note": "The last minus at x=4 removes the second interval, coverage returns to 0, and the sweep is finished.",
           "active": [
             3
           ],
@@ -204,7 +213,7 @@
           }
         },
         {
-          "note": "Tie at the same x: process + before - if intervals are closed and a touch counts as overlap; reverse if they do not.",
+          "note": "If a start and an end share an x, process the plus first when closed intervals should count a touch as overlap; reverse that when they should not.",
           "active": [
             1,
             2
@@ -216,7 +225,7 @@
           }
         },
         {
-          "note": "Skyline would store heights in a multiset as x hits left/right walls.",
+          "note": "A skyline uses the same x-walk but stores building heights in a multiset, so the active maximum is the skyline y until the next wall.",
           "active": [
             0
           ],
@@ -249,17 +258,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>List events</strong> (x, type, payload). Type order at equal x is part of the problem.</li>
-  <li><strong>Sort</strong> by x, then type.</li>
-  <li><strong>Init</strong> the active structure (counter, TreeSet, segment tree).</li>
-  <li><strong>Process</strong> each event: update active, then (if x changed) add the contribution of the previous strip.</li>
-  <li><strong>Query</strong> the active set when the statement asks about "right now".</li>
-  <li><strong>Compress y</strong> if the tree is an array-based segtree.</li>
+  <li><strong>List every event as (x, type, payload).</strong> Starts, ends, and crossings are the only x-coordinates where the stabbed set can change, so missing one of them silently drops a strip from the answer.</li>
+  <li><strong>Sort by x, then by the type order the problem needs.</strong> Equal-x order is a semantic choice, not a convenience: closed versus half-open intervals disagree on whether a touch counts, and the comparator is where that decision lives.</li>
+  <li><strong>Initialise the active structure empty.</strong> A counter for 1D coverage, a TreeMap multiset for skyline heights, or a segment tree on compressed y for rectangle measure: pick the structure that can answer the query you will ask at every jump.</li>
+  <li><strong>At each new x, first charge the previous strip, then apply the event.</strong> Area and union length use <code>(x - prevX) &times; measure</code>; applying the event first would charge the new set to the old width and the last strip would go missing.</li>
+  <li><strong>Query the active set when the statement asks about "right now".</strong> Maximum coverage, current skyline height, or closest y-neighbour in the strip: that query is legal only after every event at this x has been applied.</li>
+  <li><strong>Compress y before allocating an array-based tree.</strong> Raw coordinates up to <code>10<sup>9</sup></code> cannot index a segment tree; collecting and ranking the y-endpoints gives a tree of size <code>O(n)</code> whose ranks still preserve order.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Two overlapping intervals walked left to right. Each row is one event: the coverage after applying it, and the maximum overlap seen so far.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -267,12 +276,12 @@ flowchart TD
       <tr><th>event</th><th>cover</th><th>maxC</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>+1</td><td>1</td><td>1</td><td>Intervals [1,3], [2,4]. Events: + at 1, + at 2, - at 3, - at 4.</td></tr>
-      <tr><td>+2</td><td>2</td><td>2</td><td>+ at 2: cover=2. Max overlapping = 2.</td></tr>
-      <tr><td>-3</td><td>1</td><td>2</td><td>- at 3: cover=1.</td></tr>
-      <tr><td>-4</td><td>0</td><td>2</td><td>- at 4: cover=0. Done.</td></tr>
-      <tr><td>tie</td><td>policy</td><td>2</td><td>Tie at the same x: process + before - if intervals are closed and a touch counts as overlap; reverse if they do not.</td></tr>
-      <tr><td>skyline</td><td>multiset</td><td>h</td><td>Skyline would store heights in a multiset as x hits left/right walls.</td></tr>
+      <tr class="trace-table__row--change"><td>+1</td><td>1</td><td>1</td><td>Intervals [1, 3] and [2, 4] produce four events: +1 at x=1, +1 at x=2, -1 at x=3, and -1 at x=4.</td></tr>
+      <tr><td>+2</td><td>2</td><td>2</td><td>The second plus lands at x=2, coverage becomes 2, and that is the maximum overlap these two intervals ever reach.</td></tr>
+      <tr><td>-3</td><td>1</td><td>2</td><td>A minus at x=3 removes the first interval, so coverage drops back to 1 while the second interval is still active.</td></tr>
+      <tr><td>-4</td><td>0</td><td>2</td><td>The last minus at x=4 removes the second interval, coverage returns to 0, and the sweep is finished.</td></tr>
+      <tr><td>tie</td><td>policy</td><td>2</td><td>If a start and an end share an x, process the plus first when closed intervals should count a touch as overlap; reverse that when they should not.</td></tr>
+      <tr><td>skyline</td><td>multiset</td><td>h</td><td>A skyline uses the same x-walk but stores building heights in a multiset, so the active maximum is the skyline y until the next wall.</td></tr>
     </tbody>
   </table>
 </div>
@@ -385,7 +394,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>O(n) events, sort O(n log n), each update O(log n) in a tree or O(1) for a counter. Rectangle area is the same with a segtree measure.</p>
+    <p>There are <code>2n</code> endpoints, or <code>O(n + k)</code> events if crossings are included, and sorting them is <code>n log n</code> comparisons. Each event then updates the active structure: a coverage counter is constant time, a balanced tree or segment tree is <code>log n</code> per update. Over <code>n</code> events that is another <code>n log n</code>, which is absorbed into the sort.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> you sort two hundred thousand events, about <code>3.6 &times; 10<sup>6</sup></code> comparisons, then do as many tree updates. Pairwise overlap on the same input is about <code>5 &times; 10<sup>9</sup></code> tests and will time out. Rectangle union is the same <code>n log n</code> once y is compressed; the segment tree adds a small constant but does not change the class.</p>
   </div>
 
   <table class="complexity__compare">
@@ -407,28 +417,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Same-x order</span>
-    <div class="pitfalls__bug">A segment ends at x and another starts at x. Processing - first makes coverage 0 in between and you miss a touch (or the reverse).</div>
-    <div class="pitfalls__fix">Decide closed/open. For max overlap of closed intervals, process + first.</div>
+    <div class="pitfalls__bug">A segment ending at <code>x</code> and another starting at <code>x</code> look interchangeable in the sort, so processing the minus first drops coverage to 0 in between and a closed touch is missed (or the reverse, and an open touch is counted).</div>
+    <div class="pitfalls__fix">Decide closed versus half-open before you write the comparator. For maximum overlap of closed intervals, process +1 before -1, and test two intervals that only share an endpoint.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using a HashSet of active y without duplicates</span>
-    <div class="pitfalls__bug">Two segments at the same y. TreeSet of y collapses them.</div>
-    <div class="pitfalls__fix">Multiset (TreeMap counts) or store unique ids.</div>
+    <div class="pitfalls__bug">Two segments at the same y look like one key, so a TreeSet of raw y-values collapses them and the second removal deletes the first segment that is still alive.</div>
+    <div class="pitfalls__fix">Store a multiset (TreeMap of counts) or key the set by a unique segment id. Two identical y-coordinates must survive as two active objects.</div>
   </li>
   <li>
     <span class="pitfalls__title">Integer overflow on area</span>
-    <div class="pitfalls__bug">Width * coveredHeight for 1e9 coordinates.</div>
-    <div class="pitfalls__fix"><code>long</code>.</div>
+    <div class="pitfalls__bug">Width times covered height with coordinates up to <code>10<sup>9</sup></code> fits the mental picture of an <code>int</code> product, but <code>10<sup>9</sup> &times; 10<sup>9</sup></code> overflows 32 bits and the area wraps to a small wrong number.</div>
+    <div class="pitfalls__fix">Accumulate the area in a <code>long</code>, and cast at least one factor to <code>long</code> before multiplying. Test a single rectangle of width and height <code>10<sup>9</sup></code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to add the last strip</span>
-    <div class="pitfalls__bug">You update at event x but never add (x - prevX) * measure before the last event.</div>
-    <div class="pitfalls__fix">On x change: add, then update prevX, then apply the event. Or apply then add using next x.</div>
+    <div class="pitfalls__bug">Updating the tree at event <code>x</code> looks complete because the active set is now right, but the strip from the previous x to this one was never charged, so the last rectangle is silently dropped from the area.</div>
+    <div class="pitfalls__fix">On every x-change: add <code>(x - prevX) &times; measure</code>, then update <code>prevX</code>, then apply the event. The last event still has a previous strip behind it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Y not compressed</span>
-    <div class="pitfalls__bug">segtree of size 1e9.</div>
-    <div class="pitfalls__fix">Collect y's, unique, map to 0..2n.</div>
+    <div class="pitfalls__bug">Allocating a segment tree of size <code>10<sup>9</sup></code> looks like it matches the coordinate range, then the process runs out of memory before the first query.</div>
+    <div class="pitfalls__fix">Collect every y-endpoint, unique them, and map each to a rank in <code>0 .. 2n</code>. Ranks index the tree; original y-values still supply the lengths.</div>
   </li>
 </ul>
 
@@ -470,28 +480,28 @@ flowchart TD
   <details class="followup">
     <summary>Sweep vs sort+greedy for meeting rooms?</summary>
     <div class="followup__body">
-      <p>They are the same 1D sweep. The heap-of-ends version is also a sweep that only stores active ends.</p>
+      <p>They are the same 1D sweep written two ways. The +1/-1 counter version sorts every endpoint and the running maximum is the room count. The heap-of-ends version sorts meetings by start and pops every end that is already past, which is a sweep that only stores the currently open ends. Both are <code>n log n</code>; pick the one whose structure you already have typed.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you get union length of intervals?</summary>
     <div class="followup__body">
-      <p>Same +1/-1. When coverage goes 0	o1 start a run; when it returns to 0 add the length. Or add Δx whenever coverage &gt; 0.</p>
+      <p>Use the same +1/-1 events. Whenever coverage steps from 0 to 1 you start a run; whenever it returns to 0 you add the length of that run to the answer. Equivalently, on every x-change add <code>&Delta;x</code> whenever the current coverage is already positive. Closed versus open endpoints only change the type order, not this charging rule.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why a segment tree for y?</summary>
     <div class="followup__body">
-      <p>You need to add +1 on a y-interval and query the measure of y with coverage &gt; 0. That is lazy coverage, not a TreeSet (TreeSet cannot add a range of y at once).</p>
+      <p>A rectangle event asks you to add +1 on a whole y-interval at once and then to report the measure of y that currently has coverage at least one. A TreeSet can insert a single y but cannot paint a range. A lazy coverage segment tree (or a Fenwick of difference plus a length table) is the structure that supports both operations in <code>log n</code> after y is compressed.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Offline 2D points "count in rectangle"?</summary>
     <div class="followup__body">
-      <p>Sort points and queries by x, Fenwick on compressed y. It is a sweep, just with Fenwick as the active structure.</p>
+      <p>Sort the points and the query corners by x, then walk left to right inserting each point's y into a Fenwick of compressed y-ranks. A query "how many points have x &le; X and y in [y1, y2]" is then one prefix read at that X. It is a sweep whose active structure is a Fenwick rather than a coverage tree; the line still only moves to interesting x-coordinates.</p>
     </div>
   </details>
 </div>

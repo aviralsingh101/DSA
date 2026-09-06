@@ -38,8 +38,8 @@
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
 <p>Every problem statement contains a hint that is impossible to hide: the bounds. A setter who wants an <code>O(n log n)</code> solution must set <code>n</code> large enough to kill <code>O(n&sup2;)</code> and small enough that <code>O(n log n)</code> passes. That pins the bound into a narrow window. Read the window backwards and you recover the intended complexity, which usually recovers the intended <em>technique</em>.</p>
-<p>This is the specific skill that decays when you stop competing. Experienced engineers still know what a segment tree is; what they lose is the reflex that says "<code>n &le; 20</code>, therefore subsets, therefore bitmask" in under two seconds. Recovering that reflex is worth more than re-reading any single algorithm.</p>
-<p>It also protects you in interviews where no constraints are given. Ask for them. "How large is <code>n</code>?" is not a stalling question &mdash; it is the question that determines whether the expected answer is two pointers or a suffix automaton, and asking it signals that you think about cost before you think about code.</p>
+<p>This is the specific skill that decays when you stop competing. Experienced engineers still know what a segment tree is; what they lose is the reflex that says "<code>n &le; 20</code>, therefore subsets, therefore bitmask" in under two seconds. Recovering that reflex is worth more than re-reading any single algorithm, because it tells you which page of this course to open before you have even finished the statement.</p>
+<p>It also protects you in interviews where no constraints are given. Ask for them. "How large is <code>n</code>?" is not a stalling question &mdash; it is the question that determines whether the expected answer is two pointers or a suffix automaton, and asking it signals that you think about cost before you think about code. A setter who answers "up to a hundred thousand" has just told you that a nested pair loop is dead, and you should say that deduction out loud before you pick a data structure.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -142,14 +142,14 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Java's budget is roughly <code>10&#8312;</code> simple operations per second. Halve it for <code>HashMap</code>-heavy code, quarter it for boxed collections, and add 0.5&ndash;1&nbsp;s of JVM startup on some judges.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Java's budget is roughly <code>10&#8312;</code> simple operations per second. Halve it for <code>HashMap</code>-heavy code, quarter it for boxed collections, and add 0.5&ndash;1&nbsp;s of JVM startup on some judges. A bound that sits just under that budget is almost always the intended class, not a coincidence.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: read the bound backwards</h2>
 <p>A setter chooses bounds to separate solutions. If <code>O(n&sup2;)</code> should fail and <code>O(n log n)</code> should pass, <code>n</code> has to land somewhere around <code>10&#8309;</code>. There is no way to write the statement without leaking that. So the procedure is: take the bound, compute which complexity classes fit inside <code>10&#8312;</code> operations, and then ask which techniques deliver those classes.</p>
 <p>The second half of that procedure is the part people forget. Knowing "<code>n &le; 20</code> means <code>O(2&#8319;)</code>" is only half an answer; the useful reflex is "<code>O(2&#8319;)</code> over <code>n &le; 20</code> means the state is a <em>subset</em>, so I am enumerating masks or writing bitmask DP". Complexity classes map to a small number of state shapes, and that mapping is what you are drilling.</p>
-<p>Two refinements matter in practice. First, look for a <strong>second, smaller bound</strong>: when <code>n</code> is huge but <code>a<sub>i</sub> &le; 100</code> or <code>k &le; 10</code>, the small parameter is almost always the DP dimension. Second, unusual bounds are signatures: <code>n &le; 40</code> means meet in the middle, <code>n &le; 500</code> means <code>O(n&sup3;)</code>, and a bound of <code>10&sup1;&#8312;</code> means you will never iterate over the input at all.</p>
+<p>Two refinements matter in practice. First, look for a <strong>second, smaller bound</strong>: when <code>n</code> is huge but <code>a<sub>i</sub> &le; 100</code> or <code>k &le; 10</code>, the small parameter is almost always the DP dimension. Second, unusual bounds are signatures: <code>n &le; 40</code> means meet in the middle, <code>n &le; 500</code> means <code>O(n&sup3;)</code>, and a bound of <code>10&sup1;&#8312;</code> means you will never iterate over the input at all. Walk one line as a check: <code>1 &le; n &le; 2&times;10&#8309;</code> with a request for the longest increasing subsequence forces <code>O(n log n)</code> patience sorting, because the quadratic DP at that size is about <code>4&times;10&sup1;&#8304;</code> steps.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
@@ -594,7 +594,7 @@
           }
         },
         {
-          "note": "n = 3000 gives 9e6. Comfortable.",
+          "note": "n = 3000 gives 9e6 operations. Still comfortable in Java, even with a slightly heavy inner loop.",
           "active": [
             2
           ],
@@ -796,10 +796,10 @@ flowchart TD
   <li><strong>Pick the largest one</strong> and compute the operation budget: about <code>10&#8312;</code> divided by nothing if you use primitive arrays, by 2&ndash;5 if you use collections.</li>
   <li><strong>List the complexity classes that fit.</strong> Usually only two survive, which is the whole point of the exercise.</li>
   <li><strong>Look for a second, smaller bound.</strong> If <code>k &le; 10</code> or <code>a<sub>i</sub> &le; 100</code>, that parameter is almost certainly a DP dimension or a state.</li>
-  <li><strong>Translate the class into a state shape:</strong> subsets, prefix pairs, intervals, sorted order, digits, or all pairs.</li>
+  <li><strong>Translate the class into a state shape:</strong> subsets, prefix pairs, intervals, sorted order, digits, or all pairs &mdash; that mapping is what you are actually drilling.</li>
   <li><strong>Check the memory limit</strong> against your intended table. If it does not fit, the DP is meant to be rolled to one or two rows.</li>
-  <li><strong>Sanity-check the output type.</strong> Bounds near <code>10&#8313;</code> with any summation or multiplication mean <code>long</code>.</li>
-  <li><strong>Only now start solving</strong>, with the target complexity already fixed.</li>
+  <li><strong>Sanity-check the output type.</strong> Bounds near <code>10&#8313;</code> with any summation or multiplication mean the product no longer fits in a 32-bit <code>int</code>, so use <code>long</code>.</li>
+  <li><strong>Only now start solving</strong>, with the target complexity already fixed so you do not implement a correct idea that the bound has already ruled out.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->

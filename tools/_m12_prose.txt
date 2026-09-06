@@ -1,0 +1,211 @@
+﻿
+m12.mjs :: kmp-and-prefix-function  (36 thin fields)
+   - why[0] 32w < 55w
+   - why[1] 46w < 55w
+   - why[2] 33w < 55w
+   - why total 111w < 220w
+   - insight 29w < 30w
+   - core has 2 paras < 3
+   - core[0] 24w < 55w
+   - core[1] 34w < 55w
+   - core total 58w < 220w
+   - invariant 34w < 45w
+   - step[0] 11w < 18w
+   - step[1] 8w < 18w
+   - step[2] 7w < 18w
+   - step[3] 3w < 18w
+   - step[4] 4w < 18w
+   - step[5] 10w < 18w
+   - pitfall[0].bug 16w < 20w
+   - pitfall[0].fix 13w < 15w
+   - pitfall[1].bug 11w < 20w
+   - pitfall[2].bug 11w < 20w
+   - pitfall[2].fix 9w < 15w
+   - pitfall[3].bug 17w < 20w
+   - pitfall[3].fix 7w < 15w
+   - pitfall[4].bug 14w < 20w
+   - pitfall[4].fix 14w < 15w
+   - followup[0] 34w < 45w
+   - followup[1] 25w < 45w
+   - followup[2] 20w < 45w
+   - followup[3] 17w < 45w
+   - derivation 34w < 80w
+   - constraint 15w < 30w
+   - dryRun.intro 9w < 20w
+   - kmp-and-prefix-functionViz.frame[2] 8w < 9w
+   - kmp-and-prefix-functionViz.frame[3] 8w < 9w
+   - kmp-and-prefix-functionViz.frame[4] 8w < 9w
+   - kmp-and-prefix-functionViz.frame[5] 7w < 9w
+
+m12.mjs :: z-function  (33 thin fields)
+   - why[0] 33w < 55w
+   - why[1] 46w < 55w
+   - why[2] 29w < 55w
+   - why total 108w < 220w
+   - insight 28w < 30w
+   - core has 2 paras < 3
+   - core[0] 47w < 55w
+   - core[1] 17w < 55w
+   - core total 64w < 220w
+   - invariant 35w < 45w
+   - step[0] 12w < 18w
+   - step[1] 4w < 18w
+   - step[2] 5w < 18w
+   - step[3] 7w < 18w
+   - step[4] 7w < 18w
+   - step[5] 6w < 18w
+   - pitfall[0].bug 11w < 20w
+   - pitfall[0].fix 5w < 15w
+   - pitfall[1].fix 6w < 15w
+   - pitfall[2].bug 12w < 20w
+   - pitfall[2].fix 7w < 15w
+   - pitfall[3].bug 12w < 20w
+   - pitfall[3].fix 5w < 15w
+   - pitfall[4].bug 6w < 20w
+   - pitfall[4].fix 7w < 15w
+   - followup[0] 27w < 45w
+   - followup[1] 28w < 45w
+   - followup[2] 19w < 45w
+   - followup[3] 22w < 45w
+   - derivation 24w < 80w
+   - constraint 15w < 30w
+   - dryRun.intro 9w < 20w
+   - z-functionViz.frame[4] 4w < 9w
+
+m12.mjs :: rolling-hash  (36 thin fields)
+   - why[0] 42w < 55w
+   - why[1] 45w < 55w
+   - why[2] 29w < 55w
+   - why total 116w < 220w
+   - insight 25w < 30w
+   - core has 2 paras < 3
+   - core[0] 32w < 55w
+   - core[1] 40w < 55w
+   - core total 72w < 220w
+   - invariant 25w < 45w
+   - step[0] 16w < 18w
+   - step[1] 10w < 18w
+   - step[2] 10w < 18w
+   - step[3] 14w < 18w
+   - step[4] 9w < 18w
+   - step[5] 15w < 18w
+   - pitfall[0].bug 16w < 20w
+   - pitfall[0].fix 5w < 15w
+   - pitfall[1].bug 13w < 20w
+   - pitfall[1].fix 12w < 15w
+   - pitfall[2].bug 12w < 20w
+   - pitfall[2].fix 14w < 15w
+   - pitfall[3].bug 9w < 20w
+   - pitfall[3].fix 10w < 15w
+   - pitfall[4].bug 10w < 20w
+   - pitfall[4].fix 8w < 15w
+   - followup[0] 29w < 45w
+   - followup[1] 31w < 45w
+   - followup[2] 25w < 45w
+   - followup[3] 26w < 45w
+   - derivation 25w < 80w
+   - constraint 20w < 30w
+   - dryRun.intro 9w < 20w
+   - rolling-hashViz.frame[1] 8w < 9w
+   - rolling-hashViz.frame[2] 8w < 9w
+   - rolling-hashViz.frame[3] 7w < 9w
+
+m12.mjs :: manacher  (30 thin fields)
+   - why[0] 43w < 55w
+   - why[1] 33w < 55w
+   - why[2] 27w < 55w
+   - why total 103w < 220w
+   - insight 21w < 30w
+   - core has 2 paras < 3
+   - core[0] 36w < 55w
+   - core[1] 19w < 55w
+   - core total 55w < 220w
+   - invariant 34w < 45w
+   - step[0] 10w < 18w
+   - step[1] 5w < 18w
+   - step[3] 9w < 18w
+   - step[4] 7w < 18w
+   - step[5] 16w < 18w
+   - pitfall[0].bug 13w < 20w
+   - pitfall[0].fix 6w < 15w
+   - pitfall[2].bug 11w < 20w
+   - pitfall[2].fix 4w < 15w
+   - pitfall[3].bug 8w < 20w
+   - pitfall[3].fix 6w < 15w
+   - pitfall[4].bug 8w < 20w
+   - pitfall[4].fix 12w < 15w
+   - followup[0] 19w < 45w
+   - followup[1] 33w < 45w
+   - followup[2] 15w < 45w
+   - followup[3] 18w < 45w
+   - derivation 23w < 80w
+   - constraint 21w < 30w
+   - dryRun.intro 9w < 20w
+
+m12.mjs :: suffix-array-and-lcp  (33 thin fields)
+   - why[0] 48w < 55w
+   - why[1] 41w < 55w
+   - why[2] 29w < 55w
+   - why total 118w < 220w
+   - insight 27w < 30w
+   - core has 2 paras < 3
+   - core[0] 38w < 55w
+   - core[1] 22w < 55w
+   - core total 60w < 220w
+   - invariant 26w < 45w
+   - step[0] 9w < 18w
+   - step[1] 10w < 18w
+   - step[2] 6w < 18w
+   - step[3] 7w < 18w
+   - step[4] 7w < 18w
+   - step[5] 9w < 18w
+   - pitfall[0].bug 9w < 20w
+   - pitfall[0].fix 9w < 15w
+   - pitfall[1].bug 14w < 20w
+   - pitfall[1].fix 10w < 15w
+   - pitfall[2].fix 9w < 15w
+   - pitfall[3].bug 9w < 20w
+   - pitfall[3].fix 8w < 15w
+   - pitfall[4].bug 5w < 20w
+   - pitfall[4].fix 2w < 15w
+   - followup[1] 31w < 45w
+   - followup[2] 14w < 45w
+   - followup[3] 20w < 45w
+   - derivation 33w < 80w
+   - constraint 24w < 30w
+   - dryRun.intro 9w < 20w
+   - suffix-array-and-lcpViz.frame[2] 7w < 9w
+   - suffix-array-and-lcpViz.frame[5] 8w < 9w
+
+m12.mjs :: aho-corasick  (28 thin fields)
+   - why[0] 49w < 55w
+   - why[1] 36w < 55w
+   - why[2] 22w < 55w
+   - why total 107w < 220w
+   - insight 29w < 30w
+   - core has 2 paras < 3
+   - core[0] 35w < 55w
+   - core[1] 24w < 55w
+   - core total 59w < 220w
+   - invariant 41w < 45w
+   - step[0] 8w < 18w
+   - step[1] 13w < 18w
+   - step[2] 16w < 18w
+   - step[3] 9w < 18w
+   - step[4] 11w < 18w
+   - step[5] 9w < 18w
+   - pitfall[0].bug 16w < 20w
+   - pitfall[0].fix 11w < 15w
+   - pitfall[1].fix 6w < 15w
+   - pitfall[3].bug 5w < 20w
+   - pitfall[3].fix 10w < 15w
+   - pitfall[4].bug 8w < 20w
+   - pitfall[4].fix 8w < 15w
+   - followup[1] 39w < 45w
+   - followup[2] 29w < 45w
+   - followup[3] 26w < 45w
+   - derivation 46w < 80w
+   - dryRun.intro 9w < 20w
+
+0/6 topics read like a first-time explanation
+6 topic(s) still too compressed

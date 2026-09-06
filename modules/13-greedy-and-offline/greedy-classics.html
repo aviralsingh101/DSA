@@ -22,7 +22,7 @@
   <p class="hero__tagline">A field guide to the greedy shapes you will actually be handed: intervals, jumps, gas, candies, Huffman-like merging, and scheduling.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="greedy-foundations.html">Greedy Foundations</a>,
       <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps & Priority Queue</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Once the proof toolkit exists, recognition is the remaining skill. These patterns share a sort key and a one-pass decision; mixing the keys is the usual bug.</p>
-<p>Intervals: finish time, or "min arrows / rooms" as a sweep. Jumps: farthest reach. Gas: prefix of gas-cost, start after the minimum prefix. Candies / ratings: two passes. Merging files: always merge two smallest (Huffman / heap).</p>
-<p>Interviewers chain them: "now the weighted version" (DP), "now k rooms" (heap of end times). Know which upgrade kills the greedy.</p>
+<p>You are given one of a handful of shapes that interviews and contests recycle: a list of intervals to pack, an array of jump lengths, a circular gas route, ratings that must beat their neighbours, or files that must be merged two at a time. Each shape has exactly one sort key and one linear pass, and mixing the keys is the usual wrong submission. The previous page is the proof toolkit; this page is the field guide that says which key belongs to which object, so you do not spend the first ten minutes reinventing activity selection under a new name.</p>
+<p>The obvious alternative is to write a DP for every one of them. Min-jumps-to-index is a correct DP, weighted interval scheduling is a correct DP, and both die at <code>n = 10<sup>5</sup></code> if the state is quadratic. What the classics buy is a linear or <code>n log n</code> scan once the key is named: sort intervals by finish, walk jumps in one BFS-shaped window, find the deepest gas-cost prefix, run two slope passes on ratings, or pop a heap of file sizes. At a hundred thousand items that is a couple of million operations, not a hundred million DP transitions.</p>
+<p>In a real problem statement the signal is the object itself sitting next to those limits. "Maximum number of non-overlapping intervals" is earliest finish. "Minimum jumps to the last index" is farthest reach in the current window. "Circular tour, unique start" is the index after the minimum prefix. Interviewers then chain an upgrade: "now each interval has a profit" kills the greedy and you write DP; "now you have <code>k</code> rooms" keeps a greedy but upgrades the structure to a heap of end times. Knowing which upgrade kills the key is the rest of the skill.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Name the sort key in one phrase before you touch the keyboard. If you cannot, you do not yet know which classic it is.</p>
+    <p>Name the sort key in one phrase before you touch the keyboard: earliest finish, farthest in the window, start after the worst prefix, two slope passes, or always merge the two lightest. If you cannot say that phrase, you do not yet know which classic it is.</p>
   </div>
 </aside>
 
@@ -112,18 +112,28 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> All of these are n log n or n. If you wrote DP on n=1e5 intervals, you picked the weighted variant by mistake — or the unweighted one.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> All of these run in <code>n</code> or <code>n log n</code>, so <code>n = 10<sup>5</sup></code> is the intended budget. If you wrote a quadratic DP on a hundred thousand intervals you picked the weighted variant by mistake, or you missed that the unweighted count is a sort. A heap of <code>k</code> end times is still this family; a profit on each interval is not.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Jump Game II: the current interval [L,R] was reachable in s jumps. Scan it for the farthest index, which becomes the next R. That is BFS-on-array without a queue.</p>
-<p>Gas: if total gas &lt; total cost, impossible. Otherwise the unique start is the index after the minimum prefix of (gas-cost). Proof: that prefix is the deepest deficit; starting just after it never goes negative.</p>
+<p>Jump Game II keeps three integers. <code>s</code> is how many jumps you have already committed to, <code>R</code> is the farthest index those <code>s</code> jumps can reach, and <code>farthest</code> is the farthest index you have seen while scanning the current window <code>[L, R]</code>. When the scan index <code>i</code> hits <code>R</code>, you must jump: increment <code>s</code> and set <code>R</code> to <code>farthest</code>. That window is a BFS layer on the array without a queue, so the first time <code>R</code> covers the last index the jump count is shortest. Loop only to <code>n-2</code>, because landing on the last index does not spend another jump.</p>
+<p>Gas uses a running prefix of <code>gas[i] - cost[i]</code>. If the total over the whole circle is negative the tour is impossible and you return <code>-1</code> immediately. Otherwise there is a unique start: the index just after the minimum prefix, because that prefix is the deepest deficit on the circle and starting immediately after it is the only way the tank never goes negative. You can compute the same answer with a tank variable that resets at every local crash; both views are the same one-pass scan.</p>
+<p>Walk the jump array <code>[2, 3, 1, 1, 4]</code>. From index 0 you can reach 2, so the first window is <code>[1, 2]</code> after one jump. Scanning that window, index 1 can reach 4 and index 2 can reach 3, so <code>farthest</code> becomes 4. The second jump's window already contains the last index, and the answer is 2. The same page's gas sample <code>gas = [1,2,3,4,5]</code>, <code>cost = [3,4,5,1,2]</code> has prefixes <code>-2, -4, -6, -3, 0</code>; the minimum sits at index 2, so the start is 3, and the tank stays non-negative from there.</p>
+<p>Candies and Huffman close the field guide. Ratings need two slope passes: left-to-right enforce "more than the left neighbour", right-to-left enforce the right neighbour, then take the max at each index &mdash; one pass misses a valley. File merging always pops the two lightest sizes from a heap, pays their sum, and pushes the sum back, because every later merge will pay that combined size again. That last fact is the exchange: swapping a heavier pair earlier only increases every ancestor's cost.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Each classic has one invariant: activity — last-finish is minimal among k-sets; jumps — [0,R] is exactly the set reachable in ≤ s jumps; gas — prefix surplus is minimised at start-1.</p>
+    <p>Each classic has one invariant that the pass maintains: activity &mdash; the last finish among any <code>k</code> taken jobs is minimal for greedy; jumps &mdash; <code>[0, R]</code> is exactly the set reachable in at most <code>s</code> jumps; gas &mdash; the prefix surplus is minimised at <code>start - 1</code>.</p><p>In plain words, name the number the scan is protecting (earliest free time, farthest reach, deepest deficit, neighbour slopes, or lightest pair) and refuse to update it with a different key.</p><p>Interview sentence: <em>"I name the key first; the pass only protects that number."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The upgrade that kills the key</span>
+    <p>Weights on intervals turn activity selection into DP. A budget of <code>k</code> rooms keeps a greedy but needs a heap of end times. If the interviewer adds either sentence, say which upgrade you are making before you touch the keyboard.</p>
   </div>
 </aside>
 
@@ -155,7 +165,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Jump Game II on [2,3,1,1,4]. s=0, window [0,0], farthest=2.",
+          "note": "Jump Game II on [2, 3, 1, 1, 4]. Zero jumps so far, the window is just index 0, and from there farthest is 2.",
           "active": [
             0
           ],
@@ -166,7 +176,7 @@
           }
         },
         {
-          "note": "Window ends: one jump covers [1,2]. Scan them: from 1 can reach 1+3=4, from 2 reach 2+1=3. farthest=4.",
+          "note": "One jump now covers the window [1, 2]. Index 1 can reach 4 and index 2 can reach 3, so farthest becomes 4.",
           "active": [
             1,
             2
@@ -178,7 +188,7 @@
           }
         },
         {
-          "note": "Second jump window [3,4] already includes n-1. Answer 2.",
+          "note": "The second jump opens the window [3, 4], which already contains the last index, so the answer is 2 and we stop.",
           "active": [
             4
           ],
@@ -189,7 +199,7 @@
           }
         },
         {
-          "note": "Gas example [1,2,3,4,5] cost [3,4,5,1,2]. prefix of gas-cost: -2,-4,-6,-3,0. Min at index 2, start at 3.",
+          "note": "Gas [1,2,3,4,5] against cost [3,4,5,1,2] has prefixes -2, -4, -6, -3, 0. The minimum sits at index 2, so the start is 3.",
           "active": [
             3
           ],
@@ -200,7 +210,7 @@
           }
         },
         {
-          "note": "Candies [1,0,2]: left pass [1,1,2], right pass [2,1,2], sum 5.",
+          "note": "Candies on ratings [1, 0, 2]: the left pass writes [1, 1, 2], the right pass writes [2, 1, 2], and the sum of the maxes is 5.",
           "active": [
             0,
             1,
@@ -213,7 +223,7 @@
           }
         },
         {
-          "note": "Huffman: files 1,2,3,4. Merge 1+2=3, then 3+3=6, then 6+4=10. Total cost 3+6+10=19.",
+          "note": "Huffman on files 1, 2, 3, 4 merges 1+2=3, then 3+3=6, then 6+4=10. The paid cost is 3+6+10=19, not just the final 10.",
           "active": [
             0,
             1
@@ -251,17 +261,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Classify</strong> the object: interval, jump, circular, rating, merge.</li>
-  <li><strong>Sort or heap</strong> with the matching key.</li>
-  <li><strong>One pass</strong> maintaining the invariant (last end, farthest, prefix, slope, heap pop).</li>
-  <li><strong>Handle impossible</strong> (gas total, jump that cannot grow R).</li>
-  <li><strong>Upgrade check:</strong> weights? k resources? → DP or a heap of k.</li>
-  <li><strong>Reconstruct</strong> if asked: store parent jumps / chosen indices.</li>
+  <li><strong>Classify the object first.</strong> Say whether you are looking at intervals, a jump array, a circular surplus, neighbour ratings, or a merge cost, because that sentence picks the key and everything else follows from it.</li>
+  <li><strong>Sort or heap with that matching key.</strong> Finish times, a min-heap of ends, a min-heap of file sizes: using the wrong structure here is how meeting-rooms becomes a quadratic nested loop.</li>
+  <li><strong>Run one pass that protects the invariant.</strong> Last finish, farthest reach, prefix surplus, left/right slopes, or the two lightest sizes: update only that number, and refuse a second key mid-scan.</li>
+  <li><strong>Handle the impossible cases explicitly.</strong> A gas total below zero, or a jump window whose farthest cannot grow, must return failure; skipping the check still produces a start index that looks plausible.</li>
+  <li><strong>Ask which upgrade the interviewer just added.</strong> Weights on intervals are DP; <code>k</code> rooms stay greedy with a heap of ends. Saying the upgrade out loud stops you from shipping the unweighted scan on the weighted problem.</li>
+  <li><strong>Reconstruct only if asked.</strong> Store the parent jump or the chosen indices during the same pass; a second walk that re-sorts by a different key will not match the proof you just used.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>One jump-game window, then the matching gas, candy, and Huffman traces. Each row names the key the scan is protecting at that moment.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -269,12 +279,12 @@ flowchart TD
       <tr><th>s</th><th>R</th><th>farthest</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>2</td><td>Jump Game II on [2,3,1,1,4]. s=0, window [0,0], farthest=2.</td></tr>
-      <tr><td>1</td><td>2</td><td>4</td><td>Window ends: one jump covers [1,2]. Scan them: from 1 can reach 1+3=4, from 2 reach 2+1=3. farthest=4.</td></tr>
-      <tr><td>2</td><td>4</td><td>4</td><td>Second jump window [3,4] already includes n-1. Answer 2.</td></tr>
-      <tr><td>gas</td><td>start 3</td><td>ok</td><td>Gas example [1,2,3,4,5] cost [3,4,5,1,2]. prefix of gas-cost: -2,-4,-6,-3,0. Min at index 2, start at 3.</td></tr>
-      <tr><td>candy</td><td>—</td><td>5</td><td>Candies [1,0,2]: left pass [1,1,2], right pass [2,1,2], sum 5.</td></tr>
-      <tr><td>heap</td><td>—</td><td>19</td><td>Huffman: files 1,2,3,4. Merge 1+2=3, then 3+3=6, then 6+4=10. Total cost 3+6+10=19.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>2</td><td>Jump Game II on [2, 3, 1, 1, 4]. Zero jumps so far, the window is just index 0, and from there farthest is 2.</td></tr>
+      <tr><td>1</td><td>2</td><td>4</td><td>One jump now covers the window [1, 2]. Index 1 can reach 4 and index 2 can reach 3, so farthest becomes 4.</td></tr>
+      <tr><td>2</td><td>4</td><td>4</td><td>The second jump opens the window [3, 4], which already contains the last index, so the answer is 2 and we stop.</td></tr>
+      <tr><td>gas</td><td>start 3</td><td>ok</td><td>Gas [1,2,3,4,5] against cost [3,4,5,1,2] has prefixes -2, -4, -6, -3, 0. The minimum sits at index 2, so the start is 3.</td></tr>
+      <tr><td>candy</td><td>—</td><td>5</td><td>Candies on ratings [1, 0, 2]: the left pass writes [1, 1, 2], the right pass writes [2, 1, 2], and the sum of the maxes is 5.</td></tr>
+      <tr><td>heap</td><td>—</td><td>19</td><td>Huffman on files 1, 2, 3, 4 merges 1+2=3, then 3+3=6, then 6+4=10. The paid cost is 3+6+10=19, not just the final 10.</td></tr>
     </tbody>
   </table>
 </div>
@@ -364,7 +374,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Jumps and gas are one pass. Interval problems sort. Huffman is n heap operations, O(n log n).</p>
+    <p>Jump Game II and gas each walk the array once and do a constant amount of work per index, so they are <code>n</code> additions and comparisons. Interval problems pay a sort of <code>n</code> pairs, which is <code>n log n</code> comparisons, then a linear scan. Huffman does <code>n</code> heap pops and pushes; each heap operation is <code>log n</code>, so the merge loop is another <code>n log n</code>.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> a linear pass is a hundred thousand steps and a sort is about <code>1.7 &times; 10<sup>6</sup></code> comparisons, both fine. A quadratic min-jumps DP on the same size is about <code>10<sup>10</sup></code> transitions if every index can jump far, which no judge accepts. That gap is why naming the key matters more than writing a recurrences first.</p>
   </div>
 
   <table class="complexity__compare">
@@ -386,28 +397,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Jump Game II loop including last index</span>
-    <div class="pitfalls__bug">You add an extra jump when i hits n-1.</div>
-    <div class="pitfalls__fix">Loop to n-2 only.</div>
+    <div class="pitfalls__bug">Looping to <code>n-1</code> looks like a normal array walk, so when <code>i</code> lands on the last index you increment <code>s</code> one extra time and report a jump you never needed to take.</div>
+    <div class="pitfalls__fix">Loop only to <code>n-2</code>. Reaching the last index is the goal, not a place that spends a jump. Test on <code>[1, 1]</code>: the answer is 1, not 2.</div>
   </li>
   <li>
     <span class="pitfalls__title">Gas returning 0 when total is negative</span>
-    <div class="pitfalls__bug">The min-prefix still exists but the tour is impossible.</div>
-    <div class="pitfalls__fix">Check total &lt; 0 first.</div>
+    <div class="pitfalls__bug">The minimum prefix still exists on an impossible tour, so returning <code>minIndex + 1</code> looks like the usual unique-start rule and the sample with a non-negative total still passes.</div>
+    <div class="pitfalls__fix">Check that the total of <code>gas[i] - cost[i]</code> is non-negative first, and only then use the min-prefix start. A negative total must return <code>-1</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Meeting rooms without a heap</span>
-    <div class="pitfalls__bug">Sorting by start and counting overlap naively is O(n^2), or wrong if you only look at the previous meeting.</div>
-    <div class="pitfalls__fix">Min-heap of end times, or a sweep of +1/-1.</div>
+    <div class="pitfalls__bug">Sorting by start and comparing each meeting only to the previous one looks linear and works on non-nested samples, but a third meeting can overlap the first while missing the second, so the room count is wrong or you fall back to a quadratic pair check.</div>
+    <div class="pitfalls__fix">Keep a min-heap of end times, or run a +1/-1 sweep on the endpoints. Both are <code>n log n</code> and count true overlap.</div>
   </li>
   <li>
     <span class="pitfalls__title">Candies one pass</span>
-    <div class="pitfalls__bug">A decreasing then increasing valley needs both directions.</div>
-    <div class="pitfalls__fix">Left-to-right enforce left neighbour, right-to-left enforce right, take max.</div>
+    <div class="pitfalls__bug">A single left-to-right pass looks enough because each rating is compared to one neighbour, but a valley that decreases then increases needs the right slope too, and the bottom of the valley is then under-paid.</div>
+    <div class="pitfalls__fix">Left-to-right enforce the left neighbour, right-to-left enforce the right neighbour, then take the max at each index. The valley <code>[1, 0, 2]</code> is the test: the answer is 5, not 4.</div>
   </li>
   <li>
     <span class="pitfalls__title">Huffman adding the new file once</span>
-    <div class="pitfalls__bug">Cost is the sum of internal nodes, not just the final root. Push the merged size back.</div>
-    <div class="pitfalls__fix">ans += a+b; heap.add(a+b);</div>
+    <div class="pitfalls__bug">Paying only the final root looks right because that number is the total size, but every internal node is a merge that later ancestors pay again, so omitting <code>ans += a + b</code> undercounts the cost.</div>
+    <div class="pitfalls__fix">After each pop, do <code>ans += a + b</code> and push <code>a + b</code> back onto the heap. Files 1, 2, 3, 4 must total 19, not 10.</div>
   </li>
 </ul>
 
@@ -449,28 +460,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is Jump II not DP?</summary>
     <div class="followup__body">
-      <p>It can be DP (min jumps to i). The greedy window is BFS layers on the array, so the first time you reach n-1 is the shortest. That is the proof.</p>
+      <p>It can be DP: <code>dp[i]</code> is the fewest jumps that reach index <code>i</code>, and that is correct and quadratic. The greedy window is the same computation viewed as BFS layers on the array: every index inside the current <code>[L, R]</code> is reachable in exactly <code>s</code> jumps, so the first time a layer covers <code>n-1</code> is the shortest path. That layer argument is the exchange / stay-ahead that lets you drop the DP table.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Two starting points for gas?</summary>
     <div class="followup__body">
-      <p>If total ≥ 0 there is exactly one start (modulo a stretch of zeros). The unique deepest prefix deficit pins it.</p>
+      <p>If the total surplus is non-negative there is exactly one start, except for a stretch of zeros that all work equally well. The unique deepest prefix deficit pins that start: every other index has a strictly worse prefix behind it and the tank would go negative before you climbed out. Check the total first, then report the index after the minimum prefix.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can Huffman run on more than two-way merges?</summary>
     <div class="followup__body">
-      <p>Yes, k-way: always merge k lightest. Pad with zeros if n-1 is not divisible by k-1.</p>
+      <p>Yes: a <code>k</code>-way Huffman always merges the <code>k</code> lightest current sizes, pays their sum, and pushes the sum back. If <code>n-1</code> is not divisible by <code>k-1</code> you pad with zero-size dummy files so the last merge still has exactly <code>k</code> children. The exchange is the same as the binary case: a heavier tuple merged earlier only increases later ancestor costs.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Interval covering from a point?</summary>
     <div class="followup__body">
-      <p>Sort by start, greedy take the interval that covers the current point and extends farthest. Jump Game in disguise.</p>
+      <p>Sort the intervals by start. While you still have an uncovered point <code>x</code>, take the interval that covers <code>x</code> and extends farthest to the right, then jump <code>x</code> to that new end. That is Jump Game II in disguise: the current point is the left of the window and "extends farthest" is <code>farthest</code>. If no interval covers <code>x</code>, the instance is impossible.</p>
     </div>
   </details>
 </div>

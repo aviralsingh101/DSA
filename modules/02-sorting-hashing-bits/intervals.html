@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>An interval is a pair <code>[l, r]</code>. Naive "compare every pair" is <code>O(n&sup2;)</code> and dies at <code>n = 10&#8309;</code>. After sorting by start, overlaps are contiguous: if the current interval does not touch the previous merged end, nothing later with a larger start will touch it either. That single observation is merge intervals, insert interval, and coverage.</p>
-<p>The other sort, by end, is the greedy for "how many can I keep if they must not overlap": always keep the one that finishes first. Meeting rooms, arrows bursting balloons, and non-overlapping removal are the same proof with a flipped sign.</p>
-<p>Sweep-line is the same idea with an explicit event queue: +1 at l, &minus;1 at r, walk left to right, and the running sum is how many intervals cover this point. That answers "maximum concurrent meetings" without building the merged list.</p>
+<p>You are given 100,000 calendar bookings, each a pair of times such as 9:00&ndash;10:30, and you must print one list of busy blocks with overlaps collapsed. Comparing every booking to every other booking is about <code>100000 &times; 100000 / 2 = 5&times;10&#8313;</code> pair checks, which no judge will wait for. After you sort the bookings by start time &mdash; roughly <code>1.7&times;10&#8310;</code> comparisons &mdash; a booking can only overlap something that starts before it, so you only ever look at the previous merged end. One linear pass then finishes the job.</p>
+<p>An <em>interval</em> is just that pair <code>[l, r]</code> of endpoints on a line. Once they are sorted by start, overlaps become contiguous: if the current interval does not touch the previous merged end, nothing later with a larger start will touch it either. That single observation is merge intervals, insert interval, and coverage. The other sort, by end, is the greedy for "how many can I keep if they must not overlap": always keep the one that finishes first, because that leaves the most room for everything still to come.</p>
+<p>A <em>sweep line</em> is the same idea with an explicit event queue: write +1 at each start, &minus;1 at each end, walk left to right, and the running sum is how many intervals cover this point. That answers "maximum concurrent meetings" without building the merged list. In a real statement the tell is <code>n &le; 10&#8309;</code> intervals sitting next to "merge overlapping", "minimum arrows", or "how many rooms". Those limits permit one <code>O(n log n)</code> sort and a linear scan, and they rule out the pairwise check that dies at a hundred thousand bookings.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>In one dimension, sorting turns geometry into adjacency. After the sort, every decision looks at the current interval and a single running endpoint (or a running count).</p>
+    <p>In one dimension, sorting turns geometry into adjacency. After the sort, every decision looks at the current interval and a single running endpoint (or a running count), because anything that could still overlap is either the neighbour you are looking at or has already been merged into that running end.</p>
   </div>
 </aside>
 
@@ -123,13 +123,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Merge: sort by start. Keep a running <code>[curL, curR]</code>. If the next start is <code>&le; curR</code> (or <code>&lt;</code> if ends are exclusive), extend <code>curR = max(curR, nextR)</code>; else emit <code>cur</code> and start a new one. The sort is what makes "next" the only candidate that can overlap.</p>
-<p>Non-overlap greedy: sort by <em>end</em>. Keep the interval that finishes first; skip anything that starts before that end. Proof: any kept set can replace its last interval with this earlier finish without losing feasibility, so the greedy stays ahead. Sweep for rooms: emit start events before end events at a tied time if a meeting can reuse a room that just freed (depends on the statement).</p>
+<p>To merge, sort by start and keep a running interval <code>[curL, curR]</code> that represents the block you have not emitted yet. If the next start is <code>&le; curR</code> (or <code>&lt;</code> if ends are exclusive), the two blocks overlap, so extend <code>curR = max(curR, nextR)</code>. If there is a gap, emit <code>cur</code> and open a new running interval at the next pair. The sort is what makes "next" the only candidate that can still overlap: everything earlier already went into <code>cur</code> or was emitted as a finished block.</p>
+<p>The other algorithm sorts by <em>end</em>. Keep the interval that finishes first; skip anything that starts before that end. Any kept set can replace its last interval with this earlier finish without losing feasibility, so the greedy stays ahead of every rival schedule. Meeting-room count uses a sweep instead: emit a +1 event at each start and a &minus;1 at each end, sort the events by time, and track the running sum. Process end events before start events at a tied time if a room that just freed may be reused immediately.</p>
+<p>Walk <code>[1,3], [2,6], [8,10], [15,18]</code> after sorting by start. Open <code>[1,3]</code>. The next start 2 sits on or before 3, so the running end grows to <code>max(3, 6) = 6</code> and the open block is now <code>[1,6]</code>. The next start 8 is past 6, so emit <code>[1,6]</code> and open <code>[8,10]</code>. Start 15 is past 10, so emit <code>[8,10]</code> and open <code>[15,18]</code>. The list ends, and you must still emit that last open block. The merged answer is <code>[1,6], [8,10], [15,18]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After sorting by start, a single running end <code>curR</code> satisfies:</p><span class="eq">every emitted interval is disjoint from the later ones, and curR is the max end of the open merge</span><p>Interview sentence: <em>"I sort so overlaps become adjacent, then I only track one running endpoint."</em></p>
+    <p>After sorting by start, a single running end <code>curR</code> satisfies:</p><span class="eq">every emitted interval is disjoint from the later ones, and curR is the max end of the open merge</span><p>In plain words, the block you are holding is the only unfinished overlap, and everything you have already printed sits entirely to its left. A new interval either stretches that open block or proves a gap, in which case the open block is finished and can be printed.</p><p>Interview sentence: <em>"I sort so overlaps become adjacent, then I only track one running endpoint."</em></p>
   </div>
 </aside>
 
@@ -339,18 +340,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Decide inclusive vs exclusive</strong> ends. It changes <code>&le;</code> vs <code>&lt;</code>.</li>
-  <li><strong>Union / merge:</strong> sort by start, extend a running end, emit when a gap appears.</li>
-  <li><strong>Max non-overlapping:</strong> sort by end, take if start &ge; lastEnd.</li>
-  <li><strong>Rooms / concurrent:</strong> events +1/−1, sort by time, max the running sum.</li>
-  <li><strong>Two lists of disjoint intervals:</strong> two pointers; advance the earlier end.</li>
-  <li><strong>Insert:</strong> copy strictly-before, merge all that overlap the new one, copy after.</li>
-  <li><strong>Use long</strong> for union length: ends up to 1e9, n up to 1e5.</li>
+  <li><strong>Decide inclusive vs exclusive ends first.</strong> The comparison <code>&le;</code> versus <code>&lt;</code> is the whole difference between merging <code>[1,2]</code> with <code>[2,3]</code> and leaving a gap.</li>
+  <li><strong>To take a union, sort by start.</strong> Extend a running end while the next start still touches it, and emit the open block the moment a gap appears, because nothing later can close that gap.</li>
+  <li><strong>To keep the maximum non-overlapping set, sort by end.</strong> Take an interval only when its start is at or after <code>lastEnd</code>, because the earliest finish leaves the most room for what remains.</li>
+  <li><strong>For rooms or concurrent overlap, sweep.</strong> Write +1 at each start and &minus;1 at each end, sort by time, and the maximum of the running sum is the number of rooms you need.</li>
+  <li><strong>Two already-sorted disjoint lists intersect with two pointers.</strong> Advance the interval that ends first, because that one can no longer overlap anything later in the other list.</li>
+  <li><strong>To insert one new interval, copy in three phases.</strong> Write every block strictly before it, merge every block that overlaps it into one union, then copy the tail that starts after that union.</li>
+  <li><strong>Accumulate union length in <code>long</code>.</strong> Ends up to <code>10&#8313;</code> and <code>n</code> up to <code>10&#8309;</code> overflow a 32-bit <code>int</code> the moment you add <code>r - l + 1</code> across the list.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Merge <code>[1,3], [2,6], [8,10], [15,18]</code> after sorting by start: extend when the next start still touches the running end, emit when a gap appears.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -532,8 +533,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>The sort dominates: <span class="eq">T(n) = Θ(n log n) + Θ(n)</span>. After sorting, each interval is inspected a constant number of times.</p>
-    <p>Sweep with 2n events is the same class. Two-pointer intersection of already-sorted disjoint lists is <code>O(n + m)</code> with no extra sort.</p>
+    <p>The sort dominates: <span class="eq">T(n) = Θ(n log n) + Θ(n)</span>. After sorting, each interval is inspected a constant number of times. At <code>n = 10&#8309;</code> that is about <code>1.7&times;10&#8310;</code> comparisons plus a linear scan, versus the hopeless <code>5&times;10&#8313;</code> pair checks of the nested loop.</p>
+    <p>A sweep with 2n events is the same class: you sort 2n numbers and then walk them once. Two-pointer intersection of already-sorted disjoint lists is <code>O(n + m)</code> with no extra sort, because each pointer only moves forward and each interval is considered once.</p>
   </div>
 
   <table class="complexity__compare">
@@ -556,28 +557,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Inclusive ends treated as exclusive</span>
-    <div class="pitfalls__bug">[1,2] and [2,3] should merge on LC 56 but a <code>&lt;</code> test leaves a gap.</div>
-    <div class="pitfalls__fix">Read the statement. LC 56 overlaps at a shared endpoint; LC 452 arrows too.</div>
+    <div class="pitfalls__bug"><code>[1,2]</code> and <code>[2,3]</code> should merge on LC 56, but a <code>&lt;</code> test looks correct if you pictured exclusive ends and silently leaves a one-point gap.</div>
+    <div class="pitfalls__fix">Read the statement. LC 56 and LC 452 treat a shared endpoint as an overlap; only then choose <code>&le;</code> versus <code>&lt;</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Sorting by the wrong coordinate</span>
-    <div class="pitfalls__bug">Merging after sorting by end misses an overlap that starts late and stretches far.</div>
-    <div class="pitfalls__fix">Union → sort by start. Greedy keep → sort by end. Do not mix.</div>
+    <div class="pitfalls__bug">Merging after sorting by end looks tidy, but it misses an overlap that starts late and stretches far past an earlier short interval.</div>
+    <div class="pitfalls__fix">Union and coverage sort by start. Greedy keep and min-arrows sort by end. Do not mix the two keys.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow on union length</span>
-    <div class="pitfalls__bug"><code>r - l + 1</code> with l, r up to 1e9 and n up to 1e5, summed in int.</div>
-    <div class="pitfalls__fix">Accumulate in <code>long</code>. Subtract as long before adding one.</div>
+    <div class="pitfalls__bug"><code>r - l + 1</code> with ends up to <code>10&#8313;</code> and <code>n</code> up to <code>10&#8309;</code>, summed in a 32-bit int, wraps and reports a nonsense total that still looks like a length.</div>
+    <div class="pitfalls__fix">Accumulate in <code>long</code>, and cast before you subtract so <code>(long) r - l + 1</code> cannot overflow the intermediate.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to emit the last interval</span>
-    <div class="pitfalls__bug">The loop only emits when a gap appears, so the final running merge is dropped.</div>
-    <div class="pitfalls__fix">Always <code>out.add(cur)</code> after the loop.</div>
+    <div class="pitfalls__bug">The loop only emits when a gap appears, so the final running merge is dropped and the answer is missing its rightmost block.</div>
+    <div class="pitfalls__fix">Always <code>out.add(cur)</code> after the loop, then test a one-interval input and an all-overlapping input as well.</div>
   </li>
   <li>
     <span class="pitfalls__title">Start and end events at the same time</span>
-    <div class="pitfalls__bug">Processing a start before an end at time t counts an extra room that just freed.</div>
-    <div class="pitfalls__fix">If a room can be reused at time t, process ends first. Match the problem's "touching is OK" rule.</div>
+    <div class="pitfalls__bug">Processing a start before an end at time t counts an extra room that just freed, so touching meetings look like they need two rooms.</div>
+    <div class="pitfalls__fix">If a room can be reused at time t, process ends first. Match the problem's "touching is OK" rule and add a unit test of <code>[1,2], [2,3]</code>.</div>
   </li>
 </ul>
 
@@ -619,28 +620,28 @@ flowchart TD
   <details class="followup">
     <summary>Why sort by end for "remove minimum overlapping"?</summary>
     <div class="followup__body">
-      <p>The interval that finishes first leaves the most room for the rest. If an optimal solution keeps a later-ending interval in that slot, swap it for the greedy choice: the end only moves left, so later intervals that fitted still fit.</p>
+      <p>The interval that finishes first leaves the most room for the rest. If an optimal solution keeps a later-ending interval in that slot, swap it for the greedy choice: the end only moves left, so every later interval that still fitted still fits. That exchange argument is why "remove the fewest" is the same as "keep the most that do not overlap".</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you list points covered by exactly k intervals?</summary>
     <div class="followup__body">
-      <p>Sweep with +1 at l and −1 at r. Whenever the running count changes, close the previous segment at this x and open a new one. Group by the count value.</p>
+      <p>Sweep with +1 at each start and &minus;1 at each end. Whenever the running count changes, close the previous segment at this x and open a new one labelled with the new count. Group those segments by the count value and you have every point covered by exactly k intervals.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Intervals arrive online and you must merge on the fly?</summary>
     <div class="followup__body">
-      <p>A TreeMap from start to end, or a balanced tree of disjoint ranges. Lower-bound the start, walk neighbours that overlap, delete them, insert the union. See TreeMap patterns.</p>
+      <p>Keep a TreeMap from start to end, or any balanced tree of disjoint ranges. Lower-bound the new start, walk the neighbours that overlap, delete them, and insert the union. Each arrival is then a handful of tree operations instead of a full re-sort. See the TreeMap patterns page for the spelling.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What changes on a circle?</summary>
     <div class="followup__body">
-      <p>Cut at 0, or duplicate the array shifted by the circumference so a wrap-around interval becomes a linear one. Take care not to double-count the cut point.</p>
+      <p>Cut the circle at 0, or duplicate the array shifted by the circumference so a wrap-around interval becomes an ordinary linear one. Either way you must not double-count the cut point, and a wrap-around block has to be merged with the first block if they touch across 0.</p>
     </div>
   </details>
 </div>

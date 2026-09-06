@@ -22,7 +22,7 @@
   <p class="hero__tagline">Point update and prefix sum in <code>O(log n)</code> each, using the lowest set bit to jump responsibility ranges &mdash; the smallest structure that beats a prefix array once updates appear.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../01-arrays-and-windows/prefix-sums.html">Prefix Sums</a>,
       <a href="../00-foundations/constraints-to-complexity.html">Constraints to Complexity</a>
@@ -39,14 +39,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A prefix array answers range sums in O(1) and dies the moment you change an element: every prefix to the right is stale. A Fenwick tree (Binary Indexed Tree) keeps the same prefix-sum algebra but stores each value in <code>O(log n)</code> buckets so an update touches <code>O(log n)</code> of them and a prefix query adds <code>O(log n)</code> of them. That is the cheapest dynamic range-sum structure.</p>
-<p>The addressing trick is the lowest set bit. Index i is responsible for a range of length <code>lsb(i) = i &amp; -i</code> ending at i. Walking <code>i += lsb(i)</code> climbs to every bucket that contains i (the update). Walking <code>i -= lsb(i)</code> drops to a disjoint cover of [1, i] (the query). Two loops, no recursion, tiny constants.</p>
-<p>Almost every "count inversions / count smaller to the left / range-sum with updates" interview problem is this page plus optional coordinate compression. Segment trees are more general; Fenwick is what you write when the operation is prefix-shaped.</p>
+<p>You are given an array such as <code>[3, 1, 4, 1, 5, 9, 2, 6]</code>, and between asking for the sum of a prefix someone keeps changing a single cell. A prefix-sum array answers each range in one subtraction, but the moment you write <code>a[3] += 2</code> every prefix that includes index 3 is stale, and rewriting those prefixes costs a linear scan. With a hundred thousand updates and a hundred thousand sums you are looking at ten billion writes, and the judge will cut you off. You need the same prefix algebra without the linear repair.</p>
+<p>A Fenwick tree, also called a Binary Indexed Tree, keeps each array value inside a handful of <em>buckets</em> instead of one running total. Index <code>i</code> (counting from 1) owns a contiguous range that <em>ends</em> at <code>i</code> and has length equal to the value of i's lowest set bit, written <code>lsb(i) = i &amp; -i</code>. So index 6, whose binary form is <code>110</code>, owns a range of length 2 ending at 6, which is the pair <code>a[5], a[6]</code>. An update of cell <code>i</code> walks every bucket that contains <code>i</code>; a prefix query walks a disjoint set of buckets that tile <code>[1, i]</code>. Each walk is a handful of array reads, never a scan.</p>
+<p>The two walks go in opposite directions because they are answering opposite questions. A prefix query wants buckets that sit <em>inside</em> <code>[1, i]</code> and do not overlap, so it peels the bucket ending at the current index off the prefix and jumps to whatever is left, which is <code>i -= lsb(i)</code>. An update wants every bucket that <em>contains</em> index <code>i</code>, including ones that stretch past i to a later end, so it climbs to the next larger owner with <code>i += lsb(i)</code>. Same lowest-set-bit quantity, opposite arithmetic.</p>
+<p>In a real statement the signal is point updates mixed with prefix or range sums at limits such as <code>n, q &le; 2&times;10&#8309;</code>. That combination rules out a prefix array and is exactly what Fenwick is for. The same twenty lines then cover inversion counting, "how many values to the left are smaller", frequency queries on compressed ranks, and the two-tree trick that turns range-add plus range-sum into four point updates. Reach for a segment tree only when the operation is not a prefix of something invertible.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>lsb(i) is the length of i's bucket. Update climbs by adding it; query drops by subtracting it. Both walks are O(log n) because each step clears or sets a bit.</p>
+    <p>Index i owns the contiguous sum of length <code>i &amp; -i</code> that ends at i. A prefix query subtracts that length to peel off disjoint buckets; an update adds it to climb to every larger bucket that still contains i. The two walks are opposite because one is covering a prefix and the other is notifying the owners of a single cell.</p>
   </div>
 </aside>
 
@@ -118,19 +119,20 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> point-update range-sum is Fenwick's home. Values that are 10&#8313; with n of 10&#8309; need <code>long</code>. Coordinate-compress if the value universe is 10&#8313; but n is 10&#8309;.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, q &le; 2&times;10&#8309;</code> with point updates and prefix or range sums is Fenwick's home. Each operation is about twenty array reads, so the whole batch finishes in milliseconds. Values of <code>10&#8313;</code> with <code>n</code> of <code>10&#8309;</code> overflow an <code>int</code> prefix and need <code>long</code>. If the value universe is <code>10&#8313;</code> but you only have <code>n</code> items, compress the coordinates down to ranks <code>1..n</code> before you index the tree.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Index the tree 1-based. <code>bit[i]</code> stores the sum of <code>a[i - lsb(i) + 1 .. i]</code>, a half-open-length bucket ending at i. <code>lsb(i) = i &amp; -i</code> works because Java ints are two's complement: <code>-i</code> is <code>~i + 1</code>, so the conjunction isolates the lowest 1.</p>
-<p>Prefix sum of the first i elements is the sum of the disjoint buckets you land on while repeatedly subtracting the lsb, which peels off the lowest 1 each time and so terminates in O(popcount(i)) &le; O(log n) steps. An update at i adds delta to every bucket that contains i, found by repeatedly adding the lsb (setting the next higher bit of the current suffix).</p>
-<p>Range sum [l, r] is two prefixes. Range add [l, r] += v on a point-query structure is the difference-array trick inside the BIT: add v at l, add -v at r+1. Two BITs give range add and range sum together, which is the usual contest upgrade before reaching for a lazy segment tree.</p>
+<p>Index the tree from 1, never from 0. The cell <code>bit[i]</code> stores the sum of the closed range <code>a[i - lsb(i) + 1 .. i]</code>: a contiguous bucket that ends at i and has length <code>lsb(i)</code>. That length is <code>i &amp; -i</code> because Java integers are two's complement: <code>-i</code> equals <code>~i + 1</code>, which flips every bit of i and then adds one. Adding one walks through the trailing zeros of i, flips them back to zero, and leaves the lowest 1 of i sitting alone in the conjunction. For i = 12 = <code>1100</code> in binary, <code>-i</code> ends with <code>0100</code>, the conjunction is 4, and so <code>bit[12]</code> owns the four entries that end at 12. The same identity is why you must never call it on 0: <code>0 &amp; -0</code> is 0, and adding zero is an infinite loop.</p>
+<p>A prefix sum of the first i elements is the sum of the disjoint buckets you land on while repeatedly subtracting the lowest set bit. Each subtraction clears the lowest 1 of the current index, so the walk visits at most one bucket per bit and finishes in at most <code>log<sub>2</sub> i</code> steps. An update at i does the opposite: it adds the delta into <code>bit[i]</code> and then into every larger bucket that still contains i, found by repeatedly adding the lowest set bit. Adding the lsb carries into a higher bit and lands on the next index whose owned range is a proper multiple of the current one, which is exactly the next owner that covers i. The two loops share one helper and no recursion.</p>
+<p>A range sum <code>[l, r]</code> is two prefixes, <code>prefix(r) - prefix(l - 1)</code>, which is legal only because addition has an inverse. The same inverse is why Fenwick cannot do range minimum: there is nothing you can subtract from <code>min(a[1..r])</code> to recover <code>min(a[l..r])</code>. A range add on a point-query tree is the difference-array trick sitting inside the BIT: add <code>v</code> at l and add <code>-v</code> at r+1. Two Fenwick trees together give range add and range sum, which is the usual contest upgrade before you reach for a lazy segment tree.</p>
+<p>Walk the sample <code>[3, 1, 4, 1, 5, 9, 2, 6]</code> after the tree is built. One-based, the buckets are <code>bit[1]=3</code> (just a[1]), <code>bit[2]=4</code> (a[1]+a[2]), <code>bit[3]=4</code> (just a[3]), <code>bit[4]=9</code> (a[1]..a[4]), <code>bit[5]=5</code>, <code>bit[6]=14</code> (a[5]+a[6]), <code>bit[7]=2</code>, <code>bit[8]=31</code> (the whole array). Asking for prefix(7) starts at 7, adds <code>bit[7]=2</code>, drops to 6, adds <code>bit[6]=14</code>, drops to 4, adds <code>bit[4]=9</code>, and lands on 0 with a total of 25, which is 3+1+4+1+5+9+2. An update of +2 at index 3 climbs the other way: 3, then 4, then 8, because those are the three buckets whose owned ranges contain 3. After that write, the same three query nodes would read 27.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>With 1-based indexing and <code>lsb(i) = i &amp; -i</code>:</p><span class="eq">bit[i] = sum(a[i - lsb(i) + 1 .. i])</span><p>Interview sentence: <em>"Update adds lsb, query subtracts lsb; both are walking the binary representation of the index."</em></p>
+    <p>With 1-based indexing and <code>lsb(i) = i &amp; -i</code>, each cell owns a contiguous suffix of the prefix that ends at i:</p><span class="eq">bit[i] = sum(a[i - lsb(i) + 1 .. i])</span><p>In plain words, index i does not store "the sum up to i". It stores only the last <code>lsb(i)</code> entries before i, and a prefix is recovered by adding those leftover chunks as you strip one set bit at a time. That is why the query walks down (subtract lsb, peel a finished chunk) and the update walks up (add lsb, notify the next larger owner): one of them is assembling a prefix from pieces that sit inside it, and the other is telling every piece that still covers the cell you just changed.</p><p>Interview sentence: <em>"Update adds lsb, query subtracts lsb; both are walking the binary representation of the index."</em></p>
   </div>
 </aside>
 
@@ -138,7 +140,7 @@
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
   <div class="callout__body">
     <span class="callout__title">Why i &amp; -i is the lowest set bit</span>
-    <p>In two's complement, <code>-i</code> flips every bit of i and adds one, which leaves the lowest 1 of i in place and turns every lower 0 into 0 in the conjunction. Example: i = 12 = 1100<sub>2</sub>, -i = ...0100<sub>2</sub>, conjunction 0100<sub>2</sub> = 4, and bit[12] covers four entries.</p>
+    <p>In two's complement, <code>-i</code> flips every bit of i and adds one, which leaves the lowest 1 of i in place and turns every lower 0 into 0 in the conjunction. Example: i = 12 = 1100<sub>2</sub>, -i = ...0100<sub>2</sub>, conjunction 0100<sub>2</sub> = 4, and bit[12] covers four entries ending at 12. That numeric value <em>is</em> the length of the range i owns, not a coincidence: the lowest set bit of i is the largest power of two that divides i, and Fenwick assigns i a bucket of exactly that length.</p>
   </div>
 </aside>
 
@@ -147,6 +149,14 @@
   <div class="callout__body">
     <span class="callout__title">Always 1-based</span>
     <p><code>i &amp; -i</code> on 0 is 0, so <code>i += 0</code> is an infinite loop. The tree starts at index 1. Translate 0-based array index i to Fenwick index i+1.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the two walks go opposite ways</span>
+    <p>A prefix query asks "which of my own buckets tile [1, i]?" and those buckets end at or before i, so you subtract the lsb and drop to a shorter leftover prefix. An update asks "which buckets in the whole tree still contain i?" and those buckets end at or after i, so you add the lsb and climb to the next larger owner. Same helper, opposite question.</p>
   </div>
 </aside>
 
@@ -192,7 +202,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Built tree. bit[i] holds the sum of lsb(i) entries ending at i. Query prefix(7).",
+          "note": "Built tree. bit[i] holds the sum of lsb(i) entries ending at i, not the whole prefix. Query prefix(7).",
           "dim": [
             0,
             1,
@@ -359,13 +369,13 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate <code>long[] bit</code> of length <code>n + 1</code>.</strong> Index 0 is unused.</li>
-  <li><strong>lsb:</strong> <code>i &amp; -i</code>. Never call it on 0.</li>
-  <li><strong>add(i, v):</strong> for <code>(; i &lt; bit.length; i += i &amp; -i) bit[i] += v</code>. Translate 0-based array index x to <code>i = x + 1</code>.</li>
-  <li><strong>prefix(i):</strong> for <code>(; i &gt; 0; i -= i &amp; -i) acc += bit[i]</code>.</li>
-  <li><strong>range(l, r)</strong> (1-based inclusive) is <code>prefix(r) - prefix(l - 1)</code>.</li>
-  <li><strong>Build</strong> by adding each a[i] once, or in O(n) by filling bit[i] = a[i] then pushing to the parent <code>i + lsb(i)</code>.</li>
-  <li><strong>Compress coordinates</strong> before using the BIT as a frequency tree over large values.</li>
+  <li><strong>Allocate a 1-based tree.</strong> Create <code>long[] bit</code> of length <code>n + 1</code> and leave index 0 unused, because <code>0 &amp; -0</code> is 0 and a loop that adds zero never terminates.</li>
+  <li><strong>Define lsb as <code>i &amp; -i</code>.</strong> That quantity is both the length of i's owned range and the hop you take on every walk, so it is the only helper the two loops share. Never evaluate it at 0.</li>
+  <li><strong>add(i, v): climb by adding the lsb.</strong> Loop <code>for (; i &lt; bit.length; i += i &amp; -i) bit[i] += v</code>. Translate a 0-based array index x to <code>i = x + 1</code> first, so you notify every bucket whose owned range contains x.</li>
+  <li><strong>prefix(i): drop by subtracting the lsb.</strong> Loop <code>for (; i &gt; 0; i -= i &amp; -i) acc += bit[i]</code>. Each hop peels off the bucket that ends at the current i, and what remains is a strictly shorter prefix.</li>
+  <li><strong>Range [l, r] is two prefixes.</strong> Return <code>prefix(r) - prefix(l - 1)</code> with both ends 1-based and inclusive. <code>prefix(0)</code> is 0 because the loop never runs, which is what makes a query that starts at the first cell safe.</li>
+  <li><strong>Build by adding each a[i] once, or in linear time.</strong> The naive build is n updates. The linear build writes <code>bit[i] = a[i]</code> and then pushes each cell onto its parent <code>i + lsb(i)</code>, so each index is written a constant number of times.</li>
+  <li><strong>Compress coordinates before using the tree as a frequency map.</strong> If values go up to <code>10&#8313;</code> you cannot allocate a bucket per value. Sort the unique keys, rank them 1..n, and index the tree by rank so inversion-counting stays <code>O(n log n)</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -378,7 +388,7 @@ graph TD
       <tr><th>i</th><th>lsb</th><th>added</th><th>acc</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>7</td><td>?</td><td>0</td><td>0</td><td>Built tree. bit[i] holds the sum of lsb(i) entries ending at i. Query prefix(7).</td></tr>
+      <tr class="trace-table__row--change"><td>7</td><td>?</td><td>0</td><td>0</td><td>Built tree. bit[i] holds the sum of lsb(i) entries ending at i, not the whole prefix. Query prefix(7).</td></tr>
       <tr><td>7</td><td>1</td><td>2</td><td>2</td><td>i = 7 = 111b, lsb = 1. Add bit[7] = 2. acc = 2. Next i = 7 - 1 = 6.</td></tr>
       <tr><td>6</td><td>2</td><td>14</td><td>16</td><td>i = 6 = 110b, lsb = 2. Add bit[6] = 14. acc = 16. Next i = 6 - 2 = 4.</td></tr>
       <tr><td>4</td><td>4</td><td>9</td><td>25</td><td>i = 4 = 100b, lsb = 4. Add bit[4] = 9. acc = 25. Next i = 4 - 4 = 0. Stop.</td></tr>
@@ -564,17 +574,17 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">0-based index in a 1-based tree</span>
-    <div class="pitfalls__bug"><code>add(0, v)</code> does <code>i += 0</code> forever, or immediately ArrayIndexOutOfBounds. The most common Fenwick crash.</div>
-    <div class="pitfalls__fix">Array index i maps to Fenwick index i+1. Assert <code>i &gt;= 1</code> in add.</div>
+    <div class="pitfalls__bug"><code>add(0, v)</code> does <code>i += 0</code> forever, or immediately ArrayIndexOutOfBounds. The most common Fenwick crash, and it looks like a harmless 0-based habit.</div>
+    <div class="pitfalls__fix">Map every 0-based array index i to Fenwick index i+1, and assert <code>i &gt;= 1</code> at the top of add. A unit test that updates a[0] will catch the translation.</div>
   </li>
   <li>
     <span class="pitfalls__title"><code>int</code> overflow in the buckets</span>
-    <div class="pitfalls__bug">n = 10&#8309;, values 10&#8313;, prefixes 10&sup1;&#8308;. Wrapping buckets still look vaguely plausible after a subtraction.</div>
-    <div class="pitfalls__fix"><code>long[] bit</code> always.</div>
+    <div class="pitfalls__bug">n = 10&#8309;, values 10&#8313;, prefixes 10&sup1;&#8308;. Wrapping buckets still look vaguely plausible after a subtraction, so the sample can pass and hidden tests fail.</div>
+    <div class="pitfalls__fix">Allocate <code>long[] bit</code> every time, even when the array itself is <code>int[]</code>. A single prefix of the whole array is the overflow check.</div>
   </li>
   <li>
     <span class="pitfalls__title">range(l, r) with l = 1 calling prefix(0) incorrectly</span>
-    <div class="pitfalls__bug">Writing <code>prefix(r) - prefix(l)</code> drops a[l]. Or calling prefix(-1) when someone passed 0-based l = 0.</div>
+    <div class="pitfalls__bug">Writing <code>prefix(r) - prefix(l)</code> drops a[l], and the remaining sum still looks like a plausible range. Or calling prefix(-1) when someone passed 0-based l = 0.</div>
     <div class="pitfalls__fix"><code>prefix(r) - prefix(l - 1)</code> with l, r 1-based. prefix(0) is 0 because the loop never runs.</div>
   </li>
   <li>
@@ -584,7 +594,7 @@ graph TD
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to compress before a frequency BIT</span>
-    <div class="pitfalls__bug">Values up to 10&#8313;, allocating <code>new long[1_000_000_001]</code>, OOM. Or using the raw value as an index and throwing.</div>
+    <div class="pitfalls__bug">Values up to 10&#8313;, allocating <code>new long[1_000_000_001]</code>, OOM. Or using the raw value as an index and throwing, which looks like a bounds bug rather than a missing compression.</div>
     <div class="pitfalls__fix">Sort unique values, rank them 1..n, BIT of size n. Ties need a stable policy (strictly greater vs greater-or-equal) matching the inversion definition.</div>
   </li>
 </ul>

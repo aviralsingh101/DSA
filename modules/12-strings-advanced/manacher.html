@@ -22,7 +22,7 @@
   <p class="hero__tagline">Manacher computes the longest palindromic radius at every centre in <code>O(n)</code> by mirroring inside a rightmost palindrome box &mdash; the palindrome cousin of the Z-function.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">32 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="z-function.html">Z-Function</a>,
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Expand-around-centre is O(n^2). Manacher reuses palindromes already found: if a palindrome covers i, the mirrored index 2c-i already has a radius you can copy (capped by the box edge), then extend only if needed. r only moves right, so total time is linear.</p>
-<p>The usual implementation inserts sentinels so odd and even palindromes share one array: T = ^#a#b#a#$ has a centre for every gap. d[i] is the radius in T; the original-string length is d[i]-1.</p>
-<p>LC 5 (longest palindromic substring) is the interview problem. Contest follow-ups count palindromic substrings, find the longest palindromic prefix, or build a palindrome tree (a different structure).</p>
+<p>You are given a string and you want the longest slice that reads the same forwards and backwards, or you want every such slice counted. The honest method sits at each of the <code>2n-1</code> possible centres &mdash; one on every character and one in every gap &mdash; and walks outwards while the two sides match. That is correct, and a string of all the same letter makes every walk run the full length, which is about <code>n<sup>2</sup></code> comparisons. At <code>n = 10<sup>5</sup></code> that is ten billion steps, and the judge will not wait.</p>
+<p>Manacher's observation is that a palindrome is its own mirror, so radii you have already measured on the left of a big palindrome are radii you can copy on the right. Keep the rightmost palindrome found so far as a box <code>[L, R]</code> with centre <code>c</code>. For a new centre <code>i</code> that still sits inside that box, its mirror about <code>c</code> is the index <code>j = 2c - i</code>, and the palindrome already sitting at <code>j</code> is a picture of the palindrome sitting at <code>i</code>, at least until you hit the box edge. You copy that radius, clip it so it does not claim past <code>R</code>, and only then walk characters if the copy ran out of known ground.</p>
+<p>That is the Z-function skeleton with a palindrome in place of a prefix-copy. The usual implementation inserts a border and a <code>#</code> between every letter so odd and even palindromes of the original string become ordinary odd palindromes of one longer string <code>T</code>. The array <code>d[i]</code> is then the radius at centre <code>i</code> in <code>T</code>, and the original-string length is <code>d[i] - 1</code>. LC 5 is the interview prompt; contest follow-ups count palindromic slices or ask for the longest palindromic prefix.</p>
+<p>In a real statement the signal is <code>n &le; 10<sup>6</sup></code> together with "longest palindromic substring" or "count palindromic substrings". If the string is mutable, this static array is the wrong tool. If the question is about subsequences rather than contiguous slices, this page does not apply: that is an <code>O(n<sup>2</sup>)</code> DP. If you need every distinct palindrome as a node with its own suffix link, you want an eertree, not Manacher.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Inside the rightmost palindrome, palindromes mirror. Copy the mirrored radius, clip to the box, then extend. Same amortised argument as Z.</p>
+    <p>Inside the rightmost palindrome, smaller palindromes mirror: the radius at <code>i</code> starts as <code>min(d[2c-i], R-i)</code>, you clip so you do not invent characters past the box, and you only extend when that copy hits the edge. The right end <code>R</code> never moves left, so the extra comparisons stay linear &mdash; the same amortised argument as the Z-box.</p>
   </div>
 </aside>
 
@@ -111,18 +112,44 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8310;</code>. The sentinel string has length 2n+3. Integer radii; do not use Java substring in the inner loop.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10<sup>6</sup></code> is the linear-palindrome window. The sentinel string has length <code>2n+3</code>, so the arrays are still linear. Radii are integers compared on a <code>char[]</code>; putting <code>substring</code> inside the extend loop both allocates and can go quadratic on older JDKs. If the statement updates the string between queries, rebuild or pick a different structure.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Build T with a unique border and '#' between letters so every palindrome in s is an odd palindrome in T. d[i] = radius (how far you can go from i in T, counting the centre).</p>
-<p>Maintain [l, r] = rightmost palindrome (centre c = (l+r)/2 conceptually). For i: if i < r, d[i] = min(d[2*c - i], r-i). Then extend while T[i-d]==T[i+d]. If i+d > r, move the box.</p>
+<p>First build a string <code>T</code> that has a unique left border <code>^</code>, a unique right border <code>$</code>, and a <code>#</code> sitting in every gap, including the ends. The sample <code>aba</code> becomes <code>^#a#b#a#$</code>. Every palindrome of the original string, odd or even, is now an odd palindrome of <code>T</code>: even ones of <code>s</code> are centred on a <code>#</code>. You need an array <code>d</code> of length <code>|T|</code>, plus a centre <code>c</code> and a right end <code>R</code> for the rightmost palindrome found so far. The value <code>d[i]</code> is how far you can walk from <code>i</code> in <code>T</code> and still have a palindrome, counting the centre itself, so a lone centre starts at 1.</p>
+<p>The mirror step is the load-bearing idea, so sit with why it cannot lose a palindrome. Suppose the rightmost palindrome is <code>T[L..R]</code> with centre <code>c</code>, which means <code>T[c-k] = T[c+k]</code> for every <code>k</code> up to the radius. A new centre <code>i</code> with <code>c &lt; i &lt; R</code> has a mirror <code>j = 2c - i</code> on the left of <code>c</code>, the same distance away. Because the big palindrome equals its reverse, a walk of length <code>k</code> around <code>j</code> that stays inside <code>[L, R]</code> is the same walk, letter for letter, around <code>i</code>. So the palindrome already measured at <code>j</code> is a palindrome at <code>i</code> as well, at least until one of those walks would step past <code>R</code> (or past <code>L</code>, which is the same event by symmetry). That is why the copy is <code>d[i] = min(d[j], R-i)</code> and not a blind <code>d[j]</code>: claiming more than <code>R-i</code> would invent characters you have never compared at this alignment.</p>
+<p>You still have to extend after the copy, for the same reason Z extends after clipping. If <code>d[j]</code> is strictly smaller than the remaining box, the palindrome at <code>j</code> ended for a real mismatch, and by the mirror that same mismatch sits at <code>i</code>, so you must not grow. If <code>d[j]</code> reaches exactly to the box edge, the palindrome at <code>j</code> was clipped by the box rather than by a mismatch, and the next pair of characters around <code>i</code> is unknown: they might still match, and the <code>while</code> is what finds out. After extending, if <code>i + d[i]</code> now past <code>R</code>, this palindrome is the new rightmost box and you move <code>c</code> and <code>R</code>. The right end never decreases. Every successful extend comparison increases <code>R</code>, so those comparisons total at most <code>|T|</code>, and a failed extend happens at most once per centre. The whole fill is linear, just like Z.</p>
+<p>Walk <code>aba</code> on <code>T = ^#a#b#a#$</code>. The first letter-centre is the first <code>a</code>; you expand to <code>#a#</code> and store radius 2, and that small palindrome is the live box. The centre at <code>b</code> is outside that box, so you start from 1 and expand through the whole string: <code>#a#b#a#</code> is a palindrome of radius 4, and the box now covers everything. The second <code>a</code> sits inside that box; its mirror is the first <code>a</code>, whose radius is 2, and the remaining box is also 2, so you copy 2 and the extend cannot grow. The longest original slice has length <code>d-1 = 3</code> at centre <code>b</code>, which is <code>aba</code>. An even palindrome such as <code>aa</code> would have shown up as a large radius on the <code>#</code> sitting between the two letters.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>T[l..r] is a palindrome. For i in (c, r), the mirror j = 2c-i has a known radius, so d[i] is at least min(d[j], r-i) and at most that until you extend past r.</p>
+    <p>The rightmost palindrome <code>T[L..R]</code> with centre <code>c</code> is a mirror, so every smaller palindrome inside it has a copy:</p><span class="eq">for i in (c, R),&nbsp; d[i] &ge; min(d[2c-i], R-i), and d[i] equals that minimum unless the copy hits the box edge and the next pair still matches.</span><p>In plain words, you never invent characters past the known palindrome, you never throw away a palindrome the mirror already proved, and the only centres that cost more than a couple of array reads are the ones that push <code>R</code> right. Interview sentence: <em>"I copy the mirrored radius, clip to the box, then extend; <code>R</code> only grows, so Manacher is linear."</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Clip to the box or you invent a palindrome</span>
+    <p>Copying <code>d[2c-i]</code> without the <code>min(..., R-i)</code> looks right because the two centres are mirrors. The palindrome at the mirror may stick out past the left edge of the big box; the corresponding walk on the right would then step past <code>R</code>, where the big palindrome no longer promises anything. Those extra characters can disagree, and you have just stored a radius that is too big.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The sentinels are bounds checks you do not write</span>
+    <p><code>^</code> and <code>$</code> are two characters that appear nowhere else, so the extend loop hits a guaranteed mismatch at each end instead of an <code>ArrayIndexOutOfBoundsException</code>. The <code>#</code> characters are what give even palindromes of <code>s</code> a centre of their own. Test the decode on <code>a</code>, <code>aa</code>, and <code>aba</code> before you trust <code>(centre - best) / 2</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the mirror cannot skip a palindrome</span>
+    <p>Anything the expand-around-centre method would have found at <code>i</code> while staying inside <code>[L, R]</code> is, letter for letter, the expand it already found at the mirror <code>j</code>. Anything it would have found past <code>R</code> is exactly what the extend loop is about to try. There is no third kind of palindrome, so the copy-plus-clip-plus-extend sequence reports the same radius the quadratic method would have, just without redoing the inner work.</p>
   </div>
 </aside>
 
@@ -169,7 +196,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "T = ^#a#b#a#$. Centres on '#' handle even palindromes of s.",
+          "note": "The sentinel string is ^#a#b#a#$. Centres that sit on a hash mark are what will report even palindromes of the original string.",
           "active": [
             0
           ],
@@ -180,7 +207,7 @@
           }
         },
         {
-          "note": "i at first 'a'. Extend to #a#. d=2. Box covers that palindrome.",
+          "note": "The first letter-centre is the first a. Expanding reaches #a# and stores radius 2, and that small palindrome becomes the live box.",
           "active": [
             2
           ],
@@ -191,7 +218,7 @@
           }
         },
         {
-          "note": "i at 'b'. Expand #a#b#a# — the whole string is a palindrome of radius 4 around b.",
+          "note": "The centre at b sits outside that box, so we expand from scratch and the whole string #a#b#a# is a palindrome of radius 4 around b.",
           "active": [
             4
           ],
@@ -202,7 +229,7 @@
           }
         },
         {
-          "note": "i at second 'a'. Mirror of first 'a'. Copy min(d[mirror], remaining box)=2. Matches.",
+          "note": "The second a sits inside the big box. Its mirror is the first a, and min of that radius and the remaining box is 2, which copies cleanly.",
           "active": [
             6
           ],
@@ -213,7 +240,7 @@
           }
         },
         {
-          "note": "Longest in s is length d-1 at centre b: 4-1=3, \"aba\".",
+          "note": "The longest original slice has length d minus 1 at centre b, which is 3, the string aba. That is the answer this walk was building.",
           "active": [
             2,
             4,
@@ -226,7 +253,7 @@
           }
         },
         {
-          "note": "Even palindrome \"aa\" would show up as a large d on a '#' centre between the two a's.",
+          "note": "An even palindrome such as aa would have shown up as a large radius on the hash mark sitting in the gap between those two letters.",
           "active": [
             3,
             5
@@ -265,17 +292,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Build T</strong> with '^', '$' borders and '#' between characters.</li>
-  <li><strong>d[]</strong> size |T|, c=0, r=0.</li>
-  <li><strong>For each i</strong>: mirror = 2*c-i; if i<r, d[i]=min(d[mirror], r-i); else d[i]=1 (or 0 depending on counting).</li>
-  <li><strong>Extend</strong> while ipm d in bounds and T matches.</li>
-  <li><strong>If i+d > r</strong> set c=i, r=i+d.</li>
-  <li><strong>Decode:</strong> palindrome length in s is d[i]-1; start = (i-d[i])/2 in original indexing with this T.</li>
+  <li><strong>Build the sentinel string first.</strong> Write <code>^</code>, then <code>#</code> and each letter, then a closing <code>#$</code>. The two unique borders stop the extend loop at the ends, and the hashes give even palindromes of <code>s</code> a centre of their own.</li>
+  <li><strong>Allocate the radius array and an empty box.</strong> Let <code>d</code> have length <code>|T|</code>, and start with <code>c = 0</code> and <code>R = 0</code> so the first real centre has nothing to mirror yet.</li>
+  <li><strong>Copy the mirrored radius when i sits inside the box.</strong> The mirror is <code>2*c - i</code>. If <code>i &lt; R</code>, set <code>d[i] = min(d[mirror], R-i)</code>; otherwise start at 1. The clip is what stops you inventing characters past the known palindrome.</li>
+  <li><strong>Extend with fresh comparisons.</strong> While the two characters at <code>i - d[i]</code> and <code>i + d[i]</code> agree, increment. This is the only place new characters are read, and it is what grows a palindrome that the mirror only proved up to the box edge.</li>
+  <li><strong>Move the box only when this centre wins the right end.</strong> If <code>i + d[i] &gt; R</code>, set <code>c = i</code> and <code>R = i + d[i]</code>. Charging every successful extend to a rightward move of <code>R</code> is the linear-time argument.</li>
+  <li><strong>Decode back into the original string.</strong> With this construction the palindrome length in <code>s</code> is <code>d[i] - 1</code>, and the start index is <code>(i - d[i]) / 2</code>. Confirm the arithmetic on <code>a</code>, <code>aa</code>, and <code>aba</code> before you ship it.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Radii on the sentinel string of aba, showing a fresh expand at the first a, a box-widening expand at b, and a mirrored copy at the second a.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -283,12 +310,12 @@ flowchart TD
       <tr><th>i</th><th>box</th><th>d</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>none</td><td>init</td><td>T = ^#a#b#a#$. Centres on '#' handle even palindromes of s.</td></tr>
-      <tr><td>a</td><td>[1,3]</td><td>2</td><td>i at first 'a'. Extend to #a#. d=2. Box covers that palindrome.</td></tr>
-      <tr><td>b</td><td>[0,8]</td><td>4</td><td>i at 'b'. Expand #a#b#a# — the whole string is a palindrome of radius 4 around b.</td></tr>
-      <tr><td>a2</td><td>[0,8]</td><td>2</td><td>i at second 'a'. Mirror of first 'a'. Copy min(d[mirror], remaining box)=2. Matches.</td></tr>
-      <tr><td>ans</td><td>done</td><td>len 3</td><td>Longest in s is length d-1 at centre b: 4-1=3, "aba".</td></tr>
-      <tr><td>even centres</td><td>#</td><td>gaps</td><td>Even palindrome "aa" would show up as a large d on a '#' centre between the two a's.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>none</td><td>init</td><td>The sentinel string is ^#a#b#a#$. Centres that sit on a hash mark are what will report even palindromes of the original string.</td></tr>
+      <tr><td>a</td><td>[1,3]</td><td>2</td><td>The first letter-centre is the first a. Expanding reaches #a# and stores radius 2, and that small palindrome becomes the live box.</td></tr>
+      <tr><td>b</td><td>[0,8]</td><td>4</td><td>The centre at b sits outside that box, so we expand from scratch and the whole string #a#b#a# is a palindrome of radius 4 around b.</td></tr>
+      <tr><td>a2</td><td>[0,8]</td><td>2</td><td>The second a sits inside the big box. Its mirror is the first a, and min of that radius and the remaining box is 2, which copies cleanly.</td></tr>
+      <tr><td>ans</td><td>done</td><td>len 3</td><td>The longest original slice has length d minus 1 at centre b, which is 3, the string aba. That is the answer this walk was building.</td></tr>
+      <tr><td>even centres</td><td>#</td><td>gaps</td><td>An even palindrome such as aa would have shown up as a large radius on the hash mark sitting in the gap between those two letters.</td></tr>
     </tbody>
   </table>
 </div>
@@ -405,7 +432,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each extend step that succeeds increases r. r never decreases. The mirror copy is O(1) per centre. |T| = 2n+3 so still linear.</p>
+    <p>There are <code>|T| = 2n+3</code> centres and the mirror copy is a constant amount of arithmetic at each one. The only loop that can run more than once per centre is the extend. Every successful extend comparison increases <code>R</code> by at least one, and <code>R</code> never decreases, so successful extends total at most <code>|T|</code>. A failed extend comparison happens at most once per centre after the copied radius is installed, which is another <code>|T|</code> comparisons.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>6</sup></code> the sentinel string has about two million centres and you do a few million character reads, which is a few milliseconds. Expand-around-centre on a string of all <code>a</code>s is about <code>n<sup>2</sup></code> comparisons, <code>10<sup>12</sup></code> at that size, and that is the runtime the mirror is designed to avoid. Hashing plus binary search finds only the single longest palindrome in <code>O(n log n)</code> and does not fill every radius.</p>
   </div>
 
   <table class="complexity__compare">
@@ -427,28 +455,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Forgetting sentinels ^ and $</span>
-    <div class="pitfalls__bug">The while loop walks off the array when a palindrome hits an end.</div>
-    <div class="pitfalls__fix">Guaranteed-mismatch borders, or explicit bounds checks.</div>
+    <div class="pitfalls__bug">Leaving the ends of <code>T</code> as ordinary characters looks fine on a sample whose longest palindrome sits in the middle. The first time a palindrome reaches an end, the extend loop reads past the array and throws, or it wraps into a coincidental match.</div>
+    <div class="pitfalls__fix">Put two unique borders on <code>T</code>, or write explicit bounds checks in the <code>while</code>. Test a single-character string and a string that is itself a palindrome.</div>
   </li>
   <li>
     <span class="pitfalls__title">d counting vs expand-by-1</span>
-    <div class="pitfalls__bug">Mixing "d is the length in T" with "d is the number of extra steps". Off-by-one on the substring start.</div>
-    <div class="pitfalls__fix">Pick one convention; the code above uses d=1 meaning just the centre, extend while equal.</div>
+    <div class="pitfalls__bug">Mixing "<code>d</code> is the length in <code>T</code>" with "<code>d</code> is the number of extra steps past the centre" looks like a documentation issue. The start-index formula then shifts by one and you return a neighbour of the real answer, which still looks palindromic on short samples.</div>
+    <div class="pitfalls__fix">Pick one convention and keep it. The listing uses <code>d = 1</code> meaning just the centre, then extends while the next pair matches. Check the decode on <code>a</code>, <code>aa</code>, and <code>aba</code> together.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using substring inside the extend loop</span>
-    <div class="pitfalls__bug">Java substring copies (older JDKs) and you go quadratic plus allocations.</div>
-    <div class="pitfalls__fix">char[] and indices only.</div>
+    <div class="pitfalls__bug">Comparing <code>T.substring(...)</code> in the inner loop looks like the cleanest way to say "these two sides match". On older JDKs each call copies, and even on new ones you have turned a linear scan into a quadratic allocation storm.</div>
+    <div class="pitfalls__fix">Work on a <code>char[]</code> and compare two indices. The inner loop must be two array reads and an increment, nothing else.</div>
   </li>
   <li>
     <span class="pitfalls__title">Even palindromes without '#'</span>
-    <div class="pitfalls__bug">You only computed odd lengths. "abba" is missed.</div>
-    <div class="pitfalls__fix">Sentinel string, or two arrays dOdd/dEven.</div>
+    <div class="pitfalls__bug">Expanding only around letters looks complete because those are the centres you can see. Every even palindrome of <code>s</code>, including <code>abba</code> and <code>aa</code>, is then invisible, and LC 5 returns a shorter odd piece.</div>
+    <div class="pitfalls__fix">Build the sentinel string, or keep two radius arrays <code>dOdd</code> and <code>dEven</code> with the same box idea run twice. Test <code>cbbd</code>, whose answer is the even slice <code>bb</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Decoding start index wrong</span>
-    <div class="pitfalls__bug">(centre-best)/2 vs (centre-best+1)/2 depending on T's first '#'.</div>
-    <div class="pitfalls__fix">Derive once from T = ^#s0#s1#...#$ and test on "a", "aa", "aba".</div>
+    <div class="pitfalls__bug">The formula <code>(centre - best) / 2</code> versus <code>(centre - best + 1) / 2</code> depends on whether <code>T</code> starts with a hash, and both versions look plausible. One of them passes <code>aba</code> and fails <code>aa</code>.</div>
+    <div class="pitfalls__fix">Derive the start once from <code>T = ^#s0#s1#...#$</code> and lock it with tests on <code>a</code>, <code>aa</code>, and <code>aba</code>. Do not mix constructions from two blog posts.</div>
   </li>
 </ul>
 
@@ -490,28 +518,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is this linear like Z?</summary>
     <div class="followup__body">
-      <p>Potential r. Mirror copies cost O(1). Extending past r is paid for by increasing r, at most |T| times.</p>
+      <p>The right end <code>R</code> is a potential. A mirror copy is a constant amount of work. Every successful extend comparison increases <code>R</code>, and <code>R</code> never decreases, so those comparisons total at most <code>|T|</code>. A failed extend happens at most once per centre. That is the same charging argument as the Z-box, with a palindrome in place of a prefix-copy. One centre might expand a long way, but it spends credit that is never spent again.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you support updates?</summary>
     <div class="followup__body">
-      <p>Not with a static d[]. Rebuild is O(n). Online insertion at the end is an eertree. Hashes handle "is [l,r] a palindrome" with updates via a Fenwick of polynomial coefficients, which is heavier.</p>
+      <p>Not with a static <code>d[]</code>. Rebuilding after each change is <code>O(n)</code> and is fine if updates are rare. Online insertion of a character at the end is what an eertree (palindromic tree) is for. If the question is only "is this range a palindrome?" after point updates, a Fenwick or segment tree of polynomial hash coefficients can answer it, which is a heavier structure and a different page.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Longest palindromic subsequence vs substring?</summary>
     <div class="followup__body">
-      <p>Subsequence is DP O(n^2) (LCS of s and reverse). Manacher is substrings only — contiguous.</p>
+      <p>A subsequence does not have to be contiguous, so the mirror box does not apply. The usual answer is an <code>O(n<sup>2</sup>)</code> DP, or LCS of the string with its reverse. Manacher reports contiguous slices only. In an interview, ask which word they said before you reach for this page.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you list all palindromic substrings without O(n^2) memory?</summary>
     <div class="followup__body">
-      <p>The O(n) radii already represent them. Iterate centres and emit ranges on demand; do not materialise every string.</p>
+      <p>The <code>O(n)</code> radii already represent every palindromic slice: a centre with radius <code>d</code> in <code>T</code> contributes <code>d/2</code> palindromes of the original string. Iterate centres and emit the ranges on demand. Materialising every slice as a <code>String</code> is what blows the memory, not the algorithm that found them.</p>
     </div>
   </details>
 </div>

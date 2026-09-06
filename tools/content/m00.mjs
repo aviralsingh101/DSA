@@ -14,24 +14,41 @@ export const topics = [
 
   why: {
     paras: [
-      "Complexity analysis is not academic bookkeeping in competitive programming, it is the " +
-      "targeting system. The problem setter chose <code>n &le; 2 &times; 10&#8309;</code> " +
-      "deliberately, and that number rules out entire families of solutions before you write a " +
-      "line. If you can price a candidate approach in ten seconds you avoid the single most " +
-      "expensive interview mistake: implementing something correct that is too slow, then having " +
-      "no time left to fix it.",
-      "The reason this skill decays is that day-to-day engineering rarely punishes a hidden " +
-      "quadratic. A service handling 50 records per request never notices. A judge with " +
-      "<code>n = 10&#8309;</code> notices immediately, and so does an interviewer who asks " +
-      "\"what is the complexity?\" and watches whether you answer instantly or start counting " +
-      "loops with a finger.",
-      "The whole discipline reduces to three habits: count the number of times the innermost " +
-      "statement runs, keep only the fastest-growing term, and compare that against about " +
+      "You are handed a list of two hundred thousand numbers and asked whether any two of them " +
+      "add up to exactly one million. The first idea anybody has is to try every pair: fix one " +
+      "number, walk over all the numbers after it, and check each sum. That is completely " +
+      "correct, and it is also about <code>200000 &times; 200000 / 2 = 2 &times; 10&sup1;&#8304;</code> " +
+      "additions. Java gets through roughly a hundred million simple operations per second, so " +
+      "that loop needs something like three minutes, and the judge that gave you one second " +
+      "stopped watching long ago. The idea was never wrong; the amount of work was.",
+      "Notice that nothing about that failure required running the program. The pair loop does a " +
+      "number of steps proportional to <code>n &times; n</code>, where <code>n</code> is how many " +
+      "numbers you were given, and once you know that shape you know it dies at " +
+      "<code>n = 2 &times; 10&#8309;</code> without touching a keyboard. That prediction is what " +
+      "complexity analysis is: working out how the step count grows as the input grows. The " +
+      "notation for it is <em>Big-O</em> &mdash; writing <code>O(n&sup2;)</code> says \"the work " +
+      "grows like the square of the input size\", with constant multipliers such as the one-half " +
+      "above deliberately thrown away because they do not change which sizes are survivable.",
+      "This is the skill that rusts fastest once you stop competing, because ordinary engineering " +
+      "almost never punishes getting it wrong. A service that handles fifty records per request " +
+      "can carry a hidden quadratic loop for years without anyone noticing. A judge running the " +
+      "same code on <code>10&#8309;</code> elements notices within one second, and so does an " +
+      "interviewer who asks \"and what is the complexity of that?\" and watches whether the " +
+      "answer arrives immediately or after you count loops with a finger on the screen.",
+      "In a real statement the tell is the constraint line, something like " +
+      "<code>1 &le; n &le; 2 &times; 10&#8309;</code>. A setter picks that number so that one " +
+      "family of solutions fits inside the time limit and another family does not, which means " +
+      "the number is a hint you can read backwards to recover the intended approach. The whole " +
+      "discipline reduces to three habits, and the rest of this page is those three habits in " +
+      "detail: count how many times the innermost statement of your code runs, keep only the " +
+      "fastest-growing part of that count, and compare it against a budget of about " +
       "<code>10&#8312;</code> simple operations per second.",
     ],
-    insight: "Big-O is a statement about <em>growth</em>, not about time. It answers " +
-      "\"if the input doubles, what happens to the work?\" That is exactly the question the " +
-      "constraint line in a problem statement is asking you.",
+    insight: "Big-O is a statement about <em>growth</em>, not about seconds on your particular " +
+      "machine. It answers exactly one question: if the input doubles, what happens to the work? " +
+      "Doubling <code>n</code> doubles the work of an <code>O(n)</code> loop and quadruples the " +
+      "work of an <code>O(n&sup2;)</code> one. That is the same question the constraint line in a " +
+      "problem statement is silently asking you, which is why the two fit together so neatly.",
   },
 
   recognise: {
@@ -73,39 +90,67 @@ export const topics = [
         "binary search is <code>O(log n)</code> time and <code>O(1)</code> space",
         "Always state both"],
     ],
-    constraint: "roughly <code>10&#8312;</code> simple operations per second in Java. Divide the " +
-      "budget by 2&ndash;5 if the inner loop chases pointers, boxes <code>Integer</code>s, or " +
-      "touches a <code>HashMap</code>.",
+    constraint: "Java gets through roughly <code>10&#8312;</code> simple operations per second, " +
+      "where a simple operation means one array read, one comparison or one addition, and almost " +
+      "every judge allows you between one and two seconds. Divide that budget by 2 to 5 when the " +
+      "inner loop chases object pointers, wraps <code>int</code> values into <code>Integer</code> " +
+      "objects, or touches a <code>HashMap</code>, because each of those costs several machine " +
+      "operations and a likely cache miss rather than one cheap instruction.",
   },
 
   core: {
     heading: "Core idea and the counting rules",
     paras: [
-      "Pick the statement that executes most often &mdash; usually the innermost line of the " +
-      "deepest loop &mdash; and count how many times it runs as a function of <code>n</code>. " +
-      "That count, stripped of constants and lower-order terms, is the complexity. Everything " +
-      "else is a shortcut for doing that count quickly.",
-      "Four rules cover almost every case you will meet. <strong>Sequence:</strong> code run one " +
-      "after the other costs the maximum, not the sum, because " +
-      "<code>O(n) + O(n&sup2;) = O(n&sup2;)</code>. <strong>Nesting:</strong> independent nested " +
-      "loops multiply. <strong>Dependent nesting:</strong> when the inner bound depends on the " +
-      "outer index, sum the series instead of multiplying &mdash; but note that " +
-      "<code>n(n+1)/2</code> is still <code>&Theta;(n&sup2;)</code>, so the shortcut of " +
-      "multiplying gives the right class anyway. <strong>Amortisation:</strong> when a rare " +
-      "operation is expensive, charge its cost to the cheap operations that made it necessary.",
-      "Big-O is an upper bound, &Omega; a lower bound, and &Theta; both. In practice everyone says " +
-      "\"O\" and means \"&Theta;\", and that is fine in an interview &mdash; but knowing the " +
-      "difference matters when you claim optimality. Saying \"any correct algorithm must read " +
-      "every element, so &Omega;(n) is a lower bound and my &Theta;(n) solution is optimal\" is a " +
-      "much stronger answer than \"mine is O(n)\".",
+      "Find the statement that executes most often. In a loop nest that is the innermost line; in " +
+      "a recursive routine it is the body of the call that happens most frequently. Count how " +
+      "many times it runs, written as a formula in <code>n</code>, the size of the input. Then " +
+      "throw away every constant multiplier and every term except the fastest-growing one, " +
+      "because at the sizes that decide whether you pass, the smaller terms are invisible: " +
+      "<code>3n&sup2; + 500n + 9</code> at <code>n = 10&#8308;</code> is <code>3 &times; " +
+      "10&#8312;</code> plus a rounding error. What survives that pruning is the complexity, and " +
+      "everything else on this page is a shortcut for doing the count faster.",
+      "Four rules cover almost every case you will meet. <strong>Sequence:</strong> two blocks " +
+      "that run one after the other cost the larger of the two, not the sum, because " +
+      "<code>O(n) + O(n&sup2;)</code> is swamped by the square. <strong>Nesting:</strong> two " +
+      "independent loops, each running <code>n</code> times, multiply to <code>n&sup2;</code>. " +
+      "<strong>Dependent nesting:</strong> when the inner loop's bound depends on the outer " +
+      "index, add up the series rather than multiplying, since the inner loop is short early and " +
+      "long later &mdash; though <code>1 + 2 + &hellip; + n = n(n+1)/2</code> is still " +
+      "<code>&Theta;(n&sup2;)</code>, so multiplying happens to land in the right class anyway. " +
+      "<strong>Amortisation:</strong> when one operation in a long run is occasionally expensive, " +
+      "spread its cost over the cheap operations that made it necessary and quote the average; " +
+      "that average is what <em>amortised</em> means.",
+      "Three symbols show up and they are not interchangeable. <code>O(f)</code> is an upper " +
+      "bound and means \"grows no faster than <code>f</code>\". <code>&Omega;(f)</code> is a " +
+      "lower bound and means \"grows at least as fast as <code>f</code>\". <code>&Theta;(f)</code> " +
+      "claims both at once, which is usually what you actually mean. Everyone says \"O\" out loud " +
+      "and means \"&Theta;\", and that is fine, but the distinction earns its keep the moment you " +
+      "claim a solution cannot be improved: \"any correct algorithm has to look at every element, " +
+      "so <code>&Omega;(n)</code> is a lower bound and my <code>&Theta;(n)</code> scan is " +
+      "optimal\" is a far stronger sentence than \"mine is <code>O(n)</code>\".",
+      "Put the procedure on one concrete snippet. Let <code>a</code> be an array of <code>n</code> " +
+      "numbers, <code>target</code> the value you are hunting for, and <code>hits</code> a counter " +
+      "of matching pairs, and run <code>for (i = 0; i &lt; n; i++) for (j = i + 1; j &lt; n; j++) " +
+      "if (a[i] + a[j] == target) hits++;</code>. The hot statement is the comparison inside. For " +
+      "<code>i = 0</code> it runs <code>n - 1</code> times, for <code>i = 1</code> it runs " +
+      "<code>n - 2</code> times, and so on down to a single execution, which totals " +
+      "<code>n(n-1)/2</code>. Drop the one-half and the linear term and you are left with " +
+      "<code>&Theta;(n&sup2;)</code>. At <code>n = 2 &times; 10&#8309;</code> that is " +
+      "<code>2 &times; 10&sup1;&#8304;</code> comparisons, which is precisely why the pair loop " +
+      "from the opening scenario cannot be the intended answer.",
     ],
     invariantTitle: "The one-sentence method",
     invariant: "<p><strong>How many times does the innermost statement run, as a function of " +
-      "<code>n</code>?</strong> Answer that, drop constants and lower-order terms, and you have " +
-      "the complexity. If the innermost statement is itself a library call, substitute that " +
-      "call's cost first &mdash; <code>list.contains</code> is <code>O(n)</code>, " +
-      "<code>set.contains</code> is <code>O(1)</code>, and that one substitution is the " +
-      "difference between passing and timing out.</p>",
+      "<code>n</code>?</strong> Answer that, drop the constant multipliers and the lower-order " +
+      "terms, and you have the complexity.</p>" +
+      "<p>In plain words, you are not timing anything and you are not counting lines of source " +
+      "code &mdash; you are counting executions of the single line that runs most often, because " +
+      "every other line in the method runs at most as often and therefore cannot change the " +
+      "answer. The one thing that breaks this is a line that hides a loop inside a method call, " +
+      "so substitute the call's own cost before you count: <code>list.contains(x)</code> scans " +
+      "the whole list and costs <code>O(n)</code>, while <code>set.contains(x)</code> hashes once " +
+      "and costs <code>O(1)</code>. That single substitution is routinely the difference between " +
+      "passing and timing out.</p>",
     extra: [
       { kind: "math", title: "Amortised analysis, concretely",
         html: "<p>Growing an <code>ArrayList</code> doubles its capacity, which copies every " +
@@ -280,11 +325,12 @@ export const topics = [
       "<code>O(log n)</code>, <code>String.substring</code> &rarr; <code>O(len)</code>.",
     "<strong>Count executions.</strong> Multiply independent loop bounds; sum the series when an " +
       "inner bound depends on an outer index.",
-    "<strong>Add sequential blocks with max, not plus.</strong> " +
-      "<code>O(n log n)</code> then <code>O(n)</code> is <code>O(n log n)</code>.",
+    "<strong>Add sequential blocks with max, not plus.</strong> A sort followed by a linear " +
+      "scan is still <code>O(n log n)</code>, because the slower block swallows the faster one.",
     "<strong>Amortise the spiky operations.</strong> Charge a resize or a path compression to the " +
       "cheap operations that caused it, then quote the average.",
-    "<strong>Drop constants and lower-order terms</strong> to get the class.",
+    "<strong>Drop constants and lower-order terms</strong> so only the fastest-growing piece " +
+      "survives: <code>3n&sup2; + 500n</code> is the same class as <code>n&sup2;</code>.",
     "<strong>Evaluate against the constraint</strong> using <code>10&#8312;</code> operations per " +
       "second, then divide by 2&ndash;5 for boxing and pointer chasing.",
     "<strong>State time and space separately</strong>, and say whether your bound is tight " +
@@ -721,7 +767,13 @@ public class HiddenCost {
       "The master theorem is a lookup table for exactly that classification. It is worth " +
       "memorising because interviewers ask \"why <code>n log n</code>?\" and the strong answer is " +
       "\"there are <code>log n</code> levels and each costs <code>&Theta;(n)</code>\", not " +
-      "\"because merge sort is <code>n log n</code>\".",
+      "\"because merge sort is <code>n log n</code>\". Once you can draw the tree, the lookup " +
+      "table is just a shortcut for a sum you already know how to write by hand. The same three " +
+      "shapes also tell you the space story: a divide-style tree is only <code>log n</code> deep, " +
+      "so it is safe at <code>n = 10&#8313;</code>, while a peel-one-element recursion is " +
+      "<code>n</code> deep and overflows the Java stack long before the time limit is even the " +
+      "problem. That is why this page sits next to complexity analysis: counting loops prices " +
+      "iterative code, and drawing the recursion tree prices everything that calls itself.",
     ],
     insight: "Do not try to unroll the recursion algebraically. Draw the tree, compute the cost of " +
       "one level, count the levels, and decide which end of the tree dominates. Three questions, " +
@@ -786,7 +838,11 @@ public class HiddenCost {
       "leaves, and the whole master theorem is just a comparison between it and <code>f(n)</code>. " +
       "If the leaves grow faster, the leaves pay for everything. If <code>f(n)</code> grows " +
       "faster, the single root call pays for everything. If they tie, every level costs the same " +
-      "and you multiply by the number of levels.",
+      "and you multiply by the number of levels. Walk merge sort as a check: eight elements split " +
+      "into two fours, then four twos, then eight ones; each of those four depths spends eight " +
+      "units merging, so the total is <code>8 &times; 4 = 32 = n(log&#8322; n + 1)</code>. That " +
+      "flat-per-level picture is exactly case 2, and it is the picture you should draw out loud " +
+      "when someone asks why merge sort is <code>n log n</code>.",
     ],
     invariantTitle: "The master theorem in one comparison",
     invariant: "<p>For <code>T(n) = a T(n/b) + f(n)</code> with <code>a &ge; 1</code>, " +
@@ -918,21 +974,24 @@ public class HiddenCost {
       "<code>b</code> (size divisor) and <code>f(n)</code> (work outside the calls).",
     "<strong>Check divide versus subtract.</strong> If the size shrinks by subtraction, skip the " +
       "master theorem and sum the series.",
-    "<strong>Compute the leaf exponent</strong> <code>c = log<sub>b</sub> a</code>.",
-    "<strong>Compare <code>f(n)</code> with <code>n<sup>c</sup></code></strong> to pick the case.",
+    "<strong>Compute the leaf exponent</strong> <code>c = log<sub>b</sub> a</code>, which is " +
+      "exactly how many leaves the tree has written as a power of <code>n</code>.",
+    "<strong>Compare <code>f(n)</code> with <code>n<sup>c</sup></code></strong> so you know " +
+      "whether the root, the leaves, or every level is paying for the work.",
     "<strong>Case 1 (<code>f</code> smaller):</strong> answer <code>&Theta;(n<sup>c</sup>)</code> " +
-      "&mdash; the leaves pay.",
+      "&mdash; the leaves pay because the combine work shrinks as you go up.",
     "<strong>Case 2 (equal up to log factors):</strong> answer " +
       "<code>&Theta;(n<sup>c</sup> log<sup>k+1</sup> n)</code> &mdash; every level pays equally.",
     "<strong>Case 3 (<code>f</code> larger, and regular):</strong> answer " +
-      "<code>&Theta;(f(n))</code> &mdash; the root pays.",
+      "<code>&Theta;(f(n))</code> &mdash; the single root call already costs more than everything below it.",
     "<strong>Report space separately</strong> as <code>&Theta;(max depth)</code>, plus any " +
-      "auxiliary buffers the combine step allocates.",
+      "auxiliary buffers the combine step allocates, because only the live path uses memory.",
   ],
 
   dryRun: {
-    intro: "Nine recurrences worked through the same procedure. Highlighted rows are the ones " +
-      "whose answers surprise people.",
+    intro: "Nine recurrences run through the same three questions: write a, b and f(n), compare " +
+      "the leaf exponent against f, then read the case. Highlighted rows are the ones whose " +
+      "answers surprise people.",
     cols: ["Recurrence", "a, b", "n<sup>c</sup>", "f(n)", "Case", "T(n)"],
     rows: [
       { cells: ["<code>T(n) = T(n/2) + 1</code>", "1, 2", "n&#8304; = 1", "1", "2 (k=0)", "<code>&Theta;(log n)</code>"],
@@ -1357,11 +1416,14 @@ public class RecurrenceProbe {
       "This is the specific skill that decays when you stop competing. Experienced engineers still " +
       "know what a segment tree is; what they lose is the reflex that says " +
       "\"<code>n &le; 20</code>, therefore subsets, therefore bitmask\" in under two seconds. " +
-      "Recovering that reflex is worth more than re-reading any single algorithm.",
+      "Recovering that reflex is worth more than re-reading any single algorithm, because it " +
+      "tells you which page of this course to open before you have even finished the statement.",
       "It also protects you in interviews where no constraints are given. Ask for them. " +
       "\"How large is <code>n</code>?\" is not a stalling question &mdash; it is the question that " +
       "determines whether the expected answer is two pointers or a suffix automaton, and asking " +
-      "it signals that you think about cost before you think about code.",
+      "it signals that you think about cost before you think about code. A setter who answers " +
+      "\"up to a hundred thousand\" has just told you that a nested pair loop is dead, and you " +
+      "should say that deduction out loud before you pick a data structure.",
     ],
     insightTitle: "How to use this page",
     insight: "Cover the right-hand column of the main table below. Read a constraint, say the " +
@@ -1432,7 +1494,8 @@ public class RecurrenceProbe {
     ],
     constraint: "Java's budget is roughly <code>10&#8312;</code> simple operations per second. " +
       "Halve it for <code>HashMap</code>-heavy code, quarter it for boxed collections, and add " +
-      "0.5&ndash;1&nbsp;s of JVM startup on some judges.",
+      "0.5&ndash;1&nbsp;s of JVM startup on some judges. A bound that sits just under that budget " +
+      "is almost always the intended class, not a coincidence.",
   },
 
   core: {
@@ -1453,7 +1516,10 @@ public class RecurrenceProbe {
       "<code>k &le; 10</code>, the small parameter is almost always the DP dimension. Second, " +
       "unusual bounds are signatures: <code>n &le; 40</code> means meet in the middle, " +
       "<code>n &le; 500</code> means <code>O(n&sup3;)</code>, and a bound of " +
-      "<code>10&sup1;&#8312;</code> means you will never iterate over the input at all.",
+      "<code>10&sup1;&#8312;</code> means you will never iterate over the input at all. Walk one " +
+      "line as a check: <code>1 &le; n &le; 2&times;10&#8309;</code> with a request for the " +
+      "longest increasing subsequence forces <code>O(n log n)</code> patience sorting, because " +
+      "the quadratic DP at that size is about <code>4&times;10&sup1;&#8304;</code> steps.",
     ],
     invariantTitle: "The reflex to rebuild",
     invariant: "<p>Given a bound, complete this sentence without pausing: " +
@@ -1575,7 +1641,7 @@ public class RecurrenceProbe {
             done: [], dim: [1,2,3,4,5,6,7], values: { n: "100", "n\u00b2 ops": "1e4", verdict: "instant" } },
           { note: "n = 1000 gives 1e6. Still instant, and this is why n <= 1000 usually means the setter allows O(n^2) or even O(n^2 log n).",
             active: [1], done: [0], dim: [2,3,4,5,6,7], values: { n: "1e3", "n\u00b2 ops": "1e6", verdict: "instant" } },
-          { note: "n = 3000 gives 9e6. Comfortable.",
+          { note: "n = 3000 gives 9e6 operations. Still comfortable in Java, even with a slightly heavy inner loop.",
             active: [2], done: [0,1], dim: [3,4,5,6,7], values: { n: "3e3", "n\u00b2 ops": "9e6", verdict: "fine" } },
           { note: "n = 5000 gives 2.5e7. Fine in Java with primitive arrays. This is the classic 'quadratic DP intended' bound.",
             active: [3], done: [0,1,2], dim: [4,5,6,7], values: { n: "5e3", "n\u00b2 ops": "2.5e7", verdict: "fine" } },
@@ -1633,12 +1699,13 @@ public class RecurrenceProbe {
       "<code>a<sub>i</sub> &le; 100</code>, that parameter is almost certainly a DP dimension or " +
       "a state.",
     "<strong>Translate the class into a state shape:</strong> subsets, prefix pairs, intervals, " +
-      "sorted order, digits, or all pairs.",
+      "sorted order, digits, or all pairs &mdash; that mapping is what you are actually drilling.",
     "<strong>Check the memory limit</strong> against your intended table. If it does not fit, the " +
       "DP is meant to be rolled to one or two rows.",
     "<strong>Sanity-check the output type.</strong> Bounds near <code>10&#8313;</code> with any " +
-      "summation or multiplication mean <code>long</code>.",
-    "<strong>Only now start solving</strong>, with the target complexity already fixed.",
+      "summation or multiplication mean the product no longer fits in a 32-bit <code>int</code>, so use <code>long</code>.",
+    "<strong>Only now start solving</strong>, with the target complexity already fixed so you " +
+      "do not implement a correct idea that the bound has already ruled out.",
   ],
 
   dryRun: {
@@ -2058,7 +2125,10 @@ public class MultiTestPattern {
       "stack, that <code>TreeMap.floorKey</code> exists, that " +
       "<code>Arrays.binarySearch</code> returns <code>-(insertionPoint) - 1</code>, and that " +
       "<code>(lo + hi) / 2</code> overflows. That fluency is what lets you spend your thinking on " +
-      "the algorithm.",
+      "the algorithm. Treat this page as a paste-and-memorise toolkit: once the reader, the " +
+      "overflow rules and the container flowchart are automatic, Java stops being the thing that " +
+      "makes a correct idea fail. The Java tabs below are the paste-ready versions of those " +
+      "habits, not extra theory. Paste the reader once and never think about IO again.",
     ],
     insight: "Two rules cover most of it. <strong>Never box in a hot loop</strong> &mdash; prefer " +
       "<code>int[]</code>, <code>long[]</code> and index-based structures over " +
@@ -2102,7 +2172,8 @@ public class MultiTestPattern {
     ],
     constraint: "budget about <code>10&#8312;</code> primitive operations per second. Boxed " +
       "collections cost 5&ndash;20&times; more per element; <code>Scanner</code> reads roughly " +
-      "10&#8310; tokens per second, a buffered byte reader roughly 10&#8311;&ndash;10&#8312;.",
+      "10&#8310; tokens per second, a buffered byte reader roughly 10&#8311;&ndash;10&#8312;. " +
+      "At <code>n = 10&#8310;</code> that IO gap alone is the difference between passing and TLE.",
   },
 
   core: {
@@ -2117,12 +2188,16 @@ public class MultiTestPattern {
       "IO is the other half. <code>Scanner</code> uses regular expressions internally and " +
       "synchronises; <code>System.out.println</code> can flush on every call. Replacing them with " +
       "a byte-level reader and a single buffered write is mechanical, costs thirty lines you paste " +
-      "once, and often turns a timeout into a comfortable pass.",
+      "once, and often turns a timeout into a comfortable pass. On a million integers the " +
+      "difference is typically several seconds, which is the entire time limit.",
       "Everything else on this page is a specific trap: <code>int</code> overflow in midpoints and " +
       "products, comparators written with subtraction, <code>remove(Object)</code> versus " +
       "<code>remove(int)</code> on a <code>List&lt;Integer&gt;</code>, and " +
       "<code>Arrays.sort</code> having two completely different implementations depending on " +
-      "whether the array is primitive or boxed.",
+      "whether the array is primitive or boxed. Walk one overflow: <code>lo = 2&times;10&#8313;</code> " +
+      "and <code>hi = 2.1&times;10&#8313;</code> are both legal <code>int</code>s, but " +
+      "<code>(lo + hi) / 2</code> wraps negative and then becomes a broken binary-search index. " +
+      "The same walk on <code>a * a</code> is why the cast must sit on an operand, not on the result after it has already wrapped.",
     ],
     invariantTitle: "The competitive Java checklist",
     invariant: "<p>Before submitting, verify all five:</p><ol>" +
@@ -2223,7 +2298,7 @@ public class MultiTestPattern {
         frames: [
           { note: "lo = 2e9, comfortably inside int (max is 2147483647).", active: [0], dim: [1,2,3,4,5],
             values: { expression: "lo", "true value": "2000000000", "int result": "2000000000" } },
-          { note: "hi = 2.1e9, still just inside int.", active: [1], done: [0], dim: [2,3,4,5],
+          { note: "hi = 2.1e9, still just inside int, one below Integer.MAX_VALUE.", active: [1], done: [0], dim: [2,3,4,5],
             values: { expression: "hi", "true value": "2100000000", "int result": "2100000000" } },
           { note: "lo + hi = 4.1e9 overflows and wraps negative. (lo+hi)/2 is then a negative index \u2014 the classic binary search bug that sat in the JDK for nine years.",
             active: [2], x: [2], done: [0,1], dim: [3,4,5],
@@ -2231,7 +2306,7 @@ public class MultiTestPattern {
           { note: "Fix: lo + (hi - lo) / 2. The difference always fits, so no intermediate leaves range.",
             best: [2], done: [0,1], dim: [3,4,5],
             values: { expression: "lo + (hi-lo)/2", "true value": "2050000000", "int result": "2050000000" } },
-          { note: "Second case: a = 1e9, an int.", active: [3], done: [0,1,2], dim: [4,5],
+          { note: "Second case: a = 1e9, a legal int whose square will not fit in 32 bits.", active: [3], done: [0,1,2], dim: [4,5],
             values: { expression: "a", "true value": "1000000000", "int result": "1000000000" } },
           { note: "(long) a * a = 1e18, correct, because the cast happens before the multiplication.",
             active: [4], best: [4], done: [0,1,2,3], dim: [5],
@@ -2279,16 +2354,19 @@ public class MultiTestPattern {
     "<strong>Audit arithmetic.</strong> Every <code>+</code> and <code>*</code> whose operands can " +
       "be large gets a <code>long</code> cast on an operand.",
     "<strong>Write comparators with <code>Integer.compare</code></strong> and chain with " +
-      "<code>Comparator.comparingInt(...).thenComparing(...)</code>.",
+      "<code>Comparator.comparingInt(...).thenComparing(...)</code>, never with subtraction, " +
+      "because <code>a - b</code> wraps when the values are large or negative.",
     "<strong>Shuffle before <code>Arrays.sort(int[])</code></strong> when the input is adversarial " +
-      "(any Codeforces problem).",
-    "<strong>Buffer all output</strong> and print exactly once at the end.",
+      "(any Codeforces problem), since dual-pivot quicksort can be forced into quadratic time.",
+    "<strong>Buffer all output</strong> into one <code>StringBuilder</code> and print exactly " +
+      "once at the end, so you do not flush a million times.",
     "<strong>Guard recursion depth.</strong> If it can exceed about <code>10&#8308;</code>, either " +
       "convert to an explicit stack or launch the solver on a thread with a larger stack.",
   ],
 
   dryRun: {
     intro: "The eight substitutions that matter most, in the order you should apply them when a " +
+      "correct algorithm is still too slow. " +
       "solution is too slow.",
     cols: ["#", "Instead of", "Use", "Why"],
     rows: [
@@ -2821,7 +2899,11 @@ public class JavaTraps {
       "It also gives you something to say out loud. Interviewers score communication, and " +
       "narrating \"let me restate the problem, then check the constraints, then try a small " +
       "example\" is both genuinely useful and exactly the signal they are looking for. Silence " +
-      "while you think is the most common avoidable loss in an interview.",
+      "while you think is the most common avoidable loss in an interview. The rest of this page " +
+      "is that narration written down, so you can practise it the same way you practise an " +
+      "algorithm, until the seven phases fire without you having to remember their names. Use " +
+      "it on one old problem tonight: cover the code, walk the seven phases out loud, then " +
+      "uncover and compare what you actually wrote last time.",
     ],
     insightTitle: "The core discipline",
     insight: "Do not write code until you can state the algorithm in one or two sentences and " +
@@ -2867,19 +2949,24 @@ public class JavaTraps {
       "<strong>1. Restate (2&ndash;3 min).</strong> Say the problem back in your own words, " +
       "including the exact input, the exact output, and any guarantee you were given. If you " +
       "cannot do this without looking, you have not understood it. Ask about duplicates, negative " +
-      "values, empty input, and whether the input is sorted.",
+      "values, empty input, and whether the input is sorted. Those four questions catch most of " +
+      "the hidden assumptions that later become off-by-one bugs.",
       "<strong>2. Read the constraints (1 min).</strong> This gives you the target complexity and " +
       "often the technique &mdash; see " +
       "<a href=\"constraints-to-complexity.html\">Constraints to Complexity</a>. Write the target " +
-      "down. Everything after this point is measured against it.",
+      "down. Everything after this point is measured against it, so you do not spend twenty " +
+      "minutes designing a quadratic idea the bound has already killed. If no bound is given, " +
+      "ask for one before you invent an approach.",
       "<strong>3. Work a small example by hand (3&ndash;5 min).</strong> Take the smallest " +
       "non-trivial input and compute the answer manually, watching <em>how</em> you do it. Your " +
       "own procedure is usually the brute force, and the step you find tedious is usually the step " +
-      "the algorithm optimises. This is where most insights actually come from.",
+      "the algorithm optimises. This is where most insights actually come from, because you are " +
+      "watching yourself waste work.",
       "<strong>4. Brute force, out loud (2 min).</strong> State the obvious solution and its " +
       "complexity even if it is far too slow. It establishes correctness, gives you a reference " +
       "implementation for stress testing, and guarantees you have <em>something</em> if you run " +
-      "out of time.",
+      "out of time. Interviewers prefer a correct slow answer over a broken clever one, and " +
+      "saying the brute force also proves you understood the problem.",
       "<strong>5. Find the wasted work (5&ndash;10 min).</strong> Optimisation is always the same " +
       "question: what is the brute force recomputing? The answers form a short list &mdash; " +
       "recomputing a range sum (prefix sums), rescanning a window (two pointers), re-searching a " +
@@ -2887,10 +2974,14 @@ public class JavaTraps {
       "re-checking membership (hashing). Match your waste to one of these.",
       "<strong>6. Fix the invariant, then code (15 min).</strong> Write one sentence describing " +
       "what is true at every step (\"<code>best</code> holds the maximum subarray sum ending at " +
-      "<code>i</code>\"). Only then type. The invariant is what makes the code write itself.",
+      "<code>i</code>\"). Only then type. The invariant is what makes the code write itself, " +
+      "because every line now has a reason to exist. If you cannot write that sentence, you are " +
+      "not ready to type.",
       "<strong>7. Test deliberately (5 min).</strong> Empty, single element, all equal, all " +
       "negative, maximum size, and the boundary between your branches. Trace the code on one " +
-      "small case line by line rather than re-reading it.",
+      "small case line by line rather than re-reading it, because re-reading hides the same " +
+      "assumptions you already made while typing. A single hand-trace of a three-element input " +
+      "catches more bugs than rereading the whole method.",
     ],
     invariantTitle: "The stuck protocol",
     invariant: "<p>When you have no idea, run these six in order &mdash; they are ordered by how " +
@@ -3049,17 +3140,23 @@ public class JavaTraps {
 
   steps: [
     "<strong>Restate</strong> the problem, its input, its output and its guarantees without " +
-      "looking at the statement.",
-    "<strong>Extract the target complexity</strong> from the constraints and write it down.",
-    "<strong>Hand-solve</strong> the smallest interesting example and watch your own method.",
-    "<strong>State the brute force</strong> and its complexity out loud.",
-    "<strong>Name the wasted work</strong> and match it against the six-item checklist.",
-    "<strong>Write the invariant</strong> in one sentence before typing anything.",
-    "<strong>Implement</strong>, keeping the invariant true at every line.",
+      "looking at the statement, so you know you actually understood it.",
+    "<strong>Extract the target complexity</strong> from the constraints and write it down, " +
+      "because that number decides which ideas are even legal.",
+    "<strong>Hand-solve</strong> the smallest interesting example and watch your own method, " +
+      "since the tedious step is usually the one the algorithm will later skip.",
+    "<strong>State the brute force</strong> and its complexity out loud, so you have a correct " +
+      "fallback if the clever idea never arrives.",
+    "<strong>Name the wasted work</strong> and match it against the six-item checklist, which " +
+      "turns \"I am stuck\" into a short list of known patterns.",
+    "<strong>Write the invariant</strong> in one sentence before typing anything, so every later " +
+      "line has a reason to exist.",
+    "<strong>Implement</strong>, keeping that invariant true at every line rather than inventing " +
+      "the algorithm while you type, which is how interviews get lost.",
     "<strong>Run the edge-case checklist</strong>: empty, one element, all equal, all negative, " +
       "maximum size, duplicates, and each branch boundary.",
-    "<strong>State the final complexity</strong> unprompted, time and space, and mention one " +
-      "possible improvement.",
+    "<strong>State the final complexity</strong> unprompted, both time and space, and mention one " +
+      "possible improvement so the interviewer does not have to drag it out of you.",
   ],
 
   dryRun: {

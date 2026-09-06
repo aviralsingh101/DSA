@@ -17,20 +17,47 @@ pack({
     ["Complexity Analysis", "../00-foundations/complexity-analysis.html"],
   ],
   why: [
-    "Almost every binary-tree question is a traversal wearing a costume. Diameter, path sum, " +
-      "symmetry, serialisation, construction from two orders &mdash; each is \"walk every node " +
-      "exactly once and combine the children's answers\". If you cannot write the four walks " +
-      "without looking them up, the later pages in this module feel like magic.",
-    "The recursive definition is the whole data structure: a node holds a value and two " +
-      "optional children. Height, size, and \"is this a leaf\" fall out of that definition in " +
-      "three lines. Interviewers ask for both recursive and iterative forms because a " +
-      "linked-list-shaped degenerate of n = 1e5 overflows the JVM stack.",
-    "The four orders are not four algorithms. They are one DFS with the visit placed before, " +
-      "between, or after the two recursive calls, plus one BFS that swaps the implicit stack " +
-      "for an ArrayDeque.",
+    "Imagine a comment thread stored the way a database would store it. Each comment is one " +
+      "record holding its text plus two references: one to the reply displayed above it and " +
+      "one to the reply displayed below it, where a reference of <code>null</code> means there " +
+      "is nothing on that side. You are handed exactly one thing, a reference to the top " +
+      "comment, and asked to print all 100000 comments. There is no array to loop over and no " +
+      "index to increment, so the only way to reach comment number 57000 is to follow " +
+      "references down from the top. Everything on this page is about how to follow them so " +
+      "that every record is reached exactly once and in an order you can reason about.",
+    "Now change the task to \"how many replies sit underneath each comment\". The obvious " +
+      "method answers one comment at a time: stand on it, walk everything reachable below it, " +
+      "count what you saw, then move to the next comment and start again. That is correct and " +
+      "it is also quadratic, because a record sitting 40 levels deep gets counted once for " +
+      "each of its 40 ancestors. If the thread happens to be a straight chain of 100000 " +
+      "comments, the total work is 1 + 2 + ... + 100000, roughly <code>5&times;10&#8313;</code> " +
+      "reference hops &mdash; minutes of computation. One walk that visits each record once " +
+      "and hands its count back up to its parent finishes the same job in 100000 hops.",
+    "That single walk is the whole subject, so here is the vocabulary for it. A <em>node</em> " +
+      "is one record; its two references are its <em>left child</em> and <em>right child</em>; " +
+      "a node with no children at all is a <em>leaf</em>; the <em>subtree</em> of a node is " +
+      "that node together with everything reachable below it; the topmost node, the one you " +
+      "were handed, is the <em>root</em>; the <em>depth</em> of a node is how many steps " +
+      "separate it from the root; and the <em>height</em> of the tree is the largest depth in " +
+      "it. The walk has exactly one shape &mdash; deal with the left subtree, deal with the " +
+      "right subtree &mdash; and the only decision left is when you record the node's own " +
+      "value: before both recursive calls (<em>preorder</em>), between them (<em>inorder</em>), " +
+      "or after them (<em>postorder</em>).",
+    "In a problem statement the tell is that the input is described as a root pointer, or as a " +
+      "flat array with <code>null</code> holes, rather than as a list of edges &mdash; and that " +
+      "the limit reads something like <code>n &le; 10&#8309;</code> with no promise that the " +
+      "tree is balanced. The missing promise is the part that bites. A binary tree is legally " +
+      "allowed to be a straight chain, and a recursive walk down a chain of 100000 nodes keeps " +
+      "100000 Java stack frames alive at once, while the default JVM stack runs out after a " +
+      "few thousand. That is why every walk here also gets an iterative spelling that keeps " +
+      "the pending nodes in an <code>ArrayDeque</code> on the heap instead.",
   ],
-  insight: "Preorder / inorder / postorder are the same DFS with the visit moved. Level order " +
-    "is the same walk with a queue instead of a stack. Learn one walk, then move the visit.",
+  insight: "There is only one traversal in this entire module and it is \"handle the left " +
+    "subtree, handle the right subtree\"; preorder, inorder and postorder are that same walk " +
+    "with the single line that records <code>node.val</code> moved before, between, or after " +
+    "the two recursive calls. Level order is the same visiting rule with the recursion's hidden " +
+    "stack swapped for an explicit queue, and that swap is the only thing separating " +
+    "depth-first from breadth-first.",
   yes: [
     "Return the preorder / inorder / postorder / level-order list of values",
     "Height, depth, number of nodes, or is this a leaf / full / complete tree",
@@ -54,43 +81,80 @@ pack({
       "A tree walk has no incoming-edge count and no cycle",
       "Topo sort on graphs"],
   ],
-  constraint: "n &le; 1e5 is fine for an iterative walk. Recursive DFS on a skew tree of that " +
-    "size overflows the Java stack (typically a few thousand frames). Prefer iterative whenever " +
-    "the statement does not promise a balanced tree.",
+  constraint: "<code>n &le; 10&#8309;</code>, with the tree handed to you as a root reference " +
+    "and no sentence promising it is balanced, is the everyday case, and it is comfortable for " +
+    "a walk that touches each node once. The trap here is memory rather than time: a " +
+    "chain-shaped tree of 100000 nodes needs 100000 nested calls, and the default JVM stack " +
+    "holds only a few thousand frames, so what you get is a <code>StackOverflowError</code> " +
+    "rather than a wrong answer. Prefer the iterative form whenever balance is not promised.",
   core: [
-    "A binary tree node is (val, left, right). The recursive walk is: optionally visit, walk " +
-      "left, optionally visit, walk right, optionally visit. Preorder visits first, inorder " +
-      "between the children, postorder last. Height = 1 + max(hL, hR) with null contributing 0 " +
-      "(nodes) or -1 (edges).",
-    "Iterative preorder: stack, pop, visit, push right then left. Iterative inorder: walk cur " +
-      "left while pushing, then pop-visit and step right. Level order: queue, snapshot size to " +
-      "group by depth. Use ArrayDeque, never java.util.Stack.",
+    "Fix the data first. A <code>Node</code> holds an <code>int val</code> plus two references " +
+      "<code>left</code> and <code>right</code>, either of which may be <code>null</code> to " +
+      "mean \"no child on that side\". The recursion has exactly one job: given a reference " +
+      "<code>n</code>, deal with the whole subtree rooted at <code>n</code>. Its first line is " +
+      "the base case <code>if (n == null) return;</code>, because an absent child is a subtree " +
+      "containing nothing and there is nothing to do for it. After that it calls itself on " +
+      "<code>n.left</code>, calls itself on <code>n.right</code>, and somewhere around those " +
+      "two calls it appends <code>n.val</code> to the output list <code>out</code>.",
+    "Where you put <code>out.add(n.val)</code> is the entire difference between the three " +
+      "depth-first orders. Put it before both calls and a node is recorded the first time you " +
+      "arrive at it, which is preorder. Put it between them and a node is recorded only after " +
+      "its whole left subtree has finished, which is inorder. Put it after both and a node is " +
+      "recorded only once everything below it is done, which is postorder. Quantities that " +
+      "depend on the children have no choice and must be postorder: <code>height(n)</code> " +
+      "returns <code>1 + Math.max(height(n.left), height(n.right))</code>, and the size of a " +
+      "subtree is <code>1 + szL + szR</code>. Neither of those two numbers exists until both " +
+      "recursive calls have returned, so the combine has to happen last.",
+    "Level order asks a different question &mdash; list every node at depth 0, then every node " +
+      "at depth 1, and so on &mdash; and recursion cannot answer it directly because recursion " +
+      "dives. Instead keep an explicit <code>ArrayDeque&lt;Node&gt; q</code> of nodes waiting " +
+      "to be handled. Take a node off the front, append its value, and push its non-null " +
+      "children onto the back; because a child always enters behind everything already waiting, " +
+      "the queue stays sorted by depth for free. To see where one depth ends, read " +
+      "<code>int sz = q.size()</code> at the top of each round and poll exactly that many " +
+      "nodes: those <code>sz</code> nodes are precisely the current level, since nothing " +
+      "enqueued during the round can share their depth.",
+    "Run the sample tree to see all four at once: root <code>1</code> with children " +
+      "<code>2</code> and <code>3</code>, and <code>2</code> owning children <code>4</code> " +
+      "and <code>5</code>. Preorder writes <code>1</code> on arrival, dives left and writes " +
+      "<code>2</code>, dives left again and writes <code>4</code> whose two calls both return " +
+      "immediately, comes back up to <code>2</code> and writes <code>5</code>, then unwinds to " +
+      "<code>1</code> and writes <code>3</code>: <code>[1,2,4,5,3]</code>. The identical walk " +
+      "with the recording line between the two calls emits <code>[4,2,5,1,3]</code>, and after " +
+      "both calls it emits <code>[4,5,2,3,1]</code>. The queue version pulls <code>1</code>, " +
+      "then <code>2,3</code>, then <code>4,5</code>, giving <code>[[1],[2,3],[4,5]]</code>.",
   ],
-  invariant: "<p>Every node is entered once and left once. The three DFS orders are the same " +
-    "walk; only the moment of recording node.val changes:</p>" +
+  invariant: "<p>Every node is entered exactly once and left exactly once, so all four walks " +
+    "do <code>&Theta;(n)</code> work; the only thing that differs between them is the moment " +
+    "at which <code>node.val</code> is recorded:</p>" +
     "<span class=\"eq\">pre = visit, L, R &nbsp;|&nbsp; in = L, visit, R &nbsp;|&nbsp; post = L, R, visit</span>" +
-    "<p>Interview sentence: <em>\"I walk every node once; the order is where I put the visit.\"</em></p>",
+    "<p>In plain words, the recursion chases exactly the same references in exactly the same " +
+    "physical order no matter which of the three orders you asked for; the output lists differ " +
+    "only because you chose a different instant to append. You can confirm that yourself on any " +
+    "tree by writing all three <code>add</code> lines into one function and watching a single " +
+    "walk fill three different lists.</p>" +
+    "<p>Interview sentence: <em>\"I walk every node once; the order is just where I put the visit.\"</em></p>",
   arrayLabel: "preorder output",
   array: [1, 2, 4, 5, 3],
   vars: ["node", "phase", "written"],
   vizTitle: "Preorder filling a flat output array",
   frames: [
-    { note: "Enter 1. Preorder writes on entry, slot 0 becomes 1. Next: left child 2.",
+    { note: "Arrive at the root, node 1. Preorder records a node the moment it is entered, so slot 0 becomes 1; now the walk recurses left into node 2.",
       active: [0], dim: [1, 2, 3, 4],
       values: { node: 1, phase: "visit", written: 1 } },
-    { note: "Enter 2. Write 2 at slot 1. Next: left child 4.",
+    { note: "Node 2 is entered and written into slot 1 before either of its own children is touched. The walk immediately dives left again, into node 4.",
       active: [1], done: [0], dim: [2, 3, 4],
       values: { node: 2, phase: "visit", written: 2 } },
-    { note: "Enter 4. Write 4. Both children null, subtree done.",
+    { note: "Node 4 is a leaf: both of its child references are null, so its two recursive calls return at once and slot 2 is all this branch writes.",
       active: [2], done: [0, 1], dim: [3, 4],
       values: { node: 4, phase: "visit leaf", written: 3 } },
-    { note: "Back at 2, walk right child 5. Write 5 at slot 3.",
+    { note: "Control returns to node 2, which still owes work on its right child. Entering node 5 writes it into slot 3, and node 5 is also a leaf.",
       active: [3], done: [0, 1, 2], dim: [4],
       values: { node: 5, phase: "visit leaf", written: 4 } },
-    { note: "Subtree of 2 finished. Back at 1, walk right child 3. Write 3.",
+    { note: "The subtree of node 2 is now completely finished, so the walk unwinds to node 1 and takes its right child. Node 3 lands in slot 4.",
       active: [4], done: [0, 1, 2, 3],
       values: { node: 3, phase: "visit leaf", written: 5 } },
-    { note: "Done. Preorder [1,2,4,5,3]. Inorder would be [4,2,5,1,3]; postorder [4,5,2,3,1]; level order [1,2,3,4,5].",
+    { note: "All five nodes were entered once, giving preorder [1,2,4,5,3]. Moving the recording line between the two calls yields [4,2,5,1,3], after both calls [4,5,2,3,1], and the queue version [1,2,3,4,5].",
       best: [0, 1, 2, 3, 4],
       values: { node: "done", phase: "all four orders", written: 5 } },
   ],
@@ -101,12 +165,12 @@ pack({
   t2 --> t4["4"]
   t2 --> t5["5"]`,
   steps: [
-    "<strong>Represent</strong> Node(val, left, right). Missing child is null.",
-    "<strong>Recursive DFS:</strong> base-case on null, place out.add before, between, or after the two rec calls.",
-    "<strong>Iterative preorder:</strong> stack starts with root; pop, visit, push right then left. ArrayDeque.",
-    "<strong>Iterative inorder:</strong> walk cur left while pushing, pop-visit, cur = popped.right.",
-    "<strong>Level order:</strong> queue root; drain sz = q.size() each layer.",
-    "<strong>Height / size</strong> are postorder combines; if n can be a skew chain, prefer iterative.",
+    "<strong>Represent the node.</strong> Store <code>val</code>, <code>left</code> and <code>right</code>, and treat a missing child as <code>null</code>, because that is the only signal the walk has that a branch has ended.",
+    "<strong>Write the recursive walk first.</strong> Return immediately on <code>null</code>, then place <code>out.add(n.val)</code> before, between, or after the two recursive calls so the same chase of references produces preorder, inorder or postorder.",
+    "<strong>Iterative preorder uses a stack.</strong> Start with the root, pop a node, record it, then push right before left so the left child is handled next, matching the recursive dive.",
+    "<strong>Iterative inorder walks left first.</strong> Push every node while stepping <code>cur = cur.left</code>, then pop, record, and move to that node's right child, because inorder must finish the left subtree before the node itself.",
+    "<strong>Level order uses a queue and a size snapshot.</strong> Read <code>sz = q.size()</code> at the start of each round and poll exactly that many nodes so children enqueued during the round cannot leak into the current depth.",
+    "<strong>Combine children after both calls return.</strong> Height and subtree size do not exist until the two recursive results are known, and if the tree can be a chain of <code>10&#8309;</code> nodes, prefer the iterative spelling so the JVM stack is not the limit.",
   ],
   code: [
     { tab: "Brute", file: "HeightOnly.java",
@@ -212,9 +276,9 @@ public class LevelOrder {
     time: "O(n)",
     space: "O(h) recursion / stack, O(w) for BFS",
     derivation: [
-      "Each node is pushed and popped a constant number of times, so every walk is linear in the number of nodes.",
+      "<p>Every walk enters each of the <code>n</code> nodes once and leaves it once. The recursive spelling does a constant amount of work around the two child calls, so the recurrence is <code>T(n) = T(n_L) + T(n_R) + &Theta;(1)</code>, which unfolds to <code>&Theta;(n)</code>. The iterative stack and the BFS queue each push and pop a node a constant number of times, so they are the same linear pass written with an explicit collection.</p>",
       "<span class=\"eq\">T(n) = T(n_L) + T(n_R) + &Theta;(1) = &Theta;(n)</span>",
-      "Auxiliary space is the height h (skew = n) or the BFS width w (complete last level = n/2).",
+      "<p>At <code>n = 10&#8309;</code> that is 100000 visits, a few milliseconds. Extra memory is the height <code>h</code> for DFS (a right spine uses <code>n</code> frames) or the width <code>w</code> for BFS (a complete last level holds about <code>n/2</code> nodes). The time is never the problem; the stack is, which is why the iterative forms exist.</p>",
     ],
     compare: [
       ["Recursive DFS", "O(n)", "O(h) stack", "Default; fine when balanced"],
@@ -225,20 +289,20 @@ public class LevelOrder {
   },
   pitfalls: [
     { title: "Using java.util.Stack",
-      bug: "Synchronised Vector subclass, wrong methods, slower.",
-      fix: "ArrayDeque: push/pop/peek for DFS, add/poll for BFS." },
+      bug: "<code>java.util.Stack</code> looks like the named tool for DFS, so it compiles and even produces the right list on the sample, but it is a synchronised <code>Vector</code> with the wrong method names and a real cost per push.",
+      fix: "Use <code>ArrayDeque</code>: <code>push</code>/<code>pop</code>/<code>peek</code> for DFS and <code>add</code>/<code>poll</code> for BFS. Test both walks on a three-node tree." },
     { title: "Forgetting the null base case",
-      bug: "NPE on a missing child; only shows up on trees that are not perfectly full.",
-      fix: "First line: if (node == null) return (or the identity of the combine)." },
+      bug: "Skipping <code>if (n == null) return</code> looks fine on a perfectly full tree where every child exists, then a missing child throws a <code>NullPointerException</code> the first time you read <code>n.val</code>.",
+      fix: "Make the null check the first line, or return the identity of the combine (0 for size, -1 for edge-height). Test a root with only a left child." },
     { title: "Height off-by-one (nodes vs edges)",
-      bug: "LC 104 wants 1 for a single node; LC 543 diameter is in edges.",
-      fix: "State the convention in a comment. Edge-height: null returns -1." },
+      bug: "Returning 1 for a single node matches LC 104 (height in nodes) and is wrong for LC 543, which counts edges, so the same helper silently fails the other problem.",
+      fix: "Write the convention in a comment. For edge-height, a null child returns -1 so a leaf returns 0. Check a one-node tree against the statement." },
     { title: "Level-order without snapshotting queue size",
-      bug: "Cannot tell where one level ends. Flat list is still correct; grouped list is not.",
-      fix: "int sz = q.size(); then a for of that many polls." },
+      bug: "Polling until the queue is empty still lists every node, so a flat walk looks correct, but children of the current depth leak into the same list and grouped levels come out wrong.",
+      fix: "Capture <code>int sz = q.size()</code> and poll exactly that many times. Test that a three-level tree returns three inner lists, not one." },
     { title: "Recursive walk on a linked-list-shaped tree",
-      bug: "n=1e5 right spine, StackOverflowError.",
-      fix: "Write the iterative version." },
+      bug: "A right spine of <code>n = 10&#8309;</code> is a legal binary tree, so the recursive walk is correct in theory and then dies with <code>StackOverflowError</code> after a few thousand frames.",
+      fix: "Keep an iterative version on the heap whenever the statement does not promise a balanced tree. A chain of a few thousand nodes is the test." },
   ],
   variants: [
     ["Morris inorder", "Thread predecessor.right back to cur; restore on the second visit.",
@@ -250,13 +314,13 @@ public class LevelOrder {
   ],
   followups: [
     ["How do you reconstruct from preorder and inorder?",
-      "<p>First preorder value is the root. Find it in inorder: left of it is the left subtree. Map values to indices for O(1) splits, total O(n). Preorder+postorder is ambiguous unless the tree is full.</p>"],
+      "<p>The first preorder value is the root, because preorder records a node on arrival. Find that value in the inorder list: everything to its left belongs to the left subtree and everything to its right belongs to the right. A map from value to inorder index makes each split <code>O(1)</code>, so the whole rebuild is <code>O(n)</code>. Preorder plus postorder is ambiguous unless every node has zero or two children, because a single-child node can sit on either side.</p>"],
     ["Why is inorder of a BST sorted?",
-      "<p>Left &lt; root &lt; right, and inorder is L, root, R. See the BST page.</p>"],
+      "<p>A BST promises that every key in the left subtree is smaller than the node and every key in the right subtree is larger. Inorder is exactly \"whole left, then the node, then whole right\", so the values come out in increasing order. That fact is load-bearing on the BST page; here it is just a reason to remember where the visit sits.</p>"],
     ["O(1) extra space with parent pointers?",
-      "<p>Walk to parent and decide whether you arrived from the left child. Same three-colour state machine as iterative postorder, stored in the current position.</p>"],
+      "<p>From the current node you can walk to its parent and ask whether you arrived from the left child or the right. That is the same three-colour state machine as iterative postorder, stored in the current position instead of on a stack. You still visit every node a constant number of times; you just stopped allocating the deque.</p>"],
     ["What changes for an n-ary tree?",
-      "<p>DFS becomes visit then loop children. Level order is unchanged except the enqueue loop. There is no unique inorder.</p>"],
+      "<p>Depth-first becomes \"record the node, then loop its children\" instead of two named recursive calls, and there is no unique inorder because there is no unique place between \"the left\" and \"the right\". Level order barely changes: enqueue every child instead of two. Height is still one plus the maximum child height.</p>"],
   ],
   problems: [
     lc(144, "binary-tree-preorder-traversal", "Easy", "DFS, visit first"),
@@ -276,30 +340,46 @@ public class LevelOrder {
     "<strong>ArrayDeque</strong>, never java.util.Stack.",
   ],
   oneliner: "if (n==null) return; visit/L/R placements | BFS: while q, sz=q.size(), drain, enqueue children",
+  dryIntro: "Preorder on the five-node sample 1 / 2 3 / 4 5, filling the output array one visit at a time so you can see where each value lands.",
 }),
 
 /* ====================================== 2. binary-tree-problem-patterns */
 pack({
   id: "binary-tree-problem-patterns",
   difficulty: "Medium",
-  readTime: "24 min",
+  readTime: "28 min",
   tagline: "Diameter, path sum, LCA of two nodes, serialise, and construct-from-orders are " +
     "all a postorder combine or a preorder emit with a payload attached to the walk you already own.",
   tags: ["binary tree", "diameter", "path sum", "P0"],
   prereqs: [["Binary Tree Basics & Traversals", "binary-tree-basics-and-traversals.html"]],
   why: [
-    "Once the four walks are mechanical, interview tree problems stop being unique puzzles. " +
-      "Diameter is \"height of both children, plus maybe the path through me\". Path-sum is " +
-      "\"carry a remaining target, or return a list of leftover contributions\". LCA in a " +
-      "general binary tree is \"if I sit in different subtrees of u, u is the answer\".",
-    "The pattern language is: return a struct from a postorder (height + diameter, or " +
-      "(hasP, hasQ)), or emit on the way down (serialise, construct). If you reach for a " +
-      "global ArrayList of all root-to-leaf paths and then scan, you are a generation behind.",
-    "This page is the cluster: diameter, max path sum, path sum I/II/III, invert, flatten, " +
-      "serialise, construct, lowest common ancestor, subtree of another tree.",
+    "You are given a binary tree of 100000 nodes and asked for the longest path anywhere in " +
+      "it, counted in edges. The obvious method picks every pair of leaves, walks up to their " +
+      "meeting point, and keeps the best length. A tree that is a straight chain of 100000 " +
+      "nodes has about <code>5&times;10&#8313;</code> pairs, and even a bushier tree still " +
+      "makes you pay for a fresh walk per pair. The judge will cut you off long before you " +
+      "finish. The same explosion shows up as \"maximum path sum\", \"lowest common ancestor " +
+      "of two nodes\", and \"does this path add to k\": they all look like a new puzzle and " +
+      "they are all the same walk you already own.",
+    "What changes is the payload you carry, not the chase of left and right. A " +
+      "<em>postorder</em> walk &mdash; handle both children, then the node &mdash; lets each " +
+      "node see a small summary of its two subtrees and decide what to send upward. Diameter " +
+      "needs two heights. Maximum path sum needs two gains, each of which may be dropped if " +
+      "it is negative. Lowest common ancestor, usually shortened to LCA, needs a pair of " +
+      "\"did I see p?\" / \"did I see q?\" answers. If you instead collect every root-to-leaf " +
+      "path into a global list and scan it afterwards, you have thrown away the fact that " +
+      "the interesting combination happens at one node.",
+    "A few questions emit on the way down instead: serialise writes a node before diving, " +
+      "and constructing a tree from preorder plus inorder consumes the next preorder value " +
+      "as the current root. Those are still the same walk with the recording line moved. In " +
+      "a real statement the tell is a single tree handed as a root pointer, <code>n</code> up " +
+      "to <code>10&#8309;</code>, and a question about a path, a diameter, an ancestor, or a " +
+      "rebuild from two orders &mdash; not \"answer this for every possible root\" and not " +
+      "\"the tree is a BST\".",
   ],
-  insight: "Almost every \"hard\" binary-tree question is a postorder that returns more than " +
-    "one number, plus maybe a global best. Name the struct before you code.",
+  insight: "Name the struct a node returns after both children finish, plus one global best " +
+    "for combinations that go through that node. Almost every hard binary-tree question is " +
+    "that postorder plus a decision about what to send upward.",
   yes: [
     "Diameter / maximum path sum / binary tree cameras (postorder struct + global)",
     "Path sum I/II/III, path with a given sum anywhere",
@@ -323,42 +403,70 @@ pack({
       "Binary-tree interviews usually want one DFS; rerooting is the next page",
       "This page = interview cluster; next = CP tree DP"],
   ],
-  constraint: "n &le; 1e5, values can be negative (max path sum). Recursion depth is h; if " +
-    "unbounded, the iterative rewrite is rarely asked for diameter but is asked for traversals.",
+  constraint: "<code>n &le; 10&#8309;</code> with a single root pointer is the everyday " +
+    "interview limit, and one postorder that does constant work per node finishes comfortably. " +
+    "Values may be negative, which is why maximum path sum cannot blindly add a child. " +
+    "Recursion depth equals the height; if the statement does not promise a balanced tree, " +
+    "a chain of 100000 nodes will overflow the JVM stack, though interviews rarely demand " +
+    "the iterative rewrite for diameter the way they do for the raw walks.",
   core: [
-    "Diameter: a function height(u) that also updates ans = max(ans, hL+hR). The longest path " +
-      "counted in edges is that global ans. Max path sum is the same with a twist: a child " +
-      "that contributes a negative gain is dropped (max(0, gain)), and the through-me candidate " +
-      "is val+gainL+gainR, while the value you return upward is val+max(gainL,gainR).",
-    "LCA: rec returns null if the subtree has neither; returns the node if it is p or q or if " +
-      "both sides returned non-null. Path-sum III is prefix sums on the root-to-here path with " +
-      "a hashmap of leftover prefixes (same as subarray-sum-k on the unique path to the root).",
+    "Diameter is the longest path anywhere, counted in edges. Write a helper " +
+      "<code>height(u)</code> that returns the height of the subtree in nodes (a null child " +
+      "returns 0, a leaf returns 1). After both recursive calls you have <code>hL</code> and " +
+      "<code>hR</code>. The path that goes through <code>u</code> has <code>hL + hR</code> " +
+      "edges, so update a global <code>ans</code> with that sum. What you return upward is " +
+      "only one side, <code>1 + max(hL, hR)</code>, because a parent can extend just one " +
+      "downward spine. Returning <code>hL + hR</code> as height double-counts and the parent " +
+      "then invents paths that do not exist.",
+    "Maximum path sum is the same shape with money instead of edges. A child's " +
+      "<em>gain</em> &mdash; the best sum of a downward path starting at that child &mdash; " +
+      "is dropped when it is negative, written <code>max(0, gain)</code>, because you are " +
+      "allowed to stop. The through-me candidate is <code>val + gainL + gainR</code> and " +
+      "competes for a global best. What you return upward is <code>val + max(gainL, gainR)</code>, " +
+      "one downward arm only. LCA uses a different payload: the recursive call returns " +
+      "<code>null</code> if the subtree contains neither target, returns the node itself if " +
+      "it is <code>p</code> or <code>q</code>, and if both sides come back non-null the " +
+      "current node is the answer. Path-sum III is prefix sums on the unique path from the " +
+      "root, with a hashmap of leftover prefixes, the same idea as subarray-sum-k.",
+    "Take the sample tree: root 1 with children 2 and 3, and 2 owning 4 and 5. Leaves 4, 5 " +
+      "and 3 each have height 1. At node 2 both heights are 1, so the through-me path 4-2-5 " +
+      "has 2 edges and <code>ans</code> becomes 2; the height returned upward is 2. At the " +
+      "root the heights are 2 and 1, the through-me path 4-2-1-3 has 3 edges, and that is " +
+      "the diameter. LCA of 4 and 3 sees a non-null left and a non-null right at node 1 and " +
+      "stops there. If the values were instead <code>-10 / 9 20 / 15 7</code>, the same walk " +
+      "with gains would keep 15+20+7 = 42 as the global best and drop the <code>-10</code> " +
+      "arm when sending a number upward.",
   ],
-  invariant: "<p>After both children return, you know everything about the two subtrees. The " +
-    "only new paths are those that go through the current node.</p>" +
-    "<span class=\"eq\">ans = max(ans, combine(left, me, right)); return a summary upward</span>",
+  invariant: "<p>After both children return, you know every summary of the two subtrees. The " +
+    "only new paths are those that go through the current node, so a global <code>ans</code> " +
+    "is updated with that through-me combination and a one-sided summary is sent to the parent:</p>" +
+    "<span class=\"eq\">ans = max(ans, combine(left, me, right)); return a one-sided summary</span>" +
+    "<p>In plain words, a child can tell you the best downward spine it owns, but only you " +
+    "can glue the two spines into a path that bends at you, so that glued number lives in " +
+    "<code>ans</code> and never travels upward as if it were a height.</p>" +
+    "<p>Interview sentence: <em>\"I return a summary from postorder and keep through-me in a global.\"</em></p>",
   arrayLabel: "height[] written in postorder on values [1,2,4,5,3]",
   array: [3, 2, 1, 1, 1],
   indexLabels: ["1", "2", "4", "5", "3"],
   vars: ["u", "hL", "hR", "diam"],
   vizTitle: "Diameter on the sample: through node 2 the path 4-2-5 has length 2",
   frames: [
-    { note: "Leaves 4,5,3 have height 1 (nodes) / 0 (edges). Start at 4.",
+    { note: "Start at leaf 4. A null child has height 0, so both sides are 0 and the through-me path at 4 has no edges yet.",
       active: [2],
       values: { u: 4, hL: 0, hR: 0, diam: 0 } },
-    { note: "Node 5 same. Node 2: hL=hR=1 (edges: 0+0, wait in edges null=-1+1=0). Using edges: leaves 0, node 2 through-me = 0+0=0? Sample 4-2-5 is 2 edges. Leaves height 0 in edges, 2 has hL=hR=0? No: leaf height in edges is 0, but the edge to the leaf is counted at the parent: through-me = hL+hR+2 if heights are in edges of subtrees... Standard: height(null)=-1, height(leaf)=0, through = hL+hR+2.",
+    { note: "Leaf 5 is the same. At node 2 the two downward spines each add one edge, so the bent path 4-2-5 has length 2 and the global diameter becomes 2.",
       active: [1],
       values: { u: 2, hL: 0, hR: 0, diam: 2 } },
-    { note: "Convention used in code: height in nodes, through-me = hL+hR (edges = hL+hR of node-heights minus something). LC 543: height in edges, ans = max(hL+hR) with leaf height 0.",
+    { note: "The helper still returns a one-sided height: each leaf counts as 1, so node 2 sends 2 upward. The 2-edge path stays in the global, not in the returned height.",
       active: [1],
       values: { u: 2, hL: 1, hR: 1, diam: 2 } },
-    { note: "Node 1: hL=2, hR=1, through-me=3 (path 4-2-1-3). Global diam=3 edges? 4-2-1-3 is 3 edges. Path 4-2-5 is 2. Answer 3.",
+    { note: "At root 1 the heights are 2 and 1. The path 4-2-1-3 has 3 edges, which beats the earlier 2, so the diameter is now 3.",
       active: [0],
       values: { u: 1, hL: 2, hR: 1, diam: 3 } },
-    { note: "Return height 3 for the root. Diameter 3 is the global, not the height.",
+    { note: "The root returns height 3, but the answer you report is the global diameter 3, the longest bent path, not that height.",
       best: [0, 1, 2, 4],
       values: { u: 1, hL: 2, hR: 1, diam: 3 } },
-    { note: "Max path sum would drop negative children and compare val+L+R against a global.",
+    { note: "Maximum path sum uses the same walk: drop a negative child gain, compare val+L+R to a global, and send only one arm upward.",
       done: [0, 1, 2, 3, 4],
       values: { u: "124", hL: "gain", hR: "gain", diam: "max path" } },
   ],
@@ -369,12 +477,12 @@ pack({
   t2 --> t4["4"]
   t2 --> t5["5"]`,
   steps: [
-    "<strong>Name the struct</strong> returned upward (height, gain, (foundP, foundQ)).",
-    "<strong>Postorder:</strong> rec left, rec right, combine, maybe update a global ans.",
-    "<strong>Diameter:</strong> ans = max(ans, hL+hR); return 1+max(hL,hR) with null = 0 or -1.",
-    "<strong>Max path:</strong> gain = val+max(0,gainL,gainR); ans = max(ans, val+max(0,gL)+max(0,gR)).",
-    "<strong>LCA:</strong> if both sides non-null, return u; else return the non-null side.",
-    "<strong>Construct:</strong> preorder index advances; inorder lo..hi split at the root value.",
+    "<strong>Name the struct before you type.</strong> Decide what a node must return upward &mdash; a height, a gain, or a pair of \"found p / found q\" &mdash; because that choice is the whole algorithm.",
+    "<strong>Walk postorder: children first.</strong> Recurse left, recurse right, then combine, so both summaries exist before you invent a through-me candidate or update a global <code>ans</code>.",
+    "<strong>Diameter stores the bend separately.</strong> Write <code>ans = max(ans, hL + hR)</code> and return only <code>1 + max(hL, hR)</code>, with null as 0, so a parent extends one spine rather than a already-bent path.",
+    "<strong>Maximum path sum drops a losing child.</strong> A negative gain cannot help a path that is allowed to stop, so take <code>max(0, gain)</code> both when sending one arm up and when scoring <code>val + gL + gR</code>.",
+    "<strong>LCA returns the first node that sees both targets.</strong> If both recursive calls are non-null this node is the meeting point; otherwise propagate the non-null side, which also covers the case where one target sits under the other.",
+    "<strong>Construct consumes preorder and splits inorder.</strong> The next preorder value is the current root, and a map of inorder indices tells you the left and right ranges in <code>O(1)</code> so the rebuild stays linear.",
   ],
   code: [
     { tab: "Brute", file: "AllLeafPaths.java",
@@ -465,9 +573,9 @@ pack({
     time: "O(n)",
     space: "O(h)",
     derivation: [
-      "One DFS, constant work per node. Construction from two arrays is O(n) with a hashmap, O(n^2) if you scan inorder each time.",
+      "<p>One postorder visits each of the <code>n</code> nodes once and does a constant amount of arithmetic around the two child calls, so diameter, maximum path sum and LCA are all <code>&Theta;(n)</code>. Building a tree from preorder and inorder is also <code>O(n)</code> if you map values to inorder indices up front; scanning <code>indexOf</code> at every node turns the same idea into <code>O(n&#178;)</code> and dies at <code>n = 10&#8309;</code>.</p>",
       "<span class=\"eq\">T = &Theta;(n)</span>",
-      "Path sum III with a hashmap is still O(n) expected if you add/remove on the way down/up (backtracking the prefix count).",
+      "<p>Path-sum III with a hashmap is still expected linear time if you increment a prefix count on the way down and decrement it on the way up, so a sibling cannot see a prefix it does not own. At <code>n = 10&#8309;</code> the whole family is a couple of milliseconds. The naive all-pairs walk is about <code>10&#8310;</code> path checks and will not finish.</p>",
     ],
     compare: [
       ["Naive all-pairs paths", "O(n^2)", "O(h)", "Tiny n"],
@@ -478,20 +586,20 @@ pack({
   },
   pitfalls: [
     { title: "Returning the through-me path as height",
-      bug: "Height must be one side only. Using L+R as the returned height double-counts.",
-      fix: "Return 1+max(L,R). Store L+R only in the global ans." },
+      bug: "Writing <code>return hL + hR</code> looks right because that number is the diameter contribution, and the sample still prints a plausible answer, but the parent then treats a bent path as a single spine and invents edges that do not exist.",
+      fix: "Return <code>1 + max(hL, hR)</code> and store <code>hL + hR</code> only in the global <code>ans</code>. Check that a parent of a three-node V does not report a path longer than 2." },
     { title: "Max path sum without dropping negatives",
-      bug: "A child with gain -5 is forced into the parent. The parent would be better alone.",
-      fix: "max(0, childGain) when contributing upward and through-me." },
+      bug: "Adding a child whose gain is <code>-5</code> looks consistent with \"use both children\", yet the parent would have a better path by standing alone, so the global best comes out too small.",
+      fix: "Wrap every child gain in <code>max(0, gain)</code> both upward and through-me. A node with two negative children must be allowed to answer with just its own value." },
     { title: "LCA comparing values instead of references",
-      bug: "Duplicate values, or nodes that are not the given p,q instances.",
-      fix: "Compare node identity (or a unique id), not val, unless the statement says values are unique." },
+      bug: "Comparing <code>n.val == p.val</code> looks fine when every value is unique, then a duplicate or a different instance of the same number makes you return the wrong meeting point.",
+      fix: "Compare node identity, or a unique id, unless the statement promises unique values. Test two nodes that share a value and sit in different subtrees." },
     { title: "Construct without a map, O(n^2)",
-      bug: "indexOf in inorder at every node.",
-      fix: "HashMap val -> inorder index, pass lo/hi." },
+      bug: "Calling <code>indexOf</code> on the inorder array at every node looks like the obvious split and works on the tiny sample, then becomes quadratic once both arrays have 100000 entries.",
+      fix: "Build a <code>HashMap</code> from value to inorder index once, and pass shrinking <code>lo</code>/<code>hi</code> bounds. Time a rebuild at a few thousand nodes if you are unsure." },
     { title: "Path sum III double-counting with a global map not backtracked",
-      bug: "A prefix from another branch still sits in the map.",
-      fix: "map.merge(prefix, 1, add) going down, subtract going up." },
+      bug: "Leaving a prefix in the map after you leave a subtree looks harmless because the numbers are still \"on some path\", but a later sibling then counts a prefix it does not share and the answer is too large.",
+      fix: "Increment the prefix count on the way down and decrement it on the way back up. A two-branch tree with the same running sum on both arms is the test." },
   ],
   variants: [
     ["Serialise", "Preorder with explicit nulls, or BFS with queue.",
@@ -503,13 +611,13 @@ pack({
   ],
   followups: [
     ["Diameter in nodes vs edges?",
-      "<p>LC 543 is edges. A single node is 0. If height is in nodes (leaf=1), diameter in edges is hL+hR of those heights... actually with node-heights leaf=1, through-me edges = hL+hR. With edge-heights leaf=0, through-me = hL+hR. Pick one and match the statement.</p>"],
+      "<p>LC 543 asks for edges, so a single node answers 0. If your helper counts height in nodes (a leaf returns 1), the through-me edge count is still <code>hL + hR</code>, because each side's node-count equals the number of edges on that spine. If you prefer edge-height, a null returns -1 and a leaf returns 0, and through-me is <code>hL + hR + 2</code>. Pick one convention, write it in a comment, and match the statement on a one-node tree.</p>"],
     ["LCA when one node is ancestor of the other?",
-      "<p>The first time you hit p (or q), you return it. The other node sits below, so the other side returns null, and you propagate p upward. That is correct: p is the LCA.</p>"],
+      "<p>The first time the walk hits <code>p</code> (or <code>q</code>), it returns that node immediately. The other target sits somewhere below, so the opposite child returns <code>null</code> and you propagate <code>p</code> upward. That is the correct LCA: the first common ancestor is <code>p</code> itself. A sample where 2 is an ancestor of 4 is the check.</p>"],
     ["Why max(0, gain) in LC 124?",
-      "<p>You may choose not to extend the path into a child. The path has to be non-empty (at least the node). Negative children cannot help a path that is allowed to stop at you.</p>"],
+      "<p>A path is allowed to stop at the current node, and it must contain at least that node. A child whose best downward sum is negative cannot improve any path that is allowed to refuse it, so you replace that gain with 0. The through-me score <code>val + gL + gR</code> can still use both children when both help, and the value you send to the parent uses only the better arm.</p>"],
     ["Subtree of another tree?",
-      "<p>Either serialise both and substring-search, or for each node of A try \"same tree\" with B. Same-tree is a simultaneous walk. O(n m) naive; hashing serialisations is O(n+m).</p>"],
+      "<p>Either serialise both trees with explicit nulls and ask whether B's string sits inside A's, or for each node of A run a simultaneous \"same tree\" walk against B. The naive version is <code>O(n m)</code>. Hashing the serialisations, or comparing hashes of subtrees, brings it back to linear in the two sizes. The simultaneous walk is the one to write in an interview unless they ask for the hash.</p>"],
   ],
   problems: [
     lc(543, "diameter-of-binary-tree", "Easy", "Postorder + global"),
@@ -529,13 +637,14 @@ pack({
     "<strong>Construct:</strong> map + shrinking inorder window.",
   ],
   oneliner: "hL,hR = rec; ans=max(ans,combine); return summary(hL,hR,val)",
+  dryIntro: "Diameter on the sample 1 / 2 3 / 4 5. Heights come back from the leaves; the global keeps the bent path through each node.",
 }),
 
 /* ====================================== 3. bst ======================== */
 pack({
   id: "bst",
   difficulty: "Easy",
-  readTime: "22 min",
+  readTime: "28 min",
   tagline: "Left &lt; node &lt; right on every subtree: inorder is sorted, k-th smallest is " +
     "an inorder walk, and validate is a range (lo, hi) passed down, not a local comparison.",
   tags: ["BST", "inorder", "validate", "P0"],
@@ -544,19 +653,30 @@ pack({
     ["Binary Search Basics", "../01-arrays-and-windows/binary-search-basics.html"],
   ],
   why: [
-    "A BST is a binary tree plus an invariant, and almost every BST bug is a local check that " +
-      "is not the invariant. \"Left child &lt; me &lt; right child\" is necessary and not " +
-      "sufficient: a right grandchild can still violate the ancestor. The real invariant is a " +
-      "range: every node sits in (lo, hi) inherited from its ancestors.",
-    "Because inorder is sorted, k-th smallest is \"walk inorder, stop at k\", and \"two-sum " +
-      "in a BST\" is a two-pointer on the iterator, not a hash set you needed for an unsorted " +
-      "tree. Delete is the one structural operation people fumble (two children: splice the " +
-      "inorder successor).",
-    "Balanced BSTs (TreeMap) are a later Java page. This page is the interview BST: validate, " +
-      "search, insert, delete, k-th, LCA using values, convert sorted array to BST.",
+    "You are handed a binary tree of a few thousand nodes and asked whether it is a binary " +
+      "search tree. The tempting check looks at each node and asks only whether the left " +
+      "child is smaller and the right child is larger. That test accepts a tree whose root " +
+      "is 4, whose left child is 2, and whose right child of 2 is 6: locally 2 &lt; 6, yet 6 " +
+      "sits in the left half of 4 and the whole tree is illegal. Almost every BST bug is that " +
+      "same mistake written a different way: a local compare that is not the real rule.",
+    "A <em>binary search tree</em>, usually shortened to BST, is a binary tree plus one " +
+      "range rule: every key in the left subtree is smaller than the node, and every key in " +
+      "the right subtree is larger, not just the two children. Because of that rule, an " +
+      "inorder walk emits keys in sorted order, so \"k-th smallest\" is \"walk inorder and " +
+      "stop at k\", and two-sum on a BST is two iterators walking that sorted sequence, not " +
+      "the hash set you needed on an unordered tree. Delete is the one structural edit people " +
+      "fumble: a node with two children is replaced by its inorder successor, the next key " +
+      "to the right.",
+    "This page is the interview BST: validate, search, insert, delete, k-th, LCA using the " +
+      "values, and convert a sorted array into a balanced tree. Java's <code>TreeMap</code> " +
+      "is a later, self-balancing structure and is not required here. In a statement the " +
+      "tell is the phrase \"binary search tree\" next to limits like <code>n &le; 10&#8308;</code> " +
+      "in interviews or <code>n &le; 10&#8309;</code> in contests, and a question that uses " +
+      "the ordered invariant rather than a general path or diameter.",
   ],
-  insight: "Validate with a range, not a local compare. Inorder of a BST is strictly increasing " +
-    "(if unique keys). k-th smallest is inorder that stops early.",
+  insight: "Validate by passing a range down from the ancestors, not by comparing a node to " +
+    "its two children. Inorder of a BST is strictly increasing when keys are unique, and " +
+    "k-th smallest is that same walk stopping early.",
   yes: [
     "Validate binary search tree",
     "k-th smallest / k-th largest in a BST",
@@ -580,40 +700,64 @@ pack({
       "Heap is only parent vs children, not a total inorder",
       "Heap for priority; BST for ordered keys"],
   ],
-  constraint: "n &le; 1e4 in interviews, n &le; 1e5 in contests. Skew BST is a linked list: " +
-    "search is O(n). TreeMap/TreeSet are red-black, O(log n) guaranteed. Duplicate policy: " +
-    "usually unique; if not, pick &le; on one side and document it.",
+  constraint: "Interview limits sit around <code>n &le; 10&#8308;</code>; contests go to " +
+    "<code>n &le; 10&#8309;</code>. A skew BST is a linked list, so a search can take " +
+    "<code>n</code> steps and a recursive walk can overflow the stack. <code>TreeMap</code> " +
+    "and <code>TreeSet</code> are red-black trees and guarantee <code>O(log n)</code>; this " +
+    "page does not. Duplicate policy is usually \"keys are unique\"; if equals are allowed, " +
+    "pick one side (commonly the right) and make validate match that choice.",
   core: [
-    "Validate: ok(node, lo, hi) with long sentinels (or null bounds). Fail if val &le; lo or " +
-      "val &ge; hi. Recurse left with hi=val, right with lo=val. Inorder alternative: prev " +
-      "pointer, fail if node.val &le; prev.",
-    "Insert: empty slot is the new node; go left if val &lt; cur, else right. Delete: 0 children " +
-      "drop; 1 child replace; 2 children copy successor.val then delete successor (which has no " +
-      "left). LCA: while node is not between p and q, step left or right.",
+    "Validate by passing a live range. The helper is <code>ok(node, lo, hi)</code>, and the " +
+      "sentinels must be <code>long</code> (or boxed <code>Integer</code> bounds) because " +
+      "<code>Integer.MIN_VALUE</code> is a legal key. Fail as soon as <code>val &le; lo</code> " +
+      "or <code>val &ge; hi</code>. The left child inherits <code>(lo, val)</code> and the " +
+      "right child inherits <code>(val, hi)</code>, which is how a grandchild is still checked " +
+      "against every ancestor. The inorder alternative keeps a <code>prev</code> pointer and " +
+      "fails if the current value is not strictly larger; that is the same rule written as a " +
+      "sorted scan.",
+    "Search and insert are binary search on the tree: go left when the key is smaller, right " +
+      "otherwise, and a <code>null</code> slot is where a new node hangs. Delete has three " +
+      "shapes. No children: drop the node. One child: replace it with that child. Two children: " +
+      "copy the value of the <em>inorder successor</em> &mdash; the leftmost node of the right " +
+      "subtree, which has no left child &mdash; then delete that successor. LCA walks from the " +
+      "root and steps left while both keys are smaller, right while both are larger, and stops " +
+      "at the first node that sits between them.",
+    "Walk the sample 4 / 2 5 / 1 3. The root 4 is checked against <code>(-&infin;, +&infin;)</code>. " +
+      "Node 2 must sit in <code>(-&infin;, 4)</code>, node 1 in <code>(-&infin;, 2)</code>, node 3 " +
+      "in <code>(2, 4)</code>, and node 5 in <code>(4, +&infin;)</code>; all pass, and inorder " +
+      "emits 1, 2, 3, 4, 5. Replace 3 with 6 and the local check at 2 still sees 2 &lt; 6, but " +
+      "the range <code>(2, 4)</code> rejects 6 at once. Inserting 0 walks 4 to 2 to 1 and hangs " +
+      "a left child. Deleting 2 copies 3 into 2's slot and then removes the old 3, which had " +
+      "no left child.",
   ],
-  invariant: "<p>For every node, all keys in its left subtree are &lt; node.val and all keys in " +
-    "its right subtree are &gt; node.val (unique keys).</p>" +
-    "<span class=\"eq\">lo &lt; node.val &lt; hi, inherited from ancestors</span>",
+  invariant: "<p>For every node, every key in its left subtree is strictly less than " +
+    "<code>node.val</code> and every key in its right subtree is strictly greater (unique keys). " +
+    "That is equivalent to a range inherited from the ancestors:</p>" +
+    "<span class=\"eq\">lo &lt; node.val &lt; hi</span>" +
+    "<p>In plain words, a node is legal only when it sits inside the open interval its " +
+    "ancestors carved out; checking the two children is not enough, because a grandchild can " +
+    "break an ancestor the parent never looks at.</p>" +
+    "<p>Interview sentence: <em>\"I pass (lo, hi) down; a local left-right check is not the invariant.\"</em></p>",
   arrayLabel: "inorder values (must be strictly increasing)",
   array: [1, 2, 3, 4, 5],
   vars: ["node", "lo", "hi", "ok"],
   vizTitle: "Validate BST: range tightens on the way down",
   frames: [
-    { note: "Tree 4 / 2 5 / 1 3. Root 4 in (-inf, +inf).",
+    { note: "The sample is 4 / 2 5 / 1 3. Root 4 is checked against an open range that covers every integer, so it always passes.",
       active: [3],
       values: { node: 4, lo: "-inf", hi: "+inf", ok: true } },
-    { note: "Left child 2 must be in (-inf, 4).",
+    { note: "Stepping left tightens the high end: node 2 must sit strictly below 4, which it does, so the walk continues into 2's children.",
       active: [1],
       values: { node: 2, lo: "-inf", hi: 4, ok: true } },
-    { note: "1 in (-inf, 2), 3 in (2, 4). Both ok.",
+    { note: "Node 1 must sit below 2, and node 3 must sit between 2 and 4. Both ranges hold, so the left subtree of 4 is legal.",
       active: [0, 2],
       values: { node: 3, lo: 2, hi: 4, ok: true } },
-    { note: "Right child 5 in (4, +inf). Ok. Whole tree valid.",
+    { note: "The right child 5 must sit strictly above 4. It does, so every node has passed and the tree is a BST.",
       active: [4],
       values: { node: 5, lo: 4, hi: "+inf", ok: true } },
-    { note: "If 3 were 6, local 2<6 but 6 is not <4. Range check catches it; a local left<me<right on 2 would not see 6.",
+    { note: "If 3 were 6, the local check at 2 would still see 2 &lt; 6, but the inherited range (2, 4) rejects 6 at once.",
       values: { node: 6, lo: 2, hi: 4, ok: false } },
-    { note: "Inorder 1,2,3,4,5 is strictly increasing, the other validator.",
+    { note: "The other validator is inorder: 1, 2, 3, 4, 5 is strictly increasing, which is the same range rule written as a sorted scan.",
       best: [0, 1, 2, 3, 4],
       values: { node: "inorder", lo: "prev", hi: "\u2014", ok: true } },
   ],
@@ -624,12 +768,12 @@ pack({
   t2 --> t1["1"]
   t2 --> t3["3"]`,
   steps: [
-    "<strong>Validate:</strong> dfs(n, lo, hi), fail unless lo &lt; n.val &lt; hi; rec left (lo,val), right (val,hi).",
-    "<strong>Or inorder:</strong> prev, fail if n.val &le; prev.",
-    "<strong>Search / insert:</strong> compare and step, like binary search.",
-    "<strong>Delete two-children:</strong> successor = min of right; copy; delete successor.",
-    "<strong>k-th:</strong> inorder until count==k, or sizes on nodes for O(h).",
-    "<strong>LCA:</strong> from root, step until p and q are on different sides (or one equals the node).",
+    "<strong>Validate with a shrinking range.</strong> Recurse as <code>ok(n, lo, hi)</code> and fail unless <code>lo &lt; n.val &lt; hi</code>, then send <code>(lo, val)</code> left and <code>(val, hi)</code> right so every ancestor still constrains the grandchildren.",
+    "<strong>Or walk inorder and keep the previous key.</strong> Fail as soon as <code>n.val &le; prev</code>, because a legal BST with unique keys must emit a strictly increasing sequence.",
+    "<strong>Search and insert are binary search.</strong> Compare the key to the current node and step left or right; a <code>null</code> child is the hole where a new node belongs, which is why insert is <code>O(h)</code> and not a rebuild.",
+    "<strong>Delete a two-child node via its successor.</strong> The successor is the minimum of the right subtree, it has no left child, so you can copy its value and then delete that easier node instead of splicing two live children.",
+    "<strong>k-th smallest is inorder that stops.</strong> Count visits until you hit <code>k</code>, or store subtree sizes on each node if later queries must stay <code>O(h)</code> after inserts.",
+    "<strong>LCA walks from the root using values.</strong> Step left while both keys are smaller, right while both are larger, and stop at the first node that sits between them, because that is where the two search paths split.",
   ],
   code: [
     { tab: "Brute", file: "BstLocalCheck.java",
@@ -712,9 +856,9 @@ pack({
     time: "O(h) search/insert/delete/LCA; O(n) validate / k-th naive",
     space: "O(h)",
     derivation: [
-      "h is log n on a balanced tree and n on a skew tree. Validate must see every node, O(n).",
+      "<p>Search, insert, delete and BST-LCA each walk one root-to-node path, so they cost <code>O(h)</code>. On a balanced tree <code>h</code> is about <code>log n</code>, roughly 17 steps at <code>n = 10&#8309;</code>. On a skew tree the same operations become a linked-list scan of <code>n</code> steps. Validate must look at every node, so it is always <code>&Theta;(n)</code> no matter how balanced the tree is.</p>",
       "<span class=\"eq\">T_search = O(h), T_validate = &Theta;(n)</span>",
-      "Order-statistic trees store sz[] so k-th is O(h) after each insert.",
+      "<p>Naive k-th smallest is an inorder walk that stops at <code>k</code>, which is <code>O(h + k)</code> and in the worst case <code>O(n)</code>. If the follow-up is many k-th queries mixed with inserts, store a subtree size on each node and the same question becomes one more <code>O(h)</code> descent. <code>TreeMap</code> hides a red-black tree and quotes <code>O(log n)</code> for all of this; a hand-rolled BST does not.</p>",
     ],
     compare: [
       ["Range DFS validate", "O(n)", "O(h)", "Correct invariant"],
@@ -725,20 +869,20 @@ pack({
   },
   pitfalls: [
     { title: "Local left < me < right only",
-      bug: "A 6 sitting in the left subtree of 4 passes the local check at 2.",
-      fix: "Pass (lo, hi). Use long so Integer.MIN_VALUE is a legal node value." },
+      bug: "A 6 sitting as the right child of 2, under a root of 4, passes every parent-child compare, so the function returns true on an illegal tree and the sample of a valid BST never exposes it.",
+      fix: "Pass <code>(lo, hi)</code> from the ancestors, and use <code>long</code> sentinels so <code>Integer.MIN_VALUE</code> is still a legal key. The 4 / 2 / 6 counterexample is the test." },
     { title: "int overflow sentinels",
-      bug: "lo = Integer.MIN_VALUE, node.val is also MIN_VALUE, lo < val fails or you use <= wrong.",
-      fix: "long lo, hi with Long.MIN/MAX, or Integer bounds as objects." },
+      bug: "Starting with <code>lo = Integer.MIN_VALUE</code> looks like \"no lower bound\", then a root whose value is also <code>MIN_VALUE</code> fails <code>lo &lt; val</code>, or you switch to <code>&le;</code> and silently accept a duplicate that the statement forbade.",
+      fix: "Use <code>long lo, hi</code> with <code>Long.MIN_VALUE</code> / <code>Long.MAX_VALUE</code>, or pass boxed bounds that can be null. A one-node tree holding <code>Integer.MIN_VALUE</code> is the check." },
     { title: "Delete successor incorrectly",
-      bug: "You delete the successor's value from the wrong parent, or forget it has no left child only.",
-      fix: "successor = min(right); node.val = s.val; node.right = delete(node.right, s.val)." },
+      bug: "Deleting the successor from the original parent, or treating it as if it might have a left child, looks like a local pointer fix and then either loses the right subtree or leaves a second copy of the key.",
+      fix: "Set <code>successor = min(right)</code>, copy <code>s.val</code> into the node, then <code>node.right = delete(node.right, s.val)</code>. The successor of a two-child node never has a left child." },
     { title: "Duplicates",
-      bug: "<= on both sides, or a validate that uses < both ways, rejects a legal duplicate policy.",
-      fix: "Pick a side for equals (usually right) and match validate to it." },
+      bug: "Using <code>&le;</code> on both sides, or a validate that demands a strict <code>&lt;</code> both ways, looks consistent and then either builds a broken tree or rejects a legal policy the statement actually allowed.",
+      fix: "Pick one side for equals, usually the right, and make insert, search and validate all agree. A two-node tree with equal keys is the test." },
     { title: "k-th by converting to an array always",
-      bug: "Fine for one query; wasteful if the follow-up is many k-th with inserts.",
-      fix: "Subtree sizes, or a persistent inorder iterator." },
+      bug: "Dumping inorder into a list is correct for one query and looks like the obvious answer, then the follow-up of many k-th questions mixed with inserts rebuilds the list each time and becomes linear per query.",
+      fix: "Store subtree sizes, or keep a persistent inorder iterator. Time a few thousand mixed operations if the follow-up appears." },
   ],
   variants: [
     ["Recover BST", "Two nodes swapped; inorder finds two inversions, swap values.",
@@ -750,13 +894,13 @@ pack({
   ],
   followups: [
     ["Why long bounds?",
-      "<p>The node type is int, so MIN_VALUE and MAX_VALUE are legal keys. If you pass those as the initial lo/hi with int, a root equal to MIN_VALUE is rejected. long sentinels sit strictly outside.</p>"],
+      "<p>The node stores an <code>int</code>, so both <code>Integer.MIN_VALUE</code> and <code>Integer.MAX_VALUE</code> are legal keys. If you pass those same values as the initial <code>lo</code> and <code>hi</code> with <code>int</code> arithmetic, a root equal to <code>MIN_VALUE</code> fails the lower-bound test. <code>long</code> sentinels sit strictly outside the <code>int</code> range, so every legal key falls inside the first call.</p>"],
     ["Is every inorder-sorted tree a BST?",
-      "<p>Yes for unique keys: the BST invariant is equivalent to inorder being strictly increasing. Building a tree from an increasing inorder still needs a structure (balanced mid split) if you also want height log n.</p>"],
+      "<p>For unique keys, yes: the BST range rule is equivalent to inorder being strictly increasing. That does not tell you how to build the tree. An increasing inorder sequence can be laid out as a linked list or as a balanced tree; taking the midpoint of the remaining slice as the root is what gives height about <code>log n</code>.</p>"],
     ["Delete complexity?",
-      "<p>O(h) to find, O(h) to find the successor, O(h) to splice. Still O(h). Hibbard deletion unbalances over time; interviews ignore that.</p>"],
+      "<p>You walk <code>O(h)</code> to find the node, another <code>O(h)</code> to find its successor if it has two children, and <code>O(h)</code> to splice that successor out. All of that is still <code>O(h)</code>. Repeated Hibbard deletions slowly unbalance a tree; interviews ignore that and never ask you to rebalance by hand.</p>"],
     ["LCA in BST vs general tree?",
-      "<p>BST: walk from the root using values, no extra memory. General: postorder both-sides (previous page) or binary lifting (later).</p>"],
+      "<p>On a BST you walk from the root comparing values, using no extra memory beyond a few pointers, because the split point is decided by the keys. On a general binary tree the keys tell you nothing, so you use the postorder both-sides walk from the previous page, or binary lifting when there are many queries on a static tree.</p>"],
   ],
   problems: [
     lc(98, "validate-binary-search-tree", "Medium", "Range DFS"),
@@ -776,13 +920,14 @@ pack({
     "<strong>long sentinels</strong> for validate.",
   ],
   oneliner: "ok(n,lo,hi): lo<n.val<hi then ok(L,lo,val) && ok(R,val,hi)",
+  dryIntro: "Range-validate the sample BST 4 / 2 5 / 1 3, then watch the same check reject a 6 that a local child compare would have accepted.",
 }),
 
 /* ====================================== 4. tree-dp-and-rerooting ====== */
 pack({
   id: "tree-dp-and-rerooting",
   difficulty: "Hard",
-  readTime: "26 min",
+  readTime: "30 min",
   tagline: "One DFS computes every subtree answer; a second DFS reroots, combining \"down\" " +
     "with \"the rest of the tree\" so every vertex can be treated as the root in O(n).",
   tags: ["tree DP", "rerooting", "P1"],
@@ -791,21 +936,32 @@ pack({
     ["DFS & Components", "../07-graphs-core/dfs-and-components.html"],
   ],
   why: [
-    "Interview diameter is one global. CP asks \"for every vertex, the longest path starting " +
-      "there\", or \"sum of distances to all others\", or \"whether the tree stays balanced if " +
-      "we root here\". Computing n independent DFSes is O(n^2). Tree DP is one down-DFS of " +
-      "subtree summaries, then optionally a reroot-DFS that pushes the parent's \"outside\" " +
-      "answer into each child in O(1) or O(deg) extra.",
-    "The algebraic requirement is that you can merge a child's contribution and an \"outside\" " +
-      "contribution. Sum of distances: down[u] = sum (down[v]+sz[v]), then reroot " +
-      "ans[v] = ans[u] + n - 2*sz[v]. Longest-out-path needs the top-two child depths because " +
-      "the excluded child might have been the best.",
-    "CF 219D choosing capital, CF 161D distance in tree, and \"sum of distances\" (LC 834) " +
-      "are the cluster. If the merge is not invertible, rerooting needs the top-two trick or " +
-      "a second pass that recomputes from siblings.",
+    "You are given a tree of 200000 vertices and asked, for every vertex, the sum of its " +
+      "distances to all the others. The obvious method roots the tree at vertex 0 and walks " +
+      "it, then roots it at vertex 1 and walks it again, and so on. Each walk costs a full " +
+      "pass, so two hundred thousand walks are about <code>4&times;10&#8310;</code> steps and " +
+      "the judge will not wait. The interview version of diameter hides the same trap: one " +
+      "global number needs one walk, but \"the longest path starting at every vertex\" is " +
+      "n separate questions and will not survive a naive restart.",
+    "Tree DP answers the rooted version first. A <em>down</em> DFS, starting at an arbitrary " +
+      "root, writes a summary of each subtree: its size, the sum of distances inside it, or " +
+      "the longest downward spine. That already answers the question at the chosen root. " +
+      "<em>Rerooting</em> is the second walk, and it is the whole point of this page: when " +
+      "the root slides from <code>u</code> to a child <code>v</code>, you do not recompute " +
+      "those subtree summaries. You recompute only the <em>outside</em> &mdash; everything " +
+      "that is not in <code>v</code>'s subtree &mdash; and combine it with the down-summary " +
+      "you already have. For sums that combination is a closed formula; for maxima you keep " +
+      "the top two child contributions so the excluded child is not reused as its own outside.",
+    "In a statement the tell is \"for every vertex\" sitting next to <code>n &le; 2&times;10&#8309;</code> " +
+      "on an undirected tree of <code>n - 1</code> edges. LC 834 (sum of distances), CF 219D " +
+      "(choose a capital), and \"height if we root here\" are the cluster. If the merge has " +
+      "no inverse, rerooting still works, but you must rebuild the outside from siblings " +
+      "instead of subtracting, which is why the top-two trick exists.",
   ],
-  insight: "Subtree DP answers questions about the rooted tree. Rerooting reuses those " +
-    "summaries so every vertex's \"if I were root\" answer is O(1) extra after O(n) preprocess.",
+  insight: "The down DFS answers the question as if one chosen vertex were the root. " +
+    "Rerooting reuses those subtree summaries and only recomputes the outside contribution " +
+    "when the root slides to a child, so every vertex's answer is constant extra work after " +
+    "one linear preprocess.",
   yes: [
     "For every vertex, some aggregate of the tree rooted there",
     "Sum of distances to all nodes (LC 834)",
@@ -829,40 +985,71 @@ pack({
       "That is O(n^2); the second DFS is O(n)",
       "Merge outside with child in O(1) or O(deg)"],
   ],
-  constraint: "n &le; 2e5. Recursion may overflow; iterative DFS or -Xss. Answers are long " +
-    "(n * n * value). Tree is undirected n-1 edges; root at 0 arbitrarily for the down pass.",
+  constraint: "<code>n &le; 2&times;10&#8309;</code> on an undirected tree is the signature. " +
+    "A recursive pair of walks can overflow on a chain, so keep an iterative DFS or raise " +
+    "the stack. Answers are <code>long</code>: a sum of distances can reach about " +
+    "<code>n&times;(n-1)</code>, which wraps an <code>int</code>. Root the first pass at 0 " +
+    "(or 1) arbitrarily; the second pass will give every other vertex the same quality of answer.",
   core: [
-    "Down: dfs(u, p) computes sz[u], down[u] from children only. Example sum of distances: " +
-      "sz[u]=1+sum sz[v], down[u]=sum (down[v]+sz[v]). Then ans[0]=down[0].",
-    "Reroot: dfs2(u, p). For each child v, ans[v] = ans[u] - sz[v] + (n - sz[v]) = ans[u] + n " +
-      "- 2*sz[v] for sum-of-distances. Recurse. For max-height, pass the best outside depth, " +
-      "using the top two child depths so the excluded child's outside is the second-best.",
+    "The first walk is ordinary subtree DP. <code>dfs1(u, p)</code> skips the parent, then " +
+      "for each child <code>v</code> folds <code>v</code>'s summary into <code>u</code>. For " +
+      "sum of distances you store two arrays: <code>sz[u]</code> is the number of vertices " +
+      "in <code>u</code>'s subtree, starting at 1 and adding each <code>sz[v]</code>, and " +
+      "<code>down[u]</code> is the sum of distances from <code>u</code> to those vertices, " +
+      "built as <code>down[u] += down[v] + sz[v]</code> because every node in <code>v</code>'s " +
+      "subtree is one edge farther from <code>u</code> than from <code>v</code>. After this " +
+      "pass, <code>ans[root] = down[root]</code> is the real answer at the chosen root, and " +
+      "every <code>down[u]</code> and <code>sz[u]</code> is finished. Those two arrays are " +
+      "not recomputed later.",
+    "When the root moves from <code>u</code> to a child <code>v</code>, the vertices that " +
+      "change distance are easy to name. Everyone in <code>v</code>'s subtree, " +
+      "<code>sz[v]</code> of them, is now one closer. Everyone else, <code>n - sz[v]</code> " +
+      "vertices, is now one farther. The new answer is therefore the old answer plus " +
+      "<code>(n - sz[v]) - sz[v]</code>, which is <code>ans[u] + n - 2&times;sz[v]</code>. " +
+      "That is the only number the second DFS writes: the outside contribution at <code>v</code>. " +
+      "It does not rebuild <code>down[]</code>, and it does not recount subtree sizes. For a " +
+      "maximum instead of a sum there is no subtraction, so at <code>u</code> you keep the " +
+      "best and second-best child depths and give <code>v</code> whichever of those two is " +
+      "not <code>v</code> itself, plus the outside already known at <code>u</code>.",
+    "Take the five-node tree with edges 0-1, 1-2, 1-3, 0-4, rooted at 0. Leaves 2, 3 and 4 " +
+      "have <code>sz = 1</code> and <code>down = 0</code>. Node 1 owns 2 and 3, so " +
+      "<code>sz[1] = 3</code> and <code>down[1] = 2</code>. The root then has " +
+      "<code>sz[0] = 5</code> and <code>down[0] = (2+3) + (0+1) = 6</code>, which is " +
+      "<code>ans[0]</code>. Sliding the root to 1 changes three distances by -1 and two " +
+      "(nodes 0 and 4) by +1, so <code>ans[1] = 6 + 5 - 2&times;3 = 5</code>. Sliding from 0 " +
+      "to 4 changes one distance by -1 and four by +1, so <code>ans[4] = 6 + 5 - 2&times;1 = 9</code>. " +
+      "Two walks, five answers, no fifth DFS.",
   ],
-  invariant: "<p>After the down pass, down[u] is the answer on the subtree of u. After reroot, " +
-    "ans[u] is the answer on the whole tree as if rooted at u.</p>" +
-    "<span class=\"eq\">ans[v] = combine(ans[u] without v's subtree, down[v])</span>",
+  invariant: "<p>After the down pass, <code>down[u]</code> is the answer on the subtree of " +
+    "<code>u</code> in the first rooting. After reroot, <code>ans[u]</code> is the answer on " +
+    "the whole tree as if rooted at <code>u</code>:</p>" +
+    "<span class=\"eq\">ans[v] = combine(ans[u] without v's subtree, down[v])</span>" +
+    "<p>In plain words, moving the root to a child does not ask you to walk the tree again; " +
+    "it asks you to adjust the parent's already-known answer by the nodes that got closer " +
+    "and the nodes that got farther, then keep going.</p>" +
+    "<p>Interview sentence: <em>\"I precompute every subtree, then I only recompute the outside when I slide the root.\"</em></p>",
   arrayLabel: "sz[u] after down-DFS on a 5-node tree rooted at 0",
   array: [5, 3, 1, 1, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "sz", "down", "ans"],
   vizTitle: "Sum of distances: down then reroot",
   frames: [
-    { note: "Tree: 0-1, 1-2, 1-3, 0-4. Root 0. Leaves sz=1, down=0.",
+    { note: "Root the five-node tree at 0. Each leaf has subtree size 1 and a down-sum of 0, because it can see nobody below it.",
       active: [2, 3, 4],
       values: { u: "leaves", sz: 1, down: 0, ans: "\u2014" } },
-    { note: "Node 1: children 2,3. sz=3, down=(0+1)+(0+1)=2.",
+    { note: "Node 1 owns leaves 2 and 3, so its size is 3 and its down-sum is 2: each of those two nodes is one edge away.",
       active: [1],
       values: { u: 1, sz: 3, down: 2, ans: "\u2014" } },
-    { note: "Node 0: children 1,4. sz=5, down=(2+3)+(0+1)=6. ans[0]=6.",
+    { note: "The root folds child 1 (down 2 plus size 3) and leaf 4 (0 plus 1) into a down-sum of 6, which is already the answer at 0.",
       active: [0],
       values: { u: 0, sz: 5, down: 6, ans: 6 } },
-    { note: "Reroot to 1: ans[1]=6 + 5 - 2*3 = 5. Intuition: 3 nodes got 1 closer, 2 nodes (0 and 4) got 1 farther.",
+    { note: "Slide the root to 1: three nodes get closer and two get farther, so the answer becomes 6 + 5 - 2 times 3, which is 5.",
       active: [1],
       values: { u: 1, sz: 3, down: 2, ans: 5 } },
-    { note: "Reroot to 4: ans[4]=6+5-2*1=9.",
+    { note: "Slide the root from 0 to 4 instead: one node gets closer and four get farther, so the answer becomes 6 + 5 - 2, which is 9.",
       active: [4],
       values: { u: 4, sz: 1, down: 0, ans: 9 } },
-    { note: "All five answers from two DFS passes, not five.",
+    { note: "Every vertex now has its own answer from those two walks. The down-sums were never rebuilt after the first pass.",
       best: [0, 1, 2, 3, 4],
       values: { u: "all", sz: "\u2014", down: "\u2014", ans: "done" } },
   ],
@@ -873,12 +1060,12 @@ pack({
   t1 --> t2["2"]
   t1 --> t3["3"]`,
   steps: [
-    "<strong>Build undirected lists</strong>, n-1 edges, root at 0.",
-    "<strong>Down DFS:</strong> skip parent; compute sz and down from children.",
-    "<strong>ans[root] = down[root]</strong> (or a custom combine).",
-    "<strong>Reroot DFS:</strong> for each child, write ans[child] from ans[u] and sz[child] (or top-two).",
-    "<strong>Top-two</strong> when the merge is max, not a group with inverse.",
-    "<strong>long</strong> for sums; iterative stack if n=2e5.",
+    "<strong>Build the undirected adjacency lists.</strong> A tree of <code>n</code> vertices has <code>n - 1</code> edges stored both ways, so every loop must skip the parent; root the first pass at 0 so the down summaries have a direction.",
+    "<strong>Down DFS writes subtree summaries only.</strong> From the children compute <code>sz[u]</code> and <code>down[u]</code> (or the top-two depths), because those numbers are the ones the second pass will reuse rather than recompute.",
+    "<strong>Seed the answer at the chosen root.</strong> Set <code>ans[root] = down[root]</code>, which is already the true whole-tree answer there and is the parent value the reroot step will adjust.",
+    "<strong>Reroot by adjusting the outside.</strong> For each child, write <code>ans[v]</code> from <code>ans[u]</code> and <code>sz[v]</code> (or from the top-two depths), because sliding the root changes only who got closer and who got farther.",
+    "<strong>Keep a top-two when the merge is a maximum.</strong> There is no inverse for <code>max</code>, so the excluded child's outside must come from the second-best sibling plus the parent's own outside, not from subtracting.",
+    "<strong>Use long and prefer an iterative stack at <code>n = 2&times;10&#8309;</code>.</strong> A sum of distances overflows <code>int</code>, and a chain-shaped tree overflows the JVM stack long before the arithmetic does.",
   ],
   code: [
     { tab: "Brute", file: "NDfs.java",
@@ -974,9 +1161,9 @@ public class TopTwoHeight {
     time: "O(n)",
     space: "O(n)",
     derivation: [
-      "Each edge is traversed a constant number of times across two DFS passes. Combining a child is O(1) for sums, O(deg) total per node for top-two (still O(n) because sum of deg = 2n-2).",
-      "<span class=\"eq\">T = &Theta;(n)</span> versus naive &Theta;(n^2)",
-      "If the merge needs a full multiset of child answers, you pay extra (small-to-large, or a heap).",
+      "<p>Each of the <code>n - 1</code> edges is walked a constant number of times across the two DFS passes. Combining a child is <code>O(1)</code> for a sum, and collecting the top two depths at a node is <code>O(deg(u))</code>, which still totals <code>O(n)</code> because the degrees of a tree sum to <code>2n - 2</code>. The naive \"root at each vertex and DFS\" is <code>&Theta;(n&#178;)</code>.</p>",
+      "<span class=\"eq\">T = &Theta;(n)</span> versus naive <span class=\"eq\">&Theta;(n&#178;)</span>",
+      "<p>At <code>n = 2&times;10&#8309;</code> the two linear walks are a few million edge hops, comfortable; the naive version is about <code>4&times;10&#8310;</code> hops and will time out. If the merge really needs a full multiset of child answers you pay extra (small-to-large, or a heap), but the textbook reroot of a sum or a max does not.</p>",
     ],
     compare: [
       ["n DFS from each root", "O(n^2)", "O(n)", "n<=3000 maybe"],
@@ -987,20 +1174,20 @@ public class TopTwoHeight {
   },
   pitfalls: [
     { title: "Forgetting to skip the parent",
-      bug: "Infinite recursion on an undirected edge stored both ways.",
-      fix: "if (v == p) continue; every loop." },
+      bug: "An undirected edge is stored both ways, so a loop that treats every neighbour as a child looks like the binary-tree recursion and then recurses forever along the same edge.",
+      fix: "Write <code>if (v == p) continue;</code> in every neighbour loop, both passes. A two-node tree is enough to expose the infinite walk." },
     { title: "int overflow of n*dist",
-      bug: "ans[u] up to n*(n-1) / something times values. int wraps.",
-      fix: "long[] ans, down." },
+      bug: "A sum of distances can reach about <code>n&times;(n-1)</code>, so an <code>int</code> array wraps to a small wrong number that still looks like a plausible answer on the sample.",
+      fix: "Store <code>down</code> and <code>ans</code> as <code>long[]</code>. A star with a 200000-leaf count is the overflow test." },
     { title: "Reroot max without top-two",
-      bug: "You subtract the child's depth from a max that was that child; outside becomes 0 wrongly.",
-      fix: "Store best and second-best child depths at u." },
+      bug: "Subtracting the child's own depth from a parent max that came from that same child looks like the sum-formula's inverse, then the child's outside becomes 0 even though a sibling spine is still there.",
+      fix: "Store the best and second-best child depths at <code>u</code>, and give <code>v</code> whichever of those two is not itself. A node with two long arms is the check." },
     { title: "sz[v] after rerooting used as if still rooted at 0",
-      bug: "The formula ans[u]+n-2*sz[v] needs sz[v] = size of v's down-subtree in the first rooting, which stays valid for the child v of u on the down tree.",
-      fix: "Do not recompute sz during dfs2 unless you know why." },
+      bug: "The formula <code>ans[u] + n - 2&times;sz[v]</code> needs <code>sz[v]</code> to stay the down-subtree size from the first rooting; recomputing sizes during the second pass looks tidy and then uses the wrong closer-count.",
+      fix: "Leave <code>sz[]</code> alone in <code>dfs2</code> unless you have a separate reason to rebuild it. Check that <code>ans[1]</code> on the five-node sample is 5, not 6." },
     { title: "Stack overflow",
-      bug: "A path of 2e5. JVM dies.",
-      fix: "Iterative DFS or increase stack; contests often have a chain anti-rec test." },
+      bug: "A path of <code>2&times;10&#8309;</code> is a legal tree, so the recursive pair of walks is correct on paper and then dies with <code>StackOverflowError</code> on the anti-recursion test.",
+      fix: "Write an iterative DFS, or raise the stack, whenever the statement does not promise a bushy tree. Contests like this chain." },
   ],
   variants: [
     ["Top-two for max", "At u keep the two largest child down-values; child's outside = 1+max(up[u], otherChild).",
@@ -1012,13 +1199,13 @@ public class TopTwoHeight {
   ],
   followups: [
     ["Why n - 2*sz[v]?",
-      "<p>Moving the root from u to child v: every node in v's subtree is 1 closer, everyone else is 1 farther. Closer count = sz[v], farther = n-sz[v], delta = (n-sz[v]) - sz[v].</p>"],
+      "<p>When the root slides from <code>u</code> to child <code>v</code>, every node in <code>v</code>'s subtree is one hop closer and every node outside that subtree is one hop farther. The closer count is <code>sz[v]</code>, the farther count is <code>n - sz[v]</code>, and the change in the sum is <code>(n - sz[v]) - sz[v]</code>, which is <code>n - 2&times;sz[v]</code>. You add that delta to <code>ans[u]</code>; you do not walk either side again.</p>"],
     ["When is rerooting impossible in O(n)?",
-      "<p>When you cannot compute \"parent's answer without this child\" in O(1) or O(deg). Then small-to-large, or accept O(n log n) / O(n^2).</p>"],
+      "<p>When you cannot recover \"the parent's answer without this child\" in constant time or in time proportional to the degree. A merge that needs a full multiset of sibling answers forces small-to-large, a heap, or an honest <code>O(n&#178;)</code>. Sums and maxima with a top-two are the cases that stay linear.</p>"],
     ["Diameter via rerooting?",
-      "<p>Height of a rerooting is the eccentricity of that vertex. Diameter = max eccentricity, also = max over v of down[v]+up[v]. Two BFS is shorter if you only need the diameter value.</p>"],
+      "<p>The height of the tree after rerooting at <code>v</code> is the eccentricity of <code>v</code>, the farthest distance from that vertex. The diameter is the maximum eccentricity, which is also <code>max(down[v] + up[v])</code> over vertices. If you only need the diameter value, two BFS (or two DFS) from a farthest vertex is shorter and does not reroot.</p>"],
     ["Weighted edges?",
-      "<p>Same formulas with +w(u,v) instead of +1, and \"n-2sz\" becomes a weighted analogue: minus 2*sum of subtree weights plus total. Track subtree weight sum.</p>"],
+      "<p>Replace each <code>+1</code> with the edge weight <code>w(u, v)</code> in the down pass. The reroot delta becomes \"minus twice the total weight of <code>v</code>'s subtree, plus the total weight of every edge\", so you track a subtree weight-sum alongside <code>sz</code>. The picture is the same: closer side loses <code>w</code>, farther side gains <code>w</code>.</p>"],
   ],
   problems: [
     lc(834, "sum-of-distances-in-tree", "Hard", "Classic reroot"),
@@ -1038,13 +1225,14 @@ public class TopTwoHeight {
     "<strong>O(n)</strong>, not O(n^2). long, skip parent.",
   ],
   oneliner: "dfs1 sz/down; ans[0]=down[0]; dfs2 ans[v]=combine(ans[u], sz[v])",
+  dryIntro: "Sum of distances on the five-node tree 0-1-2, 1-3, 0-4: first the down-sums from root 0, then the two reroots that adjust who got closer.",
 }),
 
 /* ====================================== 5. lca-binary-lifting ========= */
 pack({
   id: "lca-binary-lifting",
   difficulty: "Hard",
-  readTime: "24 min",
+  readTime: "30 min",
   tagline: "Precompute the 2^k-th ancestor of every node in <code>O(n log n)</code>, then " +
     "LCA and k-th ancestor queries become <code>O(log n)</code> jumps.",
   tags: ["LCA", "binary lifting", "P1"],
@@ -1053,18 +1241,32 @@ pack({
     ["Bit Manipulation", "../02-sorting-hashing-bits/bit-manipulation.html"],
   ],
   why: [
-    "The interview LCA on a binary tree is one DFS. The contest LCA is n,q = 1e5 queries on " +
-      "a static tree: distance(u,v), k-th node on a path, max edge on a path. Binary lifting " +
-      "stores up[k][v] = the 2^k-th parent of v, built from up[k][v]=up[k-1][up[k-1][v]]. " +
-      "Lift the deeper node to the same depth, then lift both until their parents match.",
-    "The same table answers \"k-th ancestor\" by jumping bits of k, and with extra payload " +
-      "on edges (max, gcd, sum) you merge along the jumps. Euler-tour RMQ is the other LCA; " +
-      "lifting is easier to extend with path aggregates.",
-    "depth[] from a DFS, parent[0][v] from the same DFS, then the doubling loop. Queries are " +
-      "then a short bit loop. Off-by-one on \"lift to depth of LCA+1\" is the classic bug.",
+    "You are given a static tree of 200000 vertices and 200000 questions of the form \"what " +
+      "is the lowest common ancestor of u and v?\", or \"how far is u from v?\", or \"what " +
+      "is the k-th node on the path?\". The interview LCA on a binary tree is one DFS and " +
+      "dies here: walking parents one step at a time can take 200000 hops per question, and " +
+      "a batch of that size is about <code>4&times;10&#8310;</code> steps. You need a way to " +
+      "climb many edges in one pointer hop.",
+    "That is what the table <code>up[k][v]</code> is for. It holds the ancestor of <code>v</code> " +
+      "that sits exactly <code>2<sup>k</sup></code> steps toward the root: <code>up[0][v]</code> " +
+      "is the parent, <code>up[1][v]</code> is the grandparent, <code>up[2][v]</code> is four " +
+      "steps up, and so on. The reason those particular ancestors are enough is that any climb " +
+      "of <code>d</code> steps has a binary representation, so <code>d</code> is a sum of " +
+      "distinct powers of two. Once every power-of-two ancestor is stored, a climb of " +
+      "<code>d</code> steps is at most twenty pointer hops instead of <code>d</code> of them. " +
+      "You build the table by doubling: the <code>2<sup>k</sup></code> ancestor is the " +
+      "<code>2<sup>k-1</sup></code> ancestor of the <code>2<sup>k-1</sup></code> ancestor.",
+    "The same jumps answer k-th ancestor and, with a payload stored next to each jump, the " +
+      "max or gcd of the edges you skipped. Euler-tour RMQ is the other LCA and is faster " +
+      "when you only need the meeting node; lifting is the one you reach for when the " +
+      "statement also wants a path aggregate. The tell in a contest is " +
+      "<code>n, q &le; 2&times;10&#8309;</code> on a static tree, plus distance, k-th, or " +
+      "path-min language.",
   ],
-  insight: "Any ancestor distance d is a sum of distinct powers of two. Jump those bits. LCA " +
-    "is: equalise depth, then jump both while the 2^k parents still differ, then take the parent.",
+  insight: "Any climb of d steps is a sum of distinct powers of two, so <code>up[k][v]</code> " +
+    "stores the ancestor exactly <code>2<sup>k</sup></code> steps up and a query jumps those " +
+    "bits. LCA equalises depth, then lifts both nodes while their <code>2<sup>k</sup></code> " +
+    "parents still differ, then takes the parent.",
   yes: [
     "Many LCA queries on a static tree",
     "Distance = depth[u]+depth[v]-2*depth[lca]",
@@ -1088,37 +1290,69 @@ pack({
       "Lifting is a sparse table of ancestors, not of a linear array",
       "Same doubling idea, different domain"],
   ],
-  constraint: "n,q &le; 2e5, LOG=18 or 20. up is int[LOG][n] (or [n][LOG]). Root's parent is " +
-    "the root or -1; jumping past the root must be defined (stay at root, or -1).",
+  constraint: "<code>n, q &le; 2&times;10&#8309;</code> is the textbook pair. Take " +
+    "<code>LOG = 18</code> or 20, because <code>2<sup>18</sup> = 262144</code> already covers " +
+    "the limit. The table is <code>int[LOG][n]</code> (or the swapped layout), about 16 MB " +
+    "of integers at <code>n = 2&times;10&#8309;</code> and 20 rows. The root's parent is " +
+    "<code>-1</code> or the root itself; whichever you pick, jumping past the root must be " +
+    "defined so <code>up[k][-1]</code> is never read.",
   core: [
-    "DFS from the root: depth[v], up[0][v]=parent. Then for k=1..LOG-1, for all v, " +
-      "up[k][v]=up[k-1][up[k-1][v]] (if parent is -1, keep -1).",
-    "LCA: if depth[u]&lt;depth[v] swap. Lift u by depth[u]-depth[v] using bits. If u==v return u. " +
-      "Then for k=LOG-1..0, if up[k][u]!=up[k][v] jump both. Return up[0][u].",
+    "One DFS from the root fills <code>depth[v]</code> and the first row of the table: " +
+      "<code>up[0][v]</code> is the parent of <code>v</code>, the ancestor one step up. That " +
+      "row is the reason the rest of the table exists at all. The doubling loop then sets " +
+      "<code>up[k][v] = up[k-1][up[k-1][v]]</code> for <code>k = 1, 2, &hellip;</code>: to " +
+      "jump <code>2<sup>k</sup></code> steps you jump <code>2<sup>k-1</sup></code> twice. " +
+      "If a midpoint is <code>-1</code> you keep <code>-1</code>, which is how a short tree " +
+      "stays well-defined. After this preprocess, climbing <code>h</code> steps from a node " +
+      "is a loop over the bits of <code>h</code>: when bit <code>k</code> is set, replace " +
+      "the node by <code>up[k][node]</code>.",
+    "LCA uses that climb twice. First swap so <code>u</code> is at least as deep as " +
+      "<code>v</code>, then lift <code>u</code> by <code>depth[u] - depth[v]</code> so the " +
+      "two nodes sit at the same depth. If they are now equal, the deeper one was under the " +
+      "shallower and you are done. Otherwise walk <code>k</code> from <code>LOG-1</code> down " +
+      "to 0 and, whenever <code>up[k][u]</code> still differs from <code>up[k][v]</code>, " +
+      "jump both. You must go from the high bit downward: a low-bit jump first can overshoot " +
+      "the meeting point and land on two different ancestors that later cannot resync. When " +
+      "the loop ends the two nodes are the children of the LCA, so the answer is " +
+      "<code>up[0][u]</code>. Distance is then <code>depth[u] + depth[v] - 2&times;depth[lca]</code>.",
+    "On the sample tree 0-1-2, 1-3, 0-4 the depths are <code>[0, 1, 2, 2, 1]</code> and " +
+      "<code>up[0]</code> is <code>[-1, 0, 1, 1, 0]</code>. Doubling fills " +
+      "<code>up[1][2] = up[0][1] = 0</code> and <code>up[1][3] = 0</code>, the grandparents. " +
+      "LCA(2, 3): depths already match and the nodes differ, <code>up[1]</code> of both is 0 " +
+      "so you do not jump 2, <code>up[0]</code> of both is 1 so you do not jump 1 either, " +
+      "and you return that parent 1. LCA(2, 4): lift 2 by one step to 1, 1 is not 4, both " +
+      "parents are 0, return 0. Distance 2 to 4 is <code>2 + 1 - 0 = 3</code>, the path 2-1-0-4. " +
+      "The 2nd ancestor of 2 is a single jump of bit 1, which lands on 0.",
   ],
-  invariant: "<p>up[k][v] is the ancestor of v exactly 2^k steps toward the root (or the root / " +
-    "-1 if you run out).</p>" +
-    "<span class=\"eq\">lca(u,v) = first common ancestor; dist = d[u]+d[v]-2 d[lca]</span>",
+  invariant: "<p><code>up[k][v]</code> is the ancestor of <code>v</code> sitting exactly " +
+    "<code>2<sup>k</sup></code> steps toward the root (or <code>-1</code> / the root if the " +
+    "climb runs out). LCA is the deepest node that is an ancestor of both arguments:</p>" +
+    "<span class=\"eq\">lca(u,v) = first common ancestor; dist = d[u]+d[v]-2 d[lca]</span>" +
+    "<p>In plain words, you never walk one parent at a time: you keep a list of \"skip 1, " +
+    "skip 2, skip 4, skip 8, &hellip;\" pointers so any climb is a handful of those skips, " +
+    "and the meeting node is what is left after the two nodes have been skipped up to just " +
+    "below it.</p>" +
+    "<p>Interview sentence: <em>\"up[k][v] is the 2^k-th parent; I equalise depth, then jump while parents differ.\"</em></p>",
   arrayLabel: "depth[v] on the sample tree rooted at 0",
   array: [0, 1, 2, 2, 1],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u-v", "depthGap", "jump", "lca"],
   vizTitle: "LCA(2,3): both depth 2, parent 1 is the LCA",
   frames: [
-    { note: "Tree 0-1-2, 1-3, 0-4. depth [0,1,2,2,1]. up[0] = parent [-1,0,1,1,0].",
+    { note: "On 0-1-2, 1-3, 0-4 the depths are 0,1,2,2,1. The first row up[0] is just the parent of each node, so 2 and 3 both point at 1.",
       values: { "u-v": "prep", depthGap: "\u2014", jump: "up[0]", lca: "\u2014" } },
-    { note: "up[1][v] = grandparent: [-, -, 0, 0, -].",
+    { note: "Doubling fills up[1][v], the ancestor two steps up. Nodes 2 and 3 both land on the root 0; nodes with no grandparent stay at -1.",
       values: { "u-v": "doubling", depthGap: "\u2014", jump: "up[1]", lca: "\u2014" } },
-    { note: "LCA(2,3): depths equal. up[1][2]=0 and up[1][3]=0 same, so do not jump 2. up[0][2]=1 != up[0][3]=1? They are equal 1. Then return parent of 2, which is 1. Wait: if up[0] already equal, we still return up[0][u] after the loop... Standard: if after equalising u==v return u. Here 2!=3. Loop k: if parents differ, jump. up[0][2]==up[0][3]==1, so we do not jump, then return up[0][2]=1.",
+    { note: "LCA(2,3): depths already match and the nodes differ. Their two-step parents agree, their one-step parents agree, so the answer is that shared parent 1.",
       active: [2, 3],
       values: { "u-v": "2,3", depthGap: 0, jump: "none", lca: 1 } },
-    { note: "LCA(2,4): lift 2 by 1 to 1. 1!=4. up[0][1]=0, up[0][4]=0 equal, return 0.",
+    { note: "LCA(2,4): lift 2 by one step to 1 so the depths match. 1 is not 4, both parents are 0, and that parent is the answer.",
       active: [2, 4],
       values: { "u-v": "2,4", depthGap: 1, jump: "2->1", lca: 0 } },
-    { note: "dist(2,4)=2+1-0=3. Path 2-1-0-4.",
+    { note: "Distance 2 to 4 is depth 2 plus depth 1 minus twice the LCA depth 0, which is 3, the path 2-1-0-4.",
       best: [0, 1, 2, 4],
       values: { "u-v": "dist", depthGap: "\u2014", jump: "\u2014", lca: "3 hops" } },
-    { note: "k-th ancestor of 2, k=2: jump bit 1 (value 2) -> 0.",
+    { note: "The 2nd ancestor of 2 is a single jump of bit 1, value 2, which reads up[1][2] and lands on the root 0.",
       active: [2, 0],
       values: { "u-v": "anc 2 k=2", depthGap: 2, jump: "bit1", lca: 0 } },
   ],
@@ -1129,12 +1363,12 @@ pack({
   t1 --> t2["2 d=2"]
   t1 --> t3["3 d=2"]`,
   steps: [
-    "<strong>DFS</strong> from root: depth[], up[0][v]=parent (root parent = -1 or itself).",
-    "<strong>Double:</strong> for k=1..LOG-1, up[k][v] = up[k-1][up[k-1][v]] (guard -1).",
-    "<strong>Equalise depth</strong> by lifting the deeper node.",
-    "<strong>If equal, that is the LCA.</strong>",
-    "<strong>From high bit to 0:</strong> if up[k][u]!=up[k][v] jump both.",
-    "<strong>Return up[0][u]</strong> (the parent of the nodes just below the LCA).",
+    "<strong>DFS from the root fills depth and the parent row.</strong> Set <code>up[0][v]</code> to the parent (and the root's parent to <code>-1</code> or itself) because every later jump is defined in terms of that first row.",
+    "<strong>Double to fill the rest of the table.</strong> <code>up[k][v] = up[k-1][up[k-1][v]]</code> with a guard on <code>-1</code>, so a jump of <code>2<sup>k</sup></code> is two jumps of <code>2<sup>k-1</sup></code> and you never index <code>up[k][-1]</code>.",
+    "<strong>Equalise depth before comparing nodes.</strong> Lift the deeper node by the depth gap, using the bits of that gap, so the two arguments sit at the same level and a later joint jump cannot miss the meeting point.",
+    "<strong>If they coincide after the lift, that node is the LCA.</strong> The deeper argument sat inside the shallower one's subtree, and there is nothing left to jump.",
+    "<strong>Walk bits from high to low and jump while parents differ.</strong> A low-bit jump first can overshoot the LCA; the high-to-low order keeps both nodes just below the meeting point.",
+    "<strong>Return the parent of either node.</strong> After the loop they are the two children of the LCA (or the same child twice), so <code>up[0][u]</code> is the answer and distance is the usual depth formula.",
   ],
   code: [
     { tab: "Brute", file: "LcaWalk.java",
@@ -1237,9 +1471,9 @@ public class BinaryLifting {
     time: "O(n log n) build, O(log n) per LCA / k-th ancestor",
     space: "O(n log n)",
     derivation: [
-      "LOG = ceil(log2 n) ~ 18. Filling up[k][v] is n * LOG. A query equalises with at most LOG jumps then at most LOG more.",
+      "<p><code>LOG</code> is <code>ceil(log2 n)</code>, about 18 at <code>n = 2&times;10&#8309;</code>. Filling <code>up[k][v]</code> writes one integer per pair <code>(k, v)</code>, so the preprocess is <code>n&times;LOG</code> assignments, a few million. A query equalises depth with at most <code>LOG</code> jumps and then does at most <code>LOG</code> more, so one LCA is a few dozen pointer reads.</p>",
       "<span class=\"eq\">T_build = O(n log n), T_q = O(log n)</span>",
-      "Euler+RMQ is O(n log n) / O(1) with a sparse table, slightly heavier constants, worse at path payloads.",
+      "<p>A batch of <code>q = 2&times;10&#8309;</code> queries is a few million jumps, comfortable. Walking parents one step at a time on a chain is <code>O(n)</code> per query and about <code>4&times;10&#8310;</code> steps in the same batch. Euler tour plus a sparse table answers LCA in <code>O(1)</code> after the same <code>n log n</code> preprocess, with heavier constants and no natural hook for a path max; lifting wins when you also need a payload.</p>",
     ],
     compare: [
       ["Walk parents", "O(n) / query", "O(n)", "q tiny"],
@@ -1250,20 +1484,20 @@ public class BinaryLifting {
   },
   pitfalls: [
     { title: "Lifting past the root without a guard",
-      bug: "up[k][-1] or up[k][parent of root] indexes garbage.",
-      fix: "Store -1, skip when mid&lt;0. Or parent[root]=root and jumps stay put." },
+      bug: "Reading <code>up[k][-1]</code>, or treating the root's parent as 0 in a 0-based tree, looks like a finished table and then indexes garbage or wraps to a random node on a short climb.",
+      fix: "Store <code>-1</code> and skip when the midpoint is negative, or set the root's parent to itself so jumps stay put. A query that asks for the 10th ancestor of a depth-2 node is the test." },
     { title: "Returning u after the loop instead of up[0][u]",
-      bug: "You stopped at the children of the LCA, not the LCA.",
-      fix: "After equalise, if u==v return u; else jump while parents differ; return parent." },
+      bug: "The high-to-low walk is designed to stop at the children of the LCA, so returning <code>u</code> looks like you finished the loop and then reports a child instead of the meeting node.",
+      fix: "After equalising, if <code>u == v</code> return <code>u</code>; otherwise jump while parents differ and return <code>up[0][u]</code>. LCA(2, 3) on the sample must be 1, not 2." },
     { title: "Filling up[k] inside DFS before children set up[k-1]",
-      bug: "up[k][v] depends only on v's ancestors, so filling at v during DFS is actually OK if you fill all k for v after up[0][v] is set, before children. Filling a global k-loop after the whole DFS is simpler.",
-      fix: "Either fill all k for u at dfs entry, or a nested loop after DFS." },
+      bug: "A nested <code>k</code>-loop that reads <code>up[k-1][parent]</code> before that parent has been doubled looks like the same recurrence and then writes -1 or a stale parent into later rows.",
+      fix: "Fill every <code>k</code> for the current node after <code>up[0]</code> is set and before recursing to children, or run one global doubling loop after the whole DFS. Either order is safe; mixing them is not." },
     { title: "depth not set when lifting",
-      bug: "Forgot DFS, all depths 0, LCA is nonsense.",
-      fix: "One DFS from the true root (problem's 1, or 0)." },
+      bug: "Skipping the DFS leaves every depth at 0, so the equalise step never lifts and LCA of two distant leaves reports a nonsense meeting point that still type-checks.",
+      fix: "Run one DFS from the statement's true root (often 1, sometimes 0) and set <code>depth[child] = depth[u] + 1</code>. Print the depth array on the sample before any query." },
     { title: "1-based nodes, 0-based table",
-      bug: "n=5 nodes 1..5, array of 5, index 5 dies.",
-      fix: "n+1 arrays, ignore 0, or decrement labels." },
+      bug: "Nodes labelled 1..n stored in an array of length n make index n throw, and the same bug looks like an off-by-one only on the last vertex.",
+      fix: "Allocate <code>n+1</code> and ignore index 0, or remap labels to <code>0..n-1</code> at the input boundary and stay consistent in every array." },
   ],
   variants: [
     ["Path max", "mx[k][v] = max(mx[k-1][v], mx[k-1][up[k-1][v]]) along the same jumps.",
@@ -1275,13 +1509,13 @@ public class BinaryLifting {
   ],
   followups: [
     ["Why jump from high bits down when equalising is low bits up?",
-      "<p>Equalising a known height h uses the bits of h, any order. The LCA's \"while parents differ\" must go from high to low: a low-bit jump first could overshoot the LCA and land on different ancestors that later cannot resync.</p>"],
+      "<p>Equalising a known height <code>h</code> uses the bits of <code>h</code>, and any order works because you are jumping an exact distance you already computed. The LCA loop is different: you do not know the remaining distance, you only know whether a trial jump of <code>2<sup>k</sup></code> would land on two different ancestors. A low-bit jump first can overshoot the meeting point and leave the two nodes on different branches that later bits cannot bring back together. High-to-low never steps past the LCA.</p>"],
     ["Virtual trees?",
-      "<p>Sort a subset of nodes by tin, LCA consecutive pairs, stack-build the compressed tree. Binary lifting (or RMQ) supplies those LCAs. Used in DP on a few important vertices.</p>"],
+      "<p>Sort a subset of important nodes by their DFS enter times, take LCA of each consecutive pair, and stack-build the compressed tree that contains only those nodes and their meeting points. Binary lifting (or Euler+RMQ) supplies those LCAs. The compressed tree has size linear in the subset, which is why DP on a few marked vertices becomes affordable.</p>"],
     ["Weighted distance?",
-      "<p>Store distRoot[v] = distance to root during DFS. dist(u,v)=distRoot[u]+distRoot[v]-2*distRoot[lca]. No extra lifting payload needed for sums.</p>"],
+      "<p>During the same DFS that fills <code>up[0]</code>, store <code>distRoot[v]</code> as the distance from the root to <code>v</code>. Then <code>dist(u, v) = distRoot[u] + distRoot[v] - 2&times;distRoot[lca]</code>. Sum is invertible, so you do not need a payload on the jumps; max or gcd on the path still does.</p>"],
     ["LOG = 20 vs 18?",
-      "<p>2^18 = 262144. n=2e5 needs 18. 20 is a safe default. 31 is a waste of memory (n*31 ints).</p>"],
+      "<p><code>2<sup>18</sup> = 262144</code>, so <code>n = 2&times;10&#8309;</code> needs 18 rows. 20 is a safe default you can type without thinking. 31 wastes a row per node for no query you will ever make: that is <code>n&times;31</code> integers, about 25 MB, for climbs that 20 already cover.</p>"],
   ],
   problems: [
     lc(236, "lowest-common-ancestor-of-a-binary-tree", "Medium", "Interview DFS, not lifting"),
@@ -1301,13 +1535,14 @@ public class BinaryLifting {
     "<strong>Path payload</strong> rides along the same jumps.",
   ],
   oneliner: "lift deeper to same depth; for k=LOG-1..0 if up[k][u]!=up[k][v] jump both; return parent",
+  dryIntro: "Build the doubling table on 0-1-2, 1-3, 0-4, then walk LCA(2,3), LCA(2,4), the distance formula, and a 2-step ancestor jump.",
 }),
 
 /* ====================================== 6. euler-tour-subtree-queries */
 pack({
   id: "euler-tour-subtree-queries",
   difficulty: "Hard",
-  readTime: "24 min",
+  readTime: "30 min",
   tagline: "tin[v]..tout[v] is a contiguous segment of a flattened DFS, so subtree sum / " +
     "add becomes a Fenwick range on that segment.",
   tags: ["Euler tour", "subtree", "tin tout", "P1"],
@@ -1316,18 +1551,32 @@ pack({
     ["Fenwick Tree", "../06-range-queries/fenwick-tree.html"],
   ],
   why: [
-    "A subtree is not a contiguous slice of the parent-pointer array, so a Fenwick on vertex " +
-      "ids is meaningless. An Euler tour (enter-time order) numbers vertices so that the " +
-      "subtree of v is exactly the interval [tin[v], tout[v]]. Point add + subtree sum is then " +
-      "a Fenwick on that interval; subtree add + point query is a range-add on the interval.",
-    "The same timestamps give the ancestry test tin[u] &le; tin[v] &le; tout[u] and are the " +
-      "substrate for HLD, virtual trees, and Mo on trees. CF 620E New Year Tree, 383C " +
-      "Propagating tree, 877E Danil are the cluster.",
-    "Tour variants: node-only (one tin per vertex), or enter-and-leave (the true Euler tour " +
-      "used for RMQ-LCA). Subtree queries use the node-only flattening.",
+    "You are given a tree of 200000 vertices and 200000 operations of the form \"add 5 to " +
+      "every node in the subtree of v\" or \"what is the sum of the subtree of v?\". The " +
+      "obvious method walks that subtree each time. A star with the query vertex at the " +
+      "centre makes every walk cost the whole tree, so the batch is about " +
+      "<code>4&times;10&#8310;</code> steps. Putting a Fenwick tree on the vertex labels " +
+      "does not help either: the subtree of vertex 7 is not the slice of ids from 7 to " +
+      "something, because the labels arrived in input order, not in ancestor order.",
+    "An <em>Euler tour</em> of the tree, in the node-only sense used here, is the sequence " +
+      "of vertices in the order a DFS first enters them. The reason a subtree becomes a " +
+      "contiguous interval is physical, not magical. DFS enters <code>v</code>, then visits " +
+      "everything reachable below <code>v</code>, and only then returns to <code>v</code>'s " +
+      "parent. Nothing from outside that subtree can be entered in between, because the only " +
+      "door out is the edge back to the parent. So the enter times of <code>v</code> and its " +
+      "descendants form a consecutive block of integers <code>[tin[v], tout[v]]</code>. A " +
+      "point add plus a subtree sum is then a Fenwick on that block; a subtree add plus a " +
+      "point query is a range-add on the same block.",
+    "The same two timestamps give an ancestry test for free: <code>u</code> is an ancestor " +
+      "of <code>v</code> exactly when <code>tin[u] &le; tin[v] &le; tout[u]</code>. They are " +
+      "also the first numbering HLD, virtual trees and Mo on trees reuse. In a statement the " +
+      "tell is a static tree shape, values that change, subtree (not path) operations, and " +
+      "<code>n, q &le; 2&times;10&#8309;</code>. CF 620E, 383C and 877E are the cluster. Path " +
+      "queries need HLD or a difference at the LCA; they are not one interval in this flattening.",
   ],
-  insight: "DFS enter times make every subtree a contiguous range. Put a Fenwick (or segtree) " +
-    "on those times, not on vertex labels.",
+  insight: "DFS enter times make every subtree a contiguous range, because the walk finishes " +
+    "a node's descendants before it is allowed to leave. Put a Fenwick (or segment tree) on " +
+    "those times, not on the vertex labels.",
   yes: [
     "Add on a subtree, query a point (or the reverse)",
     "Subtree sum / min / xor after point updates",
@@ -1351,39 +1600,68 @@ pack({
       "That is an edge-using tour of a different meaning",
       "This page is DFS timestamps on a tree"],
   ],
-  constraint: "n,q &le; 2e5. tin in 0..n-1 (or 1..n). Fenwick of size n+2. Recursion depth: " +
-    "iterative DFS to assign tin if the tree is a chain.",
+  constraint: "<code>n, q &le; 2&times;10&#8309;</code> is the usual pair. Enter times sit in " +
+    "<code>0..n-1</code> (or <code>1..n</code>); the Fenwick is size <code>n+2</code> so a " +
+    "range-add's off-the-end decrement still fits. A chain of 200000 nodes will overflow a " +
+    "recursive tour, so assign <code>tin</code> with an iterative stack when balance is not " +
+    "promised. The tree shape is static; if edges are added or deleted this numbering dies.",
   core: [
-    "timer=0. dfs(u,p): tin[u]=timer++. rec children. tout[u]=timer-1 (so [tin,tout] includes " +
-      "u and descendants). If you prefer half-open, tout=timer after children and the subtree " +
-      "is [tin, tout).",
-    "Map vertex v to index tin[v] in a Fenwick. Point add at v: add(tin[v], x). Subtree sum: " +
-      "range(tin[v], tout[v]). Subtree add: rangeAdd(tin, tout, x); point query at tin[v].",
+    "A single counter <code>timer</code> starts at 0. <code>dfs(u, p)</code> writes " +
+      "<code>tin[u] = timer++</code> on entry, recurses to every child except the parent, " +
+      "and on the way out writes <code>tout[u] = timer - 1</code>. Because the timer only " +
+      "moves forward, and because every descendant is entered before that last assignment, " +
+      "the inclusive interval <code>[tin[u], tout[u]]</code> is exactly <code>u</code> plus " +
+      "its descendants. If you prefer a half-open convention, set <code>tout[u] = timer</code> " +
+      "after the children and treat the subtree as <code>[tin[u], tout[u])</code>; mixing the " +
+      "two conventions is the classic off-by-one. Either way, the flattened array of length " +
+      "<code>n</code> is a permutation of the vertices.",
+    "A Fenwick (or segment tree) is then indexed by <code>tin</code>, never by the original " +
+      "label. Point-add at vertex <code>v</code> is <code>add(tin[v], delta)</code>. Subtree " +
+      "sum is the range <code>[tin[v], tout[v]]</code>. The dual, subtree-add plus point-query, " +
+      "is a range-add on that same interval and a prefix read at <code>tin[v]</code>. Ancestry " +
+      "does not even need the Fenwick: <code>u</code> is an ancestor of <code>v</code> when " +
+      "<code>tin[u] &le; tin[v]</code> and <code>tout[v] &le; tout[u]</code>. A true Euler " +
+      "tour that records a vertex on enter and on leave has length <code>2n-1</code> and is " +
+      "the other numbering, used for RMQ-LCA, not for these subtree ranges.",
+    "On the sample 0-1-2, 1-3, 0-4 the tour enters 0 (<code>tin=0</code>), then 1 " +
+      "(<code>tin=1</code>), then leaf 2 (<code>tin=2</code>, <code>tout=2</code>), then leaf 3 " +
+      "(<code>tin=3</code>, <code>tout=3</code>). Leaving 1 writes <code>tout[1] = 3</code>, so " +
+      "the subtree of 1 is the block of indices 1..3, which is exactly the set {1, 2, 3}. " +
+      "Leaf 4 takes index 4, and leaving 0 writes <code>tout[0] = 4</code>, the whole tree. " +
+      "A Fenwick range <code>[1, 3]</code> is the subtree sum of 1; adding 10 at node 2 " +
+      "touches only index 2 and that range becomes 13 if every value started at 1. Vertex 0 " +
+      "is an ancestor of 3 because 0 sits at or before 3's enter time and 0's leave covers it.",
   ],
-  invariant: "<p>The subtree of v, in DFS enter order, occupies a contiguous index interval.</p>" +
-    "<span class=\"eq\">subtree(v) = { u | tin[v] &le; tin[u] &le; tout[v] }</span>",
+  invariant: "<p>The subtree of <code>v</code>, written in DFS enter order, occupies one " +
+    "contiguous index interval, because the walk is not allowed to leave <code>v</code> until " +
+    "every descendant has been entered:</p>" +
+    "<span class=\"eq\">subtree(v) = { u | tin[v] &le; tin[u] &le; tout[v] }</span>" +
+    "<p>In plain words, the numbers you stamp on the way in are just a relabelling that " +
+    "makes \"below me\" look like a slice of an array, so every Fenwick or segment-tree trick " +
+    "you already know applies to subtrees.</p>" +
+    "<p>Interview sentence: <em>\"I flatten by enter time so a subtree is [tin, tout]; the Fenwick indexes tin, not the label.\"</em></p>",
   arrayLabel: "tin[v] then the flattened order",
   array: [0, 1, 2, 3, 4],
   indexLabels: ["0", "1", "2", "3", "4"],
   vars: ["u", "tin", "tout", "flat"],
   vizTitle: "Euler numbering on 0-1-2, 1-3, 0-4",
   frames: [
-    { note: "Enter 0, tin[0]=0. Recurse to 1.",
+    { note: "Enter 0 first and stamp tin[0] = 0. The walk must finish every descendant of 0 before it is allowed to leave, so the remaining stamps will be a single block.",
       active: [0],
       values: { u: 0, tin: 0, tout: "\u2014", flat: "[0]" } },
-    { note: "Enter 1, tin[1]=1. Recurse to 2.",
+    { note: "Enter 1 next and stamp tin[1] = 1. Everything still below 1 will receive the next consecutive times, because the walk cannot return to 0 yet.",
       active: [1],
       values: { u: 1, tin: 1, tout: "\u2014", flat: "[0,1]" } },
-    { note: "Enter 2, tin[2]=2, leaf, tout[2]=2. Then 3: tin=3, tout=3.",
+    { note: "Leaf 2 takes time 2 and immediately writes tout[2] = 2. Leaf 3 takes time 3 the same way. No outsider has been entered between them.",
       active: [2, 3],
       values: { u: 2, tin: 2, tout: 2, flat: "[0,1,2,3]" } },
-    { note: "Leave 1, tout[1]=3. Subtree of 1 is indices 1..3 = {1,2,3}.",
+    { note: "Leaving 1 writes tout[1] = 3. The subtree of 1 is now the contiguous block of indices 1 through 3, which is exactly the set {1, 2, 3}.",
       window: [1, 3],
       values: { u: 1, tin: 1, tout: 3, flat: "sub 1" } },
-    { note: "Enter 4, tin[4]=4, tout=4. Leave 0, tout[0]=4. Whole tree [0,4].",
+    { note: "Enter leaf 4 at time 4, then leave the root with tout[0] = 4. The whole tree is the interval [0, 4] and every subtree is some sub-block of it.",
       active: [4],
       values: { u: 4, tin: 4, tout: 4, flat: "[0,1,2,3,4]" } },
-    { note: "Fenwick range [1,3] is subtree of 1. Ancestry: 0 is ancestor of 3 because 0<=3<=4 (tins) and tout[0]>=tin[3].",
+    { note: "A Fenwick range [1, 3] is the subtree sum of 1. Vertex 0 is an ancestor of 3 because 3's enter time sits inside 0's interval.",
       best: [1, 2, 3],
       values: { u: "query", tin: 1, tout: 3, flat: "BIT range" } },
   ],
@@ -1394,12 +1672,12 @@ pack({
   t1 --> t2["2 tin=2"]
   t1 --> t3["3 tin=3"]`,
   steps: [
-    "<strong>DFS:</strong> tin[u]=timer++ before children; tout[u]=timer-1 after.",
-    "<strong>Fenwick of size n</strong> indexed by tin.",
-    "<strong>Point add on vertex v:</strong> bit.add(tin[v], delta).",
-    "<strong>Subtree sum:</strong> bit.range(tin[v], tout[v]).",
-    "<strong>Subtree add, point query:</strong> rangeAdd on [tin,tout], query prefix(tin[v]).",
-    "<strong>Ancestry:</strong> tin[u]&lt;=tin[v] &amp;&amp; tout[v]&lt;=tout[u].",
+    "<strong>Stamp enter time before the children, leave time after.</strong> <code>tin[u] = timer++</code> on the way in and <code>tout[u] = timer - 1</code> on the way out, so the inclusive interval is exactly the descendants and nothing else.",
+    "<strong>Build a Fenwick of size n indexed by tin.</strong> Vertex labels are an arbitrary permutation; only the enter-time order makes a subtree look like a slice, which is why the tree sits on <code>tin</code>.",
+    "<strong>Point-add at a vertex writes at its enter time.</strong> <code>bit.add(tin[v], delta)</code> updates one cell, and every ancestor range that covers that cell sees the new value on the next query.",
+    "<strong>Subtree sum is one range read.</strong> <code>bit.range(tin[v], tout[v])</code> covers <code>v</code> and its descendants because that is precisely the block the DFS stamped for them.",
+    "<strong>Subtree add plus point query is the dual.</strong> Range-add on <code>[tin[v], tout[v]]</code> and read the prefix at <code>tin[u]</code>, so a later point query at a descendant sees the add and a node outside the block does not.",
+    "<strong>Keep tout even if you only planned sums.</strong> Ancestry is the interval test <code>tin[u] &le; tin[v] &le; tout[u]</code>, and several later techniques (HLD, virtual trees) reuse the same pair of stamps.",
   ],
   code: [
     { tab: "Brute", file: "SubtreeScan.java",
@@ -1497,9 +1775,9 @@ public class EulerFenwick {
     time: "O(n) tour, O(log n) per update/query",
     space: "O(n)",
     derivation: [
-      "DFS assigns each vertex one tin. Fenwick ops are O(log n). Naive subtree walk is O(subtree) per query and dies at q=1e5.",
+      "<p>The DFS assigns each of the <code>n</code> vertices one enter time, which is a linear pass. Each Fenwick update or range query walks about <code>log n</code> cells, around 18 at <code>n = 2&times;10&#8309;</code>. A batch of <code>q = 2&times;10&#8309;</code> operations is a few million cell writes, comfortable. Walking a subtree per query is <code>O(|subtree|)</code> and becomes about <code>4&times;10&#8310;</code> visits when every query hits the root.</p>",
       "<span class=\"eq\">T_prep = O(n), T_op = O(log n)</span>",
-      "Path queries are not an interval in this flattening (unless you add HLD or lift diffs at the LCA).",
+      "<p>Path queries are not an interval in this flattening: the path from <code>u</code> to <code>v</code> is two root-paths glued at the LCA, so a single <code>[tin, tout]</code> is the wrong set. Those need HLD, or a difference array at <code>u</code>, <code>v</code> and the LCA, not a second Euler numbering.</p>",
     ],
     compare: [
       ["Walk the subtree", "O(|sub|) / query", "O(n)", "q tiny"],
@@ -1510,20 +1788,20 @@ public class EulerFenwick {
   },
   pitfalls: [
     { title: "tout exclusive vs inclusive mix-up",
-      bug: "range(tin, tout) with tout=timer after children is exclusive on the right if you also stored tin as the start; off-by-one drops the last descendant or includes a sibling.",
-      fix: "Pick one: tout=timer-1 inclusive, or half-open [tin,tout). Draw the sample." },
+      bug: "Writing <code>tout = timer</code> after the children and then calling an inclusive <code>range(tin, tout)</code> looks consistent, then either drops the last descendant or includes the next sibling, and the sample of a one-child tree still happens to pass.",
+      fix: "Pick one convention and stick to it: <code>tout = timer - 1</code> inclusive, or half-open <code>[tin, tout)</code>. Draw the five-node sample and check that subtree 1 is exactly {1, 2, 3}." },
     { title: "Fenwick on vertex id instead of tin",
-      bug: "Subtree {1,2,3} is not ids 1..3 after an arbitrary labelling.",
-      fix: "Always index by tin[v]." },
+      bug: "Indexing the Fenwick by the input label looks like the obvious map, and a lucky labelling where the subtree of 1 is {1, 2, 3} makes the sample green, then a different numbering makes the same range cover strangers.",
+      fix: "Always index by <code>tin[v]</code>. Print both the label and the enter time on the sample before the first query." },
     { title: "Updating val[v] without adding at tin[v]",
-      bug: "You change an array the Fenwick never sees.",
-      fix: "add(tin[v], newVal-oldVal) or set via two adds." },
+      bug: "Writing into a parallel <code>val[]</code> array looks like you stored the new value, but the Fenwick still holds the old number and every later subtree sum is stale.",
+      fix: "Translate the update as <code>add(tin[v], newVal - oldVal)</code>, or rebuild that cell with two adds. Query the same subtree immediately after the write." },
     { title: "Root's parent edge in an undirected list causing a second DFS into the parent",
-      bug: "tin assigned twice, timer explodes, or infinite rec.",
-      fix: "skip parent, same as every tree DFS." },
+      bug: "Forgetting <code>if (v == p) continue</code> looks like the binary-tree recursion and then either assigns <code>tin</code> twice, blows the timer past <code>n</code>, or recurses forever.",
+      fix: "Skip the parent in the tour, the same guard as every other undirected tree DFS. A two-node tree exposes it at once." },
     { title: "Using this flattening for path u-v",
-      bug: "Path is two intervals to the LCA, not one. Queries give nonsense.",
-      fix: "HLD, or difference array at u,v,+lca according to the op." },
+      bug: "A path is two intervals glued at the LCA, so treating it as <code>[tin[u], tin[v]]</code> looks like \"the nodes between them\" and then sums a block of unrelated descendants.",
+      fix: "Use HLD, or a difference array at <code>u</code>, <code>v</code> and the LCA according to the operation. The five-node sample path 2-1-0-4 is not the interval [2, 4]." },
   ],
   variants: [
     ["True Euler tour (2n-1)", "Push u on enter and after each child; RMQ of depth for LCA.",
@@ -1535,13 +1813,13 @@ public class EulerFenwick {
   ],
   followups: [
     ["Ancestry in O(1)?",
-      "<p>Yes: tin[u] &le; tin[v] &le; tout[u]. That is why you should still store tout even if you only planned sums.</p>"],
+      "<p>Yes: <code>u</code> is an ancestor of <code>v</code> exactly when <code>tin[u] &le; tin[v] &le; tout[u]</code>. That is the same interval fact that makes subtree sums work, which is why you should still store <code>tout</code> even if the statement only asked for sums. Two integer compares, no Fenwick, no walk.</p>"],
     ["Path add, point query without HLD?",
-      "<p>Add +x at v, add -x at parent[u] depending on the op; more carefully: difference on the root-path by adding at the node and subtracting at the LCA's parent. Then a subtree-sum (Euler+BIT) of the diffs reconstructs the point. Common CF trick.</p>"],
+      "<p>Put a difference on the root-path: add <code>+x</code> at the node and subtract <code>x</code> at the parent of the LCA (the exact endpoints depend on whether the LCA is included). A subtree-sum of those diffs, which is Euler plus a Fenwick, reconstructs the point value. It is a common CF trick and still uses this flattening; it is not a claim that a path is one interval.</p>"],
     ["tin unique?",
-      "<p>Node-only flattening: each vertex once, tin in 0..n-1 permutation. True Euler tour: vertices repeat, length 2n-1, first[] stores the first index for RMQ-LCA.</p>"],
+      "<p>In the node-only flattening each vertex is entered once, so <code>tin</code> is a permutation of <code>0..n-1</code>. The true Euler tour used for RMQ-LCA records a vertex on enter and after every child, has length <code>2n-1</code>, and stores <code>first[v]</code> as the first index of <code>v</code> in that longer sequence. Subtree queries want the short numbering; LCA-as-RMQ wants the long one.</p>"],
     ["HLD connection?",
-      "<p>HLD chains are also intervals, but of a different numbering (heavy-path compressed). The first step of HLD still uses sz[] from a DFS; Euler is the lighter tool when the query is a whole subtree.</p>"],
+      "<p>Heavy-light decomposition also turns some paths into intervals, but the numbering is different: it compresses heavy paths, not whole subtrees. The first step of HLD still runs a DFS for subtree sizes, and that DFS can stamp <code>tin</code>/<code>tout</code> at the same time. Euler alone is the lighter tool when every query is a whole subtree and you do not need an arbitrary path.</p>"],
   ],
   problems: [
     lc(938, "range-sum-of-bst", "Easy", "Not Euler; BST range. Contrast"),
@@ -1561,30 +1839,45 @@ public class EulerFenwick {
     "<strong>Paths are not intervals here</strong> &mdash; that is HLD / lifting.",
   ],
   oneliner: "tin[u]=timer++; rec; tout[u]=timer-1; BIT on tin for subtree ranges",
+  dryIntro: "Stamp enter and leave times on 0-1-2, 1-3, 0-4, then watch the subtree of 1 become the contiguous block of indices 1 through 3.",
 }),
 
 /* ====================================== 7. trie ======================= */
 pack({
   id: "trie",
   difficulty: "Medium",
-  readTime: "22 min",
+  readTime: "28 min",
   tagline: "A tree of prefixes: each edge is a character, insert/search/startsWith are " +
     "<code>O(|s|)</code>, and the same walk powers word-search II and autocomplete.",
   tags: ["trie", "prefix tree", "P0"],
   prereqs: [["Binary Tree Basics & Traversals", "binary-tree-basics-and-traversals.html"]],
   why: [
-    "HashSet.contains is O(|s|) expected for exact strings and cannot answer \"is there a " +
-      "stored word that starts with this prefix\" without scanning everything. A trie shares " +
-      "prefixes: n words of length L use O(total characters) nodes, and a prefix query walks " +
-      "one path of length |prefix|.",
-    "LC 208 is the API. Word Search II is \"DFS the board, walk the trie in lockstep, prune " +
-      "when the node is null\". Autocomplete, replace-words, and longest-word-in-dictionary " +
-      "are the same walk with a different payload on terminal nodes.",
-    "The implementation choice is next[26] vs HashMap&lt;Character,Node&gt;. Interviews want " +
-      "the array for lowercase English. Count how many words share a node if you must delete.",
+    "You are given 100000 words and asked, after each insertion, whether any stored word " +
+      "starts with a given prefix. A <code>HashSet</code> answers exact equality in time " +
+      "proportional to the query string, which is fine, and then a prefix question forces you " +
+      "to scan every word. A hundred thousand words of length 20 is two million character " +
+      "compares per prefix query; a few thousand of those queries will not finish. You need " +
+      "a structure that shares the common start of <code>app</code>, <code>ape</code> and " +
+      "<code>apple</code> so the prefix <code>ap</code> is one walk, not a scan.",
+    "A <em>trie</em>, also called a prefix tree, is that structure. Each edge is one " +
+      "character, and the path from the root to a node spells the prefix that node represents. " +
+      "Words that share a start share the same path, so the whole dictionary occupies " +
+      "memory proportional to the total number of characters, not to the number of prefixes " +
+      "written out as strings. Insert, exact search and starts-with are each one walk of " +
+      "length equal to the query. LC 208 is that API. Word Search II walks the board and the " +
+      "trie in lockstep and prunes when the next cell has no child; autocomplete and replace-words " +
+      "are the same walk with a different payload on a terminal node.",
+    "The implementation choice is <code>next[26]</code> versus a <code>HashMap</code> of " +
+      "children. Interviews want the array for lowercase English. A count on each node, " +
+      "how many inserted words pass through it, is what lets you delete without pulling the " +
+      "rug from under a sibling. In a statement the tell is \"starts with\", \"prefix\", " +
+      "\"dictionary of words\", or a board search over many patterns, with total characters " +
+      "around <code>10&#8309;</code>. Maximum XOR of numbers is the next page, a 2-child trie " +
+      "on bits, not this 26-way tree.",
   ],
-  insight: "A trie node is the set of strings with a given prefix. Child c is that prefix " +
-    "extended by c. Terminal flag (or count) marks a complete word.",
+  insight: "A trie node is the set of stored strings that share one prefix. The child labelled " +
+    "<code>c</code> is that prefix extended by <code>c</code>, and a terminal flag (or a count) " +
+    "marks the prefix that is itself a complete word.",
   yes: [
     "implement-trie: insert, search, startsWith",
     "Search a board for many words (Word Search II)",
@@ -1608,41 +1901,67 @@ pack({
       "Suffix tree is compressed suffixes, much heavier",
       "This page is a prefix tree of a dictionary"],
   ],
-  constraint: "Total characters &le; 1e5 typical. Node arrays of size 26 are fine. Alphabet " +
-    "size &sigma; multiplies memory; HashMap children for huge alphabets. Word Search II: " +
-    "4^L board DFS pruned by the trie, L up to 10.",
+  constraint: "Total characters around <code>10&#8309;</code> is the everyday limit, and a " +
+    "<code>next[26]</code> array per node is acceptable memory. Alphabet size multiplies " +
+    "that memory, so a huge alphabet wants a map of children instead. Word Search II is a " +
+    "4-way board DFS of depth up to 10, pruned by the trie; without the prune it is " +
+    "<code>4<sup>L</sup></code> and will time out on a 12-by-12 board even when the dictionary " +
+    "is tiny.",
   core: [
-    "Node { Node[] next = new Node[26]; boolean term; int cnt; }. insert: cur = root, for ch " +
-      "in s: i=ch-'a'; if next[i]==null next[i]=new Node(); cur=next[i]; cur.cnt++. Then " +
-      "cur.term=true. search: walk, fail on null, then term. startsWith: walk, fail on null.",
-    "Word Search II: build a trie of the word list. DFS the board; if next[cell]==null return; " +
-      "if term, emit word and optionally unmark term (dedup). Restore the cell after DFS. " +
-      "Delete dead leaves to prune (optional speed).",
+    "A node holds <code>Node[] next = new Node[26]</code>, a boolean <code>term</code>, and " +
+      "optionally an integer <code>cnt</code> of words that pass through it. Insert starts at " +
+      "the root and, for each character <code>ch</code>, computes <code>i = ch - 'a'</code>. " +
+      "If <code>next[i]</code> is null it allocates a fresh node, then steps into it and " +
+      "increments <code>cnt</code>. After the last character it sets <code>term = true</code>. " +
+      "Search is the same walk and returns false on a missing child; if the walk finishes it " +
+      "returns <code>term</code>, not true. Starts-with is the same walk and returns true as " +
+      "soon as the walk finishes, whether or not that node is terminal. Mixing those two " +
+      "return values is the classic LC 208 bug.",
+    "Word Search II builds a trie of the word list first. The board DFS carries a trie " +
+      "pointer alongside the cell: if the next letter has no child, that branch is dead and " +
+      "you return. Landing on a terminal node emits the word and, to avoid duplicates, you " +
+      "can clear <code>term</code> or delete a now-empty leaf. The cell itself must be marked " +
+      "(commonly with <code>'#'</code>) and restored after the four recursive calls, or a " +
+      "word can reuse the same square and invent a loop. Autocomplete is simpler: walk the " +
+      "prefix, then explore the small subtree under that node.",
+    "Insert <code>app</code> then <code>ape</code>. The first word creates the path " +
+      "<code>a &rarr; p &rarr; p</code> and marks the last <code>p</code> terminal. The second " +
+      "reuses <code>a &rarr; p</code> and creates a sibling <code>e</code>, also terminal. " +
+      "Search <code>ape</code> walks three edges and finds <code>term</code> true. Search " +
+      "<code>ap</code> lands on the shared <code>p</code>, where <code>term</code> is still " +
+      "false unless you also inserted <code>ap</code>. Starts-with <code>ap</code> does that " +
+      "same walk and returns true because the node exists. Search <code>apple</code> dies " +
+      "when the next letter <code>l</code> has no child. Two words, five nodes, one shared " +
+      "prefix of length 2.",
   ],
   invariant: "<p>The path from the root to a node spells a prefix of at least one inserted " +
-    "word. term (or cntEnd) is true iff that prefix is a complete word.</p>" +
-    "<span class=\"eq\">search(s) = walk(s) lands on a node with term=true</span>",
+    "word. <code>term</code> (or an end-count) is true exactly when that prefix is itself a " +
+    "complete word:</p>" +
+    "<span class=\"eq\">search(s) = walk(s) lands on a node with term = true</span>" +
+    "<p>In plain words, sharing a prefix means sharing a path, and \"is this a word\" is a " +
+    "flag on the last node, not the mere fact that the path exists.</p>" +
+    "<p>Interview sentence: <em>\"I walk one edge per character; search needs term, startsWith only needs the node.\"</em></p>",
   arrayLabel: "nodes visited inserting \"app\" then \"ape\" (letter indices)",
   array: ["", "a", "p", "p", "e"],
   vars: ["word", "ch", "node", "term"],
   vizTitle: "Insert app, ape; search ape; startsWith ap",
   frames: [
-    { note: "Empty root. Insert app: create a, p, p. Mark term on last p.",
+    { note: "The trie starts as a bare root. Inserting app creates the path a, p, p and marks only the last p as a complete word.",
       active: [1, 2, 3],
       values: { word: "app", ch: "p", node: "app", term: true } },
-    { note: "Insert ape: reuse a,p, create e, mark term. Shared prefix ap.",
+    { note: "Inserting ape reuses the shared prefix a, p and hangs a new sibling e, also marked terminal. Two words now share those first two nodes.",
       active: [1, 2, 4],
       values: { word: "ape", ch: "e", node: "ape", term: true } },
-    { note: "search(\"ape\"): walk a-p-e, term true.",
+    { note: "search(\"ape\") walks a, then p, then e and lands on a node whose term flag is true, so the exact word is present.",
       best: [4],
       values: { word: "ape", ch: "e", node: "ape", term: "found" } },
-    { note: "search(\"ap\"): land on p, term false (unless you also inserted ap).",
+    { note: "search(\"ap\") lands on the shared p, where term is still false because ap itself was never inserted, so exact search returns false.",
       active: [2],
       values: { word: "ap", ch: "p", node: "ap", term: false } },
-    { note: "startsWith(\"ap\"): same walk, no term needed. true.",
+    { note: "startsWith(\"ap\") does that same walk and returns true because the node exists. The term flag is not consulted for a prefix query.",
       active: [1, 2],
       values: { word: "ap", ch: "p", node: "ap", term: "prefix ok" } },
-    { note: "search(\"apple\"): after app the next l is null. false.",
+    { note: "search(\"apple\") follows app and then looks for l, finds no child, and returns false without inventing a node.",
       dim: [4],
       values: { word: "apple", ch: "l", node: "null", term: false } },
   ],
@@ -1653,12 +1972,12 @@ pack({
   np --> npp["p term app"]
   np --> ne["e term ape"]`,
   steps: [
-    "<strong>Node:</strong> next[26], term, optional cnt.",
-    "<strong>insert:</strong> create missing children, mark term at the end, bump cnt.",
-    "<strong>search:</strong> walk, null &rarr; false, else return term.",
-    "<strong>startsWith:</strong> walk, null &rarr; false, else true.",
-    "<strong>Board search:</strong> DFS 4-way, trie pointer, emit on term, restore cell.",
-    "<strong>Do not</strong> store the whole string on every node unless you need it for output.",
+    "<strong>Give each node a 26-slot array, a term flag, and an optional count.</strong> The array is the alphabet; the flag is what distinguishes a finished word from a mere prefix, which is why both fields exist.",
+    "<strong>Insert by creating a child only when it is missing.</strong> Step one character at a time, increment <code>cnt</code> if you will later delete, and set <code>term</code> on the last node so a later exact search has something to read.",
+    "<strong>Exact search returns the term flag, not the existence of the path.</strong> A missing child is false; a finished walk still asks <code>term</code>, or <code>search(\"ap\")</code> after inserting <code>apple</code> comes back true by mistake.",
+    "<strong>Starts-with is the same walk without the flag.</strong> If every edge existed, the prefix is in the dictionary, which is the whole point of sharing paths.",
+    "<strong>Board search carries a trie pointer next to the cell.</strong> A missing child prunes that 4-way branch; a terminal node emits a word; the cell is marked and restored so one word cannot reuse the same square.",
+    "<strong>Do not store the whole string on every node.</strong> Reconstruct it from the walk, or hang one <code>String</code> on terminal nodes only, because copying lists per insert is linear in the dictionary size.",
   ],
   code: [
     { tab: "Brute", file: "HashDict.java",
@@ -1756,9 +2075,9 @@ public class HashDict {
     time: "O(L) per insert/search/startsWith",
     space: "O(total characters * &sigma;) worst, typically O(total chars)",
     derivation: [
-      "Each character of each word creates at most one new node. Shared prefixes share nodes.",
+      "<p>Each character of each word creates at most one new node, and a shared prefix creates none. Insert, search and starts-with therefore walk exactly <code>|s|</code> edges. Memory is proportional to the total number of characters (times 26 pointers in the array implementation). A dictionary of 100000 words of length 10 is about a million nodes in the worst case, comfortable.</p>",
       "<span class=\"eq\">T(insert) = O(|s|), S = O(&Sigma; |s_i|)</span>",
-      "HashSet search is also O(|s|) but startsWith is O(n |s|) over the set. Trie makes prefix O(|s|).",
+      "<p>A <code>HashSet</code> of the words is also <code>O(|s|)</code> for exact search, but a prefix query scans every word and becomes <code>O(n |s|)</code>: two million compares per query at the usual limit. The trie makes that prefix <code>O(|s|)</code>. Word Search II is a 4-way DFS whose branches die when the trie has no child, which is what keeps <code>4<sup>L</sup></code> from exploding.</p>",
     ],
     compare: [
       ["HashSet of words", "O(L) exact", "O(total)", "No prefix API"],
@@ -1769,20 +2088,20 @@ public class HashDict {
   },
   pitfalls: [
     { title: "Forgetting term vs prefix",
-      bug: "search(\"ap\") true after inserting apple. startsWith and search mixed up.",
-      fix: "search requires term; startsWith does not." },
+      bug: "Returning true from search whenever the walk finishes looks like starts-with, so <code>search(\"ap\")</code> after inserting <code>apple</code> is true and LC 208's two methods silently share one implementation.",
+      fix: "Exact search requires <code>term</code>; starts-with does not. Insert only <code>apple</code> and assert both answers, they must differ." },
     { title: "Not creating nodes on insert",
-      bug: "NPE on next[c].field, or silent drop of the suffix.",
-      fix: "if (cur.next[c]==null) cur.next[c]=new Node();" },
+      bug: "Stepping into <code>next[c]</code> without allocating looks fine on a second insert that reuses a prefix, then the first insert of a new letter throws or drops the rest of the word.",
+      fix: "Write <code>if (cur.next[c] == null) cur.next[c] = new Node();</code> before the step. A first insert of a two-letter word is the test." },
     { title: "Word Search II without marking the cell",
-      bug: "The same cell is reused in one word (loop).",
-      fix: "board[r][c]='#'; rec; restore." },
+      bug: "Leaving the cell live looks like \"the board did not change\", then a 4-way DFS re-enters the same square and invents a word that loops through one letter twice.",
+      fix: "Set <code>board[r][c] = '#'</code>, recurse, then restore the letter. A 1-by-2 board with word <code>aa</code> is the check." },
     { title: "26 vs 'A'",
-      bug: "Uppercase or extra characters, negative index.",
-      fix: "Normalise, or a map. Guard c in 0..25." },
+      bug: "Subtracting <code>'a'</code> from an uppercase letter or from a punctuation mark produces a negative index, so the first non-lowercase input throws and the lowercase sample never saw it.",
+      fix: "Normalise to lowercase, or use a map. Guard that the index sits in <code>0..25</code> before you touch <code>next</code>." },
     { title: "Storing List&lt;String&gt; on every node",
-      bug: "Memory explodes; copying lists is O(n) per insert.",
-      fix: "term + reconstruct the word, or store one String at terminals only." },
+      bug: "Copying the list of words that share a prefix into each child looks convenient for autocomplete, then each insert is linear in the dictionary and memory explodes at a few thousand words.",
+      fix: "Keep <code>term</code> plus a reconstruction of the word from the walk, or store one <code>String</code> on terminal nodes only." },
   ],
   variants: [
     ["Count / delete", "cnt words passing through the node; delete decrements and drops cnt==0 children.",
@@ -1794,13 +2113,13 @@ public class HashDict {
   ],
   followups: [
     ["Why not a HashMap of all prefixes?",
-      "<p>You can: insert every prefix of every word into a HashSet for startsWith, and a set of words for search. Memory is worse (every prefix stored as a String) and Word Search II still wants a walk that can prune. The trie is the compressed form of that map.</p>"],
+      "<p>You can: insert every prefix of every word into a <code>HashSet</code> for starts-with, and keep a second set of complete words for search. Memory is worse because every prefix is stored as its own <code>String</code>, and Word Search II still wants a walk that can prune a dead branch in the middle of a word. The trie is the compressed form of that map, with one node per shared character rather than one string per prefix.</p>"],
     ["Aho-Corasick vs trie DFS on a text?",
-      "<p>Aho adds failure links so you scan the text once for all patterns. If the \"text\" is a 2-D board with 4-way moves, board DFS + trie is the right shape (LC 212). If the text is a string, Aho is linear.</p>"],
+      "<p>Aho-Corasick adds failure links so you scan a linear text once and report every pattern that occurs. If the \"text\" is a 2-D board with 4-way moves, that automaton does not match the shape of the search; board DFS locked to a trie pointer is the right tool (LC 212). If the text really is a string, Aho is linear in the text plus the dictionary plus the number of matches.</p>"],
     ["Autocomplete top-k?",
-      "<p>At the prefix node, the subtree holds candidates. Precompute a small heap of best words at each node, or DFS the subtree (fine if small).</p>"],
+      "<p>The subtree under the prefix node holds every candidate. For a small subtree you can DFS it and pick the best <code>k</code> words. If the subtree is large, precompute a small heap of the best words at each node when you insert, so a later query is a read rather than a walk. Either way you start from the node the prefix walk landed on, not from the root.</p>"],
     ["Unicode?",
-      "<p>HashMap&lt;Character,Node&gt; or a UTF-8 byte trie (256). Do not allocate next[Character.MAX_VALUE].</p>"],
+      "<p>Use <code>HashMap&lt;Character, Node&gt;</code>, or a byte trie on UTF-8 with 256 slots. Do not allocate <code>next[Character.MAX_VALUE]</code>: that is tens of thousands of unused pointers per node and will exhaust memory on the first handful of words. Interviews stay on lowercase English and the 26-slot array unless the statement names another alphabet.</p>"],
   ],
   problems: [
     lc(208, "implement-trie-prefix-tree", "Medium", "The API"),
@@ -1820,13 +2139,14 @@ public class HashDict {
     "<strong>XOR is a 2-child trie</strong> on the next page.",
   ],
   oneliner: "for ch in s: create next[ch-'a'] if missing; at end term=true",
+  dryIntro: "Insert app then ape into an empty trie, then watch exact search, prefix search, and a missing suffix take three different answers from the same walk.",
 }),
 
 /* ====================================== 8. xor-trie =================== */
 pack({
   id: "xor-trie",
   difficulty: "Hard",
-  readTime: "24 min",
+  readTime: "28 min",
   tagline: "A 2-child trie on bits, MSB first: to maximise XOR, greedily take the opposite " +
     "bit whenever that child exists.",
   tags: ["XOR trie", "binary trie", "P1"],
@@ -1835,20 +2155,32 @@ pack({
     ["Bit Manipulation", "../02-sorting-hashing-bits/bit-manipulation.html"],
   ],
   why: [
-    "Maximum XOR of two numbers in an array is not a sort+two-pointer problem in the usual " +
-      "way: XOR does not respect order. The greedy that works is bitwise, from bit 31 down: " +
-      "given a prefix of x, you want the other number to have the opposite bit. A binary trie " +
-      "of the inserted numbers tells you in O(1) whether that opposite child exists.",
-    "The same structure answers max XOR with a query value, max XOR of a subarray (insert " +
-      "prefix XORs), and CF 706D Vasiliy's Multiset (insert/delete + max XOR with x). It is " +
-      "the bit analogue of a BST on the numeric order of the 32-bit strings.",
-    "Insert is 32 steps of creating next[bit]. Query is 32 steps of preferring opposite. " +
-      "Counts on nodes support delete. Off-by-one on signed ints: treat bits as unsigned " +
-      "with &gt;&gt;&gt; or a mask, or work in 30 bits if values are 1e9.",
+    "You are given 100000 integers and asked for the maximum XOR of any two of them. Sorting " +
+      "and walking two pointers, the usual trick for a maximum difference, does not apply: " +
+      "XOR does not respect numeric order, so the best pair need not sit near each other after " +
+      "a sort. Checking every pair is about <code>5&times;10&#8313;</code> XORs and will not " +
+      "finish. The greedy that does work is bitwise, from the highest bit down: given the " +
+      "bits of <code>x</code> you have already matched, you want the other number to have " +
+      "the opposite bit, because that bit of the XOR becomes 1.",
+    "A <em>XOR trie</em> is a 2-child prefix tree on those bits, most-significant bit first. " +
+      "Each node is the set of inserted numbers that share one bit-prefix, and the two " +
+      "children are \"this prefix plus a 0\" and \"this prefix plus a 1\". Asking whether " +
+      "the opposite child exists is then a single pointer check, so a query is 30 or 31 " +
+      "steps. The same structure answers maximum XOR against a query value, maximum XOR of " +
+      "a subarray (you insert prefix XORs), and CF 706D (insert, delete, then max XOR with " +
+      "<code>x</code>). It is the bit analogue of a BST, ordered by the 30-bit strings " +
+      "rather than by numeric value.",
+    "Insert is one walk that creates a child for each bit. Query is one walk that prefers " +
+      "the opposite bit and falls back to the same bit when it must. A count on each node " +
+      "is what makes delete safe. In a statement the tell is \"maximum XOR\" next to " +
+      "<code>n &le; 10&#8309;</code> and values up to <code>10&#8313;</code>, which is 30 bits. " +
+      "Java's sign bit is the usual trap: for non-negative values loop from bit 30 down to 0, " +
+      "and do not sign-extend with <code>&gt;&gt;</code> on a 32-bit walk of a negative.",
   ],
-  insight: "XOR is maximised by making each bit 1 from the MSB down, independently of lower " +
-    "bits in the greedy sense: at bit k, if the opposite child exists, take it. The trie is " +
-    "the existence oracle for those children.",
+  insight: "XOR is maximised by setting each bit to 1 from the most-significant bit down: " +
+    "at bit <code>k</code>, take the opposite child if it exists. The trie is the oracle " +
+    "that tells you whether any stored number realises that opposite bit given the prefix " +
+    "already chosen.",
   yes: [
     "Maximum XOR of two numbers in an array (LC 421)",
     "Max XOR of a subarray (prefix XOR + query)",
@@ -1873,38 +2205,66 @@ pack({
       "Hash answers equality of XOR to k, not maximisation",
       "Hash for =k; trie for max"],
   ],
-  constraint: "n &le; 1e5, values &le; 1e9 so 30 bits (or 31). O(n * BITS) time and nodes. " +
-    "Use cnt if you delete. Java ints: bit 31 is the sign; for non-neg values loop b=30..0.",
+  constraint: "<code>n &le; 10&#8309;</code> and values up to <code>10&#8313;</code> mean 30 " +
+    "bits, so time and memory are <code>O(n&times;30)</code>, about three million steps and " +
+    "at most that many new nodes. Use a <code>cnt</code> on every node if the statement " +
+    "deletes. Java <code>int</code> treats bit 31 as the sign; for non-negative values loop " +
+    "<code>b = 30; b &ge; 0; b--</code> and leave bit 31 alone.",
   core: [
-    "Node { Node[] ch = new Node[2]; int cnt; }. insert(x): from b=30..0, bit=(x>>b)&1, " +
-      "create child, cur=child, cnt++. queryMax(x): from b=30..0, want=1-bit, if child want " +
-      "exists and cnt&gt;0 take it and set that bit in ans, else take bit.",
-    "For max pair: insert a[0], for i=1..n-1 ans=max(ans, queryMax(a[i])), insert a[i]. For " +
-      "subarray: same on prefix XOR array. Delete: walk and cnt-- (optionally drop cnt==0).",
+    "A node holds <code>Node[] ch = new Node[2]</code> and an integer <code>cnt</code> of " +
+      "numbers that pass through it. Insert starts at the root and walks " +
+      "<code>b = 30, 29, &hellip;, 0</code>. The bit is <code>(x &gt;&gt; b) &amp; 1</code>. " +
+      "Create <code>ch[bit]</code> if it is missing, step into it, increment <code>cnt</code>. " +
+      "Query-max walks the same bits of <code>x</code> but asks for the opposite child: " +
+      "<code>want = bit ^ 1</code>. If that child exists and its count is positive, take it " +
+      "and turn bit <code>b</code> of the answer on, because that bit of the XOR is now 1. " +
+      "Otherwise take the same-bit child, and that bit of the answer stays 0. The greedy is " +
+      "legal because bit <code>b</code> is worth <code>2<sup>b</sup></code>, more than all " +
+      "lower bits added together.",
+    "Maximum pair XOR inserts the first number, then for each later <code>a[i]</code> queries " +
+      "the trie and inserts. Maximum subarray XOR is the same algorithm on the prefix-XOR " +
+      "array, because the XOR of <code>a[l..r]</code> is <code>pref[r] ^ pref[l-1]</code>, " +
+      "and you must insert 0 first so a prefix that starts at index 0 has a partner. Delete " +
+      "walks the bits of <code>x</code> and decrements <code>cnt</code>; a child whose count " +
+      "hits 0 is treated as missing, which is what keeps a shared prefix alive for the " +
+      "sibling that still uses it.",
+    "Take the LC 421 sample <code>[3, 10, 5, 25, 2, 8]</code> with a 4-bit demo. Insert 3, " +
+      "which is <code>0011</code>, creating the path 0, 0, 1, 1. Query 10, which is " +
+      "<code>1010</code>: the highest bit of 10 wants a 1-child (opposite of 3's 0), none " +
+      "exists yet, so you take 0 and that XOR bit is 0; the remaining bits eventually produce " +
+      "<code>3 ^ 10 = 9</code>. Insert 10, then 5, then 25. Querying 25 against 5 prefers " +
+      "opposite bits all the way down and reports 28, which is <code>5 ^ 25</code> and the " +
+      "answer for the whole array. A later prefix-XOR version of the same trie would insert " +
+      "0 first so a prefix that starts at the left edge is not missing its partner.",
   ],
-  invariant: "<p>Each root-to-node path is a bit prefix of at least one stored number. queryMax " +
-    "walks a path that maximises XOR with x bit by bit.</p>" +
-    "<span class=\"eq\">at bit b: if opposite child exists, take it (that bit of XOR is 1)</span>",
+  invariant: "<p>Each root-to-node path is a bit prefix of at least one stored number. " +
+    "<code>queryMax(x)</code> walks a path that maximises the XOR with <code>x</code> one " +
+    "bit at a time:</p>" +
+    "<span class=\"eq\">at bit b: if the opposite child exists, take it (that XOR bit is 1)</span>" +
+    "<p>In plain words, you never look at a pair of numbers; you ask, bit by bit, whether " +
+    "any stored number has the bit you want given the bits you have already committed to, " +
+    "and you always take yes when you can because a higher 1 outweighs every lower choice.</p>" +
+    "<p>Interview sentence: <em>\"MSB first, prefer the opposite child; the trie is the existence check.\"</em></p>",
   arrayLabel: "numbers then running max-XOR after each insert",
   array: [3, 10, 5, 25, 2, 8],
   vars: ["x", "bit", "want", "best"],
   vizTitle: "Insert 3 (011), query 10 (1010) preferring opposite bits",
   frames: [
-    { note: "Insert 3 = 0011. Trie path 0,0,1,1 (4 bits for the demo).",
+    { note: "Insert 3, written 0011 in four bits for the demo. The trie grows the path 0, 0, 1, 1, one node per bit from the high end.",
       active: [0],
       values: { x: 3, bit: "0011", want: "insert", best: 0 } },
-    { note: "Query 10 = 1010. MSB want 1 (opposite of 0), no 1-child, take 0. XOR bit 0.",
+    { note: "Query 10, written 1010. The highest bit wants a 1-child, opposite of 3's 0; none exists, so you take 0 and that XOR bit stays 0.",
       values: { x: 10, bit: 3, want: 1, best: 0 } },
-    { note: "Next bits: eventually XOR 3^10=9. Insert 10.",
+    { note: "The remaining bits finish the walk and report 3 XOR 10, which is 9. Insert 10 so later queries can use its path as well.",
       active: [1],
       values: { x: 10, bit: "1010", want: "done", best: 9 } },
-    { note: "Insert 5, 25, ... LC 421 sample ends at 28 = 5 XOR 25.",
+    { note: "After 5 and 25 are inserted, a query of 25 against 5 prefers the opposite child at every bit and reports 28, the sample answer.",
       active: [2, 3],
       values: { x: 25, bit: "11001", want: "vs 5", best: 28 } },
-    { note: "Greedy opposite at each bit is optimal because a higher bit of XOR outweighs all lower bits combined.",
+    { note: "Taking the opposite child whenever it exists is safe: a 1 in a higher bit is worth more than every lower bit added together.",
       best: [2, 3],
       values: { x: "why", bit: "MSB first", want: "greedy", best: 28 } },
-    { note: "Prefix-XOR trick: max subarray XOR = max over i<j of pref[j]^pref[i], same trie on prefixes.",
+    { note: "The same trie on prefix XORs answers maximum subarray XOR, because a subarray XOR is two prefixes combined, including the empty prefix 0.",
       done: [0, 1, 2, 3, 4, 5],
       values: { x: "pref", bit: "\u2014", want: "subarray", best: "same query" } },
   ],
@@ -1917,12 +2277,12 @@ pack({
   b1 --> b10["0"]
   b10 --> b101["1 term 5"]`,
   steps: [
-    "<strong>BITS=30</strong> (or 31). Node with ch[2] and cnt.",
-    "<strong>insert(x):</strong> for b=BITS-1..0, bit=(x>>b)&1, create, cur=ch[bit], cnt++.",
-    "<strong>queryMax(x):</strong> want=bit^1; if ch[want]!=null take want and set ans|=(1<<b); else take bit.",
-    "<strong>Max pair:</strong> insert as you go, or insert all then query all.",
-    "<strong>Subarray:</strong> insert 0 first (empty prefix), then each prefix XOR.",
-    "<strong>Delete:</strong> cnt-- along the path of x.",
+    "<strong>Fix the bit width and the node.</strong> Use 30 bits for values up to <code>10&#8313;</code>, and give each node two children plus a <code>cnt</code>, because every later delete and empty-check reads that count.",
+    "<strong>Insert from the high bit down.</strong> For each <code>b</code>, take <code>bit = (x &gt;&gt; b) &amp; 1</code>, create the child if needed, step into it and increment <code>cnt</code>, so a later query can ask whether that prefix still has anyone in it.",
+    "<strong>Query-max prefers the opposite child.</strong> Set <code>want = bit ^ 1</code>; if that child exists, take it and turn on bit <code>b</code> of the answer, otherwise fall back to the same bit, which is also the rule for a minimum XOR.",
+    "<strong>Maximum pair inserts as it goes, or inserts all then queries all.</strong> Either order is linear in <code>n&times;BITS</code>; the running insert lets you forbid <code>i == j</code> for free if the statement wants two distinct indices.",
+    "<strong>Subarray XOR inserts the empty prefix 0 first.</strong> Then each running prefix XOR is queried and inserted, because a subarray starting at index 0 is the current prefix XOR 0 and would otherwise have no partner.",
+    "<strong>Delete decrements counts along the path of x.</strong> Treat a child with <code>cnt == 0</code> as missing, so a shared prefix survives for the other numbers that still use it.",
   ],
   code: [
     { tab: "Brute", file: "XorPairBrute.java",
@@ -2029,9 +2389,9 @@ pack({
     time: "O(n * BITS)",
     space: "O(n * BITS) nodes worst case",
     derivation: [
-      "Each insert/query walks BITS nodes, creating at most BITS new nodes. BITS=30, n=1e5 is 3e6 steps.",
+      "<p>Each insert or query walks <code>BITS</code> nodes and creates at most <code>BITS</code> new ones. With <code>BITS = 30</code> and <code>n = 10&#8309;</code> that is about three million steps and at most three million nodes, a few tens of milliseconds. The all-pairs scan is <code>n(n-1)/2</code> XORs, about <code>5&times;10&#8313;</code>, which no judge will accept.</p>",
       "<span class=\"eq\">T = O(n B), S = O(n B), B &asymp; 30</span>",
-      "Brute pairs are O(n^2). Hashing does not help maximisation.",
+      "<p>A hash set of the numbers, or of the prefix XORs, answers \"is this exact XOR present?\" and does not help you maximise. Minimum pair XOR is a different problem: after sorting by value the best pair is adjacent, which is <code>O(n log n)</code> and does not need this trie.</p>",
     ],
     compare: [
       ["All pairs", "O(n^2)", "O(1)", "n<=2000"],
@@ -2042,20 +2402,20 @@ pack({
   },
   pitfalls: [
     { title: "Signed shift on negative numbers",
-      bug: ">> sign-extends; bit 31 pollutes the walk if you use 32 bits on negatives.",
-      fix: "Non-neg constraints: loop 30..0. Else >>> or store as long." },
+      bug: "<code>&gt;&gt;</code> sign-extends, so a 32-bit walk of a negative fills the high end with 1s and the query follows a path that no inserted non-negative number ever created, then returns a number that looks like a XOR and is wrong.",
+      fix: "For non-negative constraints loop from bit 30 down to 0. If negatives are legal, use <code>&gt;&gt;&gt;</code> or store the value as a <code>long</code>." },
     { title: "Query on an empty trie",
-      bug: "NPE walking null children, or XOR with 0 pretending a number exists.",
-      fix: "cnt on root, or insert a dummy only when the problem allows 0." },
+      bug: "Walking <code>ch[want]</code> on a trie with no numbers looks like the usual 30-step query, then a null child throws, or you pretend 0 is present and report <code>x ^ 0</code> when the array was empty.",
+      fix: "Keep a <code>cnt</code> on the root and refuse to query when it is 0, or insert a dummy only when the statement allows 0 as a real value." },
     { title: "Forgetting to insert 0 as empty prefix",
-      bug: "Max subarray XOR misses prefixes that start at index 0 (XOR of a prefix with 0).",
-      fix: "insert(0) before the loop." },
+      bug: "Starting the subarray loop with an empty trie looks tidy, then every prefix that starts at index 0 has no partner and the answer misses <code>pref[r] ^ 0</code>, which is the prefix itself.",
+      fix: "Insert 0 before the loop, then query and insert each running prefix. A one-element array whose answer is the element itself is the test." },
     { title: "Delete without cnt",
-      bug: "Removing a number that shared prefixes with another wipes the sibling's path.",
-      fix: "cnt++ on insert, cnt-- on delete, treat cnt==0 as missing." },
+      bug: "Nulling a child when one number is removed looks like a clean erase, then a sibling that shared the same high bits loses its path and later queries under-count.",
+      fix: "Increment <code>cnt</code> on insert, decrement on delete, and treat <code>cnt == 0</code> as missing. Two inserts of the same value need two deletes." },
     { title: "Preferring the same bit for max XOR",
-      bug: "You minimise that bit of the XOR. Answer too small.",
-      fix: "want = bit ^ 1. Same bit is the fallback, and the rule for min XOR." },
+      bug: "Taking <code>ch[bit]</code> first looks like \"stay close to x\" and actually minimises that bit of the XOR, so the answer comes out too small and the sample of a tiny array still happens to pass.",
+      fix: "Set <code>want = bit ^ 1</code> for a maximum. The same-bit child is the fallback, and it is the first choice when you want a minimum XOR instead." },
   ],
   variants: [
     ["Min XOR pair", "Prefer the same bit when it exists; or sort and check adjacent.",
@@ -2067,13 +2427,13 @@ pack({
   ],
   followups: [
     ["Why is bit-greedy optimal?",
-      "<p>Bit b is worth 2^b, more than 2^b-1+...+1. If you can set it, you always should, regardless of lower bits. The trie only tells you whether any stored number realises that opposite bit given the bits already chosen (which are a prefix constraint).</p>"],
+      "<p>Bit <code>b</code> is worth <code>2<sup>b</sup></code>, which is strictly more than <code>2<sup>b</sup> - 1</code>, the sum of every lower bit. If you can set it, you always should, no matter what those lower bits do afterwards. The trie does not search pairs; it only answers whether any stored number realises the opposite bit given the prefix you have already committed to by earlier choices.</p>"],
     ["Max subarray XOR vs max pair XOR?",
-      "<p>Subarray XOR is pref[r]^pref[l-1]. Insert prefix XORs into the trie, query the current prefix. That is max pair on the prefix array, including 0.</p>"],
+      "<p>The XOR of a subarray <code>a[l..r]</code> is <code>pref[r] ^ pref[l-1]</code>. Insert the prefix XORs into the same trie and query the current prefix; that is maximum pair XOR on the prefix array. You must include 0 as <code>pref[-1]</code> so a prefix that starts at the left edge has a partner. Pair XOR on the original array is the same code without the prefix layer.</p>"],
     ["CF 706D operations?",
-      "<p>Insert x, delete x (cnt), query max XOR with x. Same trie, watch cnt so two equal inserts need two deletes.</p>"],
+      "<p>The three operations are insert <code>x</code>, delete <code>x</code>, and query the maximum XOR with a given <code>x</code>. It is this trie plus <code>cnt</code>. Two inserts of the same value need two deletes; a count of 1 after the first delete must still answer queries as if the number is present.</p>"],
     ["Persistent XOR trie?",
-      "<p>On insert, copy the O(BITS) nodes on the path. Version i is the trie of the first i numbers. Query a range of versions for [L,R] problems.</p>"],
+      "<p>On insert, copy the <code>O(BITS)</code> nodes on the path you touch and leave the rest of the old version shared. Version <code>i</code> is then the trie of the first <code>i</code> numbers. A later query that wants the best XOR against a value using only indices in <code>[L, R]</code> walks version <code>R</code> while subtracting counts from version <code>L-1</code>, or walks two roots in lockstep.</p>"],
   ],
   problems: [
     lc(421, "maximum-xor-of-two-numbers-in-an-array", "Medium", "The classic"),
@@ -2093,6 +2453,7 @@ pack({
     "<strong>Prefix XOR + trie</strong> for max subarray XOR; insert 0 first.",
   ],
   oneliner: "for b=30..0: want=bit^1; if ch[want]!=null take it else take bit",
+  dryIntro: "Insert 3 into a 4-bit XOR trie, query 10, then watch 5 XOR 25 become 28 once those two paths exist to prefer opposite bits.",
 }),
 
 ];

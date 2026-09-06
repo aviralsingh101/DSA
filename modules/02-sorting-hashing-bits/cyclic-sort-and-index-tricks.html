@@ -22,7 +22,7 @@
   <p class="hero__tagline">When the array is a permutation of a known range, the value is the address: swap each number toward index value-1 until every cycle closes.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">24 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="sorting-and-comparators.html">Sorting & Comparators</a>,
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>If every value lies in <code>1..n</code> (or <code>0..n-1</code>) and you are allowed to mutate, the array is its own hash table. The number <code>x</code> belongs at index <code>x-1</code>. Swapping along that rule sorts in linear time with O(1) extra memory, and the leftover mismatches are exactly the missing, duplicate, or disappeared numbers.</p>
-<p>This is the native language of a whole LC cluster: missing number, first missing positive, find all duplicates, set mismatch, find the duplicate without modifying (Floyd on the functional graph). Interviewers like it because it looks like a magic trick until you say "the value is the index".</p>
-<p>The same idea without swaps is "index as a sign bit": negate <code>a[|x|-1]</code> to mark that x was seen. It needs the array to be writable and the range to be <code>1..n</code>. When you cannot write, the functional graph of <code>i → a[i]</code> still has a cycle you can find with Floyd.</p>
+<p>You are given 100,000 seats labelled 1 through n, and each seat currently holds some ticket in that same range, possibly with one number missing and another duplicated. A hash set finds the hole in one pass but spends an extra 100,000 boxed integers of memory. A library sort plus a scan is about <code>1.7&times;10&#8310;</code> comparisons. You need neither: the number 7 belongs at index 6, so swap whatever sits at index 6 into its own home, and repeat. Every swap homes at least one value, so the whole cleanup is a few hundred thousand exchanges and constant extra memory.</p>
+<p>Once the values sit at their addresses, the leftover mismatches are exactly the missing, duplicate, or disappeared numbers. That is why this is the native language of a whole interview cluster: missing number, first missing positive, find all duplicates, set mismatch. Interviewers like it because it looks like a magic trick until you say "the value is the index". The same idea without swaps is "index as a sign bit": negate <code>a[|x|-1]</code> to mark that x was seen, which still needs the array to be writable and the range to be <code>1..n</code>.</p>
+<p>When you cannot write the array at all, treat each index as a node with a single outgoing edge to <code>a[i]</code>. That picture is a <em>functional graph</em> &mdash; a graph where every node has out-degree one &mdash; and a duplicate value is a node with two incoming edges, which forces a cycle. Floyd's tortoise-and-hare walk finds the cycle entrance in linear time and constant extra memory. In a real statement the tell is <code>n &le; 10&#8309;</code> with values in a range of length n, plus "O(1) extra space" or "do not modify the input".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A permutation is a set of cycles on indices. Putting each value at its index is walking those cycles with swaps. What refuses to sit still is the duplicate or the missing.</p>
+    <p>A permutation is a set of cycles on indices. Putting each value at its index is walking those cycles with swaps. What refuses to sit still is the duplicate already occupying a home, or the missing number whose slot is still holding leftover garbage.</p>
   </div>
 </aside>
 
@@ -122,13 +122,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Cyclic sort: for i from 0 to n-1, while <code>a[i]</code> is in range and not already at home (<code>a[i] != a[a[i]-1]</code>), swap it there. Each swap homes at least one value, so the inner while is amortised O(n). Afterward, index i should hold i+1; any break is the answer.</p>
-<p>First missing positive: treat anything ≤ 0 or &gt; n as garbage that cannot occupy a slot. After placement, the first i with <code>a[i] != i+1</code> is the answer; if none, the answer is n+1. Floyd for the duplicate: interpret the array as <code>next(i) = a[i]</code> (1-based), run tortoise and hare, then find the cycle entrance.</p>
+<p>Cyclic sort walks i from 0 to n-1. While <code>a[i]</code> is in range and is not already at home &mdash; home meaning <code>a[i] == a[a[i]-1]</code> would already hold, so the loop condition is the opposite &mdash; swap it into index <code>a[i]-1</code>. Each swap places at least one new value into its address, so the inner while runs at most n times across the whole array, not n times per index. Afterward, index i should hold i+1. Any break is the answer: the missing number is i+1, and the value sitting there may be the duplicate.</p>
+<p>First missing positive uses the same placement after you treat anything <code>&le; 0</code> or <code>&gt; n</code> as garbage that cannot occupy a slot. After the swaps, the first i with <code>a[i] != i+1</code> is the answer; if every slot is home, the missing positive is n+1. When mutation is forbidden, interpret the array as <code>next(i) = a[i]</code> on values in 1..n, run Floyd's tortoise-and-hare until the two pointers meet, then reset one pointer to the start and walk both one step at a time: the meeting point is the cycle entrance, which is the duplicate.</p>
+<p>Walk <code>[3, 1, 4, 2, 5]</code>, a true permutation, to see the swaps. At i=0 the value 3 belongs at index 2, so swap: <code>[4, 1, 3, 2, 5]</code>. Still at i=0, 4 belongs at index 3: <code>[2, 1, 3, 4, 5]</code>. Then 2 belongs at index 1: <code>[1, 2, 3, 4, 5]</code>. Index 0 now holds 1, so the while stops, and the remaining slots are already home. On the broken input <code>[3, 1, 3, 4, 2]</code> the same process refuses to swap the first 3 because index 2 already holds 3; the later scan sees slot 0 still holding 3, so 1 is missing and 3 is the duplicate.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After the swaps, every in-range value <code>x</code> that appeared sits at index <code>x-1</code>, unless a duplicate already occupies that slot.</p><span class="eq">a[x-1] == x &nbsp;for every x that could be placed uniquely</span><p>Interview sentence: <em>"The value is the address; I swap until every cycle of the permutation is rotated into place, then I read the holes."</em></p>
+    <p>After the swaps, every in-range value <code>x</code> that appeared sits at index <code>x-1</code>, unless a duplicate already occupies that slot:</p><span class="eq">a[x-1] == x &nbsp;for every x that could be placed uniquely</span><p>In plain words, the array has become its own address book: each number that has a unique home is sitting at that home, and anything still in the wrong seat is either garbage from outside 1..n or a second copy of a number whose seat was already taken.</p><p>Interview sentence: <em>"The value is the address; I swap until every cycle of the permutation is rotated into place, then I read the holes."</em></p>
   </div>
 </aside>
 
@@ -295,18 +296,18 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Confirm the range</strong> is length n (or 1..n after ignoring garbage).</li>
-  <li><strong>For each i</strong>, while <code>a[i]</code> is in range and <code>a[i] != a[a[i]-1]</code>, swap.</li>
-  <li><strong>Stop the while</strong> when a duplicate already sits at the home index, or the value is out of range.</li>
-  <li><strong>Scan i = 0..n-1.</strong> If <code>a[i] != i+1</code>, i+1 is missing and a[i] may be the duplicate.</li>
-  <li><strong>First missing positive:</strong> skip ≤ 0 and &gt; n; if every slot is home, return n+1.</li>
-  <li><strong>No-mutate duplicate:</strong> Floyd tortoise/hare on <code>f(x)=a[x]</code> (careful with 0-based vs 1-based).</li>
-  <li><strong>Never use a[a[i]]</strong> without checking range, or you index out of bounds.</li>
+  <li><strong>Confirm the range is length n</strong> (or 1..n after you ignore garbage). Cyclic sort is only legal when the value itself is a legal index, otherwise you are about to read off the end of the array.</li>
+  <li><strong>For each i, swap while the value is in range and not yet home.</strong> The test <code>a[i] != a[a[i]-1]</code> is what moves a number toward its address without needing a second array.</li>
+  <li><strong>Stop the while when home already holds this value.</strong> That is how you detect a duplicate: a second copy wants the same seat, and swapping again would loop forever.</li>
+  <li><strong>Scan i from 0 to n-1 after the swaps.</strong> If <code>a[i] != i+1</code>, then i+1 is missing and the value sitting there may be the duplicate.</li>
+  <li><strong>For first missing positive, skip anything &le; 0 or &gt; n.</strong> Those values cannot occupy a slot in 1..n; if every remaining slot is home, the answer is n+1.</li>
+  <li><strong>When you cannot mutate, run Floyd on <code>f(x) = a[x]</code>.</strong> Start at <code>a[0]</code> on a 1-based range stored in an array of length n+1, because index 0 is not a value in 1..n.</li>
+  <li><strong>Never index <code>a[a[i]-1]</code> without a range check.</strong> A 0 or a value past n turns that read into an out-of-bounds access, which is the most common crash on this page.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Place each in-range value of <code>[3, 1, 3, 4, 2]</code> at index value-1; the slot that refuses to become i+1 names both the missing number and the duplicate.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -462,8 +463,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each swap places at least one new value into its home (or proves a duplicate). A value already home is never swapped again, so the inner while runs ≤ n times across the whole array: <span class="eq">T(n) = Θ(n)</span>.</p>
-    <p>Floyd is the linked-list cycle proof on a functional graph of n+1 nodes and n+1 edges (indices 0 unused, values 1..n). Two O(n) pointer walks.</p>
+    <p>Each swap places at least one new value into its home, or proves a duplicate by finding that home already holds the same value. A value already home is never swapped again, so the inner while runs at most n times across the whole array: <span class="eq">T(n) = Θ(n)</span>. At <code>n = 10&#8309;</code> that is a few hundred thousand exchanges, versus <code>1.7&times;10&#8310;</code> comparisons for a full sort.</p>
+    <p>Floyd is the linked-list cycle proof on a functional graph of n+1 nodes and n+1 edges (index 0 unused as a value, values in 1..n). Two linear pointer walks find the meeting point and then the entrance, still <code>O(n)</code> time and <code>O(1)</code> extra memory, which is why it is the answer when mutation is forbidden and a hash set is not allowed.</p>
   </div>
 
   <table class="complexity__compare">
@@ -486,28 +487,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Infinite swap on a duplicate</span>
-    <div class="pitfalls__bug"><code>while (a[i] != i+1) swap(i, a[i]-1)</code> loops forever when two copies of x both want index x-1.</div>
-    <div class="pitfalls__fix">Stop when <code>a[a[i]-1] == a[i]</code>, i.e. home already holds this value.</div>
+    <div class="pitfalls__bug"><code>while (a[i] != i+1) swap(i, a[i]-1)</code> looks like it must make progress, but two copies of x both want index x-1 and the swap just exchanges them forever.</div>
+    <div class="pitfalls__fix">Stop when <code>a[a[i]-1] == a[i]</code>, i.e. home already holds this value. Test <code>[3, 1, 3]</code> and confirm the loop exits.</div>
   </li>
   <li>
     <span class="pitfalls__title">Placing 0 or n+1</span>
-    <div class="pitfalls__bug"><code>a[a[i]-1]</code> with a[i]=0 indexes -1. First missing positive must skip out-of-range values.</div>
-    <div class="pitfalls__fix">Guard <code>a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n</code> before any home access.</div>
+    <div class="pitfalls__bug"><code>a[a[i]-1]</code> with <code>a[i] = 0</code> indexes -1, so first-missing-positive crashes on an input that is otherwise legal and well inside the time limit.</div>
+    <div class="pitfalls__fix">Guard <code>a[i] &gt;= 1 &amp;&amp; a[i] &lt;= n</code> before any home access, and treat everything outside that range as unplaceable garbage.</div>
   </li>
   <li>
     <span class="pitfalls__title">Floyd 0-based off-by-one</span>
-    <div class="pitfalls__bug">Starting at index 0 when 0 is not a node of f(x)=a[x] on a 1-based permutation.</div>
-    <div class="pitfalls__fix">LC 287 stores values 1..n in an array of length n+1; start at a[0], follow a[·].</div>
+    <div class="pitfalls__bug">Starting the tortoise at index 0 when 0 is not a node of <code>f(x) = a[x]</code> on a 1-based permutation follows a pointer that the graph does not contain.</div>
+    <div class="pitfalls__fix">LC 287 stores values 1..n in an array of length n+1; start at <code>a[0]</code> and follow <code>a[&middot;]</code>, never treating 0 as a value.</div>
   </li>
   <li>
     <span class="pitfalls__title">Negate mark colliding with already-negative input</span>
-    <div class="pitfalls__bug">LC 448 input is 1..n so negation is safe; LC 41 has negatives already.</div>
-    <div class="pitfalls__fix">Cyclic-sort LC 41; do not negate unless you first sanitise the range.</div>
+    <div class="pitfalls__bug">LC 448 input is 1..n so negation is a safe seen-bit; LC 41 already contains negatives, so the same mark silently destroys real values.</div>
+    <div class="pitfalls__fix">Cyclic-sort LC 41; do not negate unless you first sanitise every slot into 1..n or a known positive sentinel.</div>
   </li>
   <li>
     <span class="pitfalls__title">Returning n instead of n+1</span>
-    <div class="pitfalls__bug">Array [1,2,3] as first missing positive should return 4, not a hole inside.</div>
-    <div class="pitfalls__fix">After a clean scan, the missing is n+1.</div>
+    <div class="pitfalls__bug">Array <code>[1, 2, 3]</code> as first missing positive has no hole inside, so returning n looks like "the scan found nothing" and is off by one.</div>
+    <div class="pitfalls__fix">After a clean scan where every slot holds i+1, the missing positive is n+1. Include <code>[1, 2, 3] &rarr; 4</code> as a unit test.</div>
   </li>
 </ul>
 
@@ -549,28 +550,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is the inner while O(n) total, not O(n²)?</summary>
     <div class="followup__body">
-      <p>A swap that does not immediately home a[i] still homes the other slot. Each index becomes home at most once. Duplicates stop the loop via the <code>a[home]==value</code> guard, so no cycle of swaps among equals.</p>
+      <p>A swap that does not immediately home <code>a[i]</code> still homes the other slot, so each index becomes home at most once. Duplicates stop the loop via the <code>a[home] == value</code> guard, so there is no cycle of swaps among equals. Adding the outer <code>n</code> iterations of i still leaves a linear total.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you recover the original array after cyclic sort?</summary>
     <div class="followup__body">
-      <p>No, unless you stored the permutation. The algorithm is in-place destructive. If the caller needs the input, clone first (and then you have O(n) extra anyway, so a HashSet was simpler).</p>
+      <p>No, unless you stored the permutation yourself. The algorithm is in-place and destructive: after the swaps the original order is gone. If the caller needs the input, clone first &mdash; and then you already have O(n) extra memory, so a HashSet was the simpler honest answer.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why does Floyd apply to finding a duplicate?</summary>
     <div class="followup__body">
-      <p>n+1 slots holding values in 1..n is a pigeonhole: the map x → a[x] has a node with two incoming edges (the duplicate). That node is the entrance of a cycle. Same proof as linked-list cycle II.</p>
+      <p>n+1 slots holding values in 1..n is a pigeonhole: the map <code>x &rarr; a[x]</code> has a node with two incoming edges (the duplicate). That node is the entrance of a cycle, exactly as in linked-list cycle II. The tortoise-and-hare meeting point is somewhere on that cycle; the second walk from the start finds the entrance.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>First missing positive when n=1?</summary>
     <div class="followup__body">
-      <p>[1] → 2; [0] → 1; [2] → 1. The out-of-range 2 is ignored, slot 0 is not 1, answer 1. Always include these three unit tests.</p>
+      <p><code>[1]</code> returns 2 because the only slot is already home. <code>[0]</code> returns 1 because 0 is garbage and slot 0 is not 1. <code>[2]</code> also returns 1 because 2 is out of range for length 1. Always include these three unit tests; they catch both the n+1 fallback and the out-of-range skip.</p>
     </div>
   </details>
 </div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Diameter, path sum, LCA of two nodes, serialise, and construct-from-orders are all a postorder combine or a preorder emit with a payload attached to the walk you already own.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="binary-tree-basics-and-traversals.html">Binary Tree Basics & Traversals</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Once the four walks are mechanical, interview tree problems stop being unique puzzles. Diameter is "height of both children, plus maybe the path through me". Path-sum is "carry a remaining target, or return a list of leftover contributions". LCA in a general binary tree is "if I sit in different subtrees of u, u is the answer".</p>
-<p>The pattern language is: return a struct from a postorder (height + diameter, or (hasP, hasQ)), or emit on the way down (serialise, construct). If you reach for a global ArrayList of all root-to-leaf paths and then scan, you are a generation behind.</p>
-<p>This page is the cluster: diameter, max path sum, path sum I/II/III, invert, flatten, serialise, construct, lowest common ancestor, subtree of another tree.</p>
+<p>You are given a binary tree of 100000 nodes and asked for the longest path anywhere in it, counted in edges. The obvious method picks every pair of leaves, walks up to their meeting point, and keeps the best length. A tree that is a straight chain of 100000 nodes has about <code>5&times;10&#8313;</code> pairs, and even a bushier tree still makes you pay for a fresh walk per pair. The judge will cut you off long before you finish. The same explosion shows up as "maximum path sum", "lowest common ancestor of two nodes", and "does this path add to k": they all look like a new puzzle and they are all the same walk you already own.</p>
+<p>What changes is the payload you carry, not the chase of left and right. A <em>postorder</em> walk &mdash; handle both children, then the node &mdash; lets each node see a small summary of its two subtrees and decide what to send upward. Diameter needs two heights. Maximum path sum needs two gains, each of which may be dropped if it is negative. Lowest common ancestor, usually shortened to LCA, needs a pair of "did I see p?" / "did I see q?" answers. If you instead collect every root-to-leaf path into a global list and scan it afterwards, you have thrown away the fact that the interesting combination happens at one node.</p>
+<p>A few questions emit on the way down instead: serialise writes a node before diving, and constructing a tree from preorder plus inorder consumes the next preorder value as the current root. Those are still the same walk with the recording line moved. In a real statement the tell is a single tree handed as a root pointer, <code>n</code> up to <code>10&#8309;</code>, and a question about a path, a diameter, an ancestor, or a rebuild from two orders &mdash; not "answer this for every possible root" and not "the tree is a BST".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Almost every "hard" binary-tree question is a postorder that returns more than one number, plus maybe a global best. Name the struct before you code.</p>
+    <p>Name the struct a node returns after both children finish, plus one global best for combinations that go through that node. Almost every hard binary-tree question is that postorder plus a decision about what to send upward.</p>
   </div>
 </aside>
 
@@ -111,18 +111,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> n &le; 1e5, values can be negative (max path sum). Recursion depth is h; if unbounded, the iterative rewrite is rarely asked for diameter but is asked for traversals.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> with a single root pointer is the everyday interview limit, and one postorder that does constant work per node finishes comfortably. Values may be negative, which is why maximum path sum cannot blindly add a child. Recursion depth equals the height; if the statement does not promise a balanced tree, a chain of 100000 nodes will overflow the JVM stack, though interviews rarely demand the iterative rewrite for diameter the way they do for the raw walks.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Diameter: a function height(u) that also updates ans = max(ans, hL+hR). The longest path counted in edges is that global ans. Max path sum is the same with a twist: a child that contributes a negative gain is dropped (max(0, gain)), and the through-me candidate is val+gainL+gainR, while the value you return upward is val+max(gainL,gainR).</p>
-<p>LCA: rec returns null if the subtree has neither; returns the node if it is p or q or if both sides returned non-null. Path-sum III is prefix sums on the root-to-here path with a hashmap of leftover prefixes (same as subarray-sum-k on the unique path to the root).</p>
+<p>Diameter is the longest path anywhere, counted in edges. Write a helper <code>height(u)</code> that returns the height of the subtree in nodes (a null child returns 0, a leaf returns 1). After both recursive calls you have <code>hL</code> and <code>hR</code>. The path that goes through <code>u</code> has <code>hL + hR</code> edges, so update a global <code>ans</code> with that sum. What you return upward is only one side, <code>1 + max(hL, hR)</code>, because a parent can extend just one downward spine. Returning <code>hL + hR</code> as height double-counts and the parent then invents paths that do not exist.</p>
+<p>Maximum path sum is the same shape with money instead of edges. A child's <em>gain</em> &mdash; the best sum of a downward path starting at that child &mdash; is dropped when it is negative, written <code>max(0, gain)</code>, because you are allowed to stop. The through-me candidate is <code>val + gainL + gainR</code> and competes for a global best. What you return upward is <code>val + max(gainL, gainR)</code>, one downward arm only. LCA uses a different payload: the recursive call returns <code>null</code> if the subtree contains neither target, returns the node itself if it is <code>p</code> or <code>q</code>, and if both sides come back non-null the current node is the answer. Path-sum III is prefix sums on the unique path from the root, with a hashmap of leftover prefixes, the same idea as subarray-sum-k.</p>
+<p>Take the sample tree: root 1 with children 2 and 3, and 2 owning 4 and 5. Leaves 4, 5 and 3 each have height 1. At node 2 both heights are 1, so the through-me path 4-2-5 has 2 edges and <code>ans</code> becomes 2; the height returned upward is 2. At the root the heights are 2 and 1, the through-me path 4-2-1-3 has 3 edges, and that is the diameter. LCA of 4 and 3 sees a non-null left and a non-null right at node 1 and stops there. If the values were instead <code>-10 / 9 20 / 15 7</code>, the same walk with gains would keep 15+20+7 = 42 as the global best and drop the <code>-10</code> arm when sending a number upward.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After both children return, you know everything about the two subtrees. The only new paths are those that go through the current node.</p><span class="eq">ans = max(ans, combine(left, me, right)); return a summary upward</span>
+    <p>After both children return, you know every summary of the two subtrees. The only new paths are those that go through the current node, so a global <code>ans</code> is updated with that through-me combination and a one-sided summary is sent to the parent:</p><span class="eq">ans = max(ans, combine(left, me, right)); return a one-sided summary</span><p>In plain words, a child can tell you the best downward spine it owns, but only you can glue the two spines into a path that bends at you, so that glued number lives in <code>ans</code> and never travels upward as if it were a height.</p><p>Interview sentence: <em>"I return a summary from postorder and keep through-me in a global."</em></p>
   </div>
 </aside>
 
@@ -162,7 +163,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Leaves 4,5,3 have height 1 (nodes) / 0 (edges). Start at 4.",
+          "note": "Start at leaf 4. A null child has height 0, so both sides are 0 and the through-me path at 4 has no edges yet.",
           "active": [
             2
           ],
@@ -174,7 +175,7 @@
           }
         },
         {
-          "note": "Node 5 same. Node 2: hL=hR=1 (edges: 0+0, wait in edges null=-1+1=0). Using edges: leaves 0, node 2 through-me = 0+0=0? Sample 4-2-5 is 2 edges. Leaves height 0 in edges, 2 has hL=hR=0? No: leaf height in edges is 0, but the edge to the leaf is counted at the parent: through-me = hL+hR+2 if heights are in edges of subtrees... Standard: height(null)=-1, height(leaf)=0, through = hL+hR+2.",
+          "note": "Leaf 5 is the same. At node 2 the two downward spines each add one edge, so the bent path 4-2-5 has length 2 and the global diameter becomes 2.",
           "active": [
             1
           ],
@@ -186,7 +187,7 @@
           }
         },
         {
-          "note": "Convention used in code: height in nodes, through-me = hL+hR (edges = hL+hR of node-heights minus something). LC 543: height in edges, ans = max(hL+hR) with leaf height 0.",
+          "note": "The helper still returns a one-sided height: each leaf counts as 1, so node 2 sends 2 upward. The 2-edge path stays in the global, not in the returned height.",
           "active": [
             1
           ],
@@ -198,7 +199,7 @@
           }
         },
         {
-          "note": "Node 1: hL=2, hR=1, through-me=3 (path 4-2-1-3). Global diam=3 edges? 4-2-1-3 is 3 edges. Path 4-2-5 is 2. Answer 3.",
+          "note": "At root 1 the heights are 2 and 1. The path 4-2-1-3 has 3 edges, which beats the earlier 2, so the diameter is now 3.",
           "active": [
             0
           ],
@@ -210,7 +211,7 @@
           }
         },
         {
-          "note": "Return height 3 for the root. Diameter 3 is the global, not the height.",
+          "note": "The root returns height 3, but the answer you report is the global diameter 3, the longest bent path, not that height.",
           "best": [
             0,
             1,
@@ -225,7 +226,7 @@
           }
         },
         {
-          "note": "Max path sum would drop negative children and compare val+L+R against a global.",
+          "note": "Maximum path sum uses the same walk: drop a negative child gain, compare val+L+R to a global, and send only one arm upward.",
           "done": [
             0,
             1,
@@ -263,17 +264,17 @@ graph TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name the struct</strong> returned upward (height, gain, (foundP, foundQ)).</li>
-  <li><strong>Postorder:</strong> rec left, rec right, combine, maybe update a global ans.</li>
-  <li><strong>Diameter:</strong> ans = max(ans, hL+hR); return 1+max(hL,hR) with null = 0 or -1.</li>
-  <li><strong>Max path:</strong> gain = val+max(0,gainL,gainR); ans = max(ans, val+max(0,gL)+max(0,gR)).</li>
-  <li><strong>LCA:</strong> if both sides non-null, return u; else return the non-null side.</li>
-  <li><strong>Construct:</strong> preorder index advances; inorder lo..hi split at the root value.</li>
+  <li><strong>Name the struct before you type.</strong> Decide what a node must return upward &mdash; a height, a gain, or a pair of "found p / found q" &mdash; because that choice is the whole algorithm.</li>
+  <li><strong>Walk postorder: children first.</strong> Recurse left, recurse right, then combine, so both summaries exist before you invent a through-me candidate or update a global <code>ans</code>.</li>
+  <li><strong>Diameter stores the bend separately.</strong> Write <code>ans = max(ans, hL + hR)</code> and return only <code>1 + max(hL, hR)</code>, with null as 0, so a parent extends one spine rather than a already-bent path.</li>
+  <li><strong>Maximum path sum drops a losing child.</strong> A negative gain cannot help a path that is allowed to stop, so take <code>max(0, gain)</code> both when sending one arm up and when scoring <code>val + gL + gR</code>.</li>
+  <li><strong>LCA returns the first node that sees both targets.</strong> If both recursive calls are non-null this node is the meeting point; otherwise propagate the non-null side, which also covers the case where one target sits under the other.</li>
+  <li><strong>Construct consumes preorder and splits inorder.</strong> The next preorder value is the current root, and a map of inorder indices tells you the left and right ranges in <code>O(1)</code> so the rebuild stays linear.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Diameter on the sample 1 / 2 3 / 4 5. Heights come back from the leaves; the global keeps the bent path through each node.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -281,12 +282,12 @@ graph TD
       <tr><th>u</th><th>hL</th><th>hR</th><th>diam</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>4</td><td>0</td><td>0</td><td>0</td><td>Leaves 4,5,3 have height 1 (nodes) / 0 (edges). Start at 4.</td></tr>
-      <tr><td>2</td><td>0</td><td>0</td><td>2</td><td>Node 5 same. Node 2: hL=hR=1 (edges: 0+0, wait in edges null=-1+1=0). Using edges: leaves 0, node 2 through-me = 0+0=0? Sample 4-2-5 is 2 edges. Leaves height 0 in edges, 2 has hL=hR=0? No: leaf height in edges is 0, but the edge to the leaf is counted at the parent: through-me = hL+hR+2 if heights are in edges of subtrees... Standard: height(null)=-1, height(leaf)=0, through = hL+hR+2.</td></tr>
-      <tr><td>2</td><td>1</td><td>1</td><td>2</td><td>Convention used in code: height in nodes, through-me = hL+hR (edges = hL+hR of node-heights minus something). LC 543: height in edges, ans = max(hL+hR) with leaf height 0.</td></tr>
-      <tr><td>1</td><td>2</td><td>1</td><td>3</td><td>Node 1: hL=2, hR=1, through-me=3 (path 4-2-1-3). Global diam=3 edges? 4-2-1-3 is 3 edges. Path 4-2-5 is 2. Answer 3.</td></tr>
-      <tr class="trace-table__row--change"><td>1</td><td>2</td><td>1</td><td>3</td><td>Return height 3 for the root. Diameter 3 is the global, not the height.</td></tr>
-      <tr><td>124</td><td>gain</td><td>gain</td><td>max path</td><td>Max path sum would drop negative children and compare val+L+R against a global.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>0</td><td>0</td><td>0</td><td>Start at leaf 4. A null child has height 0, so both sides are 0 and the through-me path at 4 has no edges yet.</td></tr>
+      <tr><td>2</td><td>0</td><td>0</td><td>2</td><td>Leaf 5 is the same. At node 2 the two downward spines each add one edge, so the bent path 4-2-5 has length 2 and the global diameter becomes 2.</td></tr>
+      <tr><td>2</td><td>1</td><td>1</td><td>2</td><td>The helper still returns a one-sided height: each leaf counts as 1, so node 2 sends 2 upward. The 2-edge path stays in the global, not in the returned height.</td></tr>
+      <tr><td>1</td><td>2</td><td>1</td><td>3</td><td>At root 1 the heights are 2 and 1. The path 4-2-1-3 has 3 edges, which beats the earlier 2, so the diameter is now 3.</td></tr>
+      <tr class="trace-table__row--change"><td>1</td><td>2</td><td>1</td><td>3</td><td>The root returns height 3, but the answer you report is the global diameter 3, the longest bent path, not that height.</td></tr>
+      <tr><td>124</td><td>gain</td><td>gain</td><td>max path</td><td>Maximum path sum uses the same walk: drop a negative child gain, compare val+L+R to a global, and send only one arm upward.</td></tr>
     </tbody>
   </table>
 </div>
@@ -410,9 +411,9 @@ graph TD
   </div>
 
   <div class="complexity__derivation">
-    <p>One DFS, constant work per node. Construction from two arrays is O(n) with a hashmap, O(n^2) if you scan inorder each time.</p>
+    <p>One postorder visits each of the <code>n</code> nodes once and does a constant amount of arithmetic around the two child calls, so diameter, maximum path sum and LCA are all <code>&Theta;(n)</code>. Building a tree from preorder and inorder is also <code>O(n)</code> if you map values to inorder indices up front; scanning <code>indexOf</code> at every node turns the same idea into <code>O(n&#178;)</code> and dies at <code>n = 10&#8309;</code>.</p>
     <p><span class="eq">T = &Theta;(n)</span></p>
-    <p>Path sum III with a hashmap is still O(n) expected if you add/remove on the way down/up (backtracking the prefix count).</p>
+    <p>Path-sum III with a hashmap is still expected linear time if you increment a prefix count on the way down and decrement it on the way up, so a sibling cannot see a prefix it does not own. At <code>n = 10&#8309;</code> the whole family is a couple of milliseconds. The naive all-pairs walk is about <code>10&#8310;</code> path checks and will not finish.</p>
   </div>
 
   <table class="complexity__compare">
@@ -434,28 +435,28 @@ graph TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Returning the through-me path as height</span>
-    <div class="pitfalls__bug">Height must be one side only. Using L+R as the returned height double-counts.</div>
-    <div class="pitfalls__fix">Return 1+max(L,R). Store L+R only in the global ans.</div>
+    <div class="pitfalls__bug">Writing <code>return hL + hR</code> looks right because that number is the diameter contribution, and the sample still prints a plausible answer, but the parent then treats a bent path as a single spine and invents edges that do not exist.</div>
+    <div class="pitfalls__fix">Return <code>1 + max(hL, hR)</code> and store <code>hL + hR</code> only in the global <code>ans</code>. Check that a parent of a three-node V does not report a path longer than 2.</div>
   </li>
   <li>
     <span class="pitfalls__title">Max path sum without dropping negatives</span>
-    <div class="pitfalls__bug">A child with gain -5 is forced into the parent. The parent would be better alone.</div>
-    <div class="pitfalls__fix">max(0, childGain) when contributing upward and through-me.</div>
+    <div class="pitfalls__bug">Adding a child whose gain is <code>-5</code> looks consistent with "use both children", yet the parent would have a better path by standing alone, so the global best comes out too small.</div>
+    <div class="pitfalls__fix">Wrap every child gain in <code>max(0, gain)</code> both upward and through-me. A node with two negative children must be allowed to answer with just its own value.</div>
   </li>
   <li>
     <span class="pitfalls__title">LCA comparing values instead of references</span>
-    <div class="pitfalls__bug">Duplicate values, or nodes that are not the given p,q instances.</div>
-    <div class="pitfalls__fix">Compare node identity (or a unique id), not val, unless the statement says values are unique.</div>
+    <div class="pitfalls__bug">Comparing <code>n.val == p.val</code> looks fine when every value is unique, then a duplicate or a different instance of the same number makes you return the wrong meeting point.</div>
+    <div class="pitfalls__fix">Compare node identity, or a unique id, unless the statement promises unique values. Test two nodes that share a value and sit in different subtrees.</div>
   </li>
   <li>
     <span class="pitfalls__title">Construct without a map, O(n^2)</span>
-    <div class="pitfalls__bug">indexOf in inorder at every node.</div>
-    <div class="pitfalls__fix">HashMap val -> inorder index, pass lo/hi.</div>
+    <div class="pitfalls__bug">Calling <code>indexOf</code> on the inorder array at every node looks like the obvious split and works on the tiny sample, then becomes quadratic once both arrays have 100000 entries.</div>
+    <div class="pitfalls__fix">Build a <code>HashMap</code> from value to inorder index once, and pass shrinking <code>lo</code>/<code>hi</code> bounds. Time a rebuild at a few thousand nodes if you are unsure.</div>
   </li>
   <li>
     <span class="pitfalls__title">Path sum III double-counting with a global map not backtracked</span>
-    <div class="pitfalls__bug">A prefix from another branch still sits in the map.</div>
-    <div class="pitfalls__fix">map.merge(prefix, 1, add) going down, subtract going up.</div>
+    <div class="pitfalls__bug">Leaving a prefix in the map after you leave a subtree looks harmless because the numbers are still "on some path", but a later sibling then counts a prefix it does not share and the answer is too large.</div>
+    <div class="pitfalls__fix">Increment the prefix count on the way down and decrement it on the way back up. A two-branch tree with the same running sum on both arms is the test.</div>
   </li>
 </ul>
 
@@ -497,28 +498,28 @@ graph TD
   <details class="followup">
     <summary>Diameter in nodes vs edges?</summary>
     <div class="followup__body">
-      <p>LC 543 is edges. A single node is 0. If height is in nodes (leaf=1), diameter in edges is hL+hR of those heights... actually with node-heights leaf=1, through-me edges = hL+hR. With edge-heights leaf=0, through-me = hL+hR. Pick one and match the statement.</p>
+      <p>LC 543 asks for edges, so a single node answers 0. If your helper counts height in nodes (a leaf returns 1), the through-me edge count is still <code>hL + hR</code>, because each side's node-count equals the number of edges on that spine. If you prefer edge-height, a null returns -1 and a leaf returns 0, and through-me is <code>hL + hR + 2</code>. Pick one convention, write it in a comment, and match the statement on a one-node tree.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>LCA when one node is ancestor of the other?</summary>
     <div class="followup__body">
-      <p>The first time you hit p (or q), you return it. The other node sits below, so the other side returns null, and you propagate p upward. That is correct: p is the LCA.</p>
+      <p>The first time the walk hits <code>p</code> (or <code>q</code>), it returns that node immediately. The other target sits somewhere below, so the opposite child returns <code>null</code> and you propagate <code>p</code> upward. That is the correct LCA: the first common ancestor is <code>p</code> itself. A sample where 2 is an ancestor of 4 is the check.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why max(0, gain) in LC 124?</summary>
     <div class="followup__body">
-      <p>You may choose not to extend the path into a child. The path has to be non-empty (at least the node). Negative children cannot help a path that is allowed to stop at you.</p>
+      <p>A path is allowed to stop at the current node, and it must contain at least that node. A child whose best downward sum is negative cannot improve any path that is allowed to refuse it, so you replace that gain with 0. The through-me score <code>val + gL + gR</code> can still use both children when both help, and the value you send to the parent uses only the better arm.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Subtree of another tree?</summary>
     <div class="followup__body">
-      <p>Either serialise both and substring-search, or for each node of A try "same tree" with B. Same-tree is a simultaneous walk. O(n m) naive; hashing serialisations is O(n+m).</p>
+      <p>Either serialise both trees with explicit nulls and ask whether B's string sits inside A's, or for each node of A run a simultaneous "same tree" walk against B. The naive version is <code>O(n m)</code>. Hashing the serialisations, or comparing hashes of subtrees, brings it back to linear in the two sizes. The simultaneous walk is the one to write in an interview unless they ask for the hash.</p>
     </div>
   </details>
 </div>

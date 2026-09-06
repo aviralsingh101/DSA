@@ -22,7 +22,7 @@
   <p class="hero__tagline">A matrix is an array with 2D indexing: layers for rotate and spiral, in-place markers for set-zeroes, and a staircase walk when rows and columns are sorted.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">24 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../01-arrays-and-windows/two-pointers.html">Two Pointers</a>,
       <a href="../01-arrays-and-windows/binary-search-basics.html">Binary Search Basics</a>
@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Most matrix questions are not graph search. Rotate 90° is transpose then reverse each row. Spiral is four shrinking bounds. Set zeroes is "mark first row/column as a bitset". Search in a row-and-column-sorted matrix is a staircase from the top-right. Once you own those four templates, the rest are payloads.</p>
-<p>Index arithmetic is where people bleed time. Off-by-one on layers, walking off the right edge of a spiral, and using the first row as a marker then zeroing it too early are the classic bugs. Drawing the layer and naming <code>top, bottom, left, right</code> removes them.</p>
-<p>When the matrix really is a graph (islands, unique paths with obstacles, word search), switch modules: BFS/DFS on the four neighbours. This page is the geometry of a dense grid you scan in a prescribed order, not the implicit graph.</p>
+<p>You are handed a 400-by-400 grid of pixels and told to rotate it 90 degrees clockwise in place. Allocating a second 160,000-cell matrix and copying <code>a[i][j]</code> to <code>b[j][n-1-i]</code> is correct and costs 160,000 writes, but the statement forbids the extra memory. The in-place version does the same 160,000 writes without the second grid: swap across the diagonal (that is a <em>transpose</em> &mdash; rows become columns), then reverse each row. Four templates of that flavour &mdash; rotate, spiral, set-zeroes, staircase search &mdash; cover almost every interview matrix that is not a graph.</p>
+<p>Index arithmetic is where people bleed time. Off-by-one on layers, walking off the right edge of a spiral, and using the first row as a marker then zeroing it too early are the classic bugs. Drawing the current layer and naming <code>top, bottom, left, right</code> removes them, because every index you write is then a function of those four numbers instead of a hard-coded <code>n-1</code> inside a loop that also shrinks. A 400-by-400 spiral is 160,000 visits if you get the bounds right, and a handful of duplicates or misses if you do not.</p>
+<p>When the matrix really is a graph &mdash; islands, unique paths with obstacles, word search &mdash; switch modules: BFS or DFS on the four neighbours. This page is the geometry of a dense grid you scan in a prescribed order, not the implicit graph. In a real statement the tell is <code>n, m &le; 400</code> plus "rotate in place", "spiral order", "set zeroes", or "search a sorted matrix". Those limits are permission to touch every cell a constant number of times and nothing heavier.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Name the bounds of the current layer (or the current staircase cell). Every index you write should be a function of those bounds, never a hard-coded n-1 inside a nested loop that also shrinks.</p>
+    <p>Name the bounds of the current layer, or the current staircase cell. Every index you write should be a function of those bounds, never a hard-coded n-1 inside a nested loop that also shrinks.</p>
   </div>
 </aside>
 
@@ -123,13 +123,14 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Rotate 90° clockwise: <code>a[i][j] → a[j][n-1-i]</code>. In-place: transpose (<code>a[i][j] ↔ a[j][i]</code> for j&gt;i) then reverse each row. Layers work too: cycle four cells. Spiral: while top≤bottom and left≤right, walk right, down, left, up, and shrink the bound you just finished. After walking a side, check the bounds again so a single middle row is not walked twice.</p>
-<p>Set zeroes: first pass records which rows/cols contain a zero, using row 0 and col 0 as the bitsets plus one extra boolean for cell [0][0]'s double duty. Second pass zeroes from the inside out so the markers survive. Staircase search: start at top-right; if the cell is too big, move left; too small, move down. Each step discards a row or a column, so O(n+m).</p>
+<p>Rotate 90 degrees clockwise sends <code>a[i][j]</code> to <code>a[j][n-1-i]</code>. In place, first <em>transpose</em> by swapping <code>a[i][j]</code> with <code>a[j][i]</code> for every <code>j &gt; i</code>, then reverse each row. Layers work too: cycle four cells around the current ring. Spiral uses the same rings without rotating: while <code>top &le; bottom</code> and <code>left &le; right</code>, walk right, down, left, up, and shrink the bound you just finished. After walking a side, check the bounds again so a single remaining middle row is not walked twice on the way back.</p>
+<p>Set zeroes records which rows and columns contain a zero, then fills them. To stay in-place, row 0 and column 0 are the bitsets, plus one extra boolean because cell <code>[0][0]</code> belongs to both. The second pass zeroes the inner <code>(n-1)&times;(m-1)</code> first so those markers survive, then clears row 0 and column 0 last. Staircase search starts at the top-right of a matrix whose rows and columns are both sorted: if the cell is too big, move left; too small, move down. Each step discards a whole row or a whole column, so the walk is <code>O(n + m)</code>.</p>
+<p>Walk the 3-by-3 <code>[[1,2,3],[4,5,6],[7,8,9]]</code>. Transpose swaps 2 with 4, 3 with 7, and 6 with 8, leaving <code>[[1,4,7],[2,5,8],[3,6,9]]</code>. Reverse each row and you have <code>[[7,4,1],[8,5,2],[9,6,3]]</code>, which is the 90-degree clockwise rotate. The same original, walked as a spiral, goes right 1,2,3, down 6,9, left 8,7, up 4, then the leftover centre 5. Searching for 6 in a row-and-column-sorted copy starts at the top-right 3, steps down to 6, and stops.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>A layer with bounds <code>top, bottom, left, right</code> is processed exactly once, and the next layer is strictly inside:</p><span class="eq">top++, bottom--, left++, right--</span><p>Interview sentence: <em>"I walk the current rectangle's perimeter, then I shrink all four bounds."</em></p>
+    <p>A layer with bounds <code>top, bottom, left, right</code> is processed exactly once, and the next layer is strictly inside:</p><span class="eq">top++, bottom--, left++, right--</span><p>In plain words, you walk the current rectangle's rim and then throw that rim away. The four numbers always describe a still-unvisited hole in the middle, so a cell is written or read once and never again.</p><p>Interview sentence: <em>"I walk the current rectangle's perimeter, then I shrink all four bounds."</em></p>
   </div>
 </aside>
 
@@ -164,7 +165,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "3x3 matrix [[1,2,3],[4,5,6],[7,8,9]]. Rotate 90 clockwise.",
+          "note": "Start with the 3-by-3 matrix [[1,2,3],[4,5,6],[7,8,9]]. The next two frames rotate it 90 degrees clockwise in place.",
           "cells": [
             {
               "r": 0,
@@ -465,19 +466,19 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Classify:</strong> in-place geometry vs search vs grid graph.</li>
-  <li><strong>Rotate:</strong> transpose, reverse rows (clockwise). Undo = reverse then transpose.</li>
-  <li><strong>Spiral:</strong> maintain top, bottom, left, right; shrink after each side; re-check bounds before the reverse walk.</li>
-  <li><strong>Set zero:</strong> marker pass, then zero inner cells, then the first row/col.</li>
-  <li><strong>LC 74:</strong> treat as 1D of length n*m, <code>mid = lo+(hi-lo)/2</code>, map to <code>[mid/m][mid%m]</code>.</li>
-  <li><strong>LC 240:</strong> start at <code>[0][m-1]</code>, smaller → down, larger → left.</li>
-  <li><strong>Border flood:</strong> DFS/BFS from every border cell of the start state, mark safe, then flip the interior.</li>
-  <li><strong>Never</strong> allocate n² extra if they said in-place.</li>
+  <li><strong>Classify the question first.</strong> In-place geometry, search in a sorted grid, and a grid graph are three different templates; picking the wrong one wastes the whole attempt.</li>
+  <li><strong>Rotate clockwise by transposing, then reversing each row.</strong> The undo is the opposite pair (reverse rows, then transpose), which is how you check one cell by hand.</li>
+  <li><strong>Spiral keeps four bounds and shrinks after each side.</strong> Re-check <code>top &le; bottom</code> before walking left, and <code>left &le; right</code> before walking up, so a leftover middle row is not visited twice.</li>
+  <li><strong>Set zeroes in two passes.</strong> Mark on row 0 and column 0 first, zero the inner cells next, and only then clear the first row and column so the markers survive.</li>
+  <li><strong>For LC 74, treat the matrix as one sorted array of length n&times;m.</strong> Binary-search with <code>mid = lo + (hi - lo) / 2</code> and map back to <code>[mid / m][mid % m]</code>.</li>
+  <li><strong>For LC 240, start at the top-right cell.</strong> A value that is too big discards its column (move left); a value that is too small discards its row (move down).</li>
+  <li><strong>Border floods start from every border cell of the start state.</strong> Mark those cells safe with DFS or BFS, then flip the unmarked interior, which is why surrounded-regions is not a spiral walk.</li>
+  <li><strong>Never allocate an n-by-n extra grid if they said in-place.</strong> The first row and column, or a four-cell cycle, are the allowed extra memory.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Rotate <code>[[1,2,3],[4,5,6],[7,8,9]]</code> by transposing then reversing rows, then walk the same grid as a spiral and as a staircase search for 6.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -485,7 +486,7 @@ flowchart TD
       <tr><th>step</th><th>cell</th><th>note2</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>start</td><td>—</td><td>original</td><td>3x3 matrix [[1,2,3],[4,5,6],[7,8,9]]. Rotate 90 clockwise.</td></tr>
+      <tr class="trace-table__row--change"><td>start</td><td>—</td><td>original</td><td>Start with the 3-by-3 matrix [[1,2,3],[4,5,6],[7,8,9]]. The next two frames rotate it 90 degrees clockwise in place.</td></tr>
       <tr><td>transpose</td><td>a[i][j]↔a[j][i]</td><td>mirror</td><td>Transpose: swap a[i][j] with a[j][i]. Now columns are the old rows.</td></tr>
       <tr><td>rev rows</td><td>row reverse</td><td>rotated</td><td>Reverse each row. Row 0: [1,4,7]→[7,4,1]. This is 90° clockwise.</td></tr>
       <tr><td>spiral</td><td>bounds shrink</td><td>1 2 3 6 9 8 …</td><td>Spiral of the original: right 1,2,3 then down 6,9 then left 8,7 then up 4 then in 5.</td></tr>
@@ -683,8 +684,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Rotate, spiral, and set-zeroes each visit every cell a constant number of times: <span class="eq">T = Θ(n m)</span>. Extra memory is the output list or O(1) markers.</p>
-    <p>Staircase discards a row or a column per step, at most n+m steps. LC 74 binary search is <code>O(log(n m))</code> comparisons on a virtual 1D array.</p>
+    <p>Rotate, spiral, and set-zeroes each visit every cell a constant number of times: <span class="eq">T = Θ(n m)</span>. At 400-by-400 that is 160,000 visits, comfortably under a second. Extra memory is the output list (spiral) or the O(1) markers (rotate, set-zeroes).</p>
+    <p>Staircase search discards a row or a column per step, so it takes at most n+m steps &mdash; 800 on a 400-by-400 grid, not 160,000. LC 74 binary search is <code>O(log(n m))</code> comparisons on a virtual 1D array, about 18 probes when n and m are 400.</p>
   </div>
 
   <table class="complexity__compare">
@@ -708,28 +709,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Spiral walking a row twice</span>
-    <div class="pitfalls__bug">After shrinking top, the left-going pass re-reads the same single remaining row.</div>
-    <div class="pitfalls__fix"><code>if (top &lt;= bottom)</code> before walking left; <code>if (left &lt;= right)</code> before walking up.</div>
+    <div class="pitfalls__bug">After shrinking top, the left-going pass re-reads the same single remaining row, so a 1-by-n matrix prints every cell twice and the answer looks almost right.</div>
+    <div class="pitfalls__fix">Guard with <code>if (top &le; bottom)</code> before walking left, and <code>if (left &le; right)</code> before walking up.</div>
   </li>
   <li>
     <span class="pitfalls__title">Zeroing markers too early</span>
-    <div class="pitfalls__bug">Clearing row 0 in the first inner pass wipes the column-marker bits.</div>
-    <div class="pitfalls__fix">Zero the inner (n-1)×(m-1) first; then row 0; then col 0.</div>
+    <div class="pitfalls__bug">Clearing row 0 in the first inner pass wipes the column-marker bits, so later columns that should have stayed non-zero get cleared (or the reverse).</div>
+    <div class="pitfalls__fix">Zero the inner <code>(n-1)&times;(m-1)</code> first, then row 0, then column 0, so the sentinels survive until they have been read.</div>
   </li>
   <li>
-    <span class="pitfalls__title">mid * m overflow when flattening LC 74</span>
-    <div class="pitfalls__bug"><code>int mid = (lo+hi)/2; a[mid/m][mid%m]</code> is fine; <code>(lo+hi)/2</code> is not the overflow you fear, but <code>lo+hi</code> is.</div>
-    <div class="pitfalls__fix"><code>int mid = lo + (hi - lo) / 2;</code> always.</div>
+    <span class="pitfalls__title">mid overflow when flattening LC 74</span>
+    <div class="pitfalls__bug"><code>int mid = (lo + hi) / 2</code> looks like ordinary binary search, but <code>lo + hi</code> can overflow a 32-bit int when n&times;m is large.</div>
+    <div class="pitfalls__fix">Always write <code>int mid = lo + (hi - lo) / 2;</code> and map back with <code>mid / m</code> and <code>mid % m</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Staircase starting at bottom-right</span>
-    <div class="pitfalls__bug">Both directions increase, so you cannot discard a row or a column.</div>
-    <div class="pitfalls__fix">Start at top-right or bottom-left, where one step is decrease and one is increase.</div>
+    <div class="pitfalls__bug">From the bottom-right both legal steps increase the value, so you cannot discard a row or a column and the walk has nowhere useful to go.</div>
+    <div class="pitfalls__fix">Start at top-right or bottom-left, where one step decreases the value and the other increases it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Transpose of a non-square</span>
-    <div class="pitfalls__bug">In-place swap a[i][j]↔a[j][i] is only for square. Rectangular transpose needs a new array.</div>
-    <div class="pitfalls__fix">Allocate m×n, or treat rotate as square-only (LC 48 is square).</div>
+    <div class="pitfalls__bug">In-place swap of <code>a[i][j]</code> with <code>a[j][i]</code> is only legal on a square; on an n-by-m rectangle those indices do not even exist.</div>
+    <div class="pitfalls__fix">Allocate a fresh m-by-n array for a rectangular transpose, and treat rotate as square-only (LC 48 is square).</div>
   </li>
 </ul>
 
@@ -771,28 +772,28 @@ flowchart TD
   <details class="followup">
     <summary>Rotate anti-clockwise in place?</summary>
     <div class="followup__body">
-      <p>Transpose, then reverse each <em>column</em> (or reverse rows first, then transpose). Derive the mapping a[i][j] → a[n-1-j][i] and check one cell.</p>
+      <p>Transpose, then reverse each <em>column</em> (or reverse the rows first, then transpose). The mapping is <code>a[i][j] &rarr; a[n-1-j][i]</code>; check one corner cell by hand so you do not mix the clockwise and counter-clockwise pair. The four-cycle version just walks the opposite permutation of the same four cells.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can staircase search be binary search?</summary>
     <div class="followup__body">
-      <p>You can binary-search each row in O(n log m). That is worse than O(n+m) when napprox m, and better when one dimension is tiny. LC 240 wants the staircase.</p>
+      <p>You can binary-search each row in <code>O(n log m)</code>. That is worse than <code>O(n + m)</code> when n and m are close, and better when one dimension is tiny (a 1-by-m row is just a binary search). LC 240 wants the staircase because both dimensions are large and only rows-and-columns-sorted, not concatenated.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Set zeroes without using the first row as a marker?</summary>
     <div class="followup__body">
-      <p>Two boolean arrays of size n and m are O(n+m) extra and simpler. The O(1) version is only required when they insist. Mention both.</p>
+      <p>Two boolean arrays of size n and m are O(n+m) extra and much simpler to get right. The O(1) first-row / first-column version is only required when they insist on constant extra memory. Mention both in an interview and implement the one they ask for.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Spiral on a jagged / empty matrix?</summary>
     <div class="followup__body">
-      <p>Guard m=0. A 1×n row is only the rightward pass; the reverse passes must be skipped via the bound checks.</p>
+      <p>Guard <code>m = 0</code> before you read <code>a[0].length</code>. A 1-by-n row is only the rightward pass; the reverse passes must be skipped by the <code>top &le; bottom</code> and <code>left &le; right</code> checks, otherwise you walk the same row backwards and duplicate every single value.</p>
     </div>
   </details>
 </div>
