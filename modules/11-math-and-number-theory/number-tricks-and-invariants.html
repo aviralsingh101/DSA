@@ -22,7 +22,7 @@
   <p class="hero__tagline">Parity, gcd, xor, and digit-sum mod 9 are invariants: a move that cannot change them cannot reach a target that differs.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="gcd-and-extended-euclid.html">GCD & Extended Euclid</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>"Can you reach B from A?" is often one invariant, not a BFS. If every move preserves I and I(A)≠I(B), the answer is no.</p>
-<p>Workhorses: parity of a sum or of inversions; gcd of a step on a circle; xor of a pile; n ≡ digitSum (mod 9).</p>
-<p>Sufficiency is a second lemma: same I does not automatically mean reachable. Construct, or name the extra obstruction.</p>
+<p>You are given a start state A and a target B, and a short list of legal moves, and you must say whether B is reachable. Building the whole state graph and running BFS is correct, but the graph can be enormous: a permutation of 15 tiles is already 10<sup>13</sup> layouts, and a frog on a circle of size <code>10<sup>9</sup></code> is a billion nodes. An <em>invariant</em> is a number you compute from a state that every legal move leaves unchanged. If that number differs at A and at B, you can answer no without searching.</p>
+<p>The workhorses are few and they keep showing up. The parity of a sum, or of the number of <em>inversions</em> (pairs that are out of order), flips or stays according to the move. The gcd of a step size with the circle length decides which residues you can land on. The xor of a pile is what Nim cannot change in one honest heap. A number and the sum of its digits have the same leftover modulo 9. Each of those is a one-line function of the state.</p>
+<p>Matching invariants is necessary, not sufficient. Same leftover modulo 9 does not mean you can reach 18 from 9 by a given move set; you still have to construct a path or name the extra obstruction. In a real statement the signal is &ldquo;can you reach&rdquo; next to a tiny list of algebraic moves and limits that make a search impossible. Check the invariant first, then construct, and only then fall back to BFS on a reduced space.</p>
+<p>The same habit kills a surprising number of &ldquo;prove it is impossible&rdquo; interview questions. Colour a chessboard, watch a token jump, and notice the colour never changes. Sum the array, watch one cell rise and another fall by the same amount, and notice the sum never changes. If the target breaks the thing that cannot change, you are done.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Name the thing a move cannot change. If the target differs, stop. If it matches, construct or search a smaller space.</p>
+    <p>Name the quantity a legal move cannot change. If the target has a different value, stop and answer no. If the values match, either construct a path or prove that every state with that value can reach a single normal form.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> Evaluating I is O(1) or O(n). A matching construction is usually another linear pass.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Evaluating the candidate invariant is <code>O(1)</code> or one linear scan of the state. A matching construction is usually another linear pass, maybe with a sort. If the statement's limits make even that scan tight, you picked too expensive a quantity. A BFS of the raw state space at these limits is the thing you are trying not to run.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Guess I. Prove I(move(s))=I(s) for every move type. Compare start and target. Different ⇒ NO.</p>
-<p>If equal, construct (often by simulating backwards) or prove the I-level is connected.</p>
+<p>Write the moves algebraically first, so you can see what they add and subtract. Guess a quantity <code>I</code> &mdash; parity of a sum, leftover of a gcd, xor of the piles, leftover of the digit sum modulo 9, colour of a square. Then prove <code>I(move(s)) = I(s)</code> for a generic move of every type, not just the first type you thought of. Compare <code>I(start)</code> and <code>I(target)</code>. If they differ, the answer is no and you can stop.</p>
+<p>If they match, you still have work. Either construct a path (often easier backwards, because forward branches and backward collapses) or prove that every state with that value of <code>I</code> can reach one normal form. A second, finer invariant is what you reach for when the first one matches and a tiny extra example is still unreachable. Sufficiency is a lemma, not a slogan.</p>
+<p>Walk two pictures. The array <code>[3, 1, 4, 2]</code> has three inversions (the pairs 3-1, 3-2, 4-2), which is odd; an adjacent swap flips that parity, and the sorted array has zero inversions, so you need an odd number of adjacent swaps. On a circle of 10 with jump +4, leftover of <code>gcd(4, 10) = 2</code> divides the distance 6 and does not divide 5, so 0 can reach 6 and cannot reach 5. Digit-sum: 38 has digits 3+8=11, then 1+1=2, and leftover of 38 modulo 9 is also 2. If any move type changes your <code>I</code>, throw that <code>I</code> away.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>I is a function of the state such that every legal move preserves I. Different values ⇒ unreachable. Same I is necessary, not always sufficient.</p>
+    <p><code>I</code> is a function of the state such that every legal move leaves <code>I</code> unchanged. Different values mean the target is unreachable. Equal values are necessary and not always sufficient.</p><p>In plain words, you are looking for a stamp that every move is forbidden to overwrite; if the target wears a different stamp, no sequence of moves can get you there.</p><p>Interview sentence: <em>&ldquo;Name what the move cannot change; if the target differs, stop.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Same I is not a path</span>
+    <p>Water jugs with gcd 2 can measure 4 and cannot measure 5, but they also cannot measure 100 if the two jugs hold 6 and 8. The capacity cap is a second obstruction. Always construct, or name the extra constraint.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--idea">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Potential is a different tool</span>
+    <p>A potential strictly decreases and proves that a process terminates. An invariant stays constant and proves that a target is impossible. Do not mix the two words on a whiteboard.</p>
   </div>
 </aside>
 
@@ -153,7 +171,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "[3,1,4,2] has 3 inversions (odd).",
+          "note": "The array 3,1,4,2 has three inversions (3-1, 3-2, 4-2), so the inversion count is odd.",
           "active": [
             0,
             1
@@ -165,7 +183,7 @@
           }
         },
         {
-          "note": "Adjacent swap 3leftrightarrow1 flips parity to even.",
+          "note": "An adjacent swap of 3 and 1 removes one inversion and flips that parity from odd to even.",
           "active": [
             0,
             1
@@ -177,7 +195,7 @@
           }
         },
         {
-          "note": "Sorted has 0 inversions. Need an odd number of adjacent swaps from the start.",
+          "note": "The sorted array has zero inversions. Reaching it therefore needs an odd number of adjacent swaps.",
           "active": [
             0
           ],
@@ -188,7 +206,7 @@
           }
         },
         {
-          "note": "Circle n=10, jump +4. gcd=2. 0→6 yes; 0→5 no.",
+          "note": "On a circle of 10, jumping +4 preserves leftover modulo gcd(4,10)=2, so 0 reaches 6 and cannot reach 5.",
           "active": [
             2
           ],
@@ -199,7 +217,7 @@
           }
         },
         {
-          "note": "38 → 3+8=11 → 2, and 38%9=2.",
+          "note": "Digits of 38 sum to 11 then 2, and leftover of 38 modulo 9 is also 2, the same invariant.",
           "active": [
             3
           ],
@@ -210,7 +228,7 @@
           }
         },
         {
-          "note": "If any move type changes I, throw I away.",
+          "note": "If even one legal move type changes I, that quantity is not an invariant; throw it away and guess again.",
           "active": [
             0
           ],
@@ -245,17 +263,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>List the moves</strong> algebraically.</li>
-  <li><strong>Guess I</strong> (parity, gcd, sum, xor, colour).</li>
-  <li><strong>Prove preservation</strong> on every type.</li>
-  <li><strong>Compare</strong> start and target.</li>
-  <li><strong>If equal</strong>, construct or argue connectivity.</li>
-  <li><strong>Backwards</strong> is often easier.</li>
+  <li><strong>List the moves algebraically.</strong> Write what each type adds, subtracts, or swaps, so you can see which quantities have a chance of staying put.</li>
+  <li><strong>Guess a candidate I.</strong> Start with the cheapest: parity of a sum, leftover of a gcd, xor of the piles, leftover of the digits modulo 9, or a board colour.</li>
+  <li><strong>Prove preservation on every type.</strong> A third move that flips your quantity is the usual false invariant; check a generic move of each kind, not one example.</li>
+  <li><strong>Compare start and target.</strong> If the values differ, answer no. That single comparison is the whole point of the technique.</li>
+  <li><strong>When they match, construct or argue connectivity.</strong> Same <code>I</code> is necessary, not a path. Reduce to a normal form, or name the extra obstruction.</li>
+  <li><strong>Prefer simulating backwards.</strong> Forward moves often branch; backward moves often collapse onto a unique predecessor, which makes the construction shorter.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Count inversions on 3,1,4,2, then a circle jump that preserves a gcd, then a digit-sum leftover modulo 9.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -263,12 +281,12 @@ flowchart TD
       <tr><th>I</th><th>move</th><th>ok</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>inv=3</td><td>—</td><td>odd</td><td>[3,1,4,2] has 3 inversions (odd).</td></tr>
-      <tr><td>inv=2</td><td>swap</td><td>even</td><td>Adjacent swap 3leftrightarrow1 flips parity to even.</td></tr>
-      <tr><td>parity</td><td>odd swaps</td><td>yes</td><td>Sorted has 0 inversions. Need an odd number of adjacent swaps from the start.</td></tr>
-      <tr><td>gcd=2</td><td>jump 4</td><td>6 yes</td><td>Circle n=10, jump +4. gcd=2. 0→6 yes; 0→5 no.</td></tr>
-      <tr><td>mod9=2</td><td>digits</td><td>match</td><td>38 → 3+8=11 → 2, and 38%9=2.</td></tr>
-      <tr><td>check all</td><td>all types</td><td>must hold</td><td>If any move type changes I, throw I away.</td></tr>
+      <tr class="trace-table__row--change"><td>inv=3</td><td>—</td><td>odd</td><td>The array 3,1,4,2 has three inversions (3-1, 3-2, 4-2), so the inversion count is odd.</td></tr>
+      <tr><td>inv=2</td><td>swap</td><td>even</td><td>An adjacent swap of 3 and 1 removes one inversion and flips that parity from odd to even.</td></tr>
+      <tr><td>parity</td><td>odd swaps</td><td>yes</td><td>The sorted array has zero inversions. Reaching it therefore needs an odd number of adjacent swaps.</td></tr>
+      <tr><td>gcd=2</td><td>jump 4</td><td>6 yes</td><td>On a circle of 10, jumping +4 preserves leftover modulo gcd(4,10)=2, so 0 reaches 6 and cannot reach 5.</td></tr>
+      <tr><td>mod9=2</td><td>digits</td><td>match</td><td>Digits of 38 sum to 11 then 2, and leftover of 38 modulo 9 is also 2, the same invariant.</td></tr>
+      <tr><td>check all</td><td>all types</td><td>must hold</td><td>If even one legal move type changes I, that quantity is not an invariant; throw it away and guess again.</td></tr>
     </tbody>
   </table>
 </div>
@@ -362,7 +380,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>The point is to avoid a search. gcd / xor / inversion parity is linear at worst.</p>
+    <p>The point of an invariant is to refuse a search. Leftover of a gcd, xor of <code>n</code> piles, leftover of a digit sum, and parity of a sum are each a handful of arithmetic operations. Inversion parity is a double loop, <code>O(n<sup>2</sup>)</code>, or a Fenwick tree at <code>O(n log n)</code>, still linear-ish in contest limits. A matching construction is usually one more pass.</p>
+    <p>Putting real numbers in: a frog on a circle of size <code>10<sup>9</sup></code> is one gcd and one remainder, a few nanoseconds, against a BFS of a billion nodes. A 15-puzzle layout space is about <code>10<sup>13</sup></code> states; inversion parity plus blank taxicab is a scan of 16 cells. If you skip the invariant and search first, those limits are what kill you.</p>
   </div>
 
   <table class="complexity__compare">
@@ -384,28 +403,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">I not actually preserved</span>
-    <div class="pitfalls__bug">A third move type flips it.</div>
-    <div class="pitfalls__fix">Prove it for a generic move of every type.</div>
+    <div class="pitfalls__bug">The first two move types leave <code>I</code> alone, so the quantity looks invariant, and a third type quietly flips it. Your NO answers become wrong on tests that use that third type.</div>
+    <div class="pitfalls__fix">Prove preservation for a generic move of every type listed in the statement, not for one example of the first type.</div>
   </li>
   <li>
     <span class="pitfalls__title">Necessity as sufficiency</span>
-    <div class="pitfalls__bug">Same gcd, hidden extra obstruction.</div>
-    <div class="pitfalls__fix">Construct or name the extra I.</div>
+    <div class="pitfalls__bug">Start and target share a gcd, so you return YES, but a hidden extra obstruction (a capacity cap, a colour, a second parity) still makes the target unreachable.</div>
+    <div class="pitfalls__fix">Construct a path, or name the extra invariant. A tiny counter-example that matches <code>I</code> and is still stuck is the test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Mod 9 vs digital root 9</span>
-    <div class="pitfalls__bug">18 ≡ 0, not 9.</div>
-    <div class="pitfalls__fix">Compare residues.</div>
+    <div class="pitfalls__bug">Digital root of 18 is written 9 in some popularisations, but leftover of 18 modulo 9 is 0. Comparing 9 to 0 looks like a mismatch and rejects a reachable target.</div>
+    <div class="pitfalls__fix">Compare residues in <code>0..8</code>. Treat a digital root of 9 as leftover 0, and test 18 against 9 and against 27.</div>
   </li>
   <li>
     <span class="pitfalls__title">15-puzzle missing blank taxicab</span>
-    <div class="pitfalls__bug">Permutation parity alone is incomplete on 4×4.</div>
-    <div class="pitfalls__fix">XOR with blank taxicab parity.</div>
+    <div class="pitfalls__bug">Permutation parity alone looks like the whole story on a 4 by 4 board, but the blank's taxicab distance to home has a parity that also has to match. Half the &ldquo;same parity&rdquo; positions are still impossible.</div>
+    <div class="pitfalls__fix">XOR the permutation parity with the blank's taxicab parity. Both must match the target. Check the classic 14-15 swap, which is the standard impossible instance.</div>
   </li>
   <li>
     <span class="pitfalls__title">BFS after a cheap NO</span>
-    <div class="pitfalls__bug">Wasted.</div>
-    <div class="pitfalls__fix">Check I first.</div>
+    <div class="pitfalls__bug">You already know the invariant differs, but you still search, which looks thorough and then times out on the large NO cases.</div>
+    <div class="pitfalls__fix">Evaluate <code>I</code> first and return NO immediately on a mismatch. Search only the equal-<code>I</code> slice, if you search at all.</div>
   </li>
 </ul>
 
@@ -447,28 +466,28 @@ flowchart TD
   <details class="followup">
     <summary>Invariant vs potential?</summary>
     <div class="followup__body">
-      <p>Invariant is constant. Potential strictly decreases and proves termination.</p>
+      <p>An invariant is a number that every legal move leaves unchanged, and it proves a target is impossible when the values differ. A potential is a number that every move strictly decreases, and it proves that a process cannot run forever. They answer different questions. Mixing the words on a whiteboard confuses the listener even when both proofs are correct.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you invent I?</summary>
     <div class="followup__body">
-      <p>Look at what the move adds and subtracts. Try the cheapest quantity that is not 0=0.</p>
+      <p>Look at what a move adds on one side and subtracts on the other. The cheapest quantity that is not the tautology &ldquo;0 equals 0&rdquo; is usually the sum, the leftover of a gcd, a parity, or a colour. If every cheap guess changes, maybe there is no one-line invariant and you do need a search or a DP.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Two step sizes a and b on a circle?</summary>
     <div class="followup__body">
-      <p>gcd(a,b,n) | distance.</p>
+      <p>The reachable residues are the multiples of <code>gcd(a, b, n)</code>. You can reach a target at distance <code>d</code> exactly when that gcd divides <code>d</code>. That is B&eacute;zout on three integers: some combination of the two steps, wrapped by the circle length, equals the distance. One step size is the special case <code>gcd(step, n)</code> divides <code>d</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When is same I enough?</summary>
     <div class="followup__body">
-      <p>When you can reduce every same-I state to a normal form.</p>
+      <p>When you can reduce every state that shares that value of <code>I</code> to a single normal form by legal moves (sorted array, empty jugs, all chips on one cell). Then the level set is connected and matching <code>I</code> is a path. If you cannot name that normal form, treat same <code>I</code> as &ldquo;not yet no&rdquo; and keep working.</p>
     </div>
   </details>
 </div>

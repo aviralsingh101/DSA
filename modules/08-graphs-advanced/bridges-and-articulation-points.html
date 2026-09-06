@@ -22,7 +22,7 @@
   <p class="hero__tagline">A bridge is an edge whose removal disconnects an undirected graph; an articulation point is a vertex with the same property. Both fall out of one tin/low DFS.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/dfs-and-components.html">DFS & Connected Components</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>"Critical connections", "edges we must repair", "nodes whose failure splits the network" are the same DFS. Discovery time <code>tin[u]</code> and <code>low[u]</code> — the earliest discovery you can reach from u without using the parent edge — classify every edge and every vertex in one pass.</p>
-<p>Edge u-v (v a child) is a bridge iff <code>low[v] &gt; tin[u]</code>: v cannot climb to u or above, so the only way out is that edge. Vertex u is articulation (non-root) iff some child has <code>low[v] &ge; tin[u]</code>. The root is articulation iff it has two or more DFS children.</p>
-<p>The bridge-block tree (compress 2-edge-connected components) is a tree you can run reroot DP on. Same for the block-cut tree of articulation points.</p>
+<p>You maintain a network of undirected cables, and you must name every cable whose single failure splits the network in two, and every junction whose single failure does the same. Those are <em>bridges</em> (critical edges) and <em>articulation points</em> (cut vertices). Trying every cable or every junction with a fresh connectivity search is <code>m</code> or <code>n</code> depth-first searches, about <code>4&times;10&#185;&#8304;</code> steps at the usual limits. One carefully instrumented search classifies every edge and every vertex in linear time.</p>
+<p>The search records two numbers at each vertex. <code>tin[u]</code> is the discovery time, a counter that ticks the first time you enter <code>u</code>. <code>low[u]</code> is the earliest discovery time you can still reach from <code>u</code> by walking down the DFS subtree and then taking at most one back-edge, never using the parent edge you arrived on. If a child <code>v</code> has <code>low[v] &gt; tin[u]</code>, that subtree cannot climb back to <code>u</code> or anything earlier, so the only cable out is <code>u-v</code> and that cable is a bridge. If some child has <code>low[v] &ge; tin[u]</code>, the subtree can reach <code>u</code> but not strictly above it, so removing <code>u</code> disconnects that child from the parent side: <code>u</code> is an articulation point. The root of the search is a special case: it is an articulation point exactly when it has two or more DFS children.</p>
+<p>In a problem statement the tell is "critical connections", "edges we must repair", or "nodes whose failure splits the network" on an undirected graph with <code>n, m &le; 2&times;10&#8309;</code>. After you have the bridges you can compress each 2-edge-connected piece into a supernode and obtain a tree, the bridge-block tree, which is the usual place to hang a reroot DP. The same idea with articulation points is the block-cut tree.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>low[v] > tin[u] means "v cannot reach u or above without this edge" — a bridge. low[v] >= tin[u] means "v cannot reach strictly above u" — u is a cut vertex for that child.</p>
+    <p>low[v] is the earliest discovery time the subtree of v can still climb to, without walking back over the parent edge. If it cannot even reach u, the edge u-v is a bridge; if it cannot reach strictly above u, then u is a cut vertex for that child.</p>
   </div>
 </aside>
 
@@ -111,18 +111,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>, undirected, possibly with parallel edges (a parallel pair is never a bridge). Multiedges need an edge id so the parent skip is exact.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> on an undirected graph is the linear window: one DFS, each edge looked at twice. Parallel cables are allowed and a parallel pair is never a bridge, so the parent skip must use an edge id, not a vertex id. Recursion depth can be <code>n</code>; the same Java-stack warning as the SCC page applies. Trying every edge with a fresh search is about <code>4&times;10&#185;&#8304;</code> steps and will time out.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>DFS from every unvisited node. tin[u] = low[u] = timer++. For a neighbour v: if v is the parent, skip; if visited, low[u] = min(low[u], tin[v]) (back-edge); else recurse, low[u] = min(low[u], low[v]), then test the bridge / articulation predicates.</p>
-<p>Parent must be an edge identity, not just a vertex, when parallel edges exist. The root's articulation test is "number of DFS children >= 2", independent of low.</p>
+<p>Start a DFS from every unvisited vertex so a disconnected graph is handled. On entry set <code>tin[u] = low[u] = timer++</code>, so both numbers begin as the discovery time. For each neighbour <code>v</code>, three cases. If the edge is the parent edge you arrived on, skip it &mdash; walking back over it would pretend the subtree can always climb to <code>u</code> and you would report zero bridges. If <code>v</code> is already visited, this is a back-edge: write <code>low[u] = min(low[u], tin[v])</code>. If <code>v</code> is new, recurse, then write <code>low[u] = min(low[u], low[v])</code> and test the two predicates on that child.</p>
+<p>The predicates are the whole classification. <code>low[v] &gt; tin[u]</code> means the child cannot reach <code>u</code> or anything earlier without this edge, so <code>u-v</code> is a bridge (strict inequality: equality means a back-edge still ties the subtree to <code>u</code>). <code>low[v] &ge; tin[u]</code> means the child cannot reach strictly above <code>u</code>, so removing <code>u</code> splits that child off the parent side: a non-root <code>u</code> is then an articulation point. The root ignores <code>low</code> and is an articulation point exactly when it has two or more DFS children. When the graph has parallel edges, store an edge id on both orientations and skip by that id, otherwise the second <code>u-v</code> is mistaken for the parent and a real non-bridge is reported as a bridge.</p>
+<p>Walk the four-vertex sample in words. The graph is the triangle 0-1-2 plus a pending leaf 1-3. The search walks 0-1-2; vertex 2 sees 0 as a back-edge and writes <code>low[2] = tin[0] = 1</code>. Returning to 1, <code>low[1]</code> becomes 1, which is not strictly greater than <code>tin[0]</code>, so 0-1 is not a bridge. The child 3 is a leaf: <code>low[3] = tin[3] = 4</code>, which is greater than <code>tin[1]</code>, so 1-3 is a bridge, and the same comparison <code>&ge;</code> marks 1 as an articulation point. Root 0 has only one DFS child, so it is not an articulation point even though the triangle hangs off it.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p><code>low[u]</code> is the smallest <code>tin</code> reachable from u by tree edges going down plus at most one back-edge, never using the parent edge. A child that cannot beat <code>tin[u]</code> is trapped in u's subtree.</p>
+    <p><code>low[u]</code> is the smallest <code>tin</code> reachable from <code>u</code> by tree edges going down plus at most one back-edge, never using the parent edge. A child <code>v</code> with <code>low[v] &gt; tin[u]</code> cannot reach <code>u</code> or above; a child with <code>low[v] &ge; tin[u]</code> cannot reach strictly above <code>u</code>.</p><p>In plain words, <code>low</code> asks "how far back toward the ancestors can this subtree still climb without walking the cable I just used?", and the two inequalities decide whether that cable, or that junction, is the only way out.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">low[v] on an undirected graph</span>
+    <p>Same measuring stick as Tarjan SCC, different graph: <code>low[v]</code> is the earliest discovery time the subtree can still climb to, walking down tree edges and then at most one back-edge, never using the parent cable. The bridge test is strict <code>&gt;</code> because reaching <code>u</code> itself is enough to keep the graph connected after <code>u-v</code> is deleted. The articulation test is <code>&ge;</code> because reaching <code>u</code> but not above it means deleting <code>u</code> isolates that child from the parent side.</p>
   </div>
 </aside>
 
@@ -160,7 +169,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Graph: 0-1-2-0 a triangle, plus 1-3 a pending leaf. DFS 0-1-2.",
+          "note": "The graph is the triangle 0-1-2 plus a pending leaf 1-3. The search starts at 0 and walks into 1, then into 2.",
           "active": [
             0
           ],
@@ -172,7 +181,7 @@
           }
         },
         {
-          "note": "2 sees 0 as a back-edge: low[2]=tin[0]=1.",
+          "note": "Vertex 2 sees the triangle edge back to 0, a back-edge, and writes low[2] = tin[0] = 1 so the subtree can climb to the root.",
           "active": [
             2
           ],
@@ -184,7 +193,7 @@
           }
         },
         {
-          "note": "Return to 1: low[1]=min(2, low[2]=1)=1. low[1] > tin[0]? No. 0-1 is not a bridge.",
+          "note": "Returning to 1, low[1] becomes 1. That is not strictly greater than tin[0], so the cable 0-1 is not a bridge.",
           "active": [
             1
           ],
@@ -196,7 +205,7 @@
           }
         },
         {
-          "note": "1-3: 3 is a leaf, low[3]=4 > tin[1]=2. Edge 1-3 is a bridge.",
+          "note": "The leaf 3 has no back-edge, so low[3] stays 4, which is greater than tin[1]. The cable 1-3 is therefore a bridge.",
           "active": [
             3
           ],
@@ -208,7 +217,7 @@
           }
         },
         {
-          "note": "low[3] >= tin[1], so 1 is an articulation point. Root 0 has one DFS child → not articulation.",
+          "note": "The same leaf gives low[3] &ge; tin[1], so junction 1 is an articulation point. Root 0 has only one DFS child, so it is not.",
           "active": [
             1
           ],
@@ -220,7 +229,7 @@
           }
         },
         {
-          "note": "Bridges: {1-3}. Articulation: {1}.",
+          "note": "Finished: the only bridge is 1-3 and the only articulation point is 1. The triangle stays 2-edge-connected.",
           "active": [
             1,
             3
@@ -255,17 +264,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>tin = low = -1</strong>, timer = 0. DFS every component.</li>
-  <li><strong>On a child:</strong> recurse, then low[u] = min(low[u], low[v]).</li>
-  <li><strong>Bridge:</strong> low[v] > tin[u]. <strong>Articulation:</strong> low[v] >= tin[u] (and u not a 1-child root).</li>
-  <li><strong>Back-edge</strong> to an already visited non-parent: low[u] = min(low[u], tin[v]).</li>
-  <li><strong>Root:</strong> articulation iff it has two or more DFS children.</li>
-  <li><strong>Multiedges:</strong> identify the parent by edge id, not by vertex.</li>
+  <li><strong>Initialise tin and low to -1, then DFS every component.</strong> A disconnected graph has several roots; each root gets its own child-count test, and a vertex already discovered in an earlier call is skipped.</li>
+  <li><strong>On a new child, recurse first, then pull low[v] into low[u].</strong> The child must finish so its own back-edges have already been written; only then is <code>low[v]</code> a trustworthy earliest-climb for the subtree.</li>
+  <li><strong>Test the two predicates on that child.</strong> <code>low[v] &gt; tin[u]</code> flags the tree edge as a bridge; <code>low[v] &ge; tin[u]</code> flags a non-root <code>u</code> as an articulation point. The strictness difference is the whole distinction between "cannot reach u" and "cannot reach above u".</li>
+  <li><strong>On a back-edge to an already visited non-parent, write tin[v] into low[u].</strong> That is the one allowed climb: a single back-edge to a vertex discovered earlier. Do not write <code>low[v]</code> here, and do not treat the parent edge as a back-edge.</li>
+  <li><strong>Treat the root as a special case.</strong> The root is an articulation point if and only if it has two or more DFS children, regardless of any <code>low</code> value; a single long child hanging off the root does not split the graph when the root is removed.</li>
+  <li><strong>Identify the parent by edge id when parallel cables exist.</strong> Skipping by vertex id treats the second <code>u-v</code> as the parent and a real non-bridge is reported as a bridge; give every undirected edge an id and skip that id only.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>A triangle 0-1-2 plus a pending leaf 1-3. The triangle has a back-edge so 0-1 is not a bridge; the leaf makes 1-3 a bridge and 1 a cut vertex.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -273,12 +282,12 @@ graph LR
       <tr><th>u</th><th>v</th><th>low</th><th>kind</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>1</td><td>1,2,3,4</td><td>start</td><td>Graph: 0-1-2-0 a triangle, plus 1-3 a pending leaf. DFS 0-1-2.</td></tr>
-      <tr><td>2</td><td>0</td><td>1,2,1,4</td><td>back</td><td>2 sees 0 as a back-edge: low[2]=tin[0]=1.</td></tr>
-      <tr><td>1</td><td>2</td><td>1,1,1,4</td><td>no bridge</td><td>Return to 1: low[1]=min(2, low[2]=1)=1. low[1] > tin[0]? No. 0-1 is not a bridge.</td></tr>
-      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>bridge</td><td>1-3: 3 is a leaf, low[3]=4 > tin[1]=2. Edge 1-3 is a bridge.</td></tr>
-      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>cut vertex 1</td><td>low[3] >= tin[1], so 1 is an articulation point. Root 0 has one DFS child → not articulation.</td></tr>
-      <tr><td>done</td><td>—</td><td>final</td><td>1-3 + vertex 1</td><td>Bridges: {1-3}. Articulation: {1}.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>1</td><td>1,2,3,4</td><td>start</td><td>The graph is the triangle 0-1-2 plus a pending leaf 1-3. The search starts at 0 and walks into 1, then into 2.</td></tr>
+      <tr><td>2</td><td>0</td><td>1,2,1,4</td><td>back</td><td>Vertex 2 sees the triangle edge back to 0, a back-edge, and writes low[2] = tin[0] = 1 so the subtree can climb to the root.</td></tr>
+      <tr><td>1</td><td>2</td><td>1,1,1,4</td><td>no bridge</td><td>Returning to 1, low[1] becomes 1. That is not strictly greater than tin[0], so the cable 0-1 is not a bridge.</td></tr>
+      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>bridge</td><td>The leaf 3 has no back-edge, so low[3] stays 4, which is greater than tin[1]. The cable 1-3 is therefore a bridge.</td></tr>
+      <tr><td>1</td><td>3</td><td>1,1,1,4</td><td>cut vertex 1</td><td>The same leaf gives low[3] &ge; tin[1], so junction 1 is an articulation point. Root 0 has only one DFS child, so it is not.</td></tr>
+      <tr><td>done</td><td>—</td><td>final</td><td>1-3 + vertex 1</td><td>Finished: the only bridge is 1-3 and the only articulation point is 1. The triangle stays 2-edge-connected.</td></tr>
     </tbody>
   </table>
 </div>
@@ -410,7 +419,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>One DFS. Each edge is looked at twice. The predicates are O(1) per tree edge.</p>
+    <p>One DFS visits every vertex once and looks at every undirected edge twice (once from each end). The bridge and articulation tests are a constant amount of work per tree edge, so the whole run is <code>O(n + m)</code>. At <code>n, m = 2&times;10&#8309;</code> that is a few hundred thousand array operations, a few milliseconds.</p>
+    <p>The brute alternative &mdash; delete each edge and rerun a connectivity search &mdash; is <code>O(m(n + m))</code>, about <code>8&times;10&#185;&#8304;</code> steps at the same limits, which no judge accepts. Recursion depth can be <code>n</code>, so a path graph overflows the default Java stack; prefer an explicit stack on Codeforces Java.</p>
   </div>
 
   <table class="complexity__compare">
@@ -432,28 +442,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using the parent as a back-edge</span>
-    <div class="pitfalls__bug">low[v] becomes tin[u] for every child, so you report zero bridges.</div>
-    <div class="pitfalls__fix">Skip the parent edge (by edge id if the graph has multis).</div>
+    <div class="pitfalls__bug">Walking back over the parent cable writes <code>tin[u]</code> into every child's <code>low</code>, so every child appears able to climb to <code>u</code> and you report zero bridges on a graph that has several.</div>
+    <div class="pitfalls__fix">Skip the parent edge. When the graph may have parallel cables, skip by edge id, not by vertex id, so the second <code>u-v</code> is still examined.</div>
   </li>
   <li>
     <span class="pitfalls__title">Bridge test with >= instead of ></span>
-    <div class="pitfalls__bug">A back-edge into u itself is not a bridge; <code>&gt;=</code> falsely flags it.</div>
-    <div class="pitfalls__fix">Bridge is strict <code>&gt;</code>. Articulation is <code>&ge;</code>.</div>
+    <div class="pitfalls__bug">A back-edge that reaches <code>u</code> itself makes <code>low[v] == tin[u]</code>. Using <code>&ge;</code> flags that tree edge as a bridge even though the back-edge still ties the subtree to <code>u</code> after the edge is deleted.</div>
+    <div class="pitfalls__fix">The bridge test is strict <code>&gt;</code>. The articulation test is <code>&ge;</code>. Write the two comparisons on separate lines so a later edit cannot blur them.</div>
   </li>
   <li>
     <span class="pitfalls__title">Root tested with the non-root rule</span>
-    <div class="pitfalls__bug">A root with one long child looks like an articulation under the low test and is not.</div>
-    <div class="pitfalls__fix">Root: two or more DFS children. Never the low predicate.</div>
+    <div class="pitfalls__bug">A root with one long child has <code>low[child] &ge; tin[root]</code> for the trivial reason that nothing sits above the root, so the low test marks a junction whose removal does not split the graph.</div>
+    <div class="pitfalls__fix">The root is an articulation point if and only if it has two or more DFS children. Never apply the <code>low</code> predicate to the root.</div>
   </li>
   <li>
     <span class="pitfalls__title">Directed input treated as undirected</span>
-    <div class="pitfalls__bug">You add only one direction and the DFS cannot climb back-edges.</div>
-    <div class="pitfalls__fix">This page is undirected: store both directions, parent-skip one id.</div>
+    <div class="pitfalls__bug">Storing only one orientation means the search cannot climb a back-edge that the input listed the other way, so every tree edge looks like a bridge.</div>
+    <div class="pitfalls__fix">This page is for undirected graphs: store both directions of every cable and skip one edge id as the parent. Directed "bridges" are edges between SCCs, a different page.</div>
   </li>
   <li>
     <span class="pitfalls__title">Parallel edges</span>
-    <div class="pitfalls__bug">Parent stored as a vertex: the second  u-v  is skipped as "parent" and a real non-bridge is reported as a bridge.</div>
-    <div class="pitfalls__fix">Give every undirected edge an id; skip that id only.</div>
+    <div class="pitfalls__bug">Parent stored as a vertex: the second cable between the same pair is skipped as "parent", the real back-edge is never seen, and a pair of parallel cables is reported as a bridge even though neither one disconnects the graph.</div>
+    <div class="pitfalls__fix">Give every undirected edge an integer id, store <code>(neighbour, id)</code> in the adjacency lists, and skip that id only.</div>
   </li>
 </ul>
 
@@ -495,28 +505,28 @@ graph LR
   <details class="followup">
     <summary>Why is the bridge test strict >?</summary>
     <div class="followup__body">
-      <p>If low[v] == tin[u], v can reach u via a back-edge (or via something that reaches u). Removing u-v, that back-edge still connects v's subtree to u. Not a bridge.</p>
+      <p>If <code>low[v] == tin[u]</code>, the subtree of <code>v</code> can still reach <code>u</code> through a back-edge (or through something that itself reaches <code>u</code>). Delete the tree edge <code>u-v</code> and that back-edge still joins the subtree to <code>u</code>, so the graph stays connected. A bridge is an edge whose deletion really splits the graph, which is the stricter "cannot even reach <code>u</code>".</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why is articulation >=?</summary>
     <div class="followup__body">
-      <p>If low[v] == tin[u], v can reach u but not above u. Removing u disconnects v's subtree from the rest of the graph (the parent side of u).</p>
+      <p>If <code>low[v] == tin[u]</code>, the subtree can reach <code>u</code> but not any ancestor of <code>u</code>. Delete vertex <code>u</code> and the subtree has nowhere to go: it is cut off from the parent side of <code>u</code>. That is why a single child with <code>low[v] &ge; tin[u]</code> is enough to mark a non-root as an articulation point, and why the root needs a different test.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Directed bridges?</summary>
     <div class="followup__body">
-      <p>A directed edge is a bridge if it is a bridge in the underlying undirected sense <em>and</em> it is the unique way to go between those SCCs — usually you just want "edges between SCCs" on the condensation.</p>
+      <p>A directed edge whose deletion breaks reachability is usually just an edge between two SCCs of the condensation, not a tin/low fact on the underlying undirected graph. If the statement is directed, run the SCC page first and look at edges that leave one supernode for another. The algorithm on this page assumes undirected cables stored both ways.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you handle multiple components?</summary>
     <div class="followup__body">
-      <p>Run the DFS from every unvisited node. Each call has its own root test.</p>
+      <p>Run the DFS from every vertex that is still unvisited. Each call has its own root and its own child-count test. Bridges and articulation points are local to a component: a cable cannot be a bridge across two pieces that were never joined, and an isolated vertex is not an articulation point.</p>
     </div>
   </details>
 </div>

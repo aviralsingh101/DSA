@@ -22,7 +22,7 @@
   <p class="hero__tagline">A linear recurrence <code>x<sub>n</sub> = &Sigma; a<sub>i</sub> x<sub>n-i</sub></code> is one matrix multiply. Binary exponentiation of that matrix jumps <code>n</code> steps in <code>O(k&sup3; log n)</code>.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="modular-arithmetic.html">Modular Arithmetic</a>,
       <a href="../00-foundations/recurrences-and-master-theorem.html">Recurrences</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Fibonacci in O(log n), "number of ways to tile a 2×n after 10^18 steps", and graph walks of length n are the same object: a vector of last-k states times a companion / adjacency matrix.</p>
-<p>If you can write S_{t+1} = A S_t, then S_n = A^n S_0. Binary exponentiation of A is the only extra skill: multiply k×k matrices, square, multiply-by-A when the bit is on.</p>
-<p>n ≤ 10^18 is the tell. k is the state size (2 for Fib, 3–6 for many tilings, |V| for walks). k³ log n must fit; k = 100 is already 1e6 * 60 multiplies — borderline.</p>
+<p>You are asked for the <code>n</code>-th Fibonacci number, or the number of ways to tile a <code>2 &times; n</code> board, and <code>n</code> can be <code>10<sup>18</sup></code>. Adding the last two terms in a loop is <code>10<sup>18</sup></code> additions and will not return. The same blow-up hits &ldquo;walks of length <code>n</code>&rdquo; on a small graph: raising the adjacency matrix by multiplying it <code>n</code> times is still linear in <code>n</code>. You need a way to jump many steps at once.</p>
+<p>If the next state is always a fixed linear mix of the current state &mdash; written <code>S<sub>t+1</sub> = A S<sub>t</sub></code>, where <code>A</code> is a <code>k &times; k</code> matrix of coefficients and <code>S<sub>t</sub></code> is a column of <code>k</code> numbers &mdash; then the state after <code>n</code> steps is leftover of <code>A<sup>n</sup> S<sub>0</sub></code>. That power is the same binary exponentiation you already know for scalars, except each multiply is a matrix multiply. Fibonacci is the 2-by-2 case; a <code>k</code>-term recurrence is a <code>k</code>-by-<code>k</code> companion matrix; walks are the adjacency matrix.</p>
+<p>The constraint that names this page is <code>n &le; 10<sup>18</sup></code> next to a linear recurrence or a small graph. The state size <code>k</code> is 2 for Fibonacci, 3 to 6 for many tilings, and <code>|V|</code> for walks. Each matrix multiply is about <code>k<sup>3</sup></code> cell products, and you do about <code>60</code> of them, so <code>k = 20</code> is comfortable and <code>k = 100</code> is already a million times sixty modular multiplies, borderline in Java.</p>
+<p>If the recurrence is not linear &mdash; <code>x<sub>n</sub> = x<sub>n-1</sub><sup>2</sup></code>, or a min / max that is not a linear combination &mdash; a matrix cannot encode the step and this page does not apply. If <code>n</code> is only a million and <code>k</code> is huge, just iterate the recurrence. Shortest paths use a different semiring and are not this multiply.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>The companion matrix of a linear recurrence is unique once you write the state as a column of the last k terms. After that it is only fast pow.</p>
+    <p>Once you write the state as a column of the last <code>k</code> terms, there is only one matrix <code>A</code> that sends that column to the next column. After that the whole problem is binary exponentiation of <code>A</code>, which computes leftover of <code>A<sup>n</sup></code> and therefore the state after <code>n</code> steps.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10^{18}</code>, <code>k &le; 80</code> in Java if you are careful; <code>k &le; 20</code> is comfortable. Always take the answer modulo the required prime.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10<sup>18</sup></code> is the tell. State size <code>k &le; 20</code> is comfortable in Java; <code>k &le; 80</code> is possible if you are careful with constants. Always reduce leftover the required prime after every cell product. If <code>n</code> is only <code>10<sup>6</sup></code>, iterate the recurrence and skip the matrices.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Fibonacci: state [F_n, F_{n-1}]^T = [[1,1],[1,0]] [F_{n-1}, F_{n-2}]^T. Then [F_n, F_{n-1}] = A^{n-1} [F_1, F_0].</p>
-<p>Multiply two k×k matrices in O(k³). Fast pow: res = I, while n>0: if n odd res = res*A; A = A*A; n >>= 1. Use long and reduce mod P every multiply.</p>
+<p>Fibonacci first, so the letters mean something. Let the state column be the pair <code>(F<sub>t</sub>, F<sub>t-1</sub>)</code>. The next pair is <code>(F<sub>t+1</sub>, F<sub>t</sub>) = (F<sub>t</sub>+F<sub>t-1</sub>, F<sub>t</sub>)</code>, which is what the matrix <code>A = [[1, 1], [1, 0]]</code> computes when it multiplies the current column: first row is &ldquo;sum the two entries&rdquo;, second row is &ldquo;copy the first entry down&rdquo;. Starting from <code>(F<sub>1</sub>, F<sub>0</sub>) = (1, 0)</code>, leftover of <code>A<sup>n-1</sup></code> times that column is <code>(F<sub>n</sub>, F<sub>n-1</sub>)</code>. The top-left cell of that power is therefore leftover of <code>F<sub>n</sub></code>.</p>
+<p>A general <code>k</code>-term recurrence uses a <em>companion matrix</em>: first row is the coefficients, and each later row is a shift that copies one old term down, which is what &ldquo;remember the last <code>k-1</code> terms&rdquo; means. Multiply two <code>k &times; k</code> matrices in the triple loop of <code>k<sup>3</sup></code> cell products, reducing leftover the prime every time. Binary exponentiation is then the scalar loop you already know: start from the identity, square <code>A</code>, and multiply into the result when the current bit of <code>n</code> is on. Use <code>long</code> for every product.</p>
+<p>Walk <code>F<sub>10</sub></code>. Ten in binary is <code>1010</code>, so you need leftover of <code>A<sup>8</sup> A<sup>2</sup></code>. Squaring gives <code>A<sup>2</sup></code> (which holds <code>F<sub>2</sub>, F<sub>1</sub></code>), then <code>A<sup>4</sup></code> (<code>F<sub>4</sub>, F<sub>3</sub></code>), then <code>A<sup>8</sup></code> (<code>F<sub>8</sub>, F<sub>7</sub></code>). Multiplying the 8-step and 2-step powers produces leftover of <code>F<sub>10</sub> = 55</code>. Which cell you read depends on whether you powered <code>n</code> or <code>n-1</code> and on the base column; pick one convention and test <code>F<sub>0</sub>=0</code>, <code>F<sub>1</sub>=1</code>, <code>F<sub>10</sub>=55</code>. For walks, <code>A</code> is the adjacency matrix and leftover of <code>A<sup>n</sup>[u][v]</code> is the number of walks from <code>u</code> to <code>v</code> of length <code>n</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>If S_{t+1} = A S_t for every t, then S_{t+n} = A^n S_t. Binary exponentiation uses A^{2m} = (A^m)² and A^{2m+1} = A · A^{2m}.</p>
+    <p>If every single step satisfies <code>S<sub>t+1</sub> = A S<sub>t</sub></code>, then leftover of <code>A<sup>n</sup> S<sub>t</sub></code> is the state <code>n</code> steps later. Binary exponentiation computes that power by leftover of <code>(A<sup>m</sup>)<sup>2</sup> = A<sup>2m</sup></code> and leftover of <code>A &middot; A<sup>2m</sup> = A<sup>2m+1</sup></code>.</p><p>In plain words, one matrix multiply is one step of the recurrence, so a power of that matrix is many steps at once, and you build the power by squaring just as you do for a scalar.</p><p>Interview sentence: <em>&ldquo;Write the linear step as a matrix, then fast-pow the matrix.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Off-by-one on F_0 and F_1</span>
+    <p>Powering <code>A<sup>n-1</sup></code> with <code>n = 0</code> underflows. Special-case zero, and test <code>F<sub>0</sub> = 0</code>, <code>F<sub>1</sub> = 1</code>, <code>F<sub>10</sub> = 55</code> before you trust a huge <code>n</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Reduce every cell product</span>
+    <p>Leaving the reduce until the end of <code>mul</code> lets intermediate cells grow past <code>M</code> and then past a <code>long</code>. Reduce leftover the prime on every <code>a[i][k] * b[k][j]</code>.</p>
   </div>
 </aside>
 
@@ -156,7 +174,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Want F_10. A = [[1,1],[1,0]], start from [F1,F0]=[1,0].",
+          "note": "Want F_10. The companion A is [[1,1],[1,0]] and the start column is (F_1, F_0) = (1, 0).",
           "active": [
             1
           ],
@@ -167,7 +185,7 @@
           }
         },
         {
-          "note": "10 = 1010₂. Square to A², A⁴, A⁸. Multiply A² and A⁸.",
+          "note": "Ten in binary is 1010, so square A to the 2, 4 and 8 powers, then multiply the 2-step and 8-step results.",
           "active": [
             2
           ],
@@ -178,7 +196,7 @@
           }
         },
         {
-          "note": "A² gives F_2,F_1. A⁴ gives F_4,F_3. A⁸ gives F_8,F_7.",
+          "note": "Those powers hold (F_2, F_1), then (F_4, F_3), then (F_8, F_7) in the same cell convention.",
           "active": [
             4
           ],
@@ -189,7 +207,7 @@
           }
         },
         {
-          "note": "A^10 = A^8 A^2 → F_10 = 55.",
+          "note": "Leftover of A^8 times A^2 is A^10, and the answer cell is F_10 = 55.",
           "active": [
             6
           ],
@@ -200,7 +218,7 @@
           }
         },
         {
-          "note": "Same A^n[0][1] or A^n[0][0] depending on the base vector — pick one convention and test F_10.",
+          "note": "Which cell you read depends on the base column. Pick one convention and check it against F_10 = 55.",
           "active": [
             6
           ],
@@ -211,7 +229,7 @@
           }
         },
         {
-          "note": "For walks, A is the adjacency matrix; A^n[u][v] is walks u→v of length n.",
+          "note": "On a graph the same power of the adjacency matrix counts walks: cell (u, v) is walks from u to v of length n.",
           "best": [
             6
           ],
@@ -244,17 +262,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Write the state vector</strong> of size k (last k terms, or |V| nodes).</li>
-  <li><strong>Write A</strong> so that S_{t+1} = A S_t. Check one step by hand.</li>
-  <li><strong>Identity</strong> res = I. Fast-pow A^n with O(k³) multiplies.</li>
-  <li><strong>Reduce mod P</strong> after every cell multiply. Use long.</li>
-  <li><strong>Multiply</strong> A^n by S_0 to read the answer cell.</li>
-  <li><strong>Off-by-one:</strong> Fib A^{n-1} vs A^n — test n=0,1,10.</li>
+  <li><strong>Write the state column.</strong> Size <code>k</code> is the last <code>k</code> terms of the recurrence, or one slot per vertex if you are counting walks. That column is what one matrix multiply will advance.</li>
+  <li><strong>Write the matrix A that takes one step.</strong> Check by hand that leftover of <code>A</code> times the current column is the next column. A wrong first row is the usual silent off-by-one.</li>
+  <li><strong>Fast-pow from the identity.</strong> Start <code>res = I</code> and run the binary loop: square <code>A</code>, multiply into <code>res</code> on a 1-bit. Each multiply is the <code>k<sup>3</sup></code> triple loop.</li>
+  <li><strong>Reduce leftover the prime on every cell.</strong> Use <code>long</code> for the product. Skipping the reduce lets a cell grow past a <code>long</code> and the leftover is garbage.</li>
+  <li><strong>Multiply the power by S_0 and read the answer cell.</strong> That cell is leftover of the term the statement asked for. Do not print a random entry of <code>A<sup>n</sup></code>.</li>
+  <li><strong>Test n = 0, 1, and 10.</strong> Fibonacci powered as <code>A<sup>n-1</sup></code> underflows at zero. Confirm <code>F<sub>0</sub> = 0</code>, <code>F<sub>1</sub> = 1</code>, <code>F<sub>10</sub> = 55</code> before a huge exponent.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Power the Fibonacci companion to reach F_10 by squaring, then read the answer cell and the walk interpretation.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -262,12 +280,12 @@ flowchart TD
       <tr><th>n</th><th>bit</th><th>Fn</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>10</td><td>init</td><td>—</td><td>Want F_10. A = [[1,1],[1,0]], start from [F1,F0]=[1,0].</td></tr>
-      <tr><td>10</td><td>1010</td><td>pow</td><td>10 = 1010₂. Square to A², A⁴, A⁸. Multiply A² and A⁸.</td></tr>
-      <tr><td>8</td><td>A8</td><td>21</td><td>A² gives F_2,F_1. A⁴ gives F_4,F_3. A⁸ gives F_8,F_7.</td></tr>
-      <tr><td>10</td><td>done</td><td>55</td><td>A^10 = A^8 A^2 → F_10 = 55.</td></tr>
-      <tr><td>10</td><td>check</td><td>55</td><td>Same A^n[0][1] or A^n[0][0] depending on the base vector — pick one convention and test F_10.</td></tr>
-      <tr class="trace-table__row--change"><td>n</td><td>graph</td><td>A^n</td><td>For walks, A is the adjacency matrix; A^n[u][v] is walks u→v of length n.</td></tr>
+      <tr class="trace-table__row--change"><td>10</td><td>init</td><td>—</td><td>Want F_10. The companion A is [[1,1],[1,0]] and the start column is (F_1, F_0) = (1, 0).</td></tr>
+      <tr><td>10</td><td>1010</td><td>pow</td><td>Ten in binary is 1010, so square A to the 2, 4 and 8 powers, then multiply the 2-step and 8-step results.</td></tr>
+      <tr><td>8</td><td>A8</td><td>21</td><td>Those powers hold (F_2, F_1), then (F_4, F_3), then (F_8, F_7) in the same cell convention.</td></tr>
+      <tr><td>10</td><td>done</td><td>55</td><td>Leftover of A^8 times A^2 is A^10, and the answer cell is F_10 = 55.</td></tr>
+      <tr><td>10</td><td>check</td><td>55</td><td>Which cell you read depends on the base column. Pick one convention and check it against F_10 = 55.</td></tr>
+      <tr class="trace-table__row--change"><td>n</td><td>graph</td><td>A^n</td><td>On a graph the same power of the adjacency matrix counts walks: cell (u, v) is walks from u to v of length n.</td></tr>
     </tbody>
   </table>
 </div>
@@ -383,7 +401,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>log n squarings, each a k×k multiply of k³ cell products. Sparse A (adjacency of a path) can drop a factor.</p>
+    <p>Binary exponentiation does about <code>log<sub>2</sub> n</code> squarings and a handful of extra multiplies on 1-bits. Each multiply of two <code>k &times; k</code> matrices is <code>k<sup>3</sup></code> cell products, so the whole power is about <code>k<sup>3</sup> log n</code> modular multiplies. A sparse adjacency (a path, a cycle) can drop a factor if you skip zero cells, but you should not count on that in the worst case.</p>
+    <p>Putting real numbers in: Fibonacci is <code>k = 2</code>, so about <code>8 &times; 60 = 480</code> cell products at <code>n = 10<sup>18</sup></code>, a few microseconds. A tiling profile with <code>k = 20</code> is <code>8000 &times; 60 = 4.8 &times; 10<sup>5</sup></code> multiplies, comfortable. At <code>k = 100</code> you are near <code>6 &times; 10<sup>7</sup></code> multiplies, tight in Java. Looping the recurrence at <code>n = 10<sup>18</sup></code> is impossible; looping it at <code>n = 10<sup>6</sup></code> is faster than building matrices.</p>
   </div>
 
   <table class="complexity__compare">
@@ -405,28 +424,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">n = 0 or n = 1</span>
-    <div class="pitfalls__bug">You pow(A, n-1) and n-1 underflows, or you return A[0][0] for F_0.</div>
-    <div class="pitfalls__fix">Special-case 0. Test F_0=0, F_1=1, F_10=55.</div>
+    <div class="pitfalls__bug">Powering <code>A<sup>n-1</sup></code> with <code>n = 0</code> underflows a <code>long</code>, or you return leftover of <code>A[0][0]</code> as <code>F<sub>0</sub></code>, which is 1 rather than 0. Small samples that start at <code>n = 10</code> hide it.</div>
+    <div class="pitfalls__fix">Special-case zero. Test leftover of <code>F<sub>0</sub> = 0</code>, <code>F<sub>1</sub> = 1</code>, and <code>F<sub>10</sub> = 55</code> before a huge exponent.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow before mod</span>
-    <div class="pitfalls__bug">a[i][k]*b[k][j] exceeds 2^63 if MOD ~ 1e9 and you accumulated wrong.</div>
-    <div class="pitfalls__fix">Both factors already % MOD; 1e9*1e9 fits in long. Bigger MOD needs care.</div>
+    <div class="pitfalls__bug">A cell product of two residues near <code>10<sup>9</sup></code>, accumulated <code>k</code> times without a reduce, can exceed <code>2<sup>63</sup></code> and wrap a <code>long</code>. The leftover then looks like a plausible Fibonacci number.</div>
+    <div class="pitfalls__fix">Reduce both factors leftover the prime first; then one product fits in a <code>long</code>. Reduce again after adding into the cell.</div>
   </li>
   <li>
     <span class="pitfalls__title">Result matrix vs base vector</span>
-    <div class="pitfalls__bug">You print A^n[0][0] but the identity you proved was A^{n-1} v.</div>
-    <div class="pitfalls__fix">Write one step on paper; match the textbook pair (F_n, F_{n-1}).</div>
+    <div class="pitfalls__bug">You print leftover of <code>A<sup>n</sup>[0][0]</code> but the identity you proved was leftover of <code>A<sup>n-1</sup></code> times the start column, so every answer is the wrong Fibonacci.</div>
+    <div class="pitfalls__fix">Write one step on paper and match the pair <code>(F<sub>n</sub>, F<sub>n-1</sub>)</code>. The three-value test above catches the shift.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting the modulus on the identity</span>
-    <div class="pitfalls__bug">I is fine; intermediate cells exceed MOD and you only reduce at the end.</div>
-    <div class="pitfalls__fix">Reduce in mul, every cell.</div>
+    <div class="pitfalls__bug">The identity is already reduced, so it looks safe, but intermediate cells of later multiplies grow past the prime and then past a <code>long</code> if you only reduce at the end of <code>mul</code>.</div>
+    <div class="pitfalls__fix">Reduce leftover the prime on every cell product inside <code>mul</code>, not once after the triple loop.</div>
   </li>
   <li>
     <span class="pitfalls__title">Min-plus for shortest paths of length n</span>
-    <div class="pitfalls__bug">You +/* instead of min/+. That counts walks, not shortest paths.</div>
-    <div class="pitfalls__fix">Walks = ordinary (+, *). Shortest k-edge path = (min, +) semiring — different code, rarely needed.</div>
+    <div class="pitfalls__bug">Ordinary plus-and-times counts walks and produces a large number that looks like a distance on tiny graphs. The statement asked for a shortest path of length <code>n</code>.</div>
+    <div class="pitfalls__fix">Walks use leftover of plus and times. A shortest <code>k</code>-edge path uses min and plus, a different semiring, and is rarely what a matrix-expo problem wants.</div>
   </li>
 </ul>
 
@@ -468,28 +487,28 @@ flowchart TD
   <details class="followup">
     <summary>Why companion matrix looks like that?</summary>
     <div class="followup__body">
-      <p>The first row is the coefficients. The remaining rows are shifts: they copy F_{n-1} down to F_{n-2}, and so on. That is what "remember the last k-1 terms" means in linear algebra.</p>
+      <p>The first row is the linear combination that computes the newest term from the previous <code>k</code> terms &mdash; those are the recurrence coefficients. Every later row is a shift: it copies one old term one slot down so the next column still holds a window of the last <code>k</code> values. That is what &ldquo;remember the last <code>k-1</code> terms&rdquo; means, written as a matrix so you can raise it to a power.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can you do better than k³?</summary>
     <div class="followup__body">
-      <p>Strassen helps only for huge k. For a linear recurrence, Berlekamp-Massey + Kitamasa is O(k² log n) or better — overkill unless k ~ 1000.</p>
+      <p>Strassen's multiply helps only for huge <code>k</code> that contests do not use. For a single linear recurrence, Berlekamp&ndash;Massey plus Kitamasa computes the <code>n</code>-th term in about <code>k<sup>2</sup> log n</code>, which is worth it around <code>k ~ 1000</code> and overkill at <code>k = 20</code>. Quote <code>k<sup>3</sup> log n</code> unless someone asks.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you get the sum of a geometric of matrices?</summary>
     <div class="followup__body">
-      <p>I + A + … + A^{n-1} has a closed doubling: if n even, (I+A^{n/2})(I+…+A^{n/2-1}). Or augment the matrix.</p>
+      <p>The sum leftover of <code>I + A + ... + A<sup>n-1</sup></code> is the total of the first <code>n</code> states if each state is a matrix power. If <code>n</code> is even it factors as leftover of <code>(I + A^{n/2})</code> times the half-sum, which is a doubling just like the power. The other route is to augment the state with a running total so one extra row accumulates the newest term.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Interview: Fib O(log n) without matrices?</summary>
     <div class="followup__body">
-      <p>F(2n)=F(n)(F(n+1)+F(n-1)), F(2n+1)=F(n)²+F(n+1)². Same log n, no arrays. Matrices generalise; identities are Fib-only.</p>
+      <p>The doubling identities leftover of <code>F(2n) = F(n)(F(n+1)+F(n-1))</code> and leftover of <code>F(2n+1) = F(n)<sup>2</sup> + F(n+1)<sup>2</sup></code> give the same <code>log n</code> without storing arrays. They are Fibonacci-only. Matrices are the form that still works for a 5-state tiling or a graph walk, which is why interviews accept either and prefer the matrix once the recurrence is not Fibonacci.</p>
     </div>
   </details>
 </div>

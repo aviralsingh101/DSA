@@ -22,7 +22,7 @@
   <p class="hero__tagline">Euclid's algorithm is O(log min(a,b)). Extended Euclid also returns x,y with ax+by=gcd, which is the inverse of a mod m when gcd=1.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="modular-arithmetic.html">Modular Arithmetic</a>,
       <a href="../04-recursion-and-dnc/recursion-fundamentals.html">Recursion Fundamentals</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>gcd appears in fractions, lattice points, frog jumps (chicken nugget / Frobenius), and modular inverses when M is not prime. lcm(a,b)=a/gcd*b, carefully in long.</p>
-<p>Bézout: there exist x,y with ax+by=gcd(a,b). Extended Euclid finds them. a has an inverse mod m iff gcd(a,m)=1, and that inverse is x normalised.</p>
-<p>The subtractive version is slow (Fibonacci worst case is already logarithmic for modulo Euclid). Always %.</p>
+<p>You are given two jug sizes, 30 and 18, and you must decide whether you can measure exactly 6 litres by filling, emptying, and pouring. The amounts you can actually measure are exactly the multiples of the <em>greatest common divisor</em> of 30 and 18, written <code>gcd(30, 18)</code> &mdash; the largest positive integer that divides both. Here that gcd is 6, so 6 is possible and 5 is not. The same number appears when you reduce a fraction, count lattice points on a segment, or jump by two step sizes on a circle.</p>
+<p>B&eacute;zout's identity says there exist integers <code>x</code> and <code>y</code> such that <code>a*x + b*y</code> equals <code>gcd(a, b)</code> &mdash; that linear combination is the smallest positive amount those two step sizes can build. <em>Extended Euclid</em> is Euclid's remainder loop plus a back-substitution that finds those <code>x</code> and <code>y</code>. When <code>gcd(a, m) = 1</code>, the coefficient <code>x</code> is the modular inverse of <code>a</code> modulo <code>m</code>: the number that acts like division even when <code>m</code> is not prime and Fermat does not apply.</p>
+<p>A subtractive loop that replaces the larger number by the difference of the two can take a linear number of steps on a Fibonacci pair. Replacing the larger by the leftover after division &mdash; <code>gcd(a, b) = gcd(b, a % b)</code> &mdash; is already logarithmic even in that worst case, under 100 remainders for 64-bit inputs. Always use <code>%</code>, never a subtract-in-a-loop.</p>
+<p>In a real statement the signal is &ldquo;can you make amount <code>z</code> with steps <code>a</code> and <code>b</code>&rdquo;, or &ldquo;inverse of <code>a</code> modulo <code>m</code>&rdquo; when <code>m</code> is not promised prime, or <code>a, b &le; 10<sup>18</sup></code> next to a gcd or lcm query. That combination rules out trial-dividing down from <code>min(a, b)</code>, and it is exactly what this page is for.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>gcd(a,b)=gcd(b, a%b). Unrolling the remainders gives the inverse as a back-substitution — that is extended Euclid.</p>
+    <p>The leftover of <code>a</code> after dividing by <code>b</code> is built from <code>a</code> and <code>b</code>, so they share the same gcd: <code>gcd(a, b) = gcd(b, a % b)</code>. Unrolling those remainders and substituting backwards produces the pair <code>x, y</code> with <code>a*x + b*y = gcd</code> &mdash; that back-substitution is extended Euclid, and it is the inverse when the gcd is 1.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> a,b up to 1e18: use long, and % is O(1). Fibonacci pairs are the worst case, still &lt; 100 steps.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Inputs <code>a</code> and <code>b</code> go up to <code>10<sup>18</sup></code>, so store them in <code>long</code>; a 64-bit remainder is one hardware instruction. Fibonacci pairs are the worst case for Euclid and still finish in under 100 remainders. Trial-dividing down from <code>min(a, b)</code> at that size is about <code>10<sup>18</sup></code> steps and will not return.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>exgcd(a,b): if b==0, return (a,1,0) meaning a*1+b*0=a. Else (g,x1,y1)=exgcd(b,a%b); then x=y1, y=x1-(a/b)*y1.</p>
-<p>Solve ax+by=c: if c%g !=0, no solution. Else multiply x,y by c/g. General solution x+=b/g*t, y-=a/g*t.</p>
+<p>Plain Euclid is a leftover loop. While <code>b</code> is not 0, replace the pair <code>(a, b)</code> by <code>(b, a % b)</code> &mdash; that leftover is what remains after dividing <code>a</code> by <code>b</code>, and any common divisor of <code>a</code> and <code>b</code> also divides it. When <code>b</code> hits 0 the current <code>a</code> is the gcd; take the absolute value so a negative input cannot poison later arithmetic. The least common multiple is then <code>a / gcd * b</code>, computed in <code>long</code> with the divide first so the product does not overflow.</p>
+<p>Extended Euclid also returns the B&eacute;zout pair. If <code>b</code> is 0, the combination is <code>a*1 + b*0 = a</code>, so you return <code>(a, 1, 0)</code>. Otherwise recurse on <code>(b, a % b)</code> and get <code>(g, x1, y1)</code> meaning <code>b*x1 + (a % b)*y1 = g</code>. Substitute <code>a % b = a - (a/b)*b</code> and rearrange: <code>a*y1 + b*(x1 - (a/b)*y1) = g</code>. That is why the update is <code>x = y1</code> and <code>y = x1 - (a/b)*y1</code> &mdash; those two numbers compute a combination that still equals the gcd. The inverse of <code>a</code> modulo <code>m</code> is that <code>x</code>, normalised into <code>0..m-1</code>, but only when the gcd is 1.</p>
+<p>Walk 30 and 18. Remainders: <code>30 = 1*18 + 12</code>, then <code>18 = 1*12 + 6</code>, then <code>12 = 2*6 + 0</code>, so the gcd is 6. Substituting backwards: 6 equals <code>18 - 1*12</code>, and 12 equals <code>30 - 1*18</code>, so 6 equals <code>2*18 - 1*30</code>. The inverse of 18 modulo 30 does not exist because that gcd is 6, not 1. The inverse of 7 modulo 30 does: extended Euclid finds <code>7*(-17) + 30*4 = 1</code>, and leftover of <code>-17</code> after adding 30 is 13, the number that acts like one-over-7 in that ring.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>At every recursive call, the current pair still generates the same gcd. The returned (x,y) satisfy ax+by=g for the current (a,b).</p>
+    <p>At every remainder step the current pair still has the same gcd as the original pair, and the coefficients the algorithm returns satisfy <code>a*x + b*y = g</code> for that current pair.</p><p>In plain words, you never invent new common divisors: each leftover is built from the previous two numbers, so the largest shared divisor cannot change, and the back-substitution only rewrites that same gcd as a combination of the original <code>a</code> and <code>b</code>.</p><p>Interview sentence: <em>&ldquo;Remainders preserve the gcd; unrolling them gives the inverse when that gcd is 1.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">No inverse when gcd is not 1</span>
+    <p>Returning <code>x</code> without checking <code>g == 1</code> looks like the same helper you used on a prime modulus. Multiply back: <code>a*x</code> will not have leftover 1, and later modular division is silently wrong. Fail (or report no solution) when the gcd does not divide the target.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Divide before you multiply for lcm</span>
+    <p><code>a * b / gcd</code> overflows a <code>long</code> when <code>a</code> and <code>b</code> are both near <code>10<sup>18</sup></code>. Write <code>a / gcd * b</code> after you know <code>gcd</code> divides <code>a</code> exactly.</p>
   </div>
 </aside>
 
@@ -155,7 +173,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "gcd(30,18). 30=1*18+12.",
+          "note": "Start Euclid on 30 and 18. Dividing 30 by 18 leaves leftover 12, so the next pair is 18 and 12.",
           "active": [
             0,
             1
@@ -167,7 +185,7 @@
           }
         },
         {
-          "note": "gcd(18,12). 18=1*12+6.",
+          "note": "Now 18 and 12. Dividing 18 by 12 leaves leftover 6, and the shared divisor has not changed.",
           "active": [
             1,
             2
@@ -179,7 +197,7 @@
           }
         },
         {
-          "note": "gcd(12,6). 12=2*6+0. gcd=6.",
+          "note": "Now 12 and 6. Dividing 12 by 6 leaves leftover 0, so the gcd is the current 6.",
           "active": [
             2,
             3
@@ -191,7 +209,7 @@
           }
         },
         {
-          "note": "Back: 6=18-1*12. 12=30-1*18. So 6=18-1*(30-18)=2*18-1*30. x=-1, y=2.",
+          "note": "Substitute backwards: 6 is 18 minus 12, and 12 is 30 minus 18, so 6 equals 2 times 18 minus 1 times 30.",
           "active": [
             0
           ],
@@ -202,7 +220,7 @@
           }
         },
         {
-          "note": "inv of 18 mod 30 does not exist (gcd=6≠1).",
+          "note": "Eighteen has no inverse modulo 30 because that gcd is 6, not 1; no leftover multiplies 18 to leftover 1.",
           "active": [
             4
           ],
@@ -213,7 +231,7 @@
           }
         },
         {
-          "note": "inv of 7 mod 30: gcd=1. exgcd gives 7*(-17)+30*4=1, inv ≡ 13.",
+          "note": "Seven and 30 are coprime. Extended Euclid finds 7 times -17 plus 30 times 4 equals 1, so the inverse leftover is 13.",
           "active": [
             3
           ],
@@ -246,17 +264,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>gcd:</strong> while b!=0, (a,b)=(b,a%b). Return |a|.</li>
-  <li><strong>exgcd recursive</strong> as above, or iterative with x=1,y=0,x1=0,y1=1.</li>
-  <li><strong>Inverse:</strong> (g,x,y)=exgcd(a,m); if g!=1 fail; return (x%m+m)%m.</li>
-  <li><strong>ax+by=c:</strong> scale by c/g; parametrise by t.</li>
-  <li><strong>lcm:</strong> a/g*b with g=gcd, after confirming no overflow.</li>
-  <li><strong>n variables:</strong> iterate gcd, or lattice reduction — rare.</li>
+  <li><strong>Compute the gcd by remainders.</strong> While <code>b</code> is not 0, replace <code>(a, b)</code> by <code>(b, a % b)</code> and finally return the absolute value of <code>a</code>. The leftover loop is what keeps the worst case logarithmic.</li>
+  <li><strong>Track coefficients for extended Euclid.</strong> Recurse as above, or iterate with <code>x, y = 1, 0</code> and <code>x1, y1 = 0, 1</code>, updating them the same way the remainders update, so you finish with <code>a*x + b*y = g</code>.</li>
+  <li><strong>Read the inverse from x when gcd is 1.</strong> Call <code>(g, x, y) = exgcd(a, m)</code>; if <code>g != 1</code> there is no inverse. Otherwise return leftover of <code>x</code> in <code>0..m-1</code>, the number that acts like one-over-<code>a</code>.</li>
+  <li><strong>Solve ax + by = c by scaling.</strong> If <code>c</code> is not a multiple of <code>g</code> there is no integer solution. Otherwise multiply <code>x</code> and <code>y</code> by <code>c/g</code>, then step <code>x</code> by <code>b/g</code> and <code>y</code> by <code>-a/g</code> to list every solution.</li>
+  <li><strong>Form the lcm without overflowing.</strong> Write <code>a / g * b</code> in <code>long</code> after confirming <code>g</code> divides <code>a</code>. Multiplying first can wrap even when the true lcm fits.</li>
+  <li><strong>More than two integers.</strong> Fold <code>gcd(gcd(a, b), c)</code> and so on. A full lattice basis for many variables is rare in contests and is a different tool.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Run Euclid on 30 and 18 to get gcd 6, then back-substitute the B&eacute;zout pair and contrast a missing inverse with the inverse of 7 modulo 30.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -264,12 +282,12 @@ flowchart TD
       <tr><th>a,b</th><th>q</th><th>g</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>30,18</td><td>1</td><td>—</td><td>gcd(30,18). 30=1*18+12.</td></tr>
-      <tr><td>18,12</td><td>1</td><td>—</td><td>gcd(18,12). 18=1*12+6.</td></tr>
-      <tr><td>12,6</td><td>2</td><td>6</td><td>gcd(12,6). 12=2*6+0. gcd=6.</td></tr>
-      <tr><td>Bézout</td><td>—</td><td>30(-1)+18(2)</td><td>Back: 6=18-1*12. 12=30-1*18. So 6=18-1*(30-18)=2*18-1*30. x=-1, y=2.</td></tr>
-      <tr><td>18 vs 30</td><td>—</td><td>no inv</td><td>inv of 18 mod 30 does not exist (gcd=6≠1).</td></tr>
-      <tr><td>7,30</td><td>—</td><td>1</td><td>inv of 7 mod 30: gcd=1. exgcd gives 7*(-17)+30*4=1, inv ≡ 13.</td></tr>
+      <tr class="trace-table__row--change"><td>30,18</td><td>1</td><td>—</td><td>Start Euclid on 30 and 18. Dividing 30 by 18 leaves leftover 12, so the next pair is 18 and 12.</td></tr>
+      <tr><td>18,12</td><td>1</td><td>—</td><td>Now 18 and 12. Dividing 18 by 12 leaves leftover 6, and the shared divisor has not changed.</td></tr>
+      <tr><td>12,6</td><td>2</td><td>6</td><td>Now 12 and 6. Dividing 12 by 6 leaves leftover 0, so the gcd is the current 6.</td></tr>
+      <tr><td>Bézout</td><td>—</td><td>30(-1)+18(2)</td><td>Substitute backwards: 6 is 18 minus 12, and 12 is 30 minus 18, so 6 equals 2 times 18 minus 1 times 30.</td></tr>
+      <tr><td>18 vs 30</td><td>—</td><td>no inv</td><td>Eighteen has no inverse modulo 30 because that gcd is 6, not 1; no leftover multiplies 18 to leftover 1.</td></tr>
+      <tr><td>7,30</td><td>—</td><td>1</td><td>Seven and 30 are coprime. Extended Euclid finds 7 times -17 plus 30 times 4 equals 1, so the inverse leftover is 13.</td></tr>
     </tbody>
   </table>
 </div>
@@ -372,7 +390,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each remainder is at most 2/3 of the previous (Lamé). Worst case consecutive Fibonacci numbers, O(log_phi a) steps.</p>
+    <p>Lam&eacute;'s theorem says each leftover is at most two-thirds of the previous pair's larger number, so the number of remainders is <code>O(log min(a, b))</code>. The worst inputs are consecutive Fibonacci numbers, where each leftover is the previous Fibonacci, and even then a 64-bit pair finishes in under 100 steps. A subtractive loop on the same pair is linear in the values and dies at <code>10<sup>18</sup></code>.</p>
+    <p>Putting real numbers in: <code>gcd(F<sub>90</sub>, F<sub>89</sub>)</code> for 64-bit Fibonacci numbers is about ninety remainders, a few hundred nanoseconds. Extended Euclid does the same number of updates plus a handful of multiplies for the coefficients. Fermat's inverse on a prime <code>M &approx; 10<sup>9</sup></code> is about sixty modular multiplies; extended Euclid is comparable and also works when <code>M</code> is composite.</p>
   </div>
 
   <table class="complexity__compare">
@@ -394,28 +413,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">lcm overflow</span>
-    <div class="pitfalls__bug"><code>a*b/gcd</code> overflows before divide.</div>
-    <div class="pitfalls__fix"><code>a / gcd * b</code> in long, gcd first.</div>
+    <div class="pitfalls__bug"><code>a * b / gcd</code> looks like the textbook formula and compiles, but the product wraps a <code>long</code> before the divide when both inputs are near <code>10<sup>18</sup></code>.</div>
+    <div class="pitfalls__fix">Write <code>a / gcd * b</code> in <code>long</code> after computing the gcd first. Test <code>lcm(10<sup>18</sup>/2, 10<sup>18</sup>/4)</code> if you want a loud failure.</div>
   </li>
   <li>
     <span class="pitfalls__title">Negative a,b</span>
-    <div class="pitfalls__bug">Java % sign follows dividend; gcd may be negative.</div>
-    <div class="pitfalls__fix">Work with abs, or normalise at the end.</div>
+    <div class="pitfalls__bug">Java <code>%</code> follows the sign of the left operand, so a negative input can make the returned gcd negative and later comparisons or inverses look randomly wrong.</div>
+    <div class="pitfalls__fix">Take absolute values on the way in, or normalise the sign of the gcd at the end. Unit-test <code>gcd(-30, 18)</code> and expect 6.</div>
   </li>
   <li>
     <span class="pitfalls__title">Ignoring g!=1 for inverse</span>
-    <div class="pitfalls__bug">You still return x, and a*x ≡ 0 or other junk.</div>
-    <div class="pitfalls__fix">If g!=1, no inverse. For ax≡b, need g|b.</div>
+    <div class="pitfalls__bug">You still return <code>x</code>, and leftover of <code>a*x</code> is 0 or some other junk, which looks like a legal inverse until a later multiply fails a self-check.</div>
+    <div class="pitfalls__fix">If <code>g != 1</code> there is no inverse. For <code>a*x &equiv; b (mod m)</code> you also need <code>g</code> to divide <code>b</code>. Always test <code>mul(a, inv(a))</code> is leftover 1.</div>
   </li>
   <li>
     <span class="pitfalls__title">Recursive exgcd on Fibonacci 1e18</span>
-    <div class="pitfalls__bug">Depth ~ 90, fine actually. Still prefer iterative.</div>
-    <div class="pitfalls__fix">Iterative is clearer for the x,y updates.</div>
+    <div class="pitfalls__bug">Depth is about 90 on a 64-bit Fibonacci pair, which happens to fit the Java stack, so the recursive version looks fine until someone ports it to a tighter limit.</div>
+    <div class="pitfalls__fix">Prefer the iterative update of <code>x, y</code>. It is stack-safe and the coefficient writes are easier to read on a whiteboard.</div>
   </li>
   <li>
     <span class="pitfalls__title">General solution forgetting t step b/g</span>
-    <div class="pitfalls__bug">You add b instead of b/g and skip solutions.</div>
-    <div class="pitfalls__fix">x += (b/g)*t; y -= (a/g)*t.</div>
+    <div class="pitfalls__bug">Stepping <code>x</code> by <code>b</code> instead of <code>b/g</code> skips legal solutions and the first few you print look plausible, so the off-by-factor hides.</div>
+    <div class="pitfalls__fix">Write <code>x += (b/g)*t</code> and <code>y -= (a/g)*t</code>. Check that two consecutive solutions differ by that reduced step.</div>
   </li>
 </ul>
 
@@ -457,28 +476,28 @@ flowchart TD
   <details class="followup">
     <summary>Why does Euclid terminate?</summary>
     <div class="followup__body">
-      <p>Remainders are non-negative and strictly decrease. gcd is preserved because a divisor of a,b divides a%b and conversely.</p>
+      <p>Each leftover is a non-negative integer strictly smaller than the previous <code>b</code>, so the pair cannot descend forever. The gcd is preserved because any common divisor of <code>a</code> and <code>b</code> also divides <code>a % b</code>, and conversely any common divisor of <code>b</code> and that leftover divides <code>a</code>. When the leftover hits 0 you are done, and the current <code>a</code> is the shared divisor.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Binary GCD?</summary>
     <div class="followup__body">
-      <p>Stein: divide out 2, then subtract odds. Good on huge bit-integers. For 64-bit, % is faster in Java.</p>
+      <p>Stein's algorithm divides out factors of 2 with shifts, then subtracts odd numbers. It is a win on huge bit-integers where a remainder is expensive. For ordinary 64-bit <code>long</code> values in Java, hardware <code>%</code> is faster and the code is shorter, so stick to Euclid unless the inputs are big-integers.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Frobenius coin problem?</summary>
     <div class="followup__body">
-      <p>For coprime a,b the largest impossible amount is ab-a-b. If gcd&gt;1, all large enough multiples of the gcd are possible, but not all integers.</p>
+      <p>If <code>a</code> and <code>b</code> are coprime, the largest amount you cannot make with non-negative combinations is <code>a*b - a - b</code>. If the gcd is greater than 1 you can only ever make multiples of that gcd, so &ldquo;every large enough integer&rdquo; is false &mdash; only every large enough multiple of the gcd is reachable. Water-jug problems are this lemma plus the capacity cap <code>a+b</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>n-dimensional ax=c?</summary>
     <div class="followup__body">
-      <p>Gcd of all coefficients must divide c. Finding one solution uses iterative exgcd. The kernel is a lattice of rank n-1.</p>
+      <p>The gcd of all the coefficients must divide <code>c</code>, or there is no integer solution. One particular solution is built by folding extended Euclid across the coefficients; the remaining freedom is a lattice of rank <code>n-1</code>. Contests almost always stay at two variables, where that lattice is the single parameter <code>t</code> on this page.</p>
     </div>
   </details>
 </div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Max flow equals min cut. Edmonds-Karp BFS-augments in <code>O(V E&sup2;)</code>; Dinic layers + blocking flow is the contest default.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">26 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/bfs.html">BFS</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A flow is an assignment of values to directed edges that respects capacity and conservation. The maximum amount you can push from s to t equals the capacity of the cheapest s-t cut — the max-flow min-cut theorem. That one sentence turns "separate these vertices" and "assign jobs under capacities" into a flow network.</p>
-<p>Ford-Fulkerson finds an s-t path in the residual graph and pushes the bottleneck. Edmonds-Karp always takes a shortest residual path (BFS) and is polynomial. Dinic builds a level graph and then a blocking flow; on unit networks it is extremely fast and is what you write in a contest.</p>
-<p>Modelling is the skill: bipartite matching is unit-capacity flow; project selection is a min-cut; circulation with demands is a max-flow with a super-source. The algorithm is twenty lines; the reduction is the interview.</p>
+<p>You run a network of pipes from a source tank <code>s</code> to a sink tank <code>t</code>. Each pipe has a capacity, the most it can carry, and junctions other than <code>s</code> and <code>t</code> cannot store water: whatever flows in must flow out. A <em>flow</em> is an assignment of numbers to pipes that respects those two rules. The obvious greedy &mdash; pick a path, fill it, forget it &mdash; gets stuck. Push 2 along <code>s &rarr; a &rarr; t</code> on a network that also has a direct <code>s &rarr; t</code> of capacity 1 and you may block a combination that could have carried 3. Trying every subset of paths is exponential; you need a way to undo a greedy push when a better combination appears.</p>
+<p>The undo is built into the <em>residual graph</em>. When you push <code>f</code> units along <code>u &rarr; v</code>, you reduce the leftover forward capacity by <code>f</code> and create (or increase) a backward residual edge <code>v &rarr; u</code> of capacity <code>f</code>. That backward edge is not a physical pipe; it is a permission slip that says "you may send flow backward, which is the same as cancelling previously forwarded flow". A later path that uses <code>v &rarr; u</code> is undoing the earlier decision so those units can be rerouted. Ford-Fulkerson finds any <code>s</code>-<code>t</code> residual path and pushes the bottleneck. Edmonds-Karp always takes a shortest residual path (a BFS) and is polynomial. Dinic builds a level graph and a blocking flow; on unit-capacity networks it is the contest default.</p>
+<p>The same run answers a second question that looks physical. An <em>s-t cut</em> is a partition of the junctions into <code>S</code> containing the source and <code>T</code> containing the sink; its capacity is the total capacity of pipes that leave <code>S</code> for <code>T</code> &mdash; the pipes you would have to shut off to stop every drop. The max-flow min-cut theorem says the most you can push equals the cheapest such shutdown. In a problem statement the tell is "maximum throughput", "minimum capacity to disconnect", or a modelling sentence such as bipartite matching, project selection, or circulation with demands. The algorithm is twenty lines; the reduction is the interview.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>An augmenting path in the residual graph is a place you can still push. When none exists, the set of nodes reachable from s in the residual graph is a min cut: every forward edge leaving it is saturated.</p>
+    <p>A residual backward edge is an undo ticket for flow you already pushed. When no residual s-t path remains, the junctions still reachable from s are one side of a cheapest shutdown: every pipe leaving that set is full.</p>
   </div>
 </aside>
 
@@ -111,18 +111,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 200</code> Edmonds-Karp is safe. <code>n &le; 2000</code>, unit caps → Dinic. Capacities up to 1e9 need <code>long</code>. Always add a reverse edge of capacity 0 for residual undo.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 200</code> is Edmonds-Karp's comfortable window. <code>n &le; 2000</code> with unit capacities wants Dinic (or Hopcroft-Karp on a bipartite graph). Capacities up to <code>10&#8309;</code> need <code>long</code> for both the leftover residual and the answer. Every original pipe must be born with a reverse twin of capacity 0, otherwise a greedy first path cannot be undone and the algorithm stops below the true maximum.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Residual graph: for each original edge u	o v of cap c with flow f, residual c-f forward and f backward. An augmenting path is an s-t path of residual &gt; 0. Push the min residual, increase forward flow, decrease backward (undo).</p>
-<p>Dinic: BFS to assign levels from s in the residual graph. DFS from s that only walks s	o t along edges with level[v]==level[u]+1, using a current-edge pointer, until the level graph is blocked. Repeat.</p>
+<p>Store the network as an edge list. For every original pipe <code>u &rarr; v</code> of capacity <code>c</code>, append a forward edge of residual <code>c</code> and a reverse twin of residual 0, and remember each twin's index so an update can touch both. After some flow <code>f</code> has been pushed on that pipe, the forward residual is <code>c - f</code> (room still left) and the backward residual is <code>f</code> (room to undo). An <em>augmenting path</em> is any <code>s</code>-<code>t</code> walk whose every residual is positive. The amount you push is the bottleneck, the smallest residual on that walk: subtract it along the walk and add it to every reverse twin. Adding to the reverse is the undo: a later walk that takes the twin is cancelling this push.</p>
+<p>Edmonds-Karp finds the augmenting path with a BFS on residual &gt; 0, so each augmentation is a shortest hop-path. Dinic first BFS-labels every junction with its residual distance from <code>s</code>, then DFS-pushes a <em>blocking flow</em>: it only walks edges with <code>level[v] == level[u] + 1</code>, and a current-edge pointer remembers that an exhausted edge will not come back inside this phase. When the DFS can no longer reach <code>t</code>, the level graph is blocked; rebuild levels and repeat until a BFS cannot reach <code>t</code> at all.</p>
+<p>Walk the three-pipe sample in words. Capacities are <code>s &rarr; a</code> 3, <code>a &rarr; t</code> 2, <code>s &rarr; t</code> 1. The first BFS finds the one-hop path <code>s-t</code> and pushes 1; the forward residual <code>s &rarr; t</code> becomes 0 and a reverse <code>t &rarr; s</code> of 1 appears. The second BFS must go <code>s-a-t</code>, bottleneck <code>min(3, 2) = 2</code>, and the total becomes 3. The third BFS still reaches <code>a</code> (residual 1 remains on <code>s &rarr; a</code>) but cannot reach <code>t</code>, so the residual-reachable set is <code>S = {s, a}</code>. The pipes leaving <code>S</code> are <code>a &rarr; t</code> (capacity 2) and <code>s &rarr; t</code> (capacity 1), total 3, which equals the flow: that is the cheapest shutdown, physically the pipes you would have to close to isolate the sink.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Conservation: for every v ≠ s,t, inflow = outflow. Capacity: 0 ≤ f(e) ≤ c(e). When no residual s-t path exists, the reachable-from-s set S is a min cut and v(f) = cap(δ(S)).</p>
+    <p>Conservation: for every junction other than <code>s</code> and <code>t</code>, inflow equals outflow. Capacity: <code>0 &le; f(e) &le; c(e)</code> on every pipe. When no residual <code>s</code>-<code>t</code> path exists, the residual-reachable set <code>S</code> is a min-cut and the flow value equals the total capacity of pipes leaving <code>S</code>.</p><p>In plain words, you keep pushing along leftover room (and along undo tickets) until the source side of the leftover network can no longer see the sink; the pipes that then sit on the boundary are all full, and that full boundary is the cheapest way to shut the network down.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why a residual reverse edge lets flow be undone</span>
+    <p>Pushing <code>f</code> along <code>u &rarr; v</code> is a decision, not a law of physics. The reverse residual of capacity <code>f</code> is the ticket that lets a later path send <code>f</code> units back from <code>v</code> to <code>u</code>, which cancels those units on the original pipe and frees them to travel a different route. Without the twin, the first greedy path that used a scarce pipe would permanently block a better combination, and Ford-Fulkerson would stop below max flow. The reverse edge is not water flowing backward in the town; it is bookkeeping that says "this much of my earlier push may be reassigned".</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">What a min-cut means physically</span>
+    <p>An s-t cut is a fence: junctions on the source side <code>S</code>, junctions on the sink side <code>T</code>. Its capacity is the total size of the pipes that cross the fence from <code>S</code> to <code>T</code> &mdash; the pipes you would have to shut off (or the total capacity you would have to destroy) to stop every drop. The cheapest such fence is the min-cut. When the algorithm stops, residual-reachability from <code>s</code> names one cheapest fence: every pipe leaving that set is saturated, so no extra drop can sneak across, and the theorem says you cannot have been pushing more than that fence's capacity.</p>
   </div>
 </aside>
 
@@ -160,7 +177,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Caps: s→a 3, a→t 2, s→t 1. Residual = caps. dist[s]=0, others ∞.",
+          "note": "Pipes: s&rarr;a capacity 3, a&rarr;t capacity 2, s&rarr;t capacity 1. Residual starts as those capacities; only s has distance 0.",
           "cells": [
             {
               "r": 0,
@@ -186,7 +203,7 @@
           }
         },
         {
-          "note": "BFS 1 (hop-Dijkstra): settle a at 1 via s→a, t at 1 via s→t. Shortest residual path is s-t.",
+          "note": "First BFS settles a at 1 hops via s&rarr;a and t at 1 hop via s&rarr;t, so the shortest residual path is the direct pipe s-t.",
           "cells": [
             {
               "r": 1,
@@ -214,7 +231,7 @@
           }
         },
         {
-          "note": "Augment 1: push 1 on s-t. Residual s-t becomes 0. Reverse t→s appears. Total = 1.",
+          "note": "Push 1 along s-t. Forward residual s&rarr;t becomes 0 and a reverse ticket t&rarr;s of 1 appears, so that push can later be undone.",
           "cells": [
             {
               "r": 2,
@@ -241,7 +258,7 @@
           }
         },
         {
-          "note": "BFS 2: s-t residual is 0. Settle a at 1, then t at 2 via a→t. Path s-a-t.",
+          "note": "Second BFS cannot use s-t. It settles a at 1 hop, then t at 2 hops via a&rarr;t, so the next augmenting path is s-a-t.",
           "cells": [
             {
               "r": 3,
@@ -269,7 +286,7 @@
           }
         },
         {
-          "note": "Augment 2: bottleneck min(3,2)=2. Residual a-t = 0, s-a = 1. Total = 3.",
+          "note": "Push the bottleneck min(3, 2) = 2 along s-a-t. Residual a&rarr;t is now 0, s&rarr;a still has 1 left, and the total flow is 3.",
           "cells": [
             {
               "r": 4,
@@ -297,7 +314,7 @@
           }
         },
         {
-          "note": "BFS 3: a is still at dist 1 (s-a residual 1) but a-t is 0 and s-t is 0. t = ∞. S = {s,a}.",
+          "note": "Third BFS still reaches a (s&rarr;a has residual 1) but t is gone. S = {s, a} is the source side of the min-cut, capacity 3.",
           "cells": [
             {
               "r": 5,
@@ -370,17 +387,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Build residual:</strong> each edge gets a reverse twin of cap 0. Store index of the twin.</li>
-  <li><strong>Edmonds-Karp:</strong> BFS a residual path, push bottleneck, update both directions.</li>
-  <li><strong>Dinic:</strong> BFS levels; DFS blocking flow with a current-edge pointer; repeat while t is reachable.</li>
-  <li><strong>Stop</strong> when BFS cannot reach t. Flow value is the sum leaving s.</li>
-  <li><strong>Min cut:</strong> all vertices reachable from s in the final residual graph; edges S	o V\S with original cap &gt; 0.</li>
-  <li><strong>long</strong> for capacities and the answer.</li>
+  <li><strong>Build the residual with a reverse twin of capacity 0.</strong> Every <code>add(u, v, c)</code> appends a forward edge and a reverse edge, each storing the other's index, because without the twin a greedy first path cannot be undone.</li>
+  <li><strong>Edmonds-Karp: BFS a residual path and push the bottleneck.</strong> Walk only residual &gt; 0, take the shortest hop-path, subtract the bottleneck along it and add the same amount to every reverse twin so the push stays cancellable.</li>
+  <li><strong>Dinic: BFS levels, then DFS a blocking flow.</strong> Only walk edges with <code>level[v] == level[u] + 1</code>, and a current-edge pointer skips an exhausted residual inside the same phase; rebuild levels when the DFS can no longer reach <code>t</code>.</li>
+  <li><strong>Stop when a BFS cannot reach t at all.</strong> The value of the flow is the total leaving <code>s</code> (or entering <code>t</code>); that number will equal the capacity of the cut you read next.</li>
+  <li><strong>Read the min-cut from residual reachability.</strong> <code>S</code> is every junction a leftover-residual BFS from <code>s</code> can still see; the cut pipes are original edges <code>u &rarr; v</code> with <code>u</code> in <code>S</code>, <code>v</code> not in <code>S</code>, and they are all saturated.</li>
+  <li><strong>Store capacities and the answer in long.</strong> A pipe of capacity <code>10&#8309;</code> and a path of a few such pipes overflow an <code>int</code> residual and wrap into a fake leftover that looks like room to push.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Three pipes, source s and sink t. Edmonds-Karp pushes 1 on s-t, then 2 on s-a-t; the leftover residual from s names the min-cut {s, a}.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -388,12 +405,12 @@ graph LR
       <tr><th>path</th><th>bottleneck</th><th>total</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>0</td><td>Caps: s→a 3, a→t 2, s→t 1. Residual = caps. dist[s]=0, others ∞.</td></tr>
-      <tr><td>s-t</td><td>1</td><td>0</td><td>BFS 1 (hop-Dijkstra): settle a at 1 via s→a, t at 1 via s→t. Shortest residual path is s-t.</td></tr>
-      <tr><td>s-t</td><td>1</td><td>1</td><td>Augment 1: push 1 on s-t. Residual s-t becomes 0. Reverse t→s appears. Total = 1.</td></tr>
-      <tr><td>s-a-t</td><td>2</td><td>1</td><td>BFS 2: s-t residual is 0. Settle a at 1, then t at 2 via a→t. Path s-a-t.</td></tr>
-      <tr><td>s-a-t</td><td>2</td><td>3</td><td>Augment 2: bottleneck min(3,2)=2. Residual a-t = 0, s-a = 1. Total = 3.</td></tr>
-      <tr><td>cut S={s,a}</td><td>2+1</td><td>3</td><td>BFS 3: a is still at dist 1 (s-a residual 1) but a-t is 0 and s-t is 0. t = ∞. S = {s,a}.</td></tr>
+      <tr class="trace-table__row--change"><td>init</td><td>—</td><td>0</td><td>Pipes: s&rarr;a capacity 3, a&rarr;t capacity 2, s&rarr;t capacity 1. Residual starts as those capacities; only s has distance 0.</td></tr>
+      <tr><td>s-t</td><td>1</td><td>0</td><td>First BFS settles a at 1 hops via s&rarr;a and t at 1 hop via s&rarr;t, so the shortest residual path is the direct pipe s-t.</td></tr>
+      <tr><td>s-t</td><td>1</td><td>1</td><td>Push 1 along s-t. Forward residual s&rarr;t becomes 0 and a reverse ticket t&rarr;s of 1 appears, so that push can later be undone.</td></tr>
+      <tr><td>s-a-t</td><td>2</td><td>1</td><td>Second BFS cannot use s-t. It settles a at 1 hop, then t at 2 hops via a&rarr;t, so the next augmenting path is s-a-t.</td></tr>
+      <tr><td>s-a-t</td><td>2</td><td>3</td><td>Push the bottleneck min(3, 2) = 2 along s-a-t. Residual a&rarr;t is now 0, s&rarr;a still has 1 left, and the total flow is 3.</td></tr>
+      <tr><td>cut S={s,a}</td><td>2+1</td><td>3</td><td>Third BFS still reaches a (s&rarr;a has residual 1) but t is gone. S = {s, a} is the source side of the min-cut, capacity 3.</td></tr>
     </tbody>
   </table>
 </div>
@@ -548,7 +565,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Edmonds-Karp: each augmentation increases the shortest residual distance of some vertex, bounding the number of phases by VE, each a BFS. Dinic: O(V) phases, each a blocking flow; unit networks are much faster in practice (<code>O(E min(E^{1/2}, V^{2/3}))</code>).</p>
+    <p>Edmonds-Karp: each augmentation strictly increases the shortest residual distance of at least one junction, and that distance is at most <code>V</code>, so there are at most <code>V E</code> augmentations, each a BFS of the residual graph, which is <code>O(V E&sup2;)</code>. At <code>n = 200</code> and a few thousand pipes that is tens of millions of edge scans, comfortable. Ford-Fulkerson without the shortest-path rule can run for a number of augmentations equal to the max flow itself, which is unbounded when capacities are <code>10&#8309;</code>.</p>
+    <p>Dinic rebuilds a level graph at most <code>V</code> times and each blocking-flow phase scans every residual edge a constant number of times thanks to the current-edge pointer, which is <code>O(V&sup2; E)</code> in the worst case. On unit-capacity networks the bound tightens to about <code>O(E min(&radic;E, V<sup>2/3</sup>))</code>, which is why Dinic is the contest default at <code>n = 2000</code> with unit caps. Store residuals in <code>long</code>: a handful of pipes of capacity <code>10&#8309;</code> overflow an <code>int</code>.</p>
   </div>
 
   <table class="complexity__compare">
@@ -570,28 +588,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">No reverse edges</span>
-    <div class="pitfalls__bug">You cannot undo a bad push and the algorithm gets stuck below max flow.</div>
-    <div class="pitfalls__fix">Every add(u,v,c) creates add(v,u,0) and the two store each other's indices.</div>
+    <div class="pitfalls__bug">Without a reverse twin, a greedy first path that used a scarce pipe cannot be cancelled, so a later better combination is invisible and the algorithm stops below the true maximum, which looks correct on a sample with only one path.</div>
+    <div class="pitfalls__fix">Every <code>add(u, v, c)</code> must also append a reverse edge of capacity 0, and the two must store each other's indices so a push updates both leftovers.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow on cap sums</span>
-    <div class="pitfalls__bug">n * 1e9 exceeds int.</div>
-    <div class="pitfalls__fix"><code>long</code> capacities and flow.</div>
+    <div class="pitfalls__bug">A path of a few pipes each of capacity <code>10&#8309;</code> exceeds <code>Integer.MAX_VALUE</code>, so a residual wraps negative and looks like room to push (or like a full pipe), and the printed max flow is junk.</div>
+    <div class="pitfalls__fix">Store capacities, residuals, bottlenecks and the answer as <code>long</code>. Test on two pipes of capacity <code>10&#8309;</code> in series and check the flow is <code>10&#8309;</code>, not a wrapped int.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using original caps to read the min cut</span>
-    <div class="pitfalls__bug">You need residual reachability, not "edges that still have cap".</div>
-    <div class="pitfalls__fix">BFS from s in the residual after the flow run; cut is S 	o V\S.</div>
+    <div class="pitfalls__bug">Listing pipes that still have leftover original capacity includes pipes inside <code>S</code> and misses saturated pipes that actually cross the fence, so the "cut" does not disconnect <code>s</code> from <code>t</code>.</div>
+    <div class="pitfalls__fix">After the flow run, BFS from <code>s</code> on residual &gt; 0. The cut pipes are original edges from that reachable set to its complement; they are saturated and their residual is 0.</div>
   </li>
   <li>
     <span class="pitfalls__title">Multiple edges overwritten in a matrix</span>
-    <div class="pitfalls__bug">An adj-matrix residual silently keeps one cap.</div>
-    <div class="pitfalls__fix">Edge list (Dinic) or add onto the matrix cell.</div>
+    <div class="pitfalls__bug">An adjacency-matrix residual keeps one cell per pair, so a second pipe between the same junctions silently overwrites the first and the max flow drops.</div>
+    <div class="pitfalls__fix">Use an edge list (the Dinic template) where parallel pipes are two pairs of twins, or add onto the matrix cell instead of assigning.</div>
   </li>
   <li>
     <span class="pitfalls__title">Bidirected input as two independent caps</span>
-    <div class="pitfalls__bug">Sometimes the statement is undirected: one capacity shared both ways. Model as two directed edges of that cap, which is correct for undirected flow.</div>
-    <div class="pitfalls__fix">Undirected edge of cap c → add(u,v,c) and add(v,u,c).</div>
+    <div class="pitfalls__bug">An undirected pipe of capacity <code>c</code> is one shared room both ways. Modelling it as a single directed edge lets flow travel only one way; omitting the reverse twin of capacity <code>c</code> is the other half of the same bug.</div>
+    <div class="pitfalls__fix">For an undirected pipe of capacity <code>c</code>, call <code>add(u, v, c)</code> and <code>add(v, u, c)</code>, each of which also creates its residual undo twin of 0.</div>
   </li>
 </ul>
 
@@ -633,28 +651,28 @@ graph LR
   <details class="followup">
     <summary>State the max-flow min-cut theorem.</summary>
     <div class="followup__body">
-      <p>In any flow network the value of a maximum s-t flow equals the capacity of a minimum s-t cut. Proof: weak inequality is easy (any flow is ≤ any cut); when FF stops, residual-unreachable t gives a cut of capacity equal to the flow.</p>
+      <p>In any flow network the value of a maximum s-t flow equals the capacity of a minimum s-t cut. Any flow is at most any cut, because every unit that leaves <code>s</code> and reaches <code>t</code> must cross the fence, and cannot exceed the fence's total pipe size. When the algorithm stops, the residual-reachable set <code>S</code> is a cut whose crossing pipes are all saturated, so its capacity equals the flow already pushed, and the two sides of the inequality meet.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you recover the cut edges?</summary>
     <div class="followup__body">
-      <p>S = residual-reachable from s. Cut edges are original edges u	o v with u in S, v not in S. Their residual is 0 (they are saturated).</p>
+      <p>After the last unsuccessful BFS, let <code>S</code> be every junction still reachable from <code>s</code> on residual &gt; 0. The cut pipes are the original edges <code>u &rarr; v</code> with <code>u</code> in <code>S</code> and <code>v</code> not in <code>S</code>. Each of those has residual 0 &mdash; they are physically full &mdash; and shutting them off is a cheapest way to stop every drop. Do not list leftover-capacity pipes inside <code>S</code>; those never leave the source side.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Why Dinic's current-edge pointer?</summary>
     <div class="followup__body">
-      <p>Once a residual edge is exhausted inside a blocking-flow phase it will not come back in that phase. The pointer makes each phase scan every edge a constant number of times.</p>
+      <p>Inside one blocking-flow phase an exhausted residual edge will not regain capacity, because the only pushes happening are further along the same level graph. The pointer remembers "I have already given up on this outgoing edge" so each phase scans every residual edge a constant number of times instead of restarting from the front of the adjacency list after every dead-end DFS.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Unit-capacity bipartite matching complexity?</summary>
     <div class="followup__body">
-      <p>Dinic on that network is <code>O(E √V)</code> (Hopcroft-Karp is the same bound with different language). Kuhn is <code>O(VE)</code> and often faster to write for n = 500.</p>
+      <p>Build <code>s &rarr; L &rarr; R &rarr; t</code> with every capacity 1 and run Dinic: the unit-network bound is <code>O(E &radic;V)</code>, which is the same bound Hopcroft-Karp quotes in matching language. Kuhn's DFS-augment is <code>O(V E)</code> and is often faster to type when both sides have a few hundred vertices. The next page is that specialised view without building the flow network.</p>
     </div>
   </details>
 </div>

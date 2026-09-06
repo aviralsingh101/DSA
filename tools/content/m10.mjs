@@ -2820,7 +2820,7 @@ pack({
       },
     },
     {
-      note: "s[0]='a' vs t[0]='a': match. diag 0+1 = 1. Target (1,1), from (0,0).",
+      note: "The first characters both equal 'a', so this is a match: take the diagonal 0 and write 1 at cell (1, 1).",
       cells: [
         {
           r: 1,
@@ -2842,7 +2842,7 @@ pack({
       },
     },
     {
-      note: "s[1]='b' vs t[0]='a': mismatch. max(up=1, left=0) = 1.",
+      note: "Comparing s[1] = 'b' with t[0] = 'a' is a mismatch, so we write max(up = 1, left = 0) = 1.",
       cells: [
         {
           r: 2,
@@ -2930,7 +2930,7 @@ pack({
       },
     },
     {
-      note: "Reconstruction walks diag on matches: (5,3)e, (3,2)c, (1,1)a — \"ace\".",
+      note: "Reconstruction walks the diagonal on each match: (5,3) emits e, (3,2) emits c, (1,1) emits a, which reverses to ace.",
       cells: [
         {
           r: 1,
@@ -3102,19 +3102,19 @@ pack({
   followups: [
     [
       "How do I print one LCS?",
-      "<p>From (n,m): if s[i-1]==t[j-1], prepend that char and go diag. Else go to the neighbour that equals dp[i][j] (prefer up or left, your choice). Reverse at the end. Need the full table.</p>",
+      "<p>Start at <code>(n, m)</code>. If the two current characters match, prepend that character and walk the diagonal. If they do not, walk to whichever neighbour still equals <code>dp[i][j]</code> &mdash; up means you dropped a character of <code>s</code>, left means you dropped a character of <code>t</code>. Reverse the built string at the end. This walk needs the full table, so do not roll if the sequence is required.</p>",
     ],
     [
       "Is LCS NP-hard?",
-      "<p>For two strings it is O(nm). For an arbitrary number of strings it is NP-hard. That is why interviews stick to two.</p>",
+      "<p>For two strings it is the <code>O(nm)</code> table on this page and it is not NP-hard. For an arbitrary number of strings the same question is NP-hard, because the natural table would have one axis per string and the product explodes. That is why interviews and contests stick to two strings, or to a small extra dimension on top of two.</p>",
     ],
     [
       "Can I do better than O(nm)?",
-      "<p>Slightly, with Four-Russians or bit-parallel tricks, and Hunt-Szymanski when the LCS is short. In contests, O(nm) at n=5000 with a rolled int[] is the expected work.</p>",
+      "<p>Slightly, with Four-Russians or bit-parallel tricks, and with Hunt-Szymanski when the LCS is known to be short. In a contest the expected work is still <code>O(nm)</code> at <code>n = 5000</code> with a rolled <code>int[]</code>. If the limits are larger than that, the intended algorithm is usually not classical LCS.</p>",
     ],
     [
       "Wildcard vs regex DP?",
-      "<p>'?' and '*' globbing is LC 44. Full regex with '*' meaning \"previous char, 0 or more\" is LC 10 and the star binds to the previous token, so the transition is slightly different. Both are boolean string DP.</p>",
+      "<p>Globbing with <code>'?'</code> and <code>'*'</code> is LeetCode 44: a star may eat the empty string or eat one character of <code>s</code> and stay. Full regular-expression matching (LeetCode 10) lets a star bind to the previous token, so the transition talks about the previous pattern character, not just the star itself. Both are boolean string DP on prefixes; mixing the two star rules is a silent wrong answer.</p>",
     ],
   ],
   problems: [
@@ -3222,18 +3222,18 @@ pack({
 pack({
   id: "interval-dp",
   difficulty: "Medium",
-  readTime: "26 min",
+  readTime: "34 min",
   tagline: "The state is a subarray <code>s[l..r]</code>, and the last cut (or last burst, or last merge) splits it into two smaller intervals.",
   tags: [ "interval DP", "MCM", "burst balloons", "P1" ],
   prereqs: [
     [ "String DP", "string-dp.html" ],
   ],
   why: [
-    "Interval DP is the family where the natural subproblem is a contiguous segment. Matrix-chain multiplication, bursting balloons, palindrome partitioning, merging stones, and \"min cost to cut a stick\" all ask: given [l, r], what is the best cost, and the last operation happens at some k in between.",
-    "The order is by interval length. Length 1 is the base; a length-L interval only reads strictly shorter pieces. That is a DAG on O(n&sup2;) states with an O(n) transition, hence O(n&sup3;) &mdash; the constraint tell n ≤ 400.",
-    "P1 because the modelling (what is the last action?) is the whole trick, and because you must pad sentinels for balloons / cuts. Once the recurrence is written, the loops are mechanical.",
+    "You are given a row of balloons with values, and bursting a balloon scores the product of its value and the values of the two neighbours that are still alive. You must burst every balloon and collect as many coins as possible. On <code>[3, 1, 5]</code> the best order scores 35. Matrix-chain multiplication, merging stones, palindrome cuts and \"min cost to cut a stick\" ask the same shape of question: given a contiguous segment, what is the best cost, and the last operation happens at some index in the middle.",
+    "Trying every burst order is <code>n!</code> sequences. At <code>n = 12</code> that is already half a billion, and at the usual <code>n = 300</code> it is beyond imagining. The DP instead names every contiguous pair of endpoints, which is about <code>n<sup>2</sup> / 2</code> intervals, and tries every cut inside each one. That product is <code>O(n<sup>3</sup>)</code>: at <code>n = 400</code> it is about 64 million combines and finishes; at <code>n = 2000</code> it is eight billion and the judge times out.",
+    "The signal in a real statement is a min or max cost to process a subarray by repeatedly merging, bursting or cutting, sitting next to <code>n &le; 400</code>. That combination is the constraint tell for this family. The modelling work is naming the last action so the two leftover pieces do not interact except through the cut. You almost always pad a sentinel on each end for balloons and stick-cuts. Once those two sentences are written, the triple loop is mechanical.",
   ],
-  insight: "Name the last cut k inside [l, r]. Then dp[l][r] combines dp[l][k] and dp[k][r] with the cost of doing that last operation now.",
+  insight: "Name the last cut <code>k</code> inside the interval. Then <code>dp[l][r]</code> combines the two strictly shorter pieces <code>dp[l][k]</code> and <code>dp[k][r]</code> with the cost of doing that last operation now, after both interiors are already finished.",
   yes: [
     "Min / max cost to process a subarray by repeatedly merging / bursting / cutting",
     "Matrix-chain, burst balloons, min cost to cut a stick, merging stones",
@@ -3260,13 +3260,14 @@ pack({
       "If only a prefix remains, it is 1D",
     ],
   ],
-  constraint: "<code>n &le; 400</code> is O(n&sup3;). <code>n &le; 100</code> is the comfortable balloon range. Cost products need <code>long</code>. Knuth optimisation applies when the argmin is monotone (see DP Optimisations).",
+  constraint: "<code>n &le; 400</code> is the signature that an <code>n<sup>3</sup></code> triple loop will finish, about 64 million combines. <code>n &le; 100</code> is the comfortable balloon range. Cost products need <code>long</code>. If <code>n</code> is a few thousand you need Knuth or divide-and-conquer optimisation, which is a later page, or a different state entirely.",
   coreHeading: "Length, then left, then the cut",
   core: [
-    "Burst balloons as the running example. Pad a with 1s on both ends. dp[l][r] = max coins from bursting everything strictly between l and r, with a[l] and a[r] still alive. The last balloon burst in (l, r) is k, scoring a[l]*a[k]*a[r] plus the two solved interiors.",
-    "Fill by increasing r-l. For length 1 interiors the answer is 0 (nothing to burst). The global answer is dp[0][n+1] after padding. MCM is the same loops: dp[i][j] min cost to multiply matrices i..j, last split k, cost = dp[i][k] + dp[k+1][j] + rows[i]*cols[k]*cols[j].",
+    "Before any formula, say what the cell answers. <code>dp[l][r]</code> is the answer to this smaller question: what is the most coins you can collect by bursting every balloon strictly between the still-alive boundaries <code>l</code> and <code>r</code>? The boundaries themselves are not burst in this subproblem; they stay as the neighbours that the last interior balloon will see. Pad the input with a 1 on each end so every real balloon has two neighbours. Until that open-interval sentence is unambiguous you do not write a <code>k</code>-loop, because a closed interval that also bursts <code>l</code> and <code>r</code> would double-count the sentinels.",
+    "Every way to finish the open interval <code>(l, r)</code> has a last balloon <code>k</code> that is still there when the two interiors have already been cleared. That last burst scores <code>a[l] * a[k] * a[r]</code>, because those three are the only balloons still alive at that moment, plus whatever the two interiors already collected. Trying every <code>k</code> strictly between <code>l</code> and <code>r</code> is exhaustive: every burst order of the interior has exactly one last balloon, and the two interiors never interact except through that <code>k</code>. Filling by increasing gap <code>r - l</code> guarantees those two shorter pieces are already written.",
+    "On the padded row <code>[1, 3, 1, 5, 1]</code> the length-2 interiors score 3, 15 and 5. The full interval <code>(0, 4)</code> then tries last-burst 3, 1 or 5, and the 5 wins at 35. Matrix-chain multiplication is the same triple loop: <code>dp[i][j]</code> is the min cost to multiply matrices <code>i..j</code>, the last multiply is at <code>k</code>, and the extra cost is the product of the three exposed dimensions. Always name the last action; naming the first action leaves two pieces that still share a neighbour and will not split cleanly.",
   ],
-  invariant: "<p><code>dp[l][r]</code> is the best cost (or coins) to finish the open interval <code>(l, r)</code> while the boundaries stay alive.</p><span class=\"eq\">dp[l][r] = max/min over k of dp[l][k] + dp[k][r] + cost(l,k,r)</span>",
+  invariant: "<p><code>dp[l][r]</code> is the best cost (or coins) to finish the open interval <code>(l, r)</code> while the two boundaries stay alive.</p><span class=\"eq\">dp[l][r] = max/min over k of dp[l][k] + dp[k][r] + cost(l,k,r)</span><p>In plain words, once both strictly shorter interiors are known, the only remaining decision is which balloon (or cut, or multiply) happens last, and that last action is the only one that sees the two original boundaries.</p>",
   extra: [
     {
       kind: "warn",
@@ -3317,7 +3318,7 @@ pack({
       },
     },
     {
-      note: "(0,2): only k=1 (val 3). Coins 1*3*1 = 3. From empty interiors.",
+      note: "Interval (0, 2) has only k = 1 (value 3). The coins are 1 * 3 * 1 = 3, and both interiors are empty.",
       cells: [
         {
           r: 0,
@@ -3339,7 +3340,7 @@ pack({
       },
     },
     {
-      note: "(1,3): k=2 (val 1). Coins 3*1*5 = 15.",
+      note: "Interval (1, 3) has only k = 2 (value 1), so the coins are 3 * 1 * 5 = 15 from empty interiors.",
       cells: [
         {
           r: 1,
@@ -3355,7 +3356,7 @@ pack({
       },
     },
     {
-      note: "(2,4): k=3 (val 5). Coins 1*5*1 = 5.",
+      note: "Interval (2, 4) has only k = 3 (value 5), so the coins are 1 * 5 * 1 = 5 from empty interiors.",
       cells: [
         {
           r: 2,
@@ -3450,15 +3451,15 @@ pack({
   merTitle: "Last burst splits the interval",
   merCaption: "k stays until the end, so the two interiors never see each other except through a[k].",
   steps: [
-    "<strong>Pad sentinels</strong> if the cost of an operation uses outside neighbours.",
-    "<strong>State:</strong> dp[l][r] = best on the open interval (l, r).",
-    "<strong>Base:</strong> r = l+1 → 0 (empty interior).",
-    "<strong>For len = 2 .. n+1, for l, r = l+len:</strong> try every k in (l, r).",
-    "<strong>Transition:</strong> combine dp[l][k], dp[k][r], and cost(l,k,r).",
-    "<strong>Take max or min</strong> over k.",
-    "<strong>Answer</strong> is dp[0][padded n+1] (balloons) or dp[0][n-1] (MCM on dimensions).",
+    "<strong>Pad a sentinel on each end if the cost of an operation uses outside neighbours.</strong> Balloons and stick-cuts become uniform only after those fake boundaries exist, and you must never burst a sentinel.",
+    "<strong>Write the state sentence for the open interval.</strong> <code>dp[l][r]</code> is the best cost of finishing everything strictly between <code>l</code> and <code>r</code> while those two boundaries stay alive.",
+    "<strong>Set the empty-interior base.</strong> When <code>r = l+1</code> there is nothing between the boundaries, so the cell is 0, and every later <code>k</code>-loop starts from that fact.",
+    "<strong>Loop by increasing gap, then by left endpoint, then by the cut k.</strong> A length-<code>L</code> interval only reads strictly shorter pieces, which is why the outer loop has to be the gap and not increasing <code>l</code>.",
+    "<strong>Try every k strictly inside (l, r).</strong> Combine <code>dp[l][k]</code>, <code>dp[k][r]</code> and the cost of doing that last operation now, after both interiors are finished.",
+    "<strong>Take the max or the min over those k values.</strong> That is the exhaustive last-action choice; first-action will not split the interval into two independent pieces.",
+    "<strong>Read dp[0][padded n+1] for balloons, or dp[0][n-1] for matrix-chain on the dimension array.</strong> Store the winning <code>k</code> if you need the burst order or the parenthesization.",
   ],
-  dryIntro: "Padded a = [1, 3, 1, 5, 1]. Evaluate (0,4) candidates after smaller intervals exist.",
+  dryIntro: "Padded balloons [1, 3, 1, 5, 1]. Each row solves one open interval after every strictly shorter interior has already been written.",
   dryCols: [ "l,r", "k", "left", "right", "cost l*k*r", "total" ],
   dryRows: [
     {
@@ -3505,8 +3506,9 @@ pack({
     time: "O(n³)",
     space: "O(n²)",
     derivation: [
-      "<p>O(n&sup2;) intervals, O(n) cuts each:</p>",
-      "<span class=\"eq\">T = &Theta;(n&sup3;)</span>",
+      "<p>There are about <code>n<sup>2</sup> / 2</code> open intervals, and each one tries every cut <code>k</code> strictly inside it, which is <code>O(n)</code> candidates. The product is a cubic:</p>",
+      "<span class=\"eq\">T = &Theta;(n<sup>3</sup>)</span>",
+      "<p>At <code>n = 100</code> that is about a million combines and feels instant. At <code>n = 400</code> it is about 64 million, which is the usual time-limit boundary for this family. At <code>n = 2000</code> it is eight billion operations and you must switch to Knuth optimisation, divide-and-conquer optimisation, or a different state. The table itself is <code>O(n<sup>2</sup>)</code> cells, a few hundred kilobytes at <code>n = 400</code>.</p>",
     ],
     compare: [
       [ "Naive interval", "O(n³)", "O(n²)", "n≤400" ],
@@ -3518,33 +3520,33 @@ pack({
   pitfalls: [
     {
       title: "Filling by l, r increasing, not by length",
-      bug: "dp[l][k] is still 0 because that interval is longer in one index and not yet computed.",
-      fix: "Outer loop is gap / length. Then l. Then k.",
+      bug: "Walking <code>l</code> and <code>r</code> upwards looks like every other 2D table, but then <code>dp[l][k]</code> can be a longer interval that is still the default 0, so every later cell is garbage.",
+      fix: "The outer loop is the gap (the length). Then the left endpoint. Then the cut <code>k</code>. Memoized recursion hides this; a tabulated triple loop does not.",
     },
     {
       title: "Forgetting the pad",
-      bug: "Bursting the first balloon uses a missing left neighbour.",
-      fix: "a = [1] + nums + [1]. k runs in (l, r).",
+      bug: "Bursting the first real balloon looks like any other <code>k</code>, but it has no left neighbour in the original array and the product reads off the end or uses a leftover 0.",
+      fix: "Build <code>a = [1] + nums + [1]</code> and let <code>k</code> run strictly inside <code>(l, r)</code>. Never treat a sentinel as a balloon you may burst.",
     },
     {
       title: "Using closed [l,r] including bursting l",
-      bug: "Then the neighbour formula double-counts or uses already-burst values.",
-      fix: "Open interval: l and r stay alive. Last burst is strictly inside.",
+      bug: "Letting the interval also burst its own endpoints looks symmetric, but then the neighbour product uses balloons that this subproblem has already burst, or it scores the sentinels twice.",
+      fix: "Keep the interval open: <code>l</code> and <code>r</code> stay alive, and the last burst is strictly inside. That is what makes the two interiors independent.",
     },
     {
       title: "int overflow on a[l]*a[k]*a[r]",
-      bug: "Values 100, n=300, the product and the sum of products can exceed int.",
-      fix: "long, or the problem's guaranteed bound.",
+      bug: "Leaving the running coins in an <code>int</code> looks fine on the sample, but values of 100 and <code>n = 300</code> make a product-and-sum that wraps to a negative and then every later max is wrong.",
+      fix: "Use <code>long</code>, or trust only a statement that explicitly bounds the answer inside 32 bits. One wrap poisons every interval that reads that cell.",
     },
     {
       title: "Merging stones without the (len-1)%(K-1)==0 check",
-      bug: "You cannot merge an arbitrary pile count into one with K-way merges.",
-      fix: "A pile of p stones is mergeable iff (p-1) % (K-1) == 0.",
+      bug: "Running the same interval DP on every pile count looks uniform, but a K-way merge cannot fold an arbitrary number of piles down to one, so some intervals are simply impossible.",
+      fix: "A pile of <code>p</code> stones is mergeable if and only if <code>(p-1) % (K-1) == 0</code>. Skip the others, or store infinity so they cannot win a min.",
     },
     {
       title: "n³ at n=2000",
-      bug: "8e9 operations.",
-      fix: "Knuth / D&C / a different model. See DP Optimisations.",
+      bug: "Submitting the textbook triple loop at <code>n = 2000</code> looks like the same DP that passed the sample, but it is about eight billion operations and the verdict is TLE.",
+      fix: "Reach for Knuth optimisation, divide-and-conquer optimisation, or a different state. Those live on the DP Optimisations page, not on this one.",
     },
   ],
   variants: [
@@ -3576,19 +3578,19 @@ pack({
   followups: [
     [
       "Why last, not first?",
-      "<p>The first burst of a balloon would leave a new neighbour pair that is hard to name as two independent intervals. The last remaining balloon k splits the original range into two interiors that never interact except through k. Always try \"last action\" when first action fails to decompose.</p>",
+      "<p>The first burst of a balloon would leave a new neighbour pair that is hard to name as two independent intervals, because those two leftover ranges still share the new gap. The last remaining balloon <code>k</code> splits the original range into two interiors that never interact except through <code>k</code>. Always try \"last action\" when \"first action\" fails to decompose. The same last-cut idea is matrix-chain, stick-cutting and optimal BST.</p>",
     ],
     [
       "When is the k-loop droppable?",
-      "<p>When the extra cost does not depend on a free k, or when a boolean (is palindrome) can be precomputed. Knuth drops it down to amortised O(1) per interval when the quadrangle inequality holds.</p>",
+      "<p>When the extra cost does not depend on a free <code>k</code>, or when a boolean such as \"is this substring a palindrome\" can be precomputed in <code>n<sup>2</sup></code>. Knuth optimisation then shrinks the remaining <code>k</code> range to amortised constant time per interval, provided the quadrangle inequality holds. Palindrome min-cuts is the usual example that drops the loop after the precompute.</p>",
     ],
     [
       "How do I reconstruct the burst order?",
-      "<p>Store bestK[l][r]. The last burst is that k; recurse on (l,k) and (k,r). The actual time order is interiors first, k last — reverse of the stored last-k.</p>",
+      "<p>Store <code>bestK[l][r]</code> as the <code>k</code> that won the max (or the min). The last burst of this interval is that <code>k</code>; recurse on <code>(l, k)</code> and <code>(k, r)</code> to recover the two interiors. The actual time order is interiors first and <code>k</code> last, which is the reverse of the stored last-cut, so you emit on the way back out of the recursion.</p>",
     ],
     [
       "Is LPS interval DP or string DP?",
-      "<p>Both. LPS as LCS(s, rev(s)) is two-string DP. LPS as dp[i][j] on one string with a match using i+1,j-1 is interval DP of a simpler transition (no k-loop). Same answer.</p>",
+      "<p>Both, and they give the same length. LPS as <code>LCS(s, reverse(s))</code> is two-string DP on prefixes. LPS as <code>dp[i][j]</code> on one string, where a match uses the strictly smaller interval <code>[i+1, j-1]</code>, is interval DP with a simpler transition that has no <code>k</code>-loop. Use whichever table the rest of the problem already looks like.</p>",
     ],
   ],
   problems: [
@@ -3696,7 +3698,7 @@ pack({
 pack({
   id: "bitmask-dp",
   difficulty: "Hard",
-  readTime: "26 min",
+  readTime: "34 min",
   tagline: "When n ≤ 20 the subset <em>is</em> the state: <code>dp[mask]</code> (and maybe a last vertex) enumerates 2<sup>n</sup> subsets in a DAG of popcounts.",
   tags: [ "bitmask", "TSP", "subset", "P1" ],
   prereqs: [
@@ -3704,11 +3706,11 @@ pack({
     [ "Bit Manipulation", "../02-sorting-hashing-bits/bit-manipulation.html" ],
   ],
   why: [
-    "n ≤ 20 is not a suggestion of brute force permutations. It is a signature for 2<sup>n</sup> n or 2<sup>n</sup> n&sup2; DP over subsets. Held-Karp TSP, assignment, \"smallest team covering all skills\", and \"number of Hamiltonian paths\" all live here.",
-    "The mask is an integer whose bits remember which items / vertices / skills are used. Transitions turn a bit off (or on) and maybe record who was last. Iterating masks in order of popcount (or by the natural 0..2^n-1 increasing order, which adds bits) is the topo order.",
-    "P1 because the bit tricks (iterate submasks, lowest set bit, popcount) are as much the topic as the recurrence, and because a missed bit means a silent wrong count.",
+    "You are given a complete graph on <code>n</code> cities and you must visit each city exactly once and return home, paying the sum of the edge weights. On three cities with edges 5, 1 and 2 the cheapest tour costs 8. The same \"remember exactly which items are used\" picture is the assignment problem, counting Hamiltonian paths, and picking the smallest team that covers every skill.",
+    "Trying every city order is <code>n!</code> tours. At <code>n = 12</code> that is already half a billion, and at <code>n = 20</code> it is about <code>2.4 &times; 10<sup>18</sup></code>. The DP remembers only the set of cities visited so far and the city you currently sit at, which is <code>2<sup>n</sup> n</code> states. Multiplying by <code>n</code> previous cities gives Held-Karp at <code>2<sup>n</sup> n<sup>2</sup></code>: at <code>n = 20</code> that is about 400 million relaxations, tight in Java but the intended bound.",
+    "The signal in a real statement is <code>n &le; 20</code> (sometimes 16 or 18) sitting next to a question whose forgotten information is exactly an arbitrary subset. That combination is not an invitation to permute. The bit tricks &mdash; iterating set bits, turning a bit off, popcount &mdash; are as much the topic as the recurrence, and a missed bit is a silent wrong count rather than a crash.",
   ],
-  insight: "dp[mask] is the answer for exactly the subset whose bits are set. A transition names one element of the subset as \"the one we added last\".",
+  insight: "<code>dp[mask]</code> is the answer for exactly the subset whose bits are set. A transition names one element of that subset as the one you added last, which is enough to know which edge you just paid.",
   yes: [
     "n ≤ 16 .. 22, and the state must remember an arbitrary subset",
     "TSP / shortest Hamiltonian path in a dense small graph",

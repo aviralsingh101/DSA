@@ -22,7 +22,7 @@
   <p class="hero__tagline"><code>nCr = n!/(r!(n-r)!)</code> in a prime field is three factorials. Lucas handles <code>n &ge; p</code>. Stars-and-bars is <code>C(n+k-1, k-1)</code>.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="modular-arithmetic.html">Modular Arithmetic</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Counting problems collapse to choose, distribute, or Catalan. Mod a prime, a fact/invFact table makes every nCr O(1). That table is the primitive the rest of combinatorics sits on.</p>
-<p>When n is huge and r is tiny, multiply the falling factorial. When n ≥ p, n! is 0 and you need Lucas: nCr of the base-p digits.</p>
-<p>Stars-and-bars, "at least one", Catalan, and derangements are the four named shapes. The algebra is short once nCr is cheap.</p>
+<p>You are asked how many ways there are to choose 3 toppings out of 10, or how many ways to walk from the top-left of a grid to the bottom-right using only right and down steps. Both answers are <em>binomial coefficients</em> <code>C(n, r)</code> &mdash; the number of ways to choose <code>r</code> items from <code>n</code> when order does not matter. Computing that by looping over subsets is exponential. When the answer is needed modulo a prime, a table of factorials and their inverses makes every later choose an array lookup.</p>
+<p>The table only works while <code>n</code> is smaller than the prime <code>M</code>. Once <code>n</code> reaches <code>M</code>, leftover of <code>n!</code> is 0 and every choose that uses it looks like 0. Then you either multiply a short <em>falling factorial</em> (when <code>r</code> is tiny) or apply Lucas: write <code>n</code> and <code>r</code> in base <code>p</code> and multiply a choose of each digit pair. The phrase &ldquo;<code>n</code> up to <code>10<sup>18</sup></code>, modulus a prime, many queries&rdquo; is the constraint that picks which of those three tools you reach for.</p>
+<p>Four named shapes sit on top of cheap <code>nCr</code>. Stars-and-bars counts non-negative solutions of <code>x<sub>1</sub>+...+x<sub>k</sub> = n</code>. Giving each bin one item first handles &ldquo;at least one&rdquo;. Catalan numbers count balanced brackets, binary trees, and monotone paths that stay under the diagonal. Derangements count permutations with no fixed point and belong with inclusion-exclusion on the next-but-one page. The algebra is short once choose is cheap.</p>
+<p>In a real statement you will see &ldquo;number of ways modulo <code>10<sup>9</sup>+7</code>&rdquo; next to <code>n &le; 10<sup>6</sup></code> (build the table), or <code>n &le; 10<sup>18</sup></code> with a small <code>r</code> (falling), or a small prime <code>p</code> with a huge <code>n</code> (Lucas). Pascal's triangle by dynamic programming dies at those sizes: <code>n*r</code> at a million is a trillion cells.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>nCr is a field element when M is prime and n < M. Precompute fact and invFact once. Lucas is the same formula on base-p digits when n ≥ M.</p>
+    <p>When <code>M</code> is prime and <code>n &lt; M</code>, leftover of <code>C(n, r)</code> is three table lookups: leftover of <code>n!</code> times the inverse of <code>r!</code> times the inverse of <code>(n-r)!</code>. Precompute those two tables once. Lucas is the same choose, applied to base-<code>p</code> digits, for the case <code>n &ge; M</code>.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> M prime, n ≤ 1e6 for a fact table. Falling for r ≤ 1e6. Lucas when p ≤ 1e6 and n is huge.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> The modulus <code>M</code> is a prime. A factorial table is comfortable at <code>n &le; 10<sup>6</sup></code> (a few milliseconds and a few megabytes). Falling factorial is the tool when <code>r &le; 10<sup>6</sup></code> and <code>n</code> is huge. Lucas needs a small-choose helper for arguments less than <code>p</code>, so <code>p &le; 10<sup>6</sup></code> with a huge <code>n</code> is the usual pairing. You cannot build a table of length <code>10<sup>9</sup>+7</code>.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Build fact[0..n] and invFact (one inverse at n, then walk down). nCr = 0 if r<0 or r>n. Stars-and-bars: non-neg solutions of x_1+...+x_k=n is C(n+k-1, k-1).</p>
-<p>Lucas: while n or r is nonzero, multiply nCr(n%p, r%p) (0 if a digit of r exceeds n), then n/=p, r/=p. Catalan = C(2n,n)*inv(n+1).</p>
+<p>Build <code>fact[0..n]</code> by <code>fact[i] = fact[i-1] * i</code> leftover <code>M</code>, starting at <code>fact[0] = 1</code>. Then invert the top cell once with Fermat, <code>invF[n] = pow(fact[n], M-2)</code>, and walk down: <code>invF[i-1] = invF[i] * i</code>. That walk computes every inverse factorial from one inverse. Leftover of <code>C(n, r)</code> is then <code>fact[n] * invF[r] * invF[n-r]</code>, or 0 if <code>r</code> is negative or larger than <code>n</code>. Stars-and-bars says the number of non-negative integer solutions of <code>x<sub>1</sub>+...+x<sub>k</sub> = n</code> is <code>C(n+k-1, k-1)</code> &mdash; that choose counts how to place <code>k-1</code> bars among <code>n</code> stars and those bars.</p>
+<p>Lucas handles <code>n &ge; p</code>. While <code>n</code> or <code>r</code> is nonzero, multiply leftover of <code>C(n % p, r % p)</code> (which is 0 if that digit of <code>r</code> exceeds the digit of <code>n</code>), then divide both by <code>p</code>. Each digit choose uses the small table. Catalan number <code>C<sub>n</sub></code> counts the shapes listed above and equals leftover of <code>C(2n, n)</code> times the inverse of <code>n+1</code>. If the prime divides <code>n+1</code> that inverse does not exist; use the difference <code>C(2n, n) - C(2n, n-1)</code>, which computes the same integer without dividing by <code>n+1</code>.</p>
+<p>Walk a few values. Pascal's row for <code>n = 5</code> is <code>1, 5, 10, 10, 5, 1</code>: leftover of <code>C(5, 2)</code> is 10 because <code>5*4 / 2 = 10</code>, and <code>C(5, 3)</code> equals <code>C(5, 2)</code> by symmetry. Three identical sweets into two labelled kids with empty allowed is stars-and-bars <code>C(3+2-1, 2-1) = C(4, 1) = 4</code>. Catalan of 3 is leftover of <code>C(6, 3) / 4 = 20/4 = 5</code>. Lucas on <code>C(10, 3)</code> modulo 7 writes 10 as digits <code>(1, 3)</code> and 3 as <code>(0, 3)</code>, then leftover of <code>C(1, 0) * C(3, 3)</code> is 1.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>C(n,r)=C(n-1,r)+C(n-1,r-1) in Z and in a field. Lucas is that recurrence in base p via (1+x)^n ≡ ∏ (1+x)^{n_i p^i} (mod p).</p>
+    <p>Pascal's recurrence <code>C(n, r) = C(n-1, r) + C(n-1, r-1)</code> holds in the integers and leftover a prime. Lucas is that recurrence read in base <code>p</code>: leftover of <code>(1+x)<sup>n</sup></code> factors as a product of leftover of <code>(1+x)</code> raised to each base-<code>p</code> digit, so the coefficient of <code>x<sup>r</sup></code> is the product of the digit-wise chooses.</p><p>In plain words, you never enumerate subsets; you look up factorials, or you look up a handful of tiny chooses of digits, and those leftovers are the number of ways.</p><p>Interview sentence: <em>&ldquo;Table when n is below the prime; Lucas on the digits when it is not.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">fact[n] is 0 once n reaches M</span>
+    <p>Every later <code>nCr</code> that multiplies by that slot becomes leftover 0, including cases where the true choose is not a multiple of <code>M</code>. That is the cue to switch to Lucas, not a bug in the multiply.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--math">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M9 4l6 16M15 4L9 20"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Stars-and-bars chooses the bars</span>
+    <p>The number of non-negative solutions of <code>x<sub>1</sub>+...+x<sub>k</sub> = n</code> is <code>C(n+k-1, k-1)</code>, not <code>C(n+k-1, k)</code>. You are choosing positions for <code>k-1</code> bars. Give each bin one item first to enforce &ldquo;at least one&rdquo;: leftover of <code>C(n-1, k-1)</code> when <code>n &ge; k</code>.</p>
   </div>
 </aside>
 
@@ -163,7 +181,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Pascal row n=5. C(5,0)=1.",
+          "note": "Pascal's row for n=5 starts at C(5,0)=1, the one way to choose nothing.",
           "active": [
             0
           ],
@@ -174,7 +192,7 @@
           }
         },
         {
-          "note": "C(5,2)=10 = 5*4/2.",
+          "note": "C(5,2) is 10, the number of ways to choose 2 out of 5, because 5 times 4 over 2 is 10.",
           "active": [
             2
           ],
@@ -185,7 +203,7 @@
           }
         },
         {
-          "note": "C(5,3)=10 by symmetry.",
+          "note": "C(5,3) equals C(5,2) by symmetry, so it is also 10: choosing 3 to keep is choosing 2 to leave out.",
           "active": [
             3
           ],
@@ -196,7 +214,7 @@
           }
         },
         {
-          "note": "Stars-and-bars: 3 sweets, 2 kids, ≥0: C(4,1)=4.",
+          "note": "Three sweets, two kids, empty allowed: stars-and-bars C(3+2-1, 1) is 4 distributions.",
           "active": [
             1
           ],
@@ -207,7 +225,7 @@
           }
         },
         {
-          "note": "Catalan_3 = C(6,3)/4 = 5.",
+          "note": "Catalan of 3 is C(6,3) divided by 4, which is 20/4=5 balanced-bracket strings of length 6.",
           "active": [
             3
           ],
@@ -218,7 +236,7 @@
           }
         },
         {
-          "note": "Lucas C(10,3) mod 7: 10=(1,3)_7, 3=(0,3)_7 → C(1,0)*C(3,3)=1.",
+          "note": "Lucas of C(10,3) modulo 7: digits (1,3) and (0,3), so C(1,0) times C(3,3) leftover 1.",
           "active": [
             0
           ],
@@ -251,17 +269,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Pick the formula</strong> from n, r, M.</li>
-  <li><strong>fact / invFact</strong> if n < M and many queries.</li>
-  <li><strong>Falling</strong> if r is small: multiply (n-i)*inv(i+1).</li>
-  <li><strong>Lucas</strong> if n ≥ p: product of digit nCr.</li>
-  <li><strong>Stars-and-bars</strong> C(n+k-1, k-1); IE the caps.</li>
-  <li><strong>Catalan</strong> C(2n,n)*inv(n+1), or the difference form if p | n+1.</li>
+  <li><strong>Pick the tool from n, r, and M.</strong> Table if <code>n &lt; M</code> and many queries; falling factorial if <code>r</code> is small; Lucas if <code>n &ge; p</code>. The wrong tool either zeros every answer or times out.</li>
+  <li><strong>Build fact and invFact when n is below M.</strong> One forward pass of multiplies, one Fermat inverse at the top, one walk down. Every later choose is three lookups.</li>
+  <li><strong>Use a falling product when r is small.</strong> Multiply leftover of <code>(n-i)</code> and the inverse of <code>(i+1)</code> for <code>i</code> from 0 to <code>r-1</code>. That computes <code>C(n, r)</code> without a table of length <code>n</code>.</li>
+  <li><strong>Apply Lucas when n reaches the prime.</strong> Product of leftover of <code>C</code> of each base-<code>p</code> digit pair, zero if any digit of <code>r</code> exceeds the matching digit of <code>n</code>.</li>
+  <li><strong>Translate distributions to stars-and-bars.</strong> Non-negative solutions of a sum is <code>C(n+k-1, k-1)</code>; subtract the overflowing subsets with inclusion-exclusion when bins have caps.</li>
+  <li><strong>Read Catalan from a choose.</strong> Leftover of <code>C(2n, n)</code> times the inverse of <code>n+1</code>, or the difference <code>C(2n, n) - C(2n, n-1)</code> when the prime divides <code>n+1</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Read Pascal's row for n=5, then stars-and-bars, Catalan of 3, and a Lucas digit product modulo 7.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -269,12 +287,12 @@ flowchart TD
       <tr><th>n</th><th>r</th><th>val</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>5</td><td>0</td><td>1</td><td>Pascal row n=5. C(5,0)=1.</td></tr>
-      <tr><td>5</td><td>2</td><td>10</td><td>C(5,2)=10 = 5*4/2.</td></tr>
-      <tr><td>5</td><td>3</td><td>10</td><td>C(5,3)=10 by symmetry.</td></tr>
-      <tr><td>bars</td><td>1</td><td>4</td><td>Stars-and-bars: 3 sweets, 2 kids, ≥0: C(4,1)=4.</td></tr>
-      <tr><td>Cat3</td><td>3</td><td>5</td><td>Catalan_3 = C(6,3)/4 = 5.</td></tr>
-      <tr><td>10</td><td>3</td><td>1</td><td>Lucas C(10,3) mod 7: 10=(1,3)_7, 3=(0,3)_7 → C(1,0)*C(3,3)=1.</td></tr>
+      <tr class="trace-table__row--change"><td>5</td><td>0</td><td>1</td><td>Pascal's row for n=5 starts at C(5,0)=1, the one way to choose nothing.</td></tr>
+      <tr><td>5</td><td>2</td><td>10</td><td>C(5,2) is 10, the number of ways to choose 2 out of 5, because 5 times 4 over 2 is 10.</td></tr>
+      <tr><td>5</td><td>3</td><td>10</td><td>C(5,3) equals C(5,2) by symmetry, so it is also 10: choosing 3 to keep is choosing 2 to leave out.</td></tr>
+      <tr><td>bars</td><td>1</td><td>4</td><td>Three sweets, two kids, empty allowed: stars-and-bars C(3+2-1, 1) is 4 distributions.</td></tr>
+      <tr><td>Cat3</td><td>3</td><td>5</td><td>Catalan of 3 is C(6,3) divided by 4, which is 20/4=5 balanced-bracket strings of length 6.</td></tr>
+      <tr><td>10</td><td>3</td><td>1</td><td>Lucas of C(10,3) modulo 7: digits (1,3) and (0,3), so C(1,0) times C(3,3) leftover 1.</td></tr>
     </tbody>
   </table>
 </div>
@@ -387,7 +405,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>The factorial table is one pass. Lucas does O(log_p n) digits, each an nCr with args &lt; p.</p>
+    <p>Building <code>fact</code> is one multiply per integer up to <code>n</code>, plus one Fermat inverse and a walk down for <code>invF</code>, so preprocess is <code>O(n + log M)</code> and every later choose is a handful of multiplies. Falling factorial is <code>r</code> multiplies and <code>r</code> inverses, about <code>r log M</code> if you invert each denominator separately. Lucas does one small choose per base-<code>p</code> digit, and there are <code>O(log_p n)</code> digits.</p>
+    <p>Putting real numbers in: a table to <code>n = 10<sup>6</sup></code> is a million multiplies, a few milliseconds, then a million queries are free. Pascal DP at the same <code>n</code> with <code>r = 10<sup>5</sup></code> is <code>10<sup>11</sup></code> additions. Lucas on <code>n = 10<sup>18</sup></code> with <code>p = 10<sup>6</sup>+3</code> is a handful of digits, each a falling choose below <code>p</code>. You cannot allocate <code>fact[10<sup>9</sup>+7]</code>.</p>
   </div>
 
   <table class="complexity__compare">
@@ -409,28 +428,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">fact[n] when n >= M</span>
-    <div class="pitfalls__bug">fact[n]=0, every choose looks like 0.</div>
-    <div class="pitfalls__fix">Lucas.</div>
+    <div class="pitfalls__bug">Leftover of <code>n!</code> is 0, so every later choose that multiplies by that slot is leftover 0, including answers that are not multiples of <code>M</code>. The table looks built and the multiply looks right.</div>
+    <div class="pitfalls__fix">Switch to Lucas (or a falling product if <code>r</code> is small). A self-check is <code>C(p, 1)</code> leftover <code>p</code>, which must be 0, versus <code>C(p+1, 1)</code>, which must be leftover 1.</div>
   </li>
   <li>
     <span class="pitfalls__title">Stars-and-bars off-by-one</span>
-    <div class="pitfalls__bug">C(n+k-1, k) is not the number of solutions.</div>
-    <div class="pitfalls__fix">C(n+k-1, k-1).</div>
+    <div class="pitfalls__bug"><code>C(n+k-1, k)</code> looks symmetric and is a legal choose, but it is not the number of non-negative solutions of a <code>k</code>-variable sum.</div>
+    <div class="pitfalls__fix">You choose positions for <code>k-1</code> bars, so the count is <code>C(n+k-1, k-1)</code>. Enumerate the four distributions of 3 sweets to 2 kids by hand.</div>
   </li>
   <li>
     <span class="pitfalls__title">Catalan inv(n+1) when p | n+1</span>
-    <div class="pitfalls__bug">Division fails.</div>
-    <div class="pitfalls__fix">Use C(2n,n) - C(2n, n-1).</div>
+    <div class="pitfalls__bug">Fermat's inverse of a multiple of <code>p</code> is leftover 0, so Catalan becomes leftover 0 even though the integer Catalan number is not a multiple of <code>p</code>.</div>
+    <div class="pitfalls__fix">Use leftover of <code>C(2n, n) - C(2n, n-1)</code>, which computes the same integer without dividing by <code>n+1</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Integer / on the falling factorial</span>
-    <div class="pitfalls__bug">Truncation in Z, not the field.</div>
-    <div class="pitfalls__fix">Multiply by inv(i+1) mod M.</div>
+    <div class="pitfalls__bug">Writing <code>(n-i) / (i+1)</code> with Java <code>/</code> truncates in the integers, so a later leftover is not the field element you wanted.</div>
+    <div class="pitfalls__fix">Multiply by the modular inverse of <code>i+1</code>. The running product must stay exact leftover <code>M</code> at every step.</div>
   </li>
   <li>
     <span class="pitfalls__title">Order vs combination</span>
-    <div class="pitfalls__bug">Arrangements are nPr.</div>
-    <div class="pitfalls__fix">Ask whether order matters.</div>
+    <div class="pitfalls__bug">Arrangements are <code>nPr = n! / (n-r)!</code>. Using <code>nCr</code> when order matters (or the reverse) looks off by a consistent factor that is easy to miss on small samples.</div>
+    <div class="pitfalls__fix">Ask whether swapping two chosen items produces a new answer. If yes, drop the <code>r!</code> in the denominator; if no, keep the choose.</div>
   </li>
 </ul>
 
@@ -472,28 +491,28 @@ flowchart TD
   <details class="followup">
     <summary>Why Lucas?</summary>
     <div class="followup__body">
-      <p>Freshman's dream: (1+x)^p ≡ 1+x^p (mod p). The coefficient of x^r is the product of digit-wise nCr.</p>
+      <p>Freshman's dream says leftover of <code>(1+x)<sup>p</sup></code> equals leftover of <code>1 + x<sup>p</sup></code> when the modulus is prime. Raising both sides to the base-<code>p</code> digits of <code>n</code> factors leftover of <code>(1+x)<sup>n</sup></code> as a product, so the coefficient of <code>x<sup>r</sup></code> &mdash; which is leftover of <code>C(n, r)</code> &mdash; is the product of leftover of <code>C</code> of each digit pair. That is Lucas, and it is why a digit of <code>r</code> larger than the matching digit of <code>n</code> forces the whole answer to 0.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Each bin at least 1?</summary>
     <div class="followup__body">
-      <p>Give one first: C(n-1, k-1), n≥k.</p>
+      <p>Give every bin one item first, which spends <code>k</code> of the <code>n</code> identical items, then distribute the remaining <code>n-k</code> with empty allowed. Stars-and-bars then says leftover of <code>C((n-k)+k-1, k-1) = C(n-1, k-1)</code>, provided <code>n &ge; k</code>. If <code>n &lt; k</code> the answer is 0 because you cannot give each bin one item.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is Catalan an integer?</summary>
     <div class="followup__body">
-      <p>Always. Prefer the difference form mod p if p might divide n+1.</p>
+      <p>Yes, always, even though the formula divides by <code>n+1</code>. In a prime field that division is an inverse, which fails when the prime divides <code>n+1</code>. The difference <code>C(2n, n) - C(2n, n-1)</code> is the same integer and only uses subtraction, so it is the form you ship when the modulus might divide the denominator.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>n=1e18, r=1e18, p=1e9+7?</summary>
     <div class="followup__body">
-      <p>Cannot sieve a 1e9 table. The problem will guarantee small r, or a different modulus.</p>
+      <p>You cannot build a factorial table of length <code>10<sup>9</sup>+7</code>, and Lucas at that prime still wants a helper for arguments up to the prime. A well-posed statement will promise a tiny <code>r</code> (falling factorial), a tiny prime, or a different modulus. If both <code>n</code> and <code>r</code> are huge and the prime is <code>10<sup>9</sup>+7</code>, you are probably missing a reduction.</p>
     </div>
   </details>
 </div>

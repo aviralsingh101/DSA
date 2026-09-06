@@ -41,13 +41,13 @@
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
 <p>"Return all subsets / permutations / combinations" is a single family. The search tree is always the same shape: at each position you either take an element or you do not, or you try every unused element as the next pick. The code is twenty lines. The reason this page is long is <strong>duplicates</strong>: the same multiset can be reached by many paths, and interviewers grade the skip rule, not the recursion.</p>
-<p>There are two mechanical implementations and they are not interchangeable. <strong>Include/exclude</strong> (or the equivalent bitmask loop) builds subsets. <strong>Swap / <code>used[]</code></strong> builds permutations. Combinations are subsets of a fixed size, generated with a <code>start</code> index so order does not explode into permutations. Combination-sum is the same tree with a remaining-target and a reuse policy.</p>
-<p>Memorise the four skip predicates below as if they were an API. "Sort, then skip equals" is not a rule; it is four different rules that happen to start with a sort.</p>
+<p>There are two mechanical implementations and they are not interchangeable. <strong>Include/exclude</strong> (or the equivalent bitmask loop) builds subsets: at index <code>i</code> you either take <code>a[i]</code> or you skip it. <strong>Swap / <code>used[]</code></strong> builds permutations: each unused value tries the next slot. Combinations are subsets of a fixed size, generated with a <code>start</code> index so order does not explode into permutations. Combination-sum is the same tree with a remaining-target and a reuse policy.</p>
+<p>Take the array <code>[1, 2, 2]</code>. A naive include/exclude tree emits <code>[1, 2]</code> twice: once by taking the first 2 and skipping the second, and once by skipping the first 2 and taking the second. Those two paths sit at the same depth under the same parent, which is why the skip talks about siblings and not about the whole path. Memorise the four skip predicates below as if they were an API. "Sort, then skip equals" is not one rule; it is four different rules that happen to start with a sort.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Duplicates are equal values at the <em>same depth</em> of the tree. Skip the second equal when its previous copy was not taken in this path; never skip across depths.</p>
+    <p>Duplicates are equal values at the <em>same depth</em> of the tree. Skip the second equal when its previous copy was not taken in this path; never skip an equal that sits at a deeper level.</p>
   </div>
 </aside>
 
@@ -129,14 +129,13 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the exact dedup rules</h2>
-<p>Include/exclude walks indices left to right. From index <code>i</code> you either skip <code>a[i]</code> and go to <code>i+1</code>, or you append it, go to <code>i+1</code>, and pop on the way back. Every subset appears once. The bitmask form is the same tree flattened: bit <code>j</code> of mask <code>m</code> means "include <code>a[j]</code>".</p>
-<p>Permutations fill positions. The swap implementation puts every remaining index into slot <code>i</code> by swapping <code>a[i]</code> with <code>a[j]</code> for <code>j &ge; i</code>, then recurses on <code>i+1</code>, then swaps back. The <code>used[]</code> implementation keeps the array intact and tracks which indices are already in the path. Both are <code>O(n &middot; n!)</code> including output copies.</p>
-<p>Dedup is a predicate on <em>siblings</em>, not on the whole path. Sort first so equals are adjacent. Then apply exactly one of the four rules below &mdash; mixing them is how you drop a valid subset or emit <code>[1,2]</code> twice.</p>
+<p>Include/exclude walks indices left to right. From index <code>i</code> you either skip <code>a[i]</code> and go to <code>i+1</code>, or you append it, go to <code>i+1</code>, and pop on the way back so the next sibling sees a clean path. On <code>[1, 2, 3]</code> that produces eight leaves, from <code>[]</code> to <code>[1, 2, 3]</code>, and every subset appears exactly once each. The bitmask form is the same tree flattened: bit <code>j</code> of mask <code>m</code> means "include <code>a[j]</code>".</p>
+<p>Permutations fill positions. The swap implementation puts every remaining index into slot <code>i</code> by swapping <code>a[i]</code> with <code>a[j]</code> for <code>j &ge; i</code>, then recurses on <code>i+1</code>, then swaps back so the next <code>j</code> still sees the original suffix. The <code>used[]</code> implementation keeps the array intact and tracks which indices are already in the path. Both are <code>O(n &middot; n!)</code> including the copies you write into the answer list.</p>
+<p>Dedup is a predicate on <em>siblings</em>, not on the whole path. Sort first so equals are adjacent. Then apply exactly one of the four rules below &mdash; mixing them is how you drop a valid subset or emit <code>[1,2]</code> twice. On <code>[1, 2, 2]</code> the start-index skip kills the second 2 at the same <code>start</code>, so the six unique subsets appear once each and the extra <code>[1, 2]</code> never ships.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The four skip predicates (memorise these)</span>
     <p>Always <code>Arrays.sort(a)</code> first when the input can contain duplicates and the output must be unique.</p><ul><li><strong>Subsets II / combination sum II</strong> (start-index tree, each value at most once): at a fixed <code>start</code>, skip <code>i</code> when <code>i &gt; start &amp;&amp; a[i] == a[i-1]</code>. Same-depth equals share a parent; the first copy is allowed to be chosen or not, the rest must not start a new sibling.</li><li><strong>Permutations II</strong> (<code>used[]</code> tree): skip index <code>i</code> when <code>used[i]</code>, <em>or</em> when <code>i &gt; 0 &amp;&amp; a[i] == a[i-1] &amp;&amp; !used[i-1]</code>. The previous equal must already be in the path; otherwise this pick is a sibling permutation of an earlier pick.</li><li><strong>Combination sum (unlimited reuse)</strong>: do not skip equals; recurse with <code>start = i</code> so you may pick <code>a[i]</code> again, and never pick an earlier index, so <code>[2,3]</code> and <code>[3,2]</code> cannot both appear.</li><li><strong>Bitmask subsets</strong>: no skip rule. Each mask is a unique index-set. If values duplicate, two masks can have the same multiset &mdash; bitmask is the wrong tool for "unique value subsets".</li></ul>
   </div>
 </aside>
@@ -173,8 +172,8 @@
 <p>The path is the current subset. Green is chosen, dim is not yet considered, red is excluded. Every leaf is one subset, including the empty one.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="subIncExc"></div>
-  <div class="viz-player" data-viz-target="subIncExc">
+  <div class="array-viz" data-viz-id="subsets-permutations-combinationsViz"></div>
+  <div class="viz-player" data-viz-target="subsets-permutations-combinationsViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "a = [1, 2, 3]",
@@ -188,7 +187,7 @@
         "path",
         "decision"
       ],
-      "speed": 900,
+      "speed": 1000,
       "frames": [
         {
           "note": "Start. i = 0, path empty. Two children: exclude 1, or include 1.",
@@ -247,7 +246,7 @@
           }
         },
         {
-          "note": "Backtrack and include 3 instead. Record [3].",
+          "note": "Backtrack and include 3 instead. Record the subset [3].",
           "x": [
             0,
             1
@@ -336,12 +335,12 @@ flowchart TD
 <h2>Algorithm</h2>
 <ol class="stepper">
   <li><strong>Classify the tree.</strong> Subsets / combinations &rarr; start index. Permutations &rarr; swap or <code>used[]</code>. Target sum &rarr; add a remaining.</li>
-  <li><strong>Sort</strong> if the output must be unique and the input can contain duplicates.</li>
-  <li><strong>Write the skip predicate</strong> for that tree before any other line. Do not improvise a third rule.</li>
+  <li><strong>Sort</strong> if the output must be unique and the input can contain duplicates, because every skip rule reads <code>a[i-1]</code> as the previous equal.</li>
+  <li><strong>Write the skip predicate</strong> for that tree before any other line. Do not improvise a third rule that mixes the two trees.</li>
   <li><strong>Record a copy of the path</strong> at the right moment: leaf for permutations and combinations of size k; every node (or the leaf of include/exclude) for subsets.</li>
   <li><strong>Push, recurse, pop.</strong> The pop is mandatory even on early returns; a <code>finally</code>-shaped pair of lines, not a hope.</li>
   <li><strong>For unlimited combination-sum</strong>, recurse with <code>start = i</code> and subtract <code>a[i]</code>. Guard <code>remain &lt; 0</code> as a prune.</li>
-  <li><strong>Prefer a bitmask loop</strong> when you need a numeric aggregate over subsets, not the lists themselves.</li>
+  <li><strong>Prefer a bitmask loop</strong> when you need a numeric aggregate over subsets (sum, XOR, count), not the lists themselves.</li>
   <li><strong>Price the output.</strong> If you emit <code>k</code> arrays of length <code>n</code>, you have already paid <code>O(kn)</code>; the recursion is not the cost.</li>
 </ol>
 
@@ -579,27 +578,27 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Storing the path by reference</span>
-    <div class="pitfalls__bug"><code>ans.add(path)</code> then <code>path.add(x)</code>. Every stored list mutates. The judge shows n copies of the last path.</div>
-    <div class="pitfalls__fix"><code>ans.add(new ArrayList&lt;&gt;(path))</code> at every record point.</div>
+    <div class="pitfalls__bug"><code>ans.add(path)</code> then <code>path.add(x)</code>. Every stored list is the same object, so later mutations rewrite earlier answers. The judge shows n copies of the last path.</div>
+    <div class="pitfalls__fix"><code>ans.add(new ArrayList&lt;&gt;(path))</code> at every record point, so each answer is a snapshot that later pops cannot touch.</div>
   </li>
   <li>
     <span class="pitfalls__title">The wrong skip predicate</span>
-    <div class="pitfalls__bug">Using <code>!used[i-1]</code> on a start-index tree, or <code>i &gt; start &amp;&amp; a[i]==a[i-1]</code> on a permutation tree.</div>
+    <div class="pitfalls__bug">Using <code>!used[i-1]</code> on a start-index tree, or <code>i &gt; start &amp;&amp; a[i]==a[i-1]</code> on a permutation tree. Each predicate looks locally correct and silently drops valid answers.</div>
     <div class="pitfalls__fix">Subsets II / Comb Sum II: same-depth skip via <code>i &gt; start</code>. Permutations II: previous equal must already be used. Do not mix.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to sort before skipping</span>
     <div class="pitfalls__bug">The skip looks at <code>a[i-1]</code>, which is only the previous equal after a sort. Unsorted <code>[2,1,2]</code> will emit duplicate subsets.</div>
-    <div class="pitfalls__fix"><code>Arrays.sort(a)</code> is part of the contract of every unique-output generator except pure bitmask-on-unique-indices.</div>
+    <div class="pitfalls__fix"><code>Arrays.sort(a)</code> is part of the contract of every unique-output generator except a pure bitmask over unique indices. Sort first, then skip.</div>
   </li>
   <li>
     <span class="pitfalls__title">Reuse going backwards</span>
-    <div class="pitfalls__bug">Combination-sum with <code>start = 0</code> on every call, so <code>[2,3]</code> and <code>[3,2]</code> both appear.</div>
+    <div class="pitfalls__bug">Combination-sum with <code>start = 0</code> on every call, so <code>[2,3]</code> and <code>[3,2]</code> both appear. The reuse looks correct because you can pick 2 again, but the start index walked backwards.</div>
     <div class="pitfalls__fix">Never decrease <code>start</code>. Unlimited reuse keeps <code>start = i</code>; 0/1 use advances to <code>i+1</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Bitmask on duplicate values when uniqueness is required</span>
-    <div class="pitfalls__bug">Looping <code>0 .. 2^n-1</code> on <code>[1,2,2]</code> and dumping every mask. [1,2] appears twice.</div>
+    <div class="pitfalls__bug">Looping <code>0 .. 2^n-1</code> on <code>[1,2,2]</code> and dumping every mask. The masks <code>011</code> and <code>101</code> are different index-sets, so <code>[1,2]</code> appears twice and looks like a complete power set.</div>
     <div class="pitfalls__fix">Bitmasks identify index-sets. For unique value-subsets, use the start-index tree. For unique index-sets, bitmask is correct and simpler.</div>
   </li>
 </ul>
@@ -649,28 +648,28 @@ flowchart TD
   <details class="followup">
     <summary>Can I dedup by stuffing paths into a <code>Set&lt;List&gt;</code>?</summary>
     <div class="followup__body">
-      <p>Yes, and it is correct, and it is the wrong answer. It costs a hash of every path and hides a broken generator. The skip rules remove the duplicates at the source in <code>O(1)</code> per sibling. Interviewers ask you to write the rule.</p>
+      <p>Yes, and it is correct, and it is the wrong answer. It costs a hash of every path and hides a broken generator. The skip rules remove the duplicates at the source in <code>O(1)</code> per sibling. Interviewers ask you to write the rule, not to paper over it with a set.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Swap or <code>used[]</code> for unique permutations?</summary>
     <div class="followup__body">
-      <p>Swap. There is nothing to skip. <code>used[]</code> is extra memory and extra branches. Use swap until the input has duplicates, then switch &mdash; swap-plus-skip is easy to get wrong because the suffix is no longer a clean unused multiset after previous swaps.</p>
+      <p>Swap, when the values are unique. There is nothing to skip. <code>used[]</code> is extra memory and extra branches. Use swap until the input has duplicates, then switch &mdash; swap-plus-skip is easy to get wrong because the suffix is no longer a clean unused multiset after previous swaps.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When does combination sum become DP?</summary>
     <div class="followup__body">
-      <p>The moment they ask for the <em>number</em> of combinations (order irrelevant) and <code>n</code> or the target is large. That is unbounded knapsack. If they want the lists, you are stuck with output-sensitive backtracking no matter how large the target is.</p>
+      <p>The moment they ask for the <em>number</em> of combinations (order irrelevant) and <code>n</code> or the target is large. That is unbounded knapsack, and a <code>dp[remain]</code> loop beats the tree. If they want the lists, you are stuck with output-sensitive backtracking no matter how large the target is.</p>
     </div>
   </details>
 </div>
 
 <!-- ======================================================= 13. PRACTICE -->
 <h2>Practice</h2>
-<p>Do LC 78, LC 46, LC 90 and LC 47 in that order. Those four are the two trees and the two skip rules. Combination sum is the same page with a remaining integer.</p>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
 
 <div class="table-scroll">
   <table class="problems">

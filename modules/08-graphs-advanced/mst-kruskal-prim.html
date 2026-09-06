@@ -22,7 +22,7 @@
   <p class="hero__tagline">Kruskal sorts edges and unions if they do not form a cycle. Prim grows a tree from a seed, always taking the cheapest edge out. Same MST, different shapes.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/graph-representations.html">Graph Representations</a>,
       <a href="../03-linear-structures/heaps-and-priority-queue.html">Heaps</a>
@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>A minimum spanning tree is the cheapest set of n-1 edges that connects a weighted undirected graph. It is unique if all weights are distinct. The cut property says the cheapest edge across any cut is safe to take — that is Kruskal (sort, skip cycles) and Prim (grow a set) in one sentence.</p>
-<p>Kruskal wants an edge list and a DSU. Prim wants an adjacency list and a heap, and looks like Dijkstra with a different relax. Pick Kruskal when you already have edges and might stop early (offline "add edges by weight"). Pick Prim when the graph is dense (n^2 implicit edges) or you already have adj lists.</p>
-<p>Variants that are still MST: maximum spanning tree (negate weights), second-best MST (swap one edge), MST in a complete graph of points (Prim on implicit edges), min bottleneck path (max edge on the MST path).</p>
+<p>You are wiring <code>n</code> houses to each other so that every house can reach every other house along the cables you buy, and you want the cheapest possible total bill. Any connecting set of cables that uses more than <code>n-1</code> of them contains a loop you could drop without disconnecting anyone, so the cheapest connecting set is always a tree: a <em>minimum spanning tree</em>, the cheapest set of <code>n-1</code> undirected edges that joins the whole graph. The naive "try every subset of <code>n-1</code> edges" is hopeless: at <code>n = 10&#8309;</code> and <code>m = 2&times;10&#8309;</code> you cannot even list the subsets, let alone score them.</p>
+<p>Both algorithms on this page rest on one fact, the <em>cut property</em>. A <em>cut</em> is any way of splitting the houses into two non-empty groups; the property says the cheapest cable that has one end in each group is safe to buy &mdash; it belongs to some cheapest tree. Kruskal applies that fact to "the groups I have already wired together": sort every cable from cheap to expensive and buy it if its two ends are still in different groups, which a union-find structure answers in almost constant time. Prim applies the same fact to "inside the tree so far versus outside": always buy the cheapest cable that leaves the tree you have already grown.</p>
+<p>Pick Kruskal when you already have an edge list and might stop early, or when queries arrive offline as "add edges in weight order". Pick Prim when the graph is dense &mdash; a complete graph of <code>n</code> points in the plane has about <code>n&sup2; / 2</code> edges you do not want to materialise &mdash; or when you already hold adjacency lists. In a problem statement the tell is "connect everyone at minimum total cost" sitting next to undirected weighted edges. Close cousins that are still this page: a maximum spanning tree (sort descending), the second-best tree (swap one unused edge), and the min-bottleneck path, whose heaviest edge is the heaviest edge on the unique MST path.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>The cut property: the lightest edge across any partition of V is in some MST. Kruskal applies it to "components so far"; Prim applies it to "inside the tree vs outside".</p>
+    <p>The cut property says the cheapest edge across any split of the vertices belongs to some MST, so you never have to look ahead. Kruskal applies the split "components wired so far"; Prim applies the split "already in the tree versus not yet". Same cheapest tree, two different shapes of code.</p>
   </div>
 </aside>
 
@@ -113,18 +113,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code>, <code>m &le; 2&times;10&#8309;</code> → Kruskal. <code>n &le; 2000</code> complete → Prim O(n^2) without a heap. Weights fit in <code>int</code>; the total needs <code>long</code>.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> and <code>m &le; 2&times;10&#8309;</code> is Kruskal's window: one sort plus almost-constant union-find. A complete graph on <code>n &le; 2000</code> vertices is Prim without a heap, <code>n&sup2;</code> scans and no materialised edge list. Individual weights usually fit in an <code>int</code>, but the sum of <code>n-1</code> of them needs a <code>long</code>. If the statement is directed, this page is the wrong tool.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Kruskal: sort edges by weight. For each, <code>if (dsu.union(u, v))</code> take it. Stop at n-1 edges. If you finish the list with fewer, the graph is disconnected.</p>
-<p>Prim: <code>dist[src] = 0</code>, heap of (cost, node). Pop the unused node of min cost, add that cost, relax its unused neighbours. Same as Dijkstra except you store the edge weight, not a path sum, and you mark a node used when it is popped.</p>
+<p>Kruskal needs an edge list and a union-find structure. Sort the edges by weight, cheapest first. For each edge <code>(u, v, w)</code> in that order, ask the structure whether <code>u</code> and <code>v</code> already share a representative. If they do, the edge would close a loop and you skip it. If they do not, <code>union</code> them, add <code>w</code> to a <code>long</code> total, and increment a counter of taken edges. Stop when the counter hits <code>n-1</code>: you have a tree. If the list ends with fewer than <code>n-1</code> taken edges, the graph was disconnected and what you built is a minimum spanning forest.</p>
+<p>Prim needs adjacency lists and a heap, and it looks like Dijkstra until you read the key. Set <code>dist[src] = 0</code> and every other <code>dist</code> to a sentinel, then grow a set <code>S</code> of vertices already in the tree. Repeatedly pop the unused vertex of smallest <code>dist</code>, mark it used, add that <code>dist</code> to the total, and for each unused neighbour <code>v</code> write <code>dist[v] = min(dist[v], w(u, v))</code> &mdash; the weight of the edge into the tree, not a path sum. That single difference is the whole algorithm: Dijkstra settles cheapest routes from a source, Prim settles the cheapest cable that leaves the tree.</p>
+<p>Walk the four-house sample in words. Edges in sorted order are 0-1 weight 1, 1-2 weight 2, 0-2 weight 2, 2-3 weight 3, 0-3 weight 4. Kruskal buys 0-1, then 1-2, skips 0-2 because 0 and 2 already share a representative, buys 2-3, and stops at three edges of total 6. Prim starting at 0 first buys the cable of weight 1 to house 1, then the cable of weight 2 to house 2, then the cable of weight 3 to house 3, and reports the same 6. The skipped 0-2 is a tie: another tree of weight 6 exists that uses 0-2 in place of 1-2.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Cut property: for any cut <code>(S, V\S)</code>, a lightest edge crossing the cut belongs to some MST. Kruskal's S is a DSU component; Prim's S is the set of popped nodes. Both stay a forest / a tree of MST edges.</p>
+    <p>Cut property: for any partition of the vertices into <code>S</code> and <code>V \ S</code>, a lightest edge with one end in each side belongs to some MST. Kruskal's <code>S</code> is one union-find component; Prim's <code>S</code> is the set of vertices already popped into the tree.</p><p>In plain words, the cheapest cable that leaves the group you have already wired is always safe to buy, so both algorithms only ever add an edge that some cheapest tree would have added, and they stop when the group is everyone (or when no leaving cable remains).</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Prim's key is the edge weight, not a path sum</span>
+    <p>Copying Dijkstra and writing <code>dist[u] + w</code> builds a shortest-path tree from the seed, which is a different object. The MST question is "what is the cheapest cable that hangs this new house onto the houses I have already wired?", so the heap key is <code>w</code> itself. Test the difference on a triangle with weights 1, 100, 100: both algorithms buy 1 plus 100, never 200.</p>
   </div>
 </aside>
 
@@ -163,7 +172,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "4 nodes. Edges (w,u,v): (1,0,1), (2,1,2), (2,0,2), (3,2,3), (4,0,3). Sort already shown.",
+          "note": "Four houses. Sorted cables: 0-1 weight 1, 1-2 weight 2, 0-2 weight 2, 2-3 weight 3, 0-3 weight 4. Buy 0-1; two groups remain.",
           "active": [
             0
           ],
@@ -174,7 +183,7 @@
           }
         },
         {
-          "note": "Take 1-2 weight 2. Components {0,1,2} and {3}.",
+          "note": "Buy 1-2 of weight 2. Houses 0, 1, 2 now share a representative; house 3 is still alone.",
           "active": [
             1
           ],
@@ -185,7 +194,7 @@
           }
         },
         {
-          "note": "Skip 0-2 weight 2 — same DSU parent.",
+          "note": "Skip 0-2 of weight 2: both ends already climb to the same representative, so the cable would close a loop.",
           "active": [
             2
           ],
@@ -196,7 +205,7 @@
           }
         },
         {
-          "note": "Take 2-3 weight 3. Now one component. MST weight 1+2+3=6.",
+          "note": "Buy 2-3 of weight 3. One group remains and three cables have been taken, so the tree is finished at total 6.",
           "active": [
             3
           ],
@@ -207,7 +216,7 @@
           }
         },
         {
-          "note": "Skip 0-3. Already connected.",
+          "note": "Skip 0-3 of weight 4: the two houses are already in the same group, so the more expensive cable is wasted.",
           "active": [
             4
           ],
@@ -218,7 +227,7 @@
           }
         },
         {
-          "note": "Three edges, weight 6. Unique? The skipped 0-2 was a tie — another MST of the same weight exists.",
+          "note": "Three cables, total 6. The skipped 0-2 was a tie with 1-2, so another tree of the same total exists.",
           "active": [
             0,
             1,
@@ -253,17 +262,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Kruskal:</strong> sort edges by weight.</li>
-  <li><strong>DSU union</strong> if parents differ; add the weight; count edges.</li>
-  <li><strong>If count &lt; n-1</strong> the graph is disconnected.</li>
-  <li><strong>Prim:</strong> heap (cost, node), skip popped, add cost, relax unused neighbours with the edge weight.</li>
-  <li><strong>Dense Prim:</strong> no heap — n times scan the unused node of min dist.</li>
-  <li><strong>Total</strong> is <code>long</code>. Parallel edges: keep the min (Kruskal sorts them; Prim relaxes).</li>
+  <li><strong>Kruskal: sort the edge list by weight.</strong> Cheapest first, so the next cable you consider is always a lightest cable across some cut of the groups you have not yet merged, which is exactly the cut property.</li>
+  <li><strong>Union if the ends are still in different groups.</strong> When <code>dsu.union(u, v)</code> returns true, add <code>w</code> to a <code>long</code> total and increment the taken-edge counter; a false return means the cable would close a loop and must be skipped.</li>
+  <li><strong>Demand n-1 taken edges, or admit a forest.</strong> If the list ends with fewer than <code>n-1</code> successes the graph was disconnected; return a failure, or return the forest if the statement asked for a minimum spanning forest.</li>
+  <li><strong>Prim: grow a tree from a seed with a heap.</strong> The heap key is the weight of the cheapest unused cable into that vertex, not a path sum; skip vertices already popped, add the popped key to the total, and relax unused neighbours with the raw edge weight.</li>
+  <li><strong>Dense Prim drops the heap for n scans.</strong> When every pair of vertices has an implicit edge, it is cheaper to scan the unused <code>dist</code> array <code>n</code> times than to push <code>n&sup2;</code> heap entries, which is the complete-graph / points-in-the-plane case.</li>
+  <li><strong>Keep the total in a long, and keep parallel edges honest.</strong> <code>n-1</code> weights of <code>10&#8309;</code> overflow an <code>int</code>; Kruskal's sort already prefers the cheaper of two parallel cables, and Prim's relax does the same with a min.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Four houses and five cables in weight order. Kruskal buys 0-1, 1-2 and 2-3 for total 6, and skips the two cables that would close a loop.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -271,12 +280,12 @@ graph LR
       <tr><th>edge</th><th>w</th><th>take</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0-1</td><td>1</td><td>yes, union</td><td>4 nodes. Edges (w,u,v): (1,0,1), (2,1,2), (2,0,2), (3,2,3), (4,0,3). Sort already shown.</td></tr>
-      <tr><td>1-2</td><td>2</td><td>yes</td><td>Take 1-2 weight 2. Components {0,1,2} and {3}.</td></tr>
-      <tr><td>0-2</td><td>2</td><td>no, cycle</td><td>Skip 0-2 weight 2 — same DSU parent.</td></tr>
-      <tr><td>2-3</td><td>3</td><td>yes, done</td><td>Take 2-3 weight 3. Now one component. MST weight 1+2+3=6.</td></tr>
-      <tr><td>0-3</td><td>4</td><td>no</td><td>Skip 0-3. Already connected.</td></tr>
-      <tr><td>MST</td><td>6</td><td>1+2+3</td><td>Three edges, weight 6. Unique? The skipped 0-2 was a tie — another MST of the same weight exists.</td></tr>
+      <tr class="trace-table__row--change"><td>0-1</td><td>1</td><td>yes, union</td><td>Four houses. Sorted cables: 0-1 weight 1, 1-2 weight 2, 0-2 weight 2, 2-3 weight 3, 0-3 weight 4. Buy 0-1; two groups remain.</td></tr>
+      <tr><td>1-2</td><td>2</td><td>yes</td><td>Buy 1-2 of weight 2. Houses 0, 1, 2 now share a representative; house 3 is still alone.</td></tr>
+      <tr><td>0-2</td><td>2</td><td>no, cycle</td><td>Skip 0-2 of weight 2: both ends already climb to the same representative, so the cable would close a loop.</td></tr>
+      <tr><td>2-3</td><td>3</td><td>yes, done</td><td>Buy 2-3 of weight 3. One group remains and three cables have been taken, so the tree is finished at total 6.</td></tr>
+      <tr><td>0-3</td><td>4</td><td>no</td><td>Skip 0-3 of weight 4: the two houses are already in the same group, so the more expensive cable is wasted.</td></tr>
+      <tr><td>MST</td><td>6</td><td>1+2+3</td><td>Three cables, total 6. The skipped 0-2 was a tie with 1-2, so another tree of the same total exists.</td></tr>
     </tbody>
   </table>
 </div>
@@ -406,7 +415,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Kruskal is sort plus almost-O(1) DSU. Prim is Dijkstra-shaped: each edge is pushed at most once per improvement. Dense Prim without a heap is <code>O(n&sup2;)</code> and beats a heap when m ~ n^2.</p>
+    <p>Kruskal spends <code>O(m log m)</code> on the sort and then almost-constant time per edge inside union-find, so the sort dominates. At <code>m = 2&times;10&#8309;</code> that is a few million comparisons, comfortable. Prim with a binary heap pushes each edge at most once per improvement and is <code>O(m log n)</code>, the same shape as Dijkstra and the same few-million heap operations on a sparse graph.</p>
+    <p>Dense Prim without a heap scans an unused array of length <code>n</code> once per vertex and is <code>O(n&sup2;)</code>. At <code>n = 2000</code> that is 4 million scans and beats a heap that would push about <code>n&sup2;</code> entries. Store the running total in a <code>long</code>: <code>n-1</code> edges of weight <code>10&#8309;</code> already overflow an <code>int</code>.</p>
   </div>
 
   <table class="complexity__compare">
@@ -428,28 +438,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Directed edges</span>
-    <div class="pitfalls__bug">MST is defined on undirected graphs. Kruskal on a tournament produces nonsense.</div>
-    <div class="pitfalls__fix">Confirm the graph is undirected; add both orientations only for Prim's adj list.</div>
+    <div class="pitfalls__bug">MST is defined on undirected graphs, so running Kruskal on a tournament of one-way roads produces a set of arcs that does not even mean "connected" in the directed sense, yet the code still returns a number.</div>
+    <div class="pitfalls__fix">Confirm the statement is undirected. Add both orientations only when you are building Prim's adjacency lists from an undirected edge list, never as a substitute for a directed algorithm.</div>
   </li>
   <li>
     <span class="pitfalls__title">Disconnected graph</span>
-    <div class="pitfalls__bug">You return the sum of a forest and call it an MST.</div>
-    <div class="pitfalls__fix">Count taken edges; require n-1, or return the forest if the statement wants MSF.</div>
+    <div class="pitfalls__bug">You sum whatever the algorithm bought, call that an MST, and hide the fact that two groups of houses were never joined, which looks correct on a connected sample.</div>
+    <div class="pitfalls__fix">Count taken edges and require exactly <code>n-1</code>, or return the forest if the statement asked for a minimum spanning forest. Test on two triangles that do not touch.</div>
   </li>
   <li>
     <span class="pitfalls__title">Prim using path-sum keys</span>
-    <div class="pitfalls__bug">You copied Dijkstra and stored <code>dist[u]+w</code>. That is a shortest-path tree, not an MST.</div>
-    <div class="pitfalls__fix">The key is the edge weight into the tree, <code>w</code>.</div>
+    <div class="pitfalls__bug">You copied Dijkstra and stored <code>dist[u] + w</code>. The heap then grows a shortest-path tree from the seed, which is a different object and can pick a heavier set of cables than the MST.</div>
+    <div class="pitfalls__fix">The heap key is the raw edge weight into the tree, <code>w</code>. Test on a triangle 1, 100, 100: both MST algorithms buy 101, never a path of 200.</div>
   </li>
   <li>
     <span class="pitfalls__title">int total</span>
-    <div class="pitfalls__bug">n-1 edges of 1e9 overflow.</div>
-    <div class="pitfalls__fix"><code>long ans</code>.</div>
+    <div class="pitfalls__bug"><code>n-1</code> edges of weight <code>10&#8309;</code> overflow an <code>int</code> and wrap to a small or negative total that still looks like a plausible bill.</div>
+    <div class="pitfalls__fix">Accumulate into <code>long ans</code> from the first addition. Test on three edges of weight <code>10&#8309;</code> and check the printed sum is <code>3&times;10&#8309;</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting union-by-rank / path compression</span>
-    <div class="pitfalls__bug">DSU degrades and Kruskal looks like O(n) per find.</div>
-    <div class="pitfalls__fix">Both heuristics. Path compression alone is already fine at 2e5.</div>
+    <div class="pitfalls__bug">A chain of unions that always hangs the old root under a new singleton turns each <code>find</code> into an <code>O(n)</code> walk, so Kruskal at <code>m = 2&times;10&#8309;</code> suddenly looks like a quadratic scan.</div>
+    <div class="pitfalls__fix">Keep both accelerations (rank or size, plus path compression). Path compression alone is already enough at this size; test by unioning <code>i</code> with <code>i+1</code> in order and timing a find on the last element.</div>
   </li>
 </ul>
 
@@ -491,28 +501,28 @@ graph LR
   <details class="followup">
     <summary>Is the MST unique?</summary>
     <div class="followup__body">
-      <p>Yes if all weights are distinct. If there are ties, every MST has the same multiset of weights (the sorted-edge greedy is forced on the distinct prefixes).</p>
+      <p>Yes whenever every weight is distinct, because the cut property then names a unique safe edge at every step. When two edges share a weight, more than one cheapest tree can exist, but every MST uses the same <em>multiset</em> of weights: the sorted-edge greedy is forced on every prefix of distinct values, and only the ties may be swapped. The sample on this page has two trees of total 6 that differ on the weight-2 cable.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is the MST a shortest-path tree?</summary>
     <div class="followup__body">
-      <p>No. A path in the MST can be heavier than a path that uses a non-tree edge. The MST minimises the <em>sum of used edges</em>, not distances from a source.</p>
+      <p>No. A walk along the MST between two houses can be heavier than a walk that uses a cable the MST rejected. The MST minimises the <em>sum of the cables you buy</em>, not the distance from a chosen source. Prim and Dijkstra share a heap shape and nothing else: Prim's key is the edge into the tree, Dijkstra's key is a path sum from the source.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Min bottleneck path?</summary>
     <div class="followup__body">
-      <p>Among all u-v paths, the one that minimises the heaviest edge is a path in the MST (any MST). Compute the MST, then the max edge on the unique tree path (lifting / HLD).</p>
+      <p>Among all walks from <code>u</code> to <code>v</code>, the walk that minimises its heaviest single edge is a walk in the MST (any MST). Build the tree, then read the maximum edge on the unique tree path with binary lifting or heavy-light decomposition. That is why "smallest max-edge" queries on an undirected graph so often start with Kruskal.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Directed analogue?</summary>
     <div class="followup__body">
-      <p>Minimum arborescence rooted at r — Edmonds' algorithm. Do not run Kruskal on a directed graph.</p>
+      <p>The directed object is a <em>minimum arborescence</em> rooted at a chosen <code>r</code>: a cheapest set of arcs that reaches every vertex from <code>r</code>. Edmonds' algorithm computes it. Kruskal on a directed graph does not even have a well-defined meaning of "cycle versus connecting", so do not run it. If the statement is undirected, stay on this page.</p>
     </div>
   </details>
 </div>

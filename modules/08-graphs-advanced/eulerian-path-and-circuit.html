@@ -22,7 +22,7 @@
   <p class="hero__tagline">An Eulerian circuit uses every edge exactly once and returns. Hierholzer: walk unused edges, splice leftover tours at the vertex you stalled.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/graph-representations.html">Graph Representations</a>
     </span>
@@ -36,14 +36,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Hamiltonian paths (every <em>vertex</em> once) are NP-complete. Eulerian paths (every <em>edge</em> once) are linear. The degree conditions are the whole existence proof, and Hierholzer is the construction.</p>
-<p>Undirected: a circuit exists iff every vertex has even degree (and the edges sit in one component). A path exists iff exactly zero or two vertices have odd degree. Directed: circuit iff every in-degree equals out-degree; path iff one vertex has out-in = 1, one has in-out = 1, rest equal.</p>
-<p>LC 332 Reconstruct Itinerary is Hierholzer on a directed multigraph of airports, with a min-heap of unused outgoing edges so the tour is the lexicographically smallest.</p>
+<p>You are a postman who must walk every street of a town exactly once, or a traveller who must use every ticket in a pile exactly once. The hard-looking cousin &mdash; visit every <em>junction</em> exactly once, a Hamiltonian path &mdash; is NP-complete. The version that spends every <em>street</em> exactly once is linear, because a short list of degree conditions decides existence and a single walk constructs the tour. That tour is an <em>Eulerian path</em> if it may start and end at different junctions, and an <em>Eulerian circuit</em> if it must return to where it started.</p>
+<p>On an undirected map a circuit exists exactly when every junction has even degree and every street sits in one connected piece (isolated junctions with no streets do not count). A path that need not return exists when exactly zero or two junctions have odd degree: start at an odd one, end at the other. On a directed map a circuit exists when every in-degree equals the matching out-degree; a path exists when one junction has out-in = 1 (the start), one has in-out = 1 (the end), and every other junction is balanced. Checking those conditions is a linear scan; building the tour is Hierholzer's algorithm on this page.</p>
+<p>In a problem statement the tell is "use every edge exactly once", "reconstruct the itinerary", or a de Bruijn sequence (an Euler tour of the graph on (k-1)-mers). LC 332 is the directed multigraph of airports with a min-heap of unused outgoing tickets so the printed tour is the lexicographically smallest. Limits such as <code>n, m &le; 2&times;10&#8309;</code> are the linear window; if the statement asks you to visit every vertex once, you are on the wrong page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>When a walk stalls, every unused edge sits in a leftover cycle attached to some vertex already on the walk. Recurse from the stall point, then append the walk so far — that splices the cycle in.</p>
+    <p>When a walk stalls, every unused street still sits in a leftover circuit glued to some junction already on the walk. Recurse from the stall, then append the walk you already had: that splices the leftover circuit in without repeating a street.</p>
   </div>
 </aside>
 
@@ -110,18 +110,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Hierholzer is O(n+m). Multiedges and self-loops are allowed and must be consumed. Isolated vertices are fine if they have no edges.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> is Hierholzer's linear window: each street is pushed and popped once. Parallel streets and self-loops are allowed and must be consumed, so you mark <em>edges</em> used, never vertices. Isolated junctions with no streets are ignored when you check that the streets sit in one component. A min-heap per junction for the lex-smallest tour adds a <code>log(degree)</code> factor, still fine at these limits.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Check the degree conditions and that all edges live in one component (ignore isolates). Start at a vertex that must be the start of a path, or any vertex incident to an edge.</p>
-<p>Hierholzer: from u, while it has unused out-edges, take one, mark used, go to the head. When u is stuck, push u onto the answer and backtrack. Reverse the answer at the end (you pushed in reverse finish order).</p>
+<p>First prove the tour exists, otherwise the walk will silently produce a partial answer. Count degrees (or in/out degrees), reject if the conditions fail, and check that every street lives in one connected piece, ignoring isolated junctions. Then pick the start: an odd-degree junction on an undirected path, the unique +1-out junction on a directed path, or any junction incident to a street if you are building a circuit.</p>
+<p>Hierholzer from that start: while the current junction <code>u</code> still has an unused outgoing street, take one, mark it used (by an edge id or by popping an adjacency iterator), and walk to its other end. When <code>u</code> has no unused street left you are stalled: push <code>u</code> onto the answer and backtrack to wherever you came from. The leftover streets at that moment sit in circuits glued to junctions already on the walk, and the recursive (or stack) restart from a stalled junction splices those circuits in. Because you pushed junctions as they stalled, the list is the tour written backwards: reverse it before you print.</p>
+<p>Walk the triangle 0-1-2-0 in words. Start at 0, take 0-1, then 1-2, then 2-0, and stall at 0 with nothing unused. Push 0, then 2, then 1, then 0; reverse to 0-1-2-0. If a leftover loop had sat at 2, the walk would have stalled at 2 first, spliced that loop onto the answer, and only then pushed 2. Marking a <em>vertex</em> used would have dropped that leftover loop and printed a tour of a subgraph.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>At every moment the unused edges of the current connected piece still satisfy the Euler condition for a circuit (or for a path from the current vertex). Splicing a leftover tour at the stall vertex preserves the used-exactly-once property.</p>
+    <p>At every moment the unused streets of the current connected piece still satisfy the Euler condition for a circuit (or for a path that starts at the current junction). Splicing a leftover tour at the stall junction uses each of those streets exactly once and does not disturb the streets already on the answer.</p><p>In plain words, stalling means "I have finished the streets I can see from here", and the leftover streets are always a bunch of circuits glued to the walk you already have, so appending them after a recursive restart is safe.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Mark edges used, never vertices</span>
+    <p>A junction of degree 4 must be entered and left twice. The unused streets at that junction are a leftover circuit you are supposed to splice in. A <code>visited[]</code> flag on vertices destroys it. Store an edge id, an iterator into the adjacency list, or a heap of unused destinations, and consume that.</p>
   </div>
 </aside>
 
@@ -158,7 +167,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Undirected cycle 0-1-2-0 plus chord 0-2. All degrees even: 0:3? Wait 0 has edges to 1,2,2 — degree 3. Use 0-1-2-0 only for the toy circuit.",
+          "note": "Toy circuit on the triangle 0-1-2-0. Every degree is 2, so a circuit exists. The walk starts at junction 0 with no street used yet.",
           "active": [
             0
           ],
@@ -169,7 +178,7 @@
           }
         },
         {
-          "note": "Walk 0→1, unused at 1 is 1-2.",
+          "note": "Take the street 0-1. Junction 1 still has the unused street 1-2, so the walk is not stalled and continues.",
           "active": [
             1
           ],
@@ -180,7 +189,7 @@
           }
         },
         {
-          "note": "1→2, then 2→0. Back at 0 with no unused edges. Push 0,2,1,0 in reverse.",
+          "note": "Take 1-2 and then 2-0. The walk is back at 0 with no unused street left, so 0 stalls and the reverse-finish push begins.",
           "active": [
             2
           ],
@@ -191,7 +200,7 @@
           }
         },
         {
-          "note": "Reverse: 0-1-2-0. Circuit.",
+          "note": "Junctions were pushed as they stalled, so the list is 0, 2, 1, 0 backwards. Reverse it to print the circuit 0-1-2-0.",
           "active": [
             0,
             1,
@@ -204,7 +213,7 @@
           }
         },
         {
-          "note": "If a leftover loop sat at 2, Hierholzer would recurse from 2 before pushing 2.",
+          "note": "If a leftover loop had sat at 2, the walk would stall at 2 first, splice that loop onto the answer, and only then push 2.",
           "active": [
             2
           ],
@@ -215,7 +224,7 @@
           }
         },
         {
-          "note": "Directed itinerary: always pop the smallest unused destination (PriorityQueue per node).",
+          "note": "For a lex-smallest directed itinerary, store unused destinations in a min-heap per junction and always pop the smallest label.",
           "active": [
             0
           ],
@@ -247,17 +256,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Check degrees</strong> (and one edge-component). If they fail, impossible.</li>
-  <li><strong>Pick start:</strong> the unique +1-out / odd-degree vertex, else any non-isolate.</li>
-  <li><strong>Hierholzer:</strong> while u has unused edges, take one and go. Else push u and pop back.</li>
-  <li><strong>Reverse</strong> the pushed list.</li>
-  <li><strong>Verify</strong> the tour length is m+1 (vertices in the walk).</li>
-  <li><strong>Lex smallest:</strong> store outgoing neighbours in a min-heap / TreeMap.</li>
+  <li><strong>Check the degree conditions and one edge-component first.</strong> If they fail, no tour exists and Hierholzer would silently print a walk of a subgraph; reject immediately rather than trusting the walk length later.</li>
+  <li><strong>Pick the only legal start.</strong> On an undirected path that is an odd-degree junction; on a directed path that is the unique +1-out junction; on a circuit, any junction that is incident to a street. Starting elsewhere leaves leftover streets.</li>
+  <li><strong>Hierholzer: take unused streets until you stall, then push.</strong> While <code>u</code> has an unused outgoing street, consume it and walk; when none remain, push <code>u</code> onto the answer and backtrack, which is how leftover circuits get spliced at the stall.</li>
+  <li><strong>Reverse the pushed list before you print.</strong> Junctions were appended as they stalled, which is reverse-finish order, so the printed walk is backwards until you reverse it or <code>addFirst</code> as you pop.</li>
+  <li><strong>Verify the tour has m+1 junctions.</strong> A shorter list means leftover streets were never consumed: a second component, a wrong start, or a vertex-visited flag that dropped a loop.</li>
+  <li><strong>For a lex-smallest directed tour, heap the unused destinations.</strong> LC 332 wants the smallest unused airport label at every choice; a <code>PriorityQueue</code> per junction (or a TreeMap of leftover tickets) is the only extra data structure.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Triangle 0-1-2-0, a circuit of three streets. The walk takes each street once, stalls at 0, and reversing the push order prints 0-1-2-0.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -265,12 +274,12 @@ graph LR
       <tr><th>u</th><th>used</th><th>stack</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>0</td><td>Undirected cycle 0-1-2-0 plus chord 0-2. All degrees even: 0:3? Wait 0 has edges to 1,2,2 — degree 3. Use 0-1-2-0 only for the toy circuit.</td></tr>
-      <tr><td>1</td><td>0-1</td><td>0,1</td><td>Walk 0→1, unused at 1 is 1-2.</td></tr>
-      <tr><td>2</td><td>all cycle</td><td>stall at 0</td><td>1→2, then 2→0. Back at 0 with no unused edges. Push 0,2,1,0 in reverse.</td></tr>
-      <tr><td>done</td><td>3 edges</td><td>0,1,2,0</td><td>Reverse: 0-1-2-0. Circuit.</td></tr>
-      <tr><td>2</td><td>splice</td><td>insert loop</td><td>If a leftover loop sat at 2, Hierholzer would recurse from 2 before pushing 2.</td></tr>
-      <tr><td>JFK</td><td>lex</td><td>Hierholzer + heap</td><td>Directed itinerary: always pop the smallest unused destination (PriorityQueue per node).</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>0</td><td>Toy circuit on the triangle 0-1-2-0. Every degree is 2, so a circuit exists. The walk starts at junction 0 with no street used yet.</td></tr>
+      <tr><td>1</td><td>0-1</td><td>0,1</td><td>Take the street 0-1. Junction 1 still has the unused street 1-2, so the walk is not stalled and continues.</td></tr>
+      <tr><td>2</td><td>all cycle</td><td>stall at 0</td><td>Take 1-2 and then 2-0. The walk is back at 0 with no unused street left, so 0 stalls and the reverse-finish push begins.</td></tr>
+      <tr><td>done</td><td>3 edges</td><td>0,1,2,0</td><td>Junctions were pushed as they stalled, so the list is 0, 2, 1, 0 backwards. Reverse it to print the circuit 0-1-2-0.</td></tr>
+      <tr><td>2</td><td>splice</td><td>insert loop</td><td>If a leftover loop had sat at 2, the walk would stall at 2 first, splice that loop onto the answer, and only then push 2.</td></tr>
+      <tr><td>JFK</td><td>lex</td><td>Hierholzer + heap</td><td>For a lex-smallest directed itinerary, store unused destinations in a min-heap per junction and always pop the smallest label.</td></tr>
     </tbody>
   </table>
 </div>
@@ -389,7 +398,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Each edge is pushed and popped once. The iterative version with an adjacency iterator is linear. A min-heap per node for lex-smallest adds a log on the degree.</p>
+    <p>Each street is consumed exactly once and each junction is pushed onto the answer once, so Hierholzer is <code>O(n + m)</code> with an adjacency iterator (or an edge-id used array). At <code>n, m = 2&times;10&#8309;</code> that is a few hundred thousand operations, a few milliseconds. Fleury's algorithm, which checks "is this street a bridge?" at every step, is <code>O(m&sup2;)</code> and is not what you write.</p>
+    <p>A min-heap per junction for the lex-smallest tour adds <code>log(degree)</code> per street. The sum of degrees is <code>2m</code>, so the extra is <code>O(m log n)</code> in the worst case and still comfortable at these limits. Isolated junctions cost nothing: you never start a walk at a vertex of degree 0.</p>
   </div>
 
   <table class="complexity__compare">
@@ -411,28 +421,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Checking vertices instead of edges for connectivity</span>
-    <div class="pitfalls__bug">Two components that both have edges: degrees can look fine locally and the tour cannot jump.</div>
-    <div class="pitfalls__fix">All <em>edges</em> in one component. Ignore isolated vertices.</div>
+    <div class="pitfalls__bug">Two pieces that both contain streets can have locally even degrees, so the existence check passes, but the walk cannot jump the gap and you print a tour of only one piece.</div>
+    <div class="pitfalls__fix">Require every <em>street</em> to live in one connected piece. Isolated junctions with no streets are ignored and do not fail the check.</div>
   </li>
   <li>
     <span class="pitfalls__title">Starting at a vertex of even degree when two odds exist</span>
-    <div class="pitfalls__bug">You produce a circuit of a subgraph and leftover edges.</div>
-    <div class="pitfalls__fix">Start at an odd-degree vertex (undirected) or the +1-out vertex (directed).</div>
+    <div class="pitfalls__bug">The walk returns to the even start after using a circuit of a subgraph, leftover streets hang off an odd junction, and the printed list is shorter than <code>m+1</code>.</div>
+    <div class="pitfalls__fix">Start at an odd-degree junction (undirected path) or at the unique +1-out junction (directed path). Only a circuit may start anywhere incident to a street.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to reverse</span>
-    <div class="pitfalls__bug">Hierholzer pushes in reverse-finish order. The printed walk is backwards.</div>
-    <div class="pitfalls__fix"><code>Collections.reverse</code> or <code>addFirst</code>.</div>
+    <div class="pitfalls__bug">Hierholzer pushes junctions as they stall, which is reverse-finish order, so the printed walk is the tour written backwards and fails a judge that checks the exact sequence.</div>
+    <div class="pitfalls__fix">Call <code>Collections.reverse</code> on the list, or <code>addFirst</code> as you pop, and test on a directed path that is not a palindrome.</div>
   </li>
   <li>
     <span class="pitfalls__title">Marking vertices used</span>
-    <div class="pitfalls__bug">Euler re-visits vertices. Marking a vertex used drops leftover cycles.</div>
-    <div class="pitfalls__fix">Mark <em>edges</em> used (an id or an iterator).</div>
+    <div class="pitfalls__bug">An Euler tour revisits junctions on purpose. A <code>visited[]</code> flag on vertices drops the leftover circuit at a degree-4 junction and prints a tour of a subgraph that still looks locally correct.</div>
+    <div class="pitfalls__fix">Mark <em>streets</em> used: an edge id, an adjacency iterator, or a heap of unused destinations. Never a vertex flag.</div>
   </li>
   <li>
     <span class="pitfalls__title">Directed tickets without a heap</span>
-    <div class="pitfalls__bug">Any Euler tour is accepted by some judges; LC 332 wants the lex smallest.</div>
-    <div class="pitfalls__fix"><code>PriorityQueue</code> of unused destinations.</div>
+    <div class="pitfalls__bug">Any Euler tour is a correct "use every ticket once", so a sample that has only one tour still passes, but LC 332 wants the lexicographically smallest tour and a later test splits.</div>
+    <div class="pitfalls__fix">Store unused destinations in a <code>PriorityQueue</code> per junction and always pop the smallest label. Test on two outgoing tickets from JFK with different destinations.</div>
   </li>
 </ul>
 
@@ -474,28 +484,28 @@ graph LR
   <details class="followup">
     <summary>Why not mark vertices?</summary>
     <div class="followup__body">
-      <p>A vertex of degree 4 must be entered and left twice. The unused-edge loop at that vertex is a leftover tour you splice in. Vertex-visited flags destroy it.</p>
+      <p>A junction of degree 4 must be entered and left twice: the first visit uses two of its streets, and the remaining two streets form a leftover circuit glued to that junction. Hierholzer is supposed to splice that circuit in when it later stalls there. A vertex-visited flag refuses the second visit and those two streets are never consumed. Mark streets, not junctions.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Hamiltonian vs Eulerian in one sentence?</summary>
     <div class="followup__body">
-      <p>Hamiltonian = every vertex once (hard). Eulerian = every edge once (easy, degree conditions + Hierholzer).</p>
+      <p>Hamiltonian asks for a walk that visits every <em>junction</em> exactly once, which is NP-complete and has no degree test that decides it. Eulerian asks for a walk that uses every <em>street</em> exactly once, which is decided by the degree conditions on this page and constructed in linear time by Hierholzer. If the statement says "vertices", you are on the wrong page.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What if the graph is disconnected?</summary>
     <div class="followup__body">
-      <p>A circuit still exists if every component that contains an edge is Eulerian (all even / in=out) and you only need a circuit of that component. If the statement wants the whole graph, require a single edge-component.</p>
+      <p>A circuit of a single piece still exists when that piece is Eulerian, even if other isolated junctions sit elsewhere. If the statement wants one tour of the whole input, require that every street lives in one connected piece and ignore degree-0 junctions. Two pieces that both contain streets cannot be joined by any Euler tour.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Directed path start?</summary>
     <div class="followup__body">
-      <p>The unique vertex with out-in = 1. If every in equals out, any vertex with an edge is a circuit start.</p>
+      <p>The unique junction whose out-degree is one more than its in-degree. The unique junction whose in-degree is one more than its out-degree is the end, and you do not start there. If every in-degree equals the matching out-degree, any junction incident to a street is a legal circuit start.</p>
     </div>
   </details>
 </div>

@@ -22,7 +22,7 @@
   <p class="hero__tagline">Relax every edge <code>n-1</code> times. A successful relaxation on the n-th pass is a negative cycle that can reach the target.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/dijkstra.html">Dijkstra's Algorithm</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Dijkstra assumes non-negative weights. One negative edge and the extracted-min order is a lie. Bellman-Ford only assumes there is no negative cycle on the path you care about, and it <em>detects</em> the ones that exist.</p>
-<p>The algorithm is the definition of a shortest path of at most <code>k</code> edges: after <code>i</code> full relax passes, <code>dist[v]</code> is the cheapest walk from the source that uses at most <code>i</code> edges. A simple path has at most <code>n-1</code> edges, so <code>n-1</code> passes suffice. A cheap n-th relaxation means a cycle with negative total weight.</p>
-<p>Interview and contest uses: "cheapest flights with at most k stops" is Bellman-Ford stopped early; "can I make money forever on these exchange rates" is a negative cycle on <code>-log(rate)</code>.</p>
+<p>You are pricing delivery routes across a handful of towns. Most roads cost money to drive, but a few of them pay you: one sponsor refunds 3 units if your van passes through their town, so that road carries a weight of &minus;3. You want the cheapest cost from town 0 to every other town. The tool you would normally reach for, Dijkstra, works by repeatedly picking the unfinished town with the smallest known cost and declaring that cost final forever. With a refund in the graph that declaration is simply false: a town you settled at cost 7 can later be reached for 4 through a road that pays you back, and Dijkstra never reopens a settled town. There is no crash and no warning, just a wrong number in the output.</p>
+<p>The algorithm on this page throws the clever ordering away and does something brutally simple instead. To <em>relax</em> an edge from <code>u</code> to <code>v</code> of weight <code>w</code> means one check: if <code>dist[u] + w</code> is smaller than the value currently stored in <code>dist[v]</code>, overwrite <code>dist[v]</code> with it. Bellman-Ford relaxes every edge in the graph, then relaxes every edge again, and repeats that sweep <code>n-1</code> times, where <code>n</code> is the number of towns. There is no priority queue and no such thing as a settled vertex, so a discovery made late is always allowed to improve a value written early. With <code>n = 2000</code> towns and <code>m = 5000</code> roads the whole run is 2000 &times; 5000 = <code>10&#8310;</code> edge checks, a few milliseconds.</p>
+<p>Why exactly <code>n-1</code> sweeps and not some other number? After the first sweep every distance reachable using a single road is correct; after the second, every distance reachable using two roads; and in general after sweep <code>i</code> the array is correct for every route of at most <code>i</code> roads. A route that never revisits a town touches at most <code>n</code> towns and therefore at most <code>n-1</code> roads, so <code>n-1</code> sweeps cover every sensible route. That bound also hands you a free detector. Run one extra sweep, and if some edge still improves a distance, the only possible explanation is a route that revisits a town and gets cheaper by doing so &mdash; a <em>negative cycle</em>, a loop whose weights sum to a negative number, which you could drive round forever to push the cost down without limit.</p>
+<p>In a problem statement the tell is a sentence that explicitly allows negative weights, or a question phrased as "can you profit forever", sitting beside small limits such as <code>n &le; 2&times;10&#179;</code> and <code>m &le; 5&times;10&#179;</code>. Two standard disguises are worth memorising. "Cheapest flight with at most <code>k</code> stops" is this algorithm stopped after <code>k+1</code> sweeps instead of <code>n-1</code>, because the sweep counter <em>is</em> the edge budget. Currency arbitrage is the other: set each exchange edge to <code>-log(rate)</code> so that multiplying rates becomes adding weights, and a sequence of trades that multiplies your money by more than one becomes exactly a cycle of negative total weight.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>After i relax-all-edges passes, dist is exact for paths of at most i edges. One more success on pass n is a negative cycle, not a longer simple path.</p>
+    <p>After <code>i</code> full sweeps of the edge list, <code>dist[v]</code> is exactly the cost of the cheapest route from the source to <code>v</code> that spends at most <code>i</code> edges, so the sweep counter is really an edge budget. An honest route never needs more than <code>n-1</code> edges, which is why anything that still improves on sweep <code>n</code> must be looping to save money rather than travelling somewhere new.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 2&times;10&#179;</code>, <code>m &le; 5&times;10&#179;</code> is the O(nm) window. Distances need <code>long</code>: n * |w| can hit 1e14. Undirected negative edges are already a negative cycle of length 2.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 2&times;10&#179;</code> and <code>m &le; 5&times;10&#179;</code> is the window where <code>n &times; m</code> fits. Distances need <code>long</code> because a path of <code>n</code> edges each of size <code>10&#8309;</code> already hits <code>2&times;10&#185;&#8308;</code>. An undirected negative edge stored both ways is already a negative cycle of length 2, so confirm the statement is directed before you duplicate every road.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Store an edge list. <code>dist[src] = 0</code>, rest INF. Repeat n-1 times: for every edge <code>u	o v</code> of weight w, if <code>dist[u]</code> is finite and <code>dist[u]+w &lt; dist[v]</code>, write the new distance and <code>par[v] = u</code>.</p>
-<p>Nth pass: any successful relax is a node on (or reachable from) a negative cycle. To recover the cycle, walk parent pointers n times from that node to enter the cycle, then walk once more to print it. To mark every node that can be driven to -INF, BFS/DFS from all nth-pass victims along the graph (or the reverse graph, depending on the question).</p>
+<p>Keep the graph as a flat list of triples <code>(u, v, w)</code> rather than adjacency lists, because each sweep must look at every road anyway. Allocate <code>dist[0..n-1]</code> filled with a huge sentinel, set <code>dist[src] = 0</code>, and allocate <code>par[v] = -1</code> so you can walk a route backwards later. To <em>relax</em> the edge <code>u &rarr; v</code> of weight <code>w</code> means: if <code>dist[u]</code> is already a real number and <code>dist[u] + w</code> is strictly smaller than <code>dist[v]</code>, overwrite <code>dist[v]</code> and remember <code>par[v] = u</code>. Never relax from the sentinel: adding a negative weight to "infinity" fabricates a finite junk distance to a town the source cannot reach.</p>
+<p>Repeat that sweep over the whole edge list exactly <code>n-1</code> times. After sweep <code>i</code> the array holds the cheapest walk that uses at most <code>i</code> edges, so <code>n-1</code> sweeps cover every walk that never revisits a town. Then run one extra sweep and collect every vertex whose distance still drops: each such victim sits on, or can be reached from, a <em>negative cycle</em> &mdash; a loop whose weights sum to a negative number. To print the loop, walk <code>par</code> exactly <code>n</code> steps from any victim (that walk is long enough to be forced onto the cycle) and then walk until a vertex repeats. To mark every town whose cheapest cost is unbounded, flood forwards from those victims, or flood on the reverse graph if the question is "can the source cheat its way to <code>t</code>".</p>
+<p>Walk the four-town sample in words. Edges are <code>0 &rarr; 1</code> weight 5, <code>0 &rarr; 2</code> weight 4, <code>2 &rarr; 1</code> weight &minus;2, <code>1 &rarr; 3</code> weight 1, <code>2 &rarr; 3</code> weight 3, source 0. After the first sweep <code>dist</code> is <code>[0, 2, 4, 3]</code> because the refund <code>2 &rarr; 1</code> improves town 1 from 5 down to 2 and then town 3 from 6 down to 3. The second sweep changes nothing, and neither does the extra detection sweep, so there is no negative cycle reachable from 0 and those four numbers are final.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After pass i, <code>dist[v]</code> equals the minimum weight of a walk from the source to v that uses at most i edges, or INF if none exists. A simple path cannot need more than n-1 edges, so pass n-1 is exact in a graph with no negative cycle on that path.</p>
+    <p>After sweep <code>i</code>, <code>dist[v]</code> equals the minimum weight of a walk from the source to <code>v</code> that uses at most <code>i</code> edges, or INF if no such walk exists.</p><p>In plain words, the sweep counter is an edge budget, not a clock: each full pass of the edge list is allowed to grow every surviving route by exactly one more road, and a route that never loops cannot need more than <code>n-1</code> roads. That is why a successful relax on sweep <code>n</code> cannot be travelling somewhere new &mdash; it must be looping to save money.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The extra sweep is the cycle detector</span>
+    <p>A walk that still improves after <code>n-1</code> edges must repeat a vertex and get cheaper by doing so. That is the definition of a negative cycle reachable from the source. The extra sweep does not compute a new distance; it only raises a flag, and the parent pointers already stored during the first <code>n-1</code> sweeps are what you walk to recover the loop.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Never relax from the sentinel</span>
+    <p>If <code>dist[u]</code> is still INF, the source has not reached <code>u</code>. Adding a negative <code>w</code> would write a finite number into <code>dist[v]</code> and pretend a path exists. Gate every relax on <code>dist[u]</code> being finite, and pick a sentinel such as <code>Long.MAX_VALUE / 4</code> so even a legal finite add cannot overflow.</p>
   </div>
 </aside>
 
@@ -159,7 +177,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Edges: 0\to1 w=5, 0\to2 w=4, 2\to1 w=-2, 1\to3 w=1, 2\to3 w=3. src=0. dist=[0,inf,inf,inf].",
+          "note": "Edges: 0&rarr;1 weight 5, 0&rarr;2 weight 4, 2&rarr;1 weight &minus;2, 1&rarr;3 weight 1, 2&rarr;3 weight 3. Source 0 starts at cost 0; every other town is still unknown.",
           "active": [
             0
           ],
@@ -170,7 +188,7 @@
           }
         },
         {
-          "note": "Pass 1: relax 0\to1 → dist[1]=5; 0\to2 → dist[2]=4.",
+          "note": "First sweep: the two roads out of 0 write dist[1]=5 and dist[2]=4, the cheapest one-edge routes from the source.",
           "active": [
             1,
             2
@@ -182,7 +200,7 @@
           }
         },
         {
-          "note": "Still pass 1: 2\to1 improves 5 to 2. 1\to3 sets dist[3]=6. 2\to3 would be 7, worse.",
+          "note": "Still the first sweep: the refund 2&rarr;1 improves town 1 from 5 down to 2, and 1&rarr;3 then writes dist[3]=3 rather than the worse 7 via 2.",
           "active": [
             1,
             3
@@ -194,7 +212,7 @@
           }
         },
         {
-          "note": "Wait: 1\to3 after dist[1]=2 gives dist[3]=3. Array is [0,2,4,3].",
+          "note": "The same first sweep, after dist[1] became 2, set dist[3] to 3. The array is now [0, 2, 4, 3] and every one-or-two-edge route has been tried.",
           "active": [
             3
           ],
@@ -205,7 +223,7 @@
           }
         },
         {
-          "note": "Pass 2: 2\to1 already 2; 1\to3 already 3. No change. Passes 3 have nothing to do.",
+          "note": "Second sweep re-checks every road and changes nothing: 2&rarr;1 is already 2 and 1&rarr;3 is already 3, so later sweeps have no work left.",
           "active": [
             0,
             1,
@@ -219,7 +237,7 @@
           }
         },
         {
-          "note": "Pass n=4 finds no improvement: no negative cycle reachable from 0.",
+          "note": "The extra detection sweep, pass n=4, finds no improvement either, so no negative cycle can be reached from town 0.",
           "active": [
             0
           ],
@@ -253,17 +271,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>dist[src] = 0</strong>, others INF, parent = -1.</li>
-  <li><strong>Repeat n-1 times:</strong> for every edge, relax <code>dist[v] = min(dist[v], dist[u]+w)</code> when dist[u] is finite.</li>
-  <li><strong>Optional early exit</strong> if a pass changes nothing.</li>
-  <li><strong>Nth pass:</strong> collect every vertex whose distance still drops.</li>
-  <li><strong>Cycle recover:</strong> from any victim walk parent n times, then walk until repeat.</li>
-  <li><strong>-INF reach:</strong> flood from those victims (forward or reverse, as the question asks).</li>
+  <li><strong>Initialise distances and parents.</strong> Set <code>dist[src] = 0</code>, fill every other slot with a huge sentinel, and set <code>par[v] = -1</code>, so a town with no written route is visibly unreachable and a later walk has a place to start.</li>
+  <li><strong>Sweep the edge list n-1 times.</strong> For every triple <code>(u, v, w)</code>, if <code>dist[u]</code> is finite and <code>dist[u] + w</code> beats <code>dist[v]</code>, overwrite the distance and remember <code>par[v] = u</code>, because only a real route is allowed to improve another town.</li>
+  <li><strong>Stop a sweep early when nothing moves.</strong> If a full pass of the edge list changes no entry, later passes cannot change anything either, so you may break; the extra detection sweep is then guaranteed to be quiet as well.</li>
+  <li><strong>Run one more sweep as a detector.</strong> Collect every vertex whose distance still drops on sweep <code>n</code>: each of those victims is on, or reachable from, a negative cycle, and that is the only information this extra pass is meant to produce.</li>
+  <li><strong>Recover a cycle from the parent pointers.</strong> Starting at any victim, follow <code>par</code> exactly <code>n</code> times so the walk is forced onto the loop, then walk once more until a vertex repeats and emit that loop.</li>
+  <li><strong>Mark every town that can be driven to minus infinity.</strong> Flood forwards from the victims (or on the reverse graph, if the question is whether the source can cheat its way to a given target) so every node that inherits the unbounded improvement is flagged.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Four towns, source 0, and one refund edge 2&rarr;1 of weight &minus;2. Watch dist settle at [0, 2, 4, 3] and the extra sweep stay quiet.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -271,12 +289,12 @@ graph LR
       <tr><th>pass</th><th>edge</th><th>dist</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>init</td><td>0,inf,inf,inf</td><td>Edges: 0	o1 w=5, 0	o2 w=4, 2	o1 w=-2, 1	o3 w=1, 2	o3 w=3. src=0. dist=[0,inf,inf,inf].</td></tr>
-      <tr><td>1</td><td>0-1, 0-2</td><td>0,5,4,inf</td><td>Pass 1: relax 0	o1 → dist[1]=5; 0	o2 → dist[2]=4.</td></tr>
-      <tr><td>1</td><td>2-1, 1-3</td><td>0,2,4,3</td><td>Still pass 1: 2	o1 improves 5 to 2. 1	o3 sets dist[3]=6. 2	o3 would be 7, worse.</td></tr>
-      <tr><td>1</td><td>1-3 again</td><td>0,2,4,3</td><td>Wait: 1	o3 after dist[1]=2 gives dist[3]=3. Array is [0,2,4,3].</td></tr>
-      <tr><td>2</td><td>none</td><td>0,2,4,3</td><td>Pass 2: 2	o1 already 2; 1	o3 already 3. No change. Passes 3 have nothing to do.</td></tr>
-      <tr><td>4</td><td>detect</td><td>stable</td><td>Pass n=4 finds no improvement: no negative cycle reachable from 0.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>init</td><td>0,inf,inf,inf</td><td>Edges: 0&rarr;1 weight 5, 0&rarr;2 weight 4, 2&rarr;1 weight &minus;2, 1&rarr;3 weight 1, 2&rarr;3 weight 3. Source 0 starts at cost 0; every other town is still unknown.</td></tr>
+      <tr><td>1</td><td>0-1, 0-2</td><td>0,5,4,inf</td><td>First sweep: the two roads out of 0 write dist[1]=5 and dist[2]=4, the cheapest one-edge routes from the source.</td></tr>
+      <tr><td>1</td><td>2-1, 1-3</td><td>0,2,4,3</td><td>Still the first sweep: the refund 2&rarr;1 improves town 1 from 5 down to 2, and 1&rarr;3 then writes dist[3]=3 rather than the worse 7 via 2.</td></tr>
+      <tr><td>1</td><td>1-3 again</td><td>0,2,4,3</td><td>The same first sweep, after dist[1] became 2, set dist[3] to 3. The array is now [0, 2, 4, 3] and every one-or-two-edge route has been tried.</td></tr>
+      <tr><td>2</td><td>none</td><td>0,2,4,3</td><td>Second sweep re-checks every road and changes nothing: 2&rarr;1 is already 2 and 1&rarr;3 is already 3, so later sweeps have no work left.</td></tr>
+      <tr><td>4</td><td>detect</td><td>stable</td><td>The extra detection sweep, pass n=4, finds no improvement either, so no negative cycle can be reached from town 0.</td></tr>
     </tbody>
   </table>
 </div>
@@ -382,7 +400,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>n-1 passes, each scans m edges, so <code>O(nm)</code>. SPFA is faster on random graphs and worst-case exponential — do not use it when an adversary exists unless you have a queue-count cutoff that falls back to BF.</p>
+    <p>Each of the <code>n-1</code> sweeps looks at every one of the <code>m</code> edges, and the extra detection sweep does the same, so the work is <code>(n) &times; m</code> relax attempts. At the usual limits that is 2000 &times; 5000 = <code>10&#8310;</code> additions, a few milliseconds. The parent array and the distance array are both length <code>n</code>, and the edge list is length <code>m</code>, so the memory is linear in the input.</p>
+    <p>SPFA queues only the vertices that just improved and is faster on random graphs, but an adversary can force a vertex to re-enter the queue exponentially often. Do not ship SPFA on a contest that allows worst-case input unless you add a visit cutoff of about <code>n</code> and fall back to this <code>O(nm)</code> sweep when the cutoff fires.</p>
   </div>
 
   <table class="complexity__compare">
@@ -404,28 +423,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Relaxing from INF</span>
-    <div class="pitfalls__bug"><code>INF + negative</code> becomes a finite junk distance and "reaches" a node that the source cannot.</div>
-    <div class="pitfalls__fix">Only relax when <code>dist[u]</code> is finite.</div>
+    <div class="pitfalls__bug"><code>INF + negative</code> wraps into a finite junk distance, so a town the source cannot reach looks reachable and the extra sweep may even raise a false cycle flag.</div>
+    <div class="pitfalls__fix">Gate every relax on <code>dist[u]</code> being finite, and pick a sentinel such as <code>Long.MAX_VALUE / 4</code> so a legal add cannot overflow either.</div>
   </li>
   <li>
     <span class="pitfalls__title">int overflow</span>
-    <div class="pitfalls__bug"><code>n * |w|</code> exceeds Integer.MAX_VALUE and a real shortest path looks like a negative cycle.</div>
-    <div class="pitfalls__fix"><code>long[] dist</code>. Sentinel <code>Long.MAX_VALUE/4</code> so additions do not overflow.</div>
+    <div class="pitfalls__bug">A path of <code>n</code> edges each of size <code>10&#8309;</code> exceeds <code>Integer.MAX_VALUE</code>, so a real shortest path wraps negative and looks like a cycle the extra sweep will "detect".</div>
+    <div class="pitfalls__fix">Store <code>long[] dist</code> and add with a <code>long</code> cast. Test on a three-edge path of weight <code>10&#8309;</code> each and check the printed sum is <code>3&times;10&#8309;</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Nth-pass victim is not on the cycle</span>
-    <div class="pitfalls__bug">It is only reachable <em>from</em> the cycle. Walking parents once may stop at a tree edge.</div>
-    <div class="pitfalls__fix">Walk parent n times first to land on the cycle, then walk until you repeat.</div>
+    <div class="pitfalls__bug">A victim is only reachable <em>from</em> the cycle, so walking <code>par</code> once can stop on a tree edge that leads into the loop rather than on the loop itself, and the printed walk is not closed.</div>
+    <div class="pitfalls__fix">Walk parent exactly <code>n</code> times first so you are forced onto the cycle, then walk until a vertex repeats. Test on a cycle with a tail hanging off it.</div>
   </li>
   <li>
     <span class="pitfalls__title">Undirected negative edge</span>
-    <div class="pitfalls__bug">Storing both directions of a negative edge is a 2-cycle of negative weight.</div>
-    <div class="pitfalls__fix">Undirected negatives are almost always a modelling error. Confirm the statement.</div>
+    <div class="pitfalls__bug">Storing both orientations of a single negative undirected edge creates a two-cycle whose weights sum negative, so the detector fires on a graph that had no interesting loop.</div>
+    <div class="pitfalls__fix">Undirected negatives are almost always a modelling error. Confirm the statement is directed before you duplicate every road, and if it is undirected then reject a negative weight immediately.</div>
   </li>
   <li>
     <span class="pitfalls__title">In-place relax for "at most k edges"</span>
-    <div class="pitfalls__bug">Using one array lets a pass use a distance written earlier in the same pass, which is a path of more than one extra edge.</div>
-    <div class="pitfalls__fix">Clone <code>dist</code> each pass (LC 787).</div>
+    <div class="pitfalls__bug">Using one array lets a sweep read a distance written earlier in the same sweep, which is a walk of more than one extra edge, so "at most k stops" silently becomes "at most many stops".</div>
+    <div class="pitfalls__fix">Clone <code>dist</code> at the start of each sweep and write improvements into the clone (LC 787). Test on a two-edge cheapest route that should be illegal when <code>k = 0</code>.</div>
   </li>
 </ul>
 
@@ -467,28 +486,28 @@ graph LR
   <details class="followup">
     <summary>Why n-1, not n?</summary>
     <div class="followup__body">
-      <p>A simple path has at most n-1 edges. If a cheaper walk uses n edges it repeats a vertex, hence contains a cycle, hence (if it is cheaper) a negative cycle.</p>
+      <p>A walk that never revisits a town uses at most <code>n-1</code> roads, because it touches at most <code>n</code> towns. If a cheaper walk still uses <code>n</code> roads it must repeat a town, and the loop it closed must have negative total weight &mdash; otherwise dropping the loop would be cheaper. That is why sweep <code>n</code> is reserved for detection rather than for computing one more honest distance.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Does BF work on undirected graphs?</summary>
     <div class="followup__body">
-      <p>Yes if every weight is non-negative. A single negative undirected edge is a negative cycle. Model the graph as directed with both orientations only when weights are ≥ 0.</p>
+      <p>Yes, but only when every weight is non-negative, in which case you may store both orientations and the extra sweep will stay quiet. A single negative undirected edge stored both ways is already a negative two-cycle, so the detector fires immediately. If the statement really is undirected and allows a negative road, the cheapest cost is unbounded and you should reject the input rather than run this algorithm.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you list every node that can be driven to -INF?</summary>
     <div class="followup__body">
-      <p>After the nth pass, the victims are nodes that improved. DFS/BFS forward from them (and, if the question is "source can cheat to reach t", also require they are reachable from the source).</p>
+      <p>After the extra sweep, the victims are the towns whose distance still improved. Flood forwards from those victims along the original edges to mark everyone who can inherit the unbounded improvement. If the question is "can the source cheat its way to <code>t</code>", you also need the victim to be reachable from the source, which the first <code>n-1</code> sweeps already recorded as a finite <code>dist</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Bellman-Ford vs Dijkstra with potentials?</summary>
     <div class="followup__body">
-      <p>Johnson's algorithm runs BF once from a dummy source to compute potentials, then Dijkstra with non-negative reduced costs for every source. That is the all-pairs algorithm when n is too big for Floyd and weights can be negative but there is no negative cycle.</p>
+      <p>Johnson's algorithm runs Bellman-Ford once from a dummy source that has a zero-weight edge into every vertex, reads the resulting distances as <em>potentials</em>, and rewrites every edge weight as <code>w + pot[u] - pot[v]</code>. Those reduced weights are non-negative when no negative cycle exists, so you may then run Dijkstra from every source. That is the all-pairs tool when <code>n</code> is too big for Floyd-Warshall but the graph is sparse and has no negative cycle.</p>
     </div>
   </details>
 </div>

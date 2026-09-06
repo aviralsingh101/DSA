@@ -22,7 +22,7 @@
   <p class="hero__tagline">|A∪B|=|A|+|B|-|A∩B|. For n sets the sign is (-1)^{|S|+1}. The same sum counts surjections, derangements, and coprime lattice points.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="combinatorics.html">Combinatorics</a>,
       <a href="primes-and-sieves.html">Primes & Sieves</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>"How many integers ≤ n are divisible by 2 or 3 or 5?" is add singles, subtract pairs, add the triple. The same loop counts derangements and gcd==1 pairs.</p>
-<p>In code: loop 2^k subsets of k properties, sign = popcount parity. 2^k times the cost of one intersection must fit.</p>
-<p>Möbius inversion packages IE on the divisor lattice: Σ_{d|n} μ(d)=[n==1]. Coprime pairs become Σ μ(d) floor(n/d)^2.</p>
+<p>You are asked how many integers from 1 to 10 are divisible by 2 or by 3. Counting multiples of 2 gives 5, counting multiples of 3 gives 3, and adding them gives 8, which is too big because 6 was counted twice. Subtract the one number that is divisible by both and you get 7, which you can check by listing: 2, 3, 4, 6, 8, 9, 10. That is inclusion-exclusion on two sets: overcount, then correct.</p>
+<p>Three sets is the same habit with one more correction. Multiples of 2, 3, or 5 up to 10: add the three single counts (5+3+2), subtract the three pairwise overlaps (multiples of 6, 10, and 15), then add back the triple overlap (multiples of 30) because the pairwise subtractions removed it too often. The running total is 5+3+2-1-1-0+0=8. Once you can see the overcount-and-correct on two and three sets, the <code>k</code>-set loop is just that pattern in a mask.</p>
+<p>In code you loop every non-empty subset of <code>k</code> properties. The sign is plus when the subset size is odd (you are adding a single, or a triple, &hellip;) and minus when it is even (you are subtracting a pairwise overlap). The product <code>2<sup>k</sup></code> times the cost of counting one intersection must fit; <code>k &le; 20</code> is the usual comfort zone. The phrase &ldquo;divisible by any of these primes&rdquo; or &ldquo;at least one property&rdquo; next to a small <code>k</code> is the constraint that names this page.</p>
+<p>The same overcount-and-correct counts derangements (permutations with no fixed point), surjections onto <code>k</code> labels, and pairs with gcd 1. M&ouml;bius inversion is the packaged form on the divisor lattice: leftover of a sum of <code>mu[d]</code> over divisors of <code>n</code> is 1 when <code>n</code> is 1 and 0 otherwise, which turns &ldquo;coprime pairs up to <code>n</code>&rdquo; into a single sum you can sieve.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>You can count a union if you can count every intersection. An element in exactly r sets is counted C(r,1)-C(r,2)+...=1 time.</p>
+    <p>You can count a union whenever you can count every intersection. Overcount by adding the singles, correct by subtracting the pairwise overlaps, and on three sets add the triple back. An element that sits in exactly <code>r</code> sets is then counted once, which is why the signed sum equals the size of the union.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> k≤20 for a mask loop. Möbius to n=1e7 is a linear sieve. Floor(n/d) blocks make Σ f(d)floor(n/d) O(√n).</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> A mask loop is comfortable at <code>k &le; 20</code>, because <code>2<sup>20</sup></code> is about a million subsets and each intersection must be cheap. M&ouml;bius up to <code>n = 10<sup>7</sup></code> is one linear sieve. Sums that group <code>floor(n/d)</code> into blocks run in about <code>2 sqrt n</code> iterations, a few thousand at <code>n = 10<sup>6</sup></code>. A universe scan of size <code>n</code> times <code>k</code> dies when <code>n</code> is <code>10<sup>12</sup></code> and <code>k</code> is 20.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>For mask≠0, count the intersection of those properties. Sign + for odd popcount (union). Sum.</p>
-<p>Möbius: sieve μ; g(n)=Σ_{d|n} μ(d) f(n/d). gcd==1 is the textbook application.</p>
+<p>Start with two sets and say the words out loud. Size of the union is size of A plus size of B minus size of the overlap: you overcounted every element that sat in both, so you subtract the overlap once and each element is counted once. Three sets: add the three singles, subtract the three pairwise overlaps (those elements were added twice too many times after the singles), then add the triple overlap back because the three pairwise subtractions removed it completely. That signed combination is the size of the union of A, B, and C.</p>
+<p>The mask loop is the same overcount-and-correct for <code>k</code> properties. Skip mask 0, which would add the whole universe. For each non-empty mask, count the intersection of the chosen properties &mdash; for &ldquo;divisible by these primes&rdquo; that count is <code>floor(n / product)</code>, the number of multiples of that product up to <code>n</code>. Add the term when the popcount is odd, subtract when it is even. If the product would exceed <code>n</code>, skip: there are no multiples, and a wrapped product would invent some.</p>
+<p>Walk the sample. Up to 10, multiples of 2 or 3: singles 5+3, overlap 1, union 7. Add 5: singles 5+3+2, pairs 1, 1, 0, triple 0, union 8. Derangements of 3 items: start from <code>3! = 6</code> permutations, subtract those that fix at least one point by the same signed sum, and you get 2 (the two 3-cycles). M&ouml;bius of 1..6 is <code>1, -1, -1, 0, -1, 1</code>, the precomputed signs for the divisor form of the same idea. Always verify the <code>k = 2</code> mask loop against size A plus size B minus the overlap before you trust a larger <code>k</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Σ_j C(r,j)(-1)^{j+1} = 1 for r≥1, so every element in the union is counted once.</p>
+    <p>An element that belongs to exactly <code>r &ge; 1</code> of the sets is added once for each singleton it sits in, subtracted once for each pair, added once for each triple, and so on. That signed combination of binomial coefficients equals 1, so the element contributes 1 to the union.</p><p>In plain words, you overcount, then you correct, and after the corrections every element that was in at least one set has been counted exactly once.</p><p>Interview sentence: <em>&ldquo;Add the singles, subtract the overlaps, add the triples back.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Two sets, then three, then the mask</span>
+    <p>Size of A union B is size A plus size B minus the overlap. Size of A union B union C adds the third single, subtracts the three new pairwise overlaps, and adds the triple. The mask loop is that paragraph, not a different idea.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Mask 0 is the universe</span>
+    <p>Popcount 0 is even, so a sloppy sign rule subtracts or adds <code>n</code> and the answer is off by the size of the whole universe. Start the loop at mask 1.</p>
   </div>
 </aside>
 
@@ -160,7 +178,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "1..10 divisible by 2 or 3: |A|=5, |B|=3.",
+          "note": "Up to 10, overcount multiples of 2 and of 3: five plus three is eight, and 6 was counted twice.",
           "active": [
             1
           ],
@@ -171,7 +189,7 @@
           }
         },
         {
-          "note": "Subtract |A∩B|=1 → 7. Numbers: 2,3,4,6,8,9,10.",
+          "note": "Correct by subtracting the one overlap (multiples of 6). The union is 7: 2, 3, 4, 6, 8, 9, 10.",
           "active": [
             3
           ],
@@ -182,7 +200,7 @@
           }
         },
         {
-          "note": "Primes 2,3,5: 5+3+2-1-1-0+0=8.",
+          "note": "Three primes: add 5+3+2, subtract the three pairwise overlaps, add the triple, total 8.",
           "active": [
             0
           ],
@@ -193,7 +211,7 @@
           }
         },
         {
-          "note": "!3 = 6*(1-1+1/2-1/6)=2.",
+          "note": "Derangements of 3: start from 6 permutations and apply the same signed sum, which leaves 2.",
           "active": [
             2
           ],
@@ -204,7 +222,7 @@
           }
         },
         {
-          "note": "μ(1..6)=1,-1,-1,0,-1,1.",
+          "note": "Möbius values on 1..6 are the precomputed plus-or-minus signs for the divisor form of this sum.",
           "active": [
             0
           ],
@@ -215,7 +233,7 @@
           }
         },
         {
-          "note": "Skip mask 0 for a union; + on odd popcount.",
+          "note": "Skip the empty mask, which is the whole universe, and add a term when the popcount is odd.",
           "active": [
             0
           ],
@@ -247,17 +265,17 @@ flowchart LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Name properties</strong> so intersections are countable.</li>
-  <li><strong>Loop masks 1..(1<<k)-1</strong>.</li>
-  <li><strong>Sign</strong> from popcount; + if odd.</li>
-  <li><strong>Skip</strong> if the product of primes exceeds n.</li>
-  <li><strong>Möbius</strong> for divisor-lattice questions.</li>
-  <li><strong>Verify k=2</strong> against |A|+|B|-|A∩B|.</li>
+  <li><strong>Name properties so every intersection is countable.</strong> &ldquo;Divisible by this prime&rdquo; and &ldquo;fixes this position&rdquo; work; a property whose overlap you cannot count is the wrong setup.</li>
+  <li><strong>Loop every non-empty mask.</strong> Masks from 1 through <code>(1&lt;&lt;k)-1</code> are the singles, the pairs, the triples, and so on. Mask 0 is the universe and must not enter the sum.</li>
+  <li><strong>Sign by popcount.</strong> Add the intersection when the subset size is odd (overcount), subtract when it is even (correct). That is the two-set and three-set paragraph in a loop.</li>
+  <li><strong>Skip a product that exceeds n.</strong> There are then no multiples, and a 64-bit wrap would invent a fake <code>floor(n / product)</code>.</li>
+  <li><strong>Reach for Möbius on divisor questions.</strong> The sieve writes the same plus-or-minus signs on the divisor lattice, so coprime-pair counts become one sum over <code>d</code>.</li>
+  <li><strong>Verify the k=2 case by hand.</strong> The mask loop must reproduce size A plus size B minus the overlap before you trust a larger <code>k</code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Overcount multiples of 2 or 3 up to 10, correct the overlap, then do the same for three primes and a derangement.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -265,12 +283,12 @@ flowchart LR
       <tr><th>step</th><th>term</th><th>acc</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>singles</td><td>5+3</td><td>8</td><td>1..10 divisible by 2 or 3: |A|=5, |B|=3.</td></tr>
-      <tr><td>pair</td><td>-1</td><td>7</td><td>Subtract |A∩B|=1 → 7. Numbers: 2,3,4,6,8,9,10.</td></tr>
-      <tr><td>3 primes</td><td>8</td><td>8</td><td>Primes 2,3,5: 5+3+2-1-1-0+0=8.</td></tr>
-      <tr><td>derange</td><td>2</td><td>2</td><td>!3 = 6*(1-1+1/2-1/6)=2.</td></tr>
-      <tr><td>mu</td><td>pairs</td><td>sum</td><td>μ(1..6)=1,-1,-1,0,-1,1.</td></tr>
-      <tr><td>sign</td><td>popcount</td><td>odd+</td><td>Skip mask 0 for a union; + on odd popcount.</td></tr>
+      <tr class="trace-table__row--change"><td>singles</td><td>5+3</td><td>8</td><td>Up to 10, overcount multiples of 2 and of 3: five plus three is eight, and 6 was counted twice.</td></tr>
+      <tr><td>pair</td><td>-1</td><td>7</td><td>Correct by subtracting the one overlap (multiples of 6). The union is 7: 2, 3, 4, 6, 8, 9, 10.</td></tr>
+      <tr><td>3 primes</td><td>8</td><td>8</td><td>Three primes: add 5+3+2, subtract the three pairwise overlaps, add the triple, total 8.</td></tr>
+      <tr><td>derange</td><td>2</td><td>2</td><td>Derangements of 3: start from 6 permutations and apply the same signed sum, which leaves 2.</td></tr>
+      <tr><td>mu</td><td>pairs</td><td>sum</td><td>Möbius values on 1..6 are the precomputed plus-or-minus signs for the divisor form of this sum.</td></tr>
+      <tr><td>sign</td><td>popcount</td><td>odd+</td><td>Skip the empty mask, which is the whole universe, and add a term when the popcount is odd.</td></tr>
     </tbody>
   </table>
 </div>
@@ -386,7 +404,8 @@ flowchart LR
   </div>
 
   <div class="complexity__derivation">
-    <p>2^k subsets. Möbius is a linear sieve. Floor values group into O(√n) blocks.</p>
+    <p>The mask loop visits <code>2<sup>k</sup> - 1</code> non-empty subsets. If counting one intersection costs <code>T</code> (a product of <code>k</code> primes, or a stars-and-bars choose), the whole union is <code>O(2<sup>k</sup> T)</code>. M&ouml;bius is one linear sieve, then a sum over <code>d = 1..n</code>. Grouping equal values of <code>floor(n/d)</code> collapses that sum to about <code>2 sqrt n</code> blocks.</p>
+    <p>Putting real numbers in: <code>k = 20</code> is a million subsets; if each intersection is a handful of arithmetic operations the batch finishes in tens of milliseconds. A universe scan at <code>n = 10<sup>12</sup></code> is impossible. M&ouml;bius to <code>10<sup>7</sup></code> is a few hundred milliseconds and 40 MB; the same sum at <code>n = 10<sup>12</sup></code> needs a Dirichlet prefix (Du-Jiao) or a promised smaller limit. Floor-block sums at <code>n = 10<sup>12</sup></code> are about two million iterations and are fine on their own.</p>
   </div>
 
   <table class="complexity__compare">
@@ -408,28 +427,28 @@ flowchart LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Wrong sign / empty mask</span>
-    <div class="pitfalls__bug">Mask 0 adds the universe.</div>
-    <div class="pitfalls__fix">Skip 0; + on odd popcount.</div>
+    <div class="pitfalls__bug">Mask 0 has popcount 0, so a sloppy sign rule adds or subtracts the whole universe. The answer is off by <code>n</code> and still looks like a plausible count.</div>
+    <div class="pitfalls__fix">Start at mask 1. Add when popcount is odd, subtract when even. The two-set case must reproduce size A plus size B minus the overlap.</div>
   </li>
   <li>
     <span class="pitfalls__title">Product overflow</span>
-    <div class="pitfalls__bug">lcm wraps; n/prod is junk.</div>
-    <div class="pitfalls__fix">If prod would exceed n, skip.</div>
+    <div class="pitfalls__bug">The product of the chosen primes wraps a <code>long</code>, so <code>n / prod</code> becomes a huge fake count of multiples and the union is wildly too large.</div>
+    <div class="pitfalls__fix">If the next prime would make <code>prod &gt; n</code>, skip that mask. There are then no multiples of that product up to <code>n</code>.</div>
   </li>
   <li>
-    <span class="pitfalls__title">μ of a square not zeroed</span>
-    <div class="pitfalls__bug">mu[i*p]=-mu[i] even when p|i.</div>
-    <div class="pitfalls__fix">If p|i, μ=0.</div>
+    <span class="pitfalls__title">mu of a square not zeroed</span>
+    <div class="pitfalls__bug">Writing <code>mu[i*p] = -mu[i]</code> even when <code>p</code> already divides <code>i</code> leaves a non-zero M&ouml;bius value on a square. Later coprime-pair sums include extra terms and look only slightly off.</div>
+    <div class="pitfalls__fix">If <code>p</code> divides <code>i</code>, set <code>mu[i*p] = 0</code>. After the sieve, <code>mu[4]</code>, <code>mu[9]</code>, and <code>mu[12]</code> must all be 0.</div>
   </li>
   <li>
     <span class="pitfalls__title">Derangement integer /</span>
-    <div class="pitfalls__bug">n!/k! must stay exact.</div>
-    <div class="pitfalls__fix">Running mul or mods.</div>
+    <div class="pitfalls__bug">Forming leftover of <code>n! / k!</code> with Java <code>/</code> truncates, so the signed sum is no longer the integer number of derangements.</div>
+    <div class="pitfalls__fix">Keep a running multiply leftover <code>M</code>, or stay in exact integers with a running product that divides evenly at each step.</div>
   </li>
   <li>
     <span class="pitfalls__title">min(|A|,|B|) as intersection</span>
-    <div class="pitfalls__bug">Not the size of A∩B.</div>
-    <div class="pitfalls__fix">Count from the structure (lcm, both constraints).</div>
+    <div class="pitfalls__bug">The smaller of the two set sizes is a cheap number and looks like an overlap bound, but it is not the size of the intersection, so the correction term is wrong.</div>
+    <div class="pitfalls__fix">Count the overlap from the structure: multiples of the lcm, or elements that satisfy both constraints. For 2-or-3 up to 10 that overlap is 1, not min(5, 3)=3.</div>
   </li>
 </ul>
 
@@ -471,28 +490,28 @@ flowchart LR
   <details class="followup">
     <summary>Why is an r-set element counted once?</summary>
     <div class="followup__body">
-      <p>Σ C(r,j)(-1)^{j+1}=1 for r≥1.</p>
+      <p>Picture an element that sits in exactly three of your sets. The singles add it three times. The pairwise overlaps subtract it three times, which removes it completely. The triple adds it back once. Net contribution: 1. In general the signed sum of &ldquo;how many of its <code>r</code> memberships you pick&rdquo; is 1 for every <code>r &ge; 1</code>, which is why overcount-and-correct equals the size of the union rather than some other combination.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Möbius vs raw IE?</summary>
     <div class="followup__body">
-      <p>Möbius is IE on the divisor poset with μ precomputed.</p>
+      <p>Raw inclusion-exclusion loops subsets of a short list of properties. M&ouml;bius is the same signed sum, precomputed on the divisor lattice: <code>mu[d]</code> is the plus-or-minus (or zero on squares) you would have written by hand for the property &ldquo;divisible by <code>d</code>&rdquo;. Use the mask loop when <code>k</code> is tiny and the properties are arbitrary; use M&ouml;bius when the properties are &ldquo;divisible by this integer&rdquo; up to <code>n</code>.</p>
     </div>
   </details>
 
   <details class="followup">
-    <summary>n=1e12 in Σ μ(d) floor(n/d)^2?</summary>
+    <summary>n=1e12 in sum mu[d] floor(n/d)^2?</summary>
     <div class="followup__body">
-      <p>Cannot sieve to 1e12. Need Du-Jiao / min_25, or n≤1e7.</p>
+      <p>That sum computes the number of coprime pairs <code>(i, j)</code> with both at most <code>n</code>: for each <code>d</code>, leftover of <code>mu[d]</code> times the square of how many multiples of <code>d</code> sit in <code>1..n</code>. You cannot sieve <code>mu</code> to <code>10<sup>12</sup></code>. Either the limit is actually <code>10<sup>7</sup></code>, or you need a Dirichlet prefix (Du-Jiao / min_25). Floor-block grouping alone does not remove the need for <code>mu[d]</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Three-set formula?</summary>
     <div class="followup__body">
-      <p>|A∪B∪C|=|A|+|B|+|C|-|AB|-|AC|-|BC|+|ABC|.</p>
+      <p>Add the three single sizes (overcount), subtract the three pairwise overlaps (correct the double-counted elements), then add the triple overlap back because those last elements were subtracted too often. The result is the number of elements that sit in at least one of the three sets. It is the two-set rule with one extra correction, and the mask loop is that sentence for every subset size.</p>
     </div>
   </details>
 </div>

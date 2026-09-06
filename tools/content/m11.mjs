@@ -88,7 +88,7 @@ pack({
   inv -- "P prime" --> fermat["pow a P-2"]`,
   merTitle: "Normalise, then multiply, then invert",
   merCaption: "Java remainder is not the mathematical mod. Fix it before hashing or subtracting.",
-  dryIntro: "Trace leftovers modulo 5 through add, subtract, multiply, inverse, divide, and a binary power, matching the visual walkthrough.",
+  dryIntro: "Trace leftovers modulo 5 through add, subtract, multiply, inverse, divide, and a binary power, matching every row of the visual walkthrough.",
   steps: [
     "<strong>Store every residue in a long.</strong> When <code>M</code> is around <code>10<sup>9</sup></code> a product of two residues needs 64 bits, so an <code>int</code> wrap before <code>%</code> silently destroys the leftover.",
     "<strong>Add by reducing the sum.</strong> With <code>a</code> and <code>b</code> already in <code>0..M-1</code>, compute <code>a+b</code> and subtract <code>M</code> if it reached <code>M</code>; that leftover of the sum always fits in a <code>long</code>.",
@@ -182,7 +182,7 @@ pack({
       bug: "The leftover of <code>a<sup>M-2</sup></code> is the inverse only for prime <code>M</code>. On a composite it looks like the same one-liner and produces a number that does not multiply back to 1.",
       fix: "Use extended Euclid when <code>gcd(a, M) = 1</code>, or factor <code>M</code> and apply Euler / CRT. Test that <code>mul(a, inv(a))</code> is leftover 1." },
     { title: "pow(a, n) with n=1e18 written as a loop",
-      bug: "A loop of <code>10<sup>18</sup></code> multiplies times out, and <code>Math.pow</code> uses doubles so the leftover is rounded, not exact.",
+      bug: "A loop of <code>10<sup>18</sup></code> multiplies times out, and <code>Math.pow</code> uses doubles so the leftover is rounded, not an exact residue.",
       fix: "Binary exponentiation in the integer ring: square and multiply on bits. Test <code>2<sup>7</sup> mod 5 = 3</code> before trusting a huge exponent." },
   ],
   variants: [
@@ -234,7 +234,7 @@ pack({
     "You are given every integer from <code>2</code> to <code>n</code> and you must mark which of them are prime, or factor a long list of them. Trial division tests one candidate in about <code>sqrt n</code> divisions, so asking the question a million times at <code>n = 10<sup>6</sup></code> is already about a billion steps and the judge will cut you off. A sieve pays that cost once, up front, and then primality of any <code>k &le; n</code> is a single array read.",
     "The extra prize is the <em>smallest-prime-factor</em> table, usually shortened to SPF: <code>spf[k]</code> stores the smallest prime that divides <code>k</code>. Once you have it, factoring any <code>k &le; n</code> is a loop that peels off <code>spf[k]</code> until you hit <code>1</code>, at most about <code>log k</code> divisions. That is why you sieve even when the statement never asked you to list primes &mdash; it asked you to factor many numbers in a range.",
     "In Java a boolean or integer sieve is comfortable up to about <code>n = 10<sup>7</sup></code> (tens of megabytes and a few hundred milliseconds). A limit of <code>10<sup>12</sup></code> cannot allocate an array of that length, so you either sieve a short window (a <em>segmented</em> sieve) or test one huge integer with Miller-Rabin. The constraint that names this page is &ldquo;all primes up to <code>n</code>&rdquo; or &ldquo;factor many <code>k &le; n</code>&rdquo; with <code>n</code> in the <code>10<sup>6</sup></code> to <code>10<sup>7</sup></code> band.",
-    "The same linear pass that writes SPF also fills <em>multiplicative functions</em> &mdash; functions determined by their values at prime powers, such as Euler's <code>phi</code> (count of leftovers coprime to <code>n</code>), M&ouml;bius <code>mu</code>, and the divisor-count <code>tau</code>. One sieve, several arrays, and every later query is an array read.",
+    "The same linear pass that writes SPF also fills <em>multiplicative functions</em> &mdash; functions determined by their values at prime powers, such as Euler's <code>phi</code> (count of leftovers coprime to <code>n</code>), M&ouml;bius <code>mu</code>, and the divisor-count <code>tau</code>. One sieve writes several arrays, and every later query about those functions is a single array read.",
   ],
   insight: "Every composite <code>k &le; n</code> has a smallest prime factor <code>p</code>. The linear sieve writes <code>k = p * m</code> exactly once, when <code>p</code> does not exceed <code>spf[m]</code>, so each composite is marked by its true smallest prime and the whole table costs a constant amount of work per integer.",
   yes: [
@@ -303,7 +303,7 @@ pack({
   inner --> write["spf of p*x = p, once"]`,
   merTitle: "Each composite gets its SPF exactly once",
   merCaption: "Stop the inner loop when p > spf[x] so p*x is left for a smaller prime.",
-  dryIntro: "Build the smallest-prime-factor table up to 10, then peel 84 and compute Euler's leftover-count for 10.",
+  dryIntro: "Build the smallest-prime-factor table up to 10, then peel the factors of 84 and compute Euler's leftover-count for 10.",
   steps: [
     "<strong>Allocate the SPF table.</strong> Create <code>int[] spf = new int[n+1]</code> filled with zeros; a zero slot still means &ldquo;not yet claimed&rdquo;, so you can tell a prime from a composite as you walk.",
     "<strong>Discover primes as you walk x.</strong> For each <code>x</code> from 2 to <code>n</code>, if <code>spf[x]</code> is still 0 then <code>x</code> is prime: write <code>spf[x] = x</code> and append <code>x</code> to the prime list.",
@@ -745,7 +745,7 @@ pack({
   small -- yes --> fact["fact table"]
   small -- "n huge r small" --> fall["falling factorial"]
   small -- "n at least p" --> lucas["Lucas digits"]`,
-  dryIntro: "Read Pascal's row for n=5, then stars-and-bars, Catalan of 3, and a Lucas digit product modulo 7.",
+  dryIntro: "Read Pascal's row for n=5, then a stars-and-bars count, Catalan of 3, and a Lucas digit product modulo 7.",
   steps: [
     "<strong>Pick the tool from n, r, and M.</strong> Table if <code>n &lt; M</code> and many queries; falling factorial if <code>r</code> is small; Lucas if <code>n &ge; p</code>. The wrong tool either zeros every answer or times out.",
     "<strong>Build fact and invFact when n is below M.</strong> One forward pass of multiplies, one Fermat inverse at the top, one walk down. Every later choose is three lookups.",
@@ -973,7 +973,7 @@ pack({
   j --> c
   c -- no --> no["impossible"]
   c -- yes --> suf["construct or search"]`,
-  dryIntro: "Count inversions on 3,1,4,2, then a circle jump that preserves a gcd, then a digit-sum leftover modulo 9.",
+  dryIntro: "Count inversions on the array 3,1,4,2, then a circle jump that preserves a gcd, then a digit-sum leftover modulo 9.",
   steps: [
     "<strong>List the moves algebraically.</strong> Write what each type adds, subtracts, or swaps, so you can see which quantities have a chance of staying put.",
     "<strong>Guess a candidate I.</strong> Start with the cheapest: parity of a sum, leftover of a gcd, xor of the piles, leftover of the digits modulo 9, or a board colour.",
@@ -1411,7 +1411,7 @@ pack({
   pow --> bin["binary exponentiation"]
   bin --> sq["square A"]
   bin --> mul["multiply into result when bit is on"]`,
-  dryIntro: "Power the Fibonacci companion to reach F_10 by squaring, then read the answer cell and the walk interpretation.",
+  dryIntro: "Power the Fibonacci companion matrix to reach F_10 by squaring, then read the answer cell and the walk interpretation.",
   steps: [
     "<strong>Write the state column.</strong> Size <code>k</code> is the last <code>k</code> terms of the recurrence, or one slot per vertex if you are counting walks. That column is what one matrix multiply will advance.",
     "<strong>Write the matrix A that takes one step.</strong> Check by hand that leftover of <code>A</code> times the current column is the next column. A wrong first row is the usual silent off-by-one.",
@@ -1644,8 +1644,7 @@ pack({
   sgn -- plus --> left["C left of AB"]
   sgn -- minus --> right["C right of AB"]
   sgn -- zero --> col["collinear"]`,
-  steps: [
-  dryIntro: "Compute the turn at B for three placements of C, then read the triangle area and the shoelace idea.",
+  dryIntro: "Compute the turn at B for three placements of C, then read the triangle area and the shoelace summing idea.",
   steps: [
     "<strong>Store every coordinate as a long.</strong> An <code>int</code> cross of two <code>10<sup>9</sup></code> differences wraps, and both the turn sign and the area become garbage.",
     "<strong>Orientation is the sign of one cross.</strong> Leftover of <code>cross(B-A, C-A)</code> is which way the turn goes: positive left, negative right, zero collinear. Use <code>Long.signum</code>.",
@@ -1764,13 +1763,13 @@ pack({
   ],
   followups: [
     ["Why not atan2 to sort by angle?",
-      "<p>You can, with care. Safer: sort by quadrant + orient (cross) so the order is exact. atan2 is a double.</p>"],
+      "<p>You can, with a lot of care around the branch cut and around ties. Safer: sort by quadrant first, then by leftover of the cross product, so the order is an exact integer predicate. <code>atan2</code> returns a double, and two nearly-collinear vectors at coordinate <code>10<sup>9</sup></code> can come back in the wrong order.</p>"],
     ["Dot vs cross?",
-      "<p>dot(u,v) = |u||v|cos. Sign of dot is acute/obtuse. Sign of cross is left/right. Length² is dot(u,u) — no sqrt until output.</p>"],
+      "<p>Leftover of the dot product <code>u.x*v.x + u.y*v.y</code> is <code>|u||v|cos</code>, so its sign is acute versus obtuse. Leftover of the cross is twice the signed area, so its sign is which way the turn goes. Length squared is leftover of <code>dot(u, u)</code> &mdash; you do not need a square root until the statement asks for a Euclidean length as output.</p>"],
     ["How do you test collinear in a degenerate triangle?",
-      "<p>orient==0. Area is 0. Do not use an epsilon on integer input.</p>"],
+      "<p>The three points are collinear exactly when leftover of the orientation cross is 0, which is also when the triangle area is 0. Do not introduce an epsilon on integer input. If the coordinates are 64-bit and the product might overflow a <code>long</code>, that is a BigInteger problem, not a floating-point one.</p>"],
     ["Point in non-convex polygon?",
-      "<p>Ray to +∞ on x, count crossings, skip vertices carefully (only count an edge if it straddles the ray in y). Or winding number with orient.</p>"],
+      "<p>Shoot a ray to <code>+&infin;</code> along <code>x</code> and count how many edges it crosses; odd means inside. Only count an edge that strictly straddles the ray in <code>y</code>, so a vertex sitting on the ray is not counted twice. The winding number, summing leftover of orientations around the boundary, is the other exact version and uses the same turn test.</p>"],
   ],
   problems: [
     lc("587", "erect-the-fence", "Hard", "Hull — next page, uses these predicates"),
@@ -1797,16 +1796,17 @@ pack({
 pack({
   id: "convex-hull",
   difficulty: "Hard",
-  readTime: "24 min",
+  readTime: "28 min",
   tagline: "Andrew's monotone chain sorts points by (x, y) and builds lower then upper hulls with a left-turn stack — O(n log n) and the default you should type.",
   tags: ["convex hull", "Andrew", "Graham", "P2"],
   prereqs: [["Geometry Basics", "geometry-basics.html"]],
   why: [
-    "The convex hull is the smallest convex polygon containing the points. After you have it, diameter, width, farthest pair, and \"does this polygon contain that one\" become walks on a circular sequence.",
-    "Andrew's algorithm is Graham scan after a sort by x: walk left-to-right keeping only left turns (lower hull), then right-to-left (upper hull). The stack pops while the last three points do not make a strict CCW turn.",
-    "n ≤ 1e5, integer coords. Degenerate all-collinear is a segment (or a point). Interviews want the sort + stack, the left-turn predicate, and what you do with ties (keep or drop middle of an edge — read the statement).",
+    "You are given a cloud of points and you must draw the tightest rubber band that wraps them: the smallest convex polygon that contains every point. That polygon is the <em>convex hull</em>. Once you have its vertices in order, diameter, width, farthest pair, and &ldquo;does this polygon contain that one&rdquo; become walks on a circular sequence instead of searches over every pair.",
+    "Checking every pair of points as a candidate edge is cubic and dies at <code>n = 10<sup>5</sup></code>. Andrew's algorithm, also called the monotone chain, sorts by x (then y) and walks the list twice with a stack. Left to right you keep only left turns, which builds the lower hull. Right to left with the same rule builds the upper hull. The stack pops while leftover of the last three points' cross product says the turn is not a strict left turn &mdash; that sign is which way the turn goes, from the previous page.",
+    "Limits are <code>n &le; 10<sup>5</sup></code> and integer coordinates up to <code>10<sup>9</sup></code>, so the sort is <code>O(n log n)</code> and every cross is a <code>long</code>. All-collinear input degenerates to a segment (or a single point). Interviews want the sort plus the stack, the left-turn predicate, and what you do with a collinear triple: drop the middle of an edge for a strict hull, or keep it if the statement asks for every boundary point.",
+    "The phrase &ldquo;smallest convex polygon&rdquo; or &ldquo;erect the fence&rdquo; next to those limits is the signal. Graham's polar-angle sort has the same bound and messier ties; Andrew's x-sort is the version you should type. Dynamic hulls that insert and delete online are a different structure (a set of tangents, or Li Chao), not this one-shot stack.",
   ],
-  insight: "After sorting by x, the lower hull is the chain you get by refusing right turns. The same walk backwards is the upper hull. Concatenate and drop the duplicated endpoints.",
+  insight: "After sorting by x, the lower hull is the chain you get by refusing every right turn. The same walk on the reversed list is the upper hull. Concatenate the two chains and drop the duplicated leftmost and rightmost endpoints, and the closed polygon is convex and contains every input point.",
   yes: [
     "Smallest convex polygon covering the points (\"erect the fence\")",
     "Diameter / farthest pair (rotating calipers on the hull)",
@@ -1828,41 +1828,55 @@ pack({
     ["All collinear", "hull is the two endpoints (or keep the edge)", "statement"],
     ["<strong>Confused with:</strong> CHT hull of lines", "This page is a hull of points", "Different object"],
   ],
-  constraint: "<code>n &le; 1e5</code> is O(n log n) sort plus O(n) stack. Coordinates 1e9 → long crosses. Output vertices in CCW order, no consecutive collinear unless asked.",
+  constraint: "<code>n &le; 10<sup>5</sup></code> means an <code>O(n log n)</code> sort plus an <code>O(n)</code> stack walk, about <code>10<sup>5</sup> log 10<sup>5</sup> &approx; 1.7 &times; 10<sup>6</sup></code> comparisons. Coordinates at <code>10<sup>9</sup></code> need <code>long</code> crosses. Output vertices counter-clockwise, with no consecutive collinear points unless the statement asked to keep the edge midpoints.",
   core: [
-    "Sort unique points by (x, y). If n ≤ 1 return them. Lower: for each point, while the last two + this one are not a left turn, pop. Upper: walk the array backwards with the same rule. Concatenate lower + upper[1..end-1].",
-    "Left turn: cross(stack[-2]→stack[-1], stack[-1]→p) > 0 for a strict hull (drop collinear middles). Use ≥ 0 if you must keep collinear edge points.",
+    "Dedup identical points, then sort the unique ones by x, then by y. If fewer than two points remain, that list is already the hull. The lower chain starts empty. For each point <code>p</code> in sorted order, while the stack has at least two points and leftover of the cross from the last two to <code>p</code> is not a left turn, pop. Then push <code>p</code>. That walk is the lower envelope from leftmost to rightmost, because every right turn (and, on a strict hull, every collinear middle) was refused.",
+    "The upper chain is the same rule on the array walked backwards, from rightmost back to leftmost. Concatenate lower plus the interior of upper, dropping the two endpoints that both chains share. Leftover of the cross of <code>stack[-2] &rarr; stack[-1]</code> with <code>stack[-1] &rarr; p</code> is which way the turn goes: pop while it is <code>&le; 0</code> for a strict hull (drop collinear middles), or only while it is <code>&lt; 0</code> if the statement wants every point that sits on an edge.",
+    "Walk A(0,0), B(1,1), C(2,0), D(2,2), E(0,2). Sorted by x then y: A, E, B, C, D. Lower starts A, E; A-E-B is a right turn because E sits above, so pop E. A-B-C has B above AC, another right-ish turn, so pop B. Lower is A, C. Then D is to the right and A-C-D is a left turn, so lower is A, C, D. Upper walking backwards keeps D, E, A as left turns. Concatenate and drop the duplicated A and D: the hull is A, C, D, E. B sits inside and never survived a stack.",
   ],
-  invariant: "<p>After the lower pass, every consecutive triple on the stack is a left turn, and the chain is the lower envelope from leftmost to rightmost. The upper pass mirrors that. The closed polygon is convex and contains every input point.</p>",
+  invariant: "<p>After the lower pass, every consecutive triple on the stack is a left turn, and the chain is the lower envelope from the leftmost point to the rightmost. The upper pass mirrors that from right to left. The closed polygon is convex and contains every input point.</p><p>In plain words, you sort left to right, refuse every turn that would dent the rubber band, then do the same upside down, and the two chains are the hull.</p><p>Interview sentence: <em>&ldquo;Sort by x, stack left turns for the lower chain, reverse for the upper.&rdquo;</em></p>",
+  extra: [
+    {
+      kind: "warn",
+      title: "Collinear policy is a judge-split",
+      html: "<p>Popping on leftover <code>&le; 0</code> drops edge midpoints. Popping only on leftover <code>&lt; 0</code> keeps them. Both look like &ldquo;keep left turns&rdquo;. Read the statement once and test a collinear triple.</p>",
+    },
+    {
+      kind: "tip",
+      title: "Andrew already emits CCW",
+      html: "<p>Lower then upper, dropping the duplicated ends, walks the polygon counter-clockwise from the leftmost point. Do not sort the output again; a later calipers or area walk depends on that order.</p>",
+    },
+  ],
   array: [0, 1, 2, 3, 4],
   arrayLabel: "id =",
   indexLabels: ["A", "B", "C", "D", "E"],
   vars: ["i", "stack", "cross"],
   frames: [
-    { note: "Points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y: A,B,C,E,D wait — E is (0,2) so order A,E,B,C,D.",
+    { note: "Five points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y the order is A, E, B, C, D.",
       active: [0], values: { i: 0, stack: "A", cross: "—" } },
-    { note: "Lower: push A, E. Next B: A→E→B is a right turn (E is above). Pop E. A→B is fine. Then C: A-B-C right-ish? B is above AC — pop B. Lower = A,C.",
+    { note: "Lower: A then E, but A-E-B is a right turn so pop E, then A-B-C has B above AC so pop B. Lower is A, C.",
       active: [2], values: { i: "C", stack: "A C", cross: "pop B" } },
-    { note: "D is to the right. A-C-D is left. Lower = A,C,D.",
+    { note: "D sits to the right of C. The turn A-C-D is left, so the lower chain is now A, C, D.",
       active: [4], values: { i: "D", stack: "A C D", cross: "+" } },
-    { note: "Upper backwards: D,E,A. D-E-A left. Full hull A,C,D,E.",
+    { note: "Upper walking backwards keeps D, E, A as left turns. Joining the chains gives hull A, C, D, E.",
       active: [0, 2, 4], values: { i: "up", stack: "A C D E", cross: "CCW" } },
-    { note: "B sits inside, never on the hull.",
+    { note: "B sits strictly inside that quadrilateral, so it was popped and never appears on the hull.",
       active: [1], values: { i: "B", stack: "inside", cross: 0 } },
-    { note: "Output CCW from leftmost: A,C,D,E.",
+    { note: "Output counter-clockwise from the leftmost point: A, then C, then D, then E.",
       best: [0, 2, 4], values: { i: "done", stack: "4 verts", cross: "+" } },
   ],
   mermaid: `flowchart TD
   sortP["sort by x then y"] --> low["lower chain: pop while not left turn"]
   low --> up["upper chain: walk backwards"]
   up --> cat["concatenate, drop duplicate ends"]`,
+  dryIntro: "Sort the five-point cloud, build the lower chain by popping right turns, then the upper chain, and read the CCW hull.",
   steps: [
-    "<strong>Dedup</strong> identical points. Sort by x, then y.",
-    "<strong>build(dir):</strong> empty stack; for each point in order (or reverse), pop while size≥2 and orient is not a left turn; push.",
-    "<strong>Lower</strong> on the sorted list. <strong>Upper</strong> on the reversed list.",
-    "<strong>Join</strong> lower + upper without repeating the two endpoints.",
-    "<strong>n ≤ 1:</strong> return the points. All collinear: two endpoints if strict.",
-    "<strong>Optional:</strong> rotating calipers for diameter on the result.",
+    "<strong>Dedup and sort.</strong> Drop identical points, then sort by x and break ties by y, so the left-to-right walk is well defined and equal x-values cannot cross.",
+    "<strong>Build one chain with a left-turn stack.</strong> For each point, pop while the stack has two points and leftover of the last turn is not left, then push. That refuse-the-dent rule is the whole algorithm.",
+    "<strong>Lower on the sorted list, upper on the reversed list.</strong> The two walks share the leftmost and rightmost points and otherwise cover opposite sides of the rubber band.",
+    "<strong>Join without repeating the endpoints.</strong> Concatenate lower plus the interior of upper so the closed polygon has no zero-length edge at A or at the rightmost point.",
+    "<strong>Handle tiny and collinear input.</strong> One point or none is already the hull. All-collinear input on a strict hull is just the two endpoints.",
+    "<strong>Optionally run rotating calipers on the result.</strong> Diameter and farthest pair are an antipodal walk around this polygon in linear extra time.",
   ],
   code: [
     { tab: "Brute", file: "HullBrute.java",
@@ -1971,7 +1985,8 @@ public class AndrewHull {
     time: "O(n log n)",
     space: "O(n)",
     derivation: [
-      "<p>Sort dominates. Each point is pushed and popped at most once per chain, so the stack passes are O(n).</p>",
+      "<p>Sorting <code>n</code> points dominates: about <code>n log n</code> comparisons. After that, each point is pushed at most once and popped at most once on the lower chain, and the same on the upper chain, so the two stack walks are linear. Gift wrapping would be <code>O(n h)</code> with <code>h</code> the hull size, which is quadratic when the hull is fat.</p>",
+      "<p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> the sort is about <code>1.7 &times; 10<sup>6</sup></code> comparisons, a few tens of milliseconds, and the stack walks are 200 000 pushes and pops. A cubic &ldquo;is this edge extreme&rdquo; check is <code>10<sup>15</sup></code> orientation tests. Coordinates at <code>10<sup>9</sup></code> make every one of those tests a <code>long</code> cross, same as the previous page.</p>",
     ],
     compare: [
       ["Gift wrapping", "O(n h)", "O(n)", "h tiny"],
@@ -1982,20 +1997,20 @@ public class AndrewHull {
   },
   pitfalls: [
     { title: "Not sorting (or sorting only by x)",
-      bug: "Ties in x leave the chain crossing itself.",
-      fix: "Sort by x then y. Dedup equals first." },
+      bug: "Two points with the same x and different y stay in input order, so the chain can cross itself and a later left-turn test pops the wrong vertex. The sort looks optional because &ldquo;we walk a stack anyway&rdquo;.",
+      fix: "Sort by x then y, and drop identical points first. A vertical pair is the usual test." },
     { title: "Wrong inequality on collinear",
-      bug: "<code>&lt; 0</code> vs <code>≤ 0</code> keeps or drops edge midpoints. The judge has a collinear triple.",
-      fix: "Strict hull: pop on ≤ 0. Keep collinear: pop only on < 0." },
+      bug: "Leftover <code>&lt; 0</code> versus leftover <code>&le; 0</code> keeps or drops an edge midpoint. Both policies compile, and the judge has a collinear triple that distinguishes them.",
+      fix: "Strict hull: pop on leftover <code>&le; 0</code>. Keep collinear boundary points: pop only on leftover <code>&lt; 0</code>. Read the statement once." },
     { title: "Duplicating the start point twice",
-      bug: "You copy both chains including both endpoints twice and the polygon has a zero-length edge.",
-      fix: "Drop the last point of the second chain (it repeats the first of the first)." },
+      bug: "Copying both chains including both endpoints twice inserts a zero-length edge at A and at the rightmost point. Shoelace then looks fine and a later calipers walk divides by a zero edge.",
+      fix: "Drop the last point of the second chain (it repeats the first of the first). The closed polygon should have each vertex once." },
     { title: "int cross on 1e9 coordinates",
-      bug: "Same overflow as the previous page, now inside a while-pop.",
-      fix: "long everywhere." },
+      bug: "The same overflow as the previous page now sits inside a while-pop, so a left turn wraps to a right turn and the stack throws away a true hull vertex.",
+      fix: "Every coordinate and every cross is a <code>long</code>. Re-use the geometry-page self-check on a <code>10<sup>9</sup></code> pair." },
     { title: "Using the hull as unordered",
-      bug: "You dump stack points without the CCW order and a later calipers / area walk breaks.",
-      fix: "Andrew already emits CCW if you lower-then-upper. Do not sort the output again." },
+      bug: "Dumping stack points without the counter-clockwise order looks like &ldquo;here are the hull vertices&rdquo; and then a later calipers or area walk assumes a circular sequence and breaks.",
+      fix: "Andrew already emits CCW if you do lower then upper. Do not sort the output again, and do not shuffle it into a set." },
   ],
   variants: [
     ["Graham polar sort", "Lowest point as origin, sort by orient, same stack.", "ties by distance", "classic textbook"],
@@ -2004,13 +2019,13 @@ public class AndrewHull {
   ],
   followups: [
     ["Why is the hull O(n) after the sort?",
-      "<p>Amortised stack: a popped point never returns on that chain. Two passes, each O(n).</p>"],
+      "<p>A point that leaves the stack on one chain never comes back on that chain, so each point is pushed once and popped once per pass. Two passes (lower and upper) are therefore linear. The <code>O(n log n)</code> you quote is the sort; say that out loud so nobody thinks the stack is the log factor.</p>"],
     ["How do you find the farthest pair?",
-      "<p>It is an antipodal pair on the hull. Rotating calipers walks one pointer monotonically around the polygon in O(h).</p>"],
+      "<p>The farthest pair of a point set is an <em>antipodal</em> pair on the hull: two vertices whose supporting lines are parallel. Rotating calipers walks one pointer monotonically around the polygon, so after the hull you finish in leftover of <code>O(h)</code> extra orientations. Checking every pair of hull vertices is the slower fallback.</p>"],
     ["Point in convex in O(log n)?",
-      "<p>Binary search the fan from h[0]: find the triangle h[0],h[i],h[i+1] by orient, then one more orient. Or two binary searches on upper/lower chains.</p>"],
+      "<p>Binary-search the fan of triangles from <code>h[0]</code>: leftover of two orientations tells you which triangle <code>h[0], h[i], h[i+1]</code> contains the query, then one more orientation says inside versus outside. The other route is two binary searches, one on the lower chain and one on the upper. Both need the hull in CCW order.</p>"],
     ["Graham vs Andrew?",
-      "<p>Same complexity. Andrew's x-sort avoids polar-angle ties and is shorter in Java. Prefer Andrew unless the textbook said Graham.</p>"],
+      "<p>Same complexity. Graham sorts by polar angle around the lowest point and then runs one stack; ties on the angle need a distance rule and a double or a careful cross. Andrew sorts by x and runs two simpler stacks. Prefer Andrew in Java unless the interviewer said the word Graham.</p>"],
   ],
   problems: [
     lc("587", "erect-the-fence", "Hard", "Andrew / Graham, keep collinear"),

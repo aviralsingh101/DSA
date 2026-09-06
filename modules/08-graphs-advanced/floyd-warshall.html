@@ -22,7 +22,7 @@
   <p class="hero__tagline">The triple loop <code>for k, for i, for j</code> is "allow vertex k as an intermediate". After k = 0..n-1 every pair is optimal.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">20 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="bellman-ford-and-negative-cycles.html">Bellman-Ford & Negative Cycles</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>n single-source Dijkstras are fine on sparse non-negative graphs. When n is a few hundred, the graph is dense, or you need the whole distance matrix (transitive closure, "best meeting city", "minimax path"), one <code>O(n&sup3;)</code> pass is simpler and faster.</p>
-<p>The recurrence is shortest path whose intermediate vertices all lie in <code>{0..k}</code>. Fixing k as the newly allowed intermediate and trying it on every pair is exactly the update <code>d[i][j] = min(d[i][j], d[i][k]+d[k][j])</code>.</p>
-<p>The same skeleton computes reachability (OR instead of min-plus), minimax (min of max-edge), and detects a negative cycle on the diagonal <code>d[i][i] &lt; 0</code>.</p>
+<p>You are given a handful of cities and the one-way flight cost between some pairs, and you must answer "what is the cheapest way from every city to every other city?" &mdash; the whole square table, not a single source. Running Dijkstra once per city works when every cost is non-negative and the graph is sparse, but with <code>n = 400</code> cities a dense table already has about 160000 flights, and four hundred heap runs are more code and no faster than one tight triple loop. You also want extras the heap will not give you: a reachability matrix, the smallest bottleneck between every pair, or a flag that some loop of flights refunds money forever.</p>
+<p>The algorithm on this page fills an <code>n</code> by <code>n</code> table <code>d</code> by asking one question at a time: "if I am now allowed to use city <code>k</code> as a stopover, does going <code>i &rarr; k &rarr; j</code> beat the best route I already have from <code>i</code> to <code>j</code>?" That is the single assignment <code>d[i][j] = min(d[i][j], d[i][k] + d[k][j])</code>. The outer loop is <code>k</code>, not <code>i</code>: you must finish every pair's answer using only stopovers from <code>{0, 1, &hellip;, k-1}</code> before anyone is allowed to use city <code>k</code>. After <code>k</code> has run from 0 through <code>n-1</code>, every city has been allowed as a stopover and the table is the true all-pairs answer.</p>
+<p>The same three loops do more than distances. Replace the min-plus update with a boolean OR and you get <em>transitive closure</em> &mdash; a yes/no matrix of who can reach whom. Replace the sum with a max and the outer min stays, and you get the minimax (smallest bottleneck) path between every pair. After the loops, a negative number on the diagonal <code>d[i][i]</code> means a negative cycle touches city <code>i</code>. In a problem statement the tell is <code>n &le; 400</code> sitting next to "distance between every pair", "can A reach B after these prerequisites", or "smallest max-edge on a path".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>k is not "the current source". k is the highest-index vertex you are now allowed to use as an intermediate. The loop order is k, then i, then j — always.</p>
+    <p>The outer index <code>k</code> is not a source and not a destination: it is the highest-numbered city you are now allowed to use as a stopover. After the <code>k</code> iteration, <code>d[i][j]</code> is the cheapest <code>i</code>-to-<code>j</code> route whose internal cities all lie in <code>{0, 1, &hellip;, k}</code>, which is why the loop order is always <code>k</code>, then <code>i</code>, then <code>j</code>.</p>
   </div>
 </aside>
 
@@ -111,18 +111,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 400</code> is the Floyd signature (64 million operations). Use <code>long</code> and a sentinel that will not overflow when added.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 400</code> is the Floyd signature: the triple loop is <code>n&sup3;</code> additions, about 64 million at the cap, which is comfortable, and a billion at <code>n = 1000</code>, which is not. Use <code>long</code> and a sentinel such as <code>Long.MAX_VALUE / 4</code> so two infinities cannot add into a small negative and fake a path. If the graph is sparse and weights are non-negative, <code>n</code> Dijkstras will beat this table.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Initialise <code>d[i][i] = 0</code>, <code>d[u][v] = w</code> for each edge (keep the minimum on parallel edges), rest INF. Then <code>for (k) for (i) for (j)</code> relax through k, skipping when <code>d[i][k]</code> or <code>d[k][j]</code> is INF.</p>
-<p>After the loops, <code>d[i][j]</code> is the shortest-path distance, or INF if unreachable. <code>d[i][i] &lt; 0</code> means a negative cycle touches i. Parent pointers: whenever you relax, set <code>nxt[i][j] = nxt[i][k]</code>.</p>
+<p>Allocate <code>long[n][n]</code>, fill every cell with a huge sentinel, then write <code>d[i][i] = 0</code> so a city reaches itself at cost 0. For each flight <code>u &rarr; v</code> of cost <code>w</code> store <code>d[u][v] = min(d[u][v], w)</code>, keeping the cheaper of two parallel flights. If the statement is undirected, write both <code>d[u][v]</code> and <code>d[v][u]</code>. That filled table is the answer using <em>no</em> intermediate city, and it is the base of the dynamic program.</p>
+<p>Now allow stopovers one city at a time. The outer loop is <code>k</code> from 0 to <code>n-1</code>. For every pair <code>(i, j)</code>, if both <code>d[i][k]</code> and <code>d[k][j]</code> are finite, try <code>d[i][j] = min(d[i][j], d[i][k] + d[k][j])</code>. Skipping a half that is still infinite is not a micro-optimisation: adding two sentinels can overflow to a small negative and invent a phantom path. Whenever a relax succeeds and you need the actual route, set <code>nxt[i][j] = nxt[i][k]</code> so a later walk from <code>i</code> follows the first hop toward <code>k</code>.</p>
+<p>Walk the four-city sample in words. Flights are 0-1 cost 3, 0-2 cost 8, 1-2 cost 1, 2-3 cost 1, 1-3 cost 7, and we watch row 0. After <code>k = 0</code> nothing new appears, because using city 0 as a stopover cannot help a route that already starts at 0. After <code>k = 1</code> the route 0-1-2 beats the direct 8 with 3+1=4, and 0-1-3 writes 10. After <code>k = 2</code> the route 0-2-3 beats 10 with 4+1=5. City 3 as a stopover adds nothing for this row, and the finished row is <code>[0, 3, 4, 5]</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After the outer iteration that has just processed k, <code>d[i][j]</code> is the shortest path from i to j whose internal vertices are a subset of <code>{0,1,…,k}</code>.</p>
+    <p>After the outer iteration that has just processed city <code>k</code>, <code>d[i][j]</code> is the cheapest path from <code>i</code> to <code>j</code> whose internal vertices all lie in <code>{0, 1, &hellip;, k}</code>, or INF if no such path exists.</p><p>In plain words, each outer iteration only asks "may I now use this one extra city as a stopover?", and because every pair has already been optimised for the previous set of stopovers, trying the new city on every pair is enough. A negative <code>d[i][i]</code> at the end means a loop of negative total weight touches city <code>i</code>.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">k is a newly allowed stopover, not a source</span>
+    <p>People coming from Dijkstra hear "for each source" and write <code>i</code> as the outer loop. That updates a pair using a stopover whose own row is not finished yet, so the recurrence is no longer "intermediates from a prefix of cities". Keep <code>k</code> outermost, always. The same skeleton with OR instead of min-plus is transitive closure; with <code>min</code> of <code>max</code> it is the smallest bottleneck.</p>
   </div>
 </aside>
 
@@ -160,7 +169,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "4 nodes. Edges 0-1:3, 0-2:8, 1-2:1, 2-3:1, 1-3:7. Row 0 starts [0,3,8,inf].",
+          "note": "Four cities. Flights 0-1 cost 3, 0-2 cost 8, 1-2 cost 1, 2-3 cost 1, 1-3 cost 7. Row 0 of the table starts as [0, 3, 8, inf].",
           "active": [
             0
           ],
@@ -172,7 +181,7 @@
           }
         },
         {
-          "note": "k=0 adds nothing new through 0 that we do not already have as a direct edge.",
+          "note": "Allowing city 0 as a stopover adds nothing new to row 0, because every route that already starts at 0 does not need to visit 0 again.",
           "active": [
             0
           ],
@@ -184,7 +193,7 @@
           }
         },
         {
-          "note": "k=1: d[0][2] = min(8, d[0][1]+d[1][2]=3+1=4). Improve 8→4.",
+          "note": "Allowing city 1: the route 0&rarr;1&rarr;2 costs 3+1=4 and beats the direct 8, so d[0][2] drops from 8 to 4.",
           "active": [
             2
           ],
@@ -196,7 +205,7 @@
           }
         },
         {
-          "note": "k=1: d[0][3] = min(inf, 3+7=10). Set 10.",
+          "note": "Still with city 1 allowed: 0&rarr;1&rarr;3 costs 3+7=10, which is the first finite number written into d[0][3].",
           "active": [
             3
           ],
@@ -208,7 +217,7 @@
           }
         },
         {
-          "note": "k=2: d[0][3] = min(10, d[0][2]+d[2][3]=4+1=5). Improve to 5.",
+          "note": "Allowing city 2: 0&rarr;2&rarr;3 costs 4+1=5 and beats the 10 we just wrote, so d[0][3] becomes 5.",
           "active": [
             3
           ],
@@ -220,7 +229,7 @@
           }
         },
         {
-          "note": "k=3 adds no new intermediates for row 0. Done: [0,3,4,5].",
+          "note": "Allowing city 3 as a stopover cannot help a route that already ends at 3 in this row. The finished row is [0, 3, 4, 5].",
           "active": [
             0,
             1,
@@ -256,17 +265,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate</strong> <code>long[n][n]</code>, fill INF, diagonal 0, write edges.</li>
-  <li><strong>for k in 0..n-1</strong> — k is the new intermediate.</li>
-  <li><strong>for i, for j</strong> — if both halves are finite, relax <code>d[i][j]</code> through k.</li>
-  <li><strong>Skip</strong> the add when either half is INF (overflow / phantom paths).</li>
-  <li><strong>Read</strong> <code>d[u][v]</code>. Negative diagonal ⇒ negative cycle.</li>
-  <li><strong>Path recover</strong> with a <code>nxt[i][j]</code> table updated on every relax.</li>
+  <li><strong>Allocate the table and write the base.</strong> Fill <code>long[n][n]</code> with a huge sentinel, zero the diagonal so each city reaches itself at cost 0, and write every flight (both ways if the graph is undirected), keeping the cheaper of two parallel flights.</li>
+  <li><strong>Loop k first: k is the newly allowed stopover.</strong> The outer index is the highest-numbered city you may now use in the middle of a route, not a source and not a destination, which is why swapping the loop order silently breaks the recurrence.</li>
+  <li><strong>Then loop every pair (i, j) and try i &rarr; k &rarr; j.</strong> If both halves of that candidate are finite, write <code>d[i][j] = min(d[i][j], d[i][k] + d[k][j])</code>, because that is exactly "use the new stopover or keep what you already had".</li>
+  <li><strong>Skip the add when either half is still infinite.</strong> Adding two sentinels can overflow to a small negative and invent a phantom path between two cities that cannot reach each other, so the finite-gate is part of correctness, not a speed hack.</li>
+  <li><strong>Read the finished table, then inspect the diagonal.</strong> <code>d[u][v]</code> is the cheapest <code>u</code>-to-<code>v</code> cost, or still infinite if unreachable, and a negative <code>d[i][i]</code> means a negative cycle touches city <code>i</code>.</li>
+  <li><strong>Recover a route from the nxt table.</strong> Whenever a relax through <code>k</code> succeeds, set <code>nxt[i][j] = nxt[i][k]</code>, then walk <code>i = nxt[i][j]</code> until you arrive at <code>j</code> to print the actual sequence of cities.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Watch row 0 of a four-city table as cities 0, 1, 2, then 3 are allowed as stopovers. The finished row should be [0, 3, 4, 5].</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -274,12 +283,12 @@ graph LR
       <tr><th>k</th><th>i</th><th>j</th><th>d</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>-</td><td>0</td><td>-</td><td>0,3,8,inf</td><td>4 nodes. Edges 0-1:3, 0-2:8, 1-2:1, 2-3:1, 1-3:7. Row 0 starts [0,3,8,inf].</td></tr>
-      <tr><td>0</td><td>0</td><td>*</td><td>0,3,8,inf</td><td>k=0 adds nothing new through 0 that we do not already have as a direct edge.</td></tr>
-      <tr><td>1</td><td>0</td><td>2</td><td>0,3,4,inf</td><td>k=1: d[0][2] = min(8, d[0][1]+d[1][2]=3+1=4). Improve 8→4.</td></tr>
-      <tr><td>1</td><td>0</td><td>3</td><td>0,3,4,10</td><td>k=1: d[0][3] = min(inf, 3+7=10). Set 10.</td></tr>
-      <tr><td>2</td><td>0</td><td>3</td><td>0,3,4,5</td><td>k=2: d[0][3] = min(10, d[0][2]+d[2][3]=4+1=5). Improve to 5.</td></tr>
-      <tr><td>3</td><td>0</td><td>*</td><td>0,3,4,5</td><td>k=3 adds no new intermediates for row 0. Done: [0,3,4,5].</td></tr>
+      <tr class="trace-table__row--change"><td>-</td><td>0</td><td>-</td><td>0,3,8,inf</td><td>Four cities. Flights 0-1 cost 3, 0-2 cost 8, 1-2 cost 1, 2-3 cost 1, 1-3 cost 7. Row 0 of the table starts as [0, 3, 8, inf].</td></tr>
+      <tr><td>0</td><td>0</td><td>*</td><td>0,3,8,inf</td><td>Allowing city 0 as a stopover adds nothing new to row 0, because every route that already starts at 0 does not need to visit 0 again.</td></tr>
+      <tr><td>1</td><td>0</td><td>2</td><td>0,3,4,inf</td><td>Allowing city 1: the route 0&rarr;1&rarr;2 costs 3+1=4 and beats the direct 8, so d[0][2] drops from 8 to 4.</td></tr>
+      <tr><td>1</td><td>0</td><td>3</td><td>0,3,4,10</td><td>Still with city 1 allowed: 0&rarr;1&rarr;3 costs 3+7=10, which is the first finite number written into d[0][3].</td></tr>
+      <tr><td>2</td><td>0</td><td>3</td><td>0,3,4,5</td><td>Allowing city 2: 0&rarr;2&rarr;3 costs 4+1=5 and beats the 10 we just wrote, so d[0][3] becomes 5.</td></tr>
+      <tr><td>3</td><td>0</td><td>*</td><td>0,3,4,5</td><td>Allowing city 3 as a stopover cannot help a route that already ends at 3 in this row. The finished row is [0, 3, 4, 5].</td></tr>
     </tbody>
   </table>
 </div>
@@ -393,7 +402,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Three nested n-loops, one add and one min each, is <code>n&sup3;</code> operations. At n = 400 that is 64 million, comfortable. At n = 1000 it is a billion — too slow.</p>
+    <p>Three nested loops of length <code>n</code>, each body doing one add and one min, is exactly <code>n&sup3;</code> operations and <code>n&sup2;</code> cells of memory. At <code>n = 400</code> that is 64 million additions, a few tens of milliseconds. At <code>n = 1000</code> it is a billion additions, which no ordinary judge will accept, so that constraint is telling you to run <code>n</code> Dijkstras or Johnson instead.</p>
+    <p>The same count holds for the boolean and minimax variants: you still touch every triple <code>(k, i, j)</code> once. Path reconstruction adds an <code>n&sup2;</code> next-hop table and a constant amount of work per successful relax, so it does not change the leading term.</p>
   </div>
 
   <table class="complexity__compare">
@@ -415,28 +425,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Loop order i,j,k</span>
-    <div class="pitfalls__bug">Using k last means you update with intermediates you have not finished allowing. The DP is wrong.</div>
-    <div class="pitfalls__fix">k is the outer loop. Always.</div>
+    <div class="pitfalls__bug">Writing <code>k</code> as the inner loop looks like "try every stopover for this pair" and reads naturally, but you then update a pair using a stopover whose own row is not finished, so the DP is no longer "intermediates from a prefix".</div>
+    <div class="pitfalls__fix">Keep <code>k</code> as the outer loop, always. To test it, take a three-city path 0-1-2 whose cheapest route needs city 1 as a stopover and confirm the table is wrong if <code>i</code> is outermost.</div>
   </li>
   <li>
     <span class="pitfalls__title">INF + INF overflow</span>
-    <div class="pitfalls__bug">Two unreachables add to a small negative and look like a path.</div>
-    <div class="pitfalls__fix">Sentinel <code>Long.MAX_VALUE/4</code>, or skip when either half is INF.</div>
+    <div class="pitfalls__bug">Two unreachable halves add to a small negative (or wrap an <code>int</code>), so a pair that has no path suddenly looks cheaper than every real route.</div>
+    <div class="pitfalls__fix">Use the sentinel <code>Long.MAX_VALUE / 4</code>, and also skip the add when either <code>d[i][k]</code> or <code>d[k][j]</code> is still infinite.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting d[i][i] = 0</span>
-    <div class="pitfalls__bug">The first pass through k=i writes junk, and the diagonal is no longer a cycle detector.</div>
-    <div class="pitfalls__fix">Zero the diagonal before the loops.</div>
+    <div class="pitfalls__bug">A missing zero on the diagonal lets the first pass through <code>k = i</code> write junk into <code>d[i][i]</code>, after which a negative-cycle check on that cell is meaningless and other pairs pick up the junk as a stopover.</div>
+    <div class="pitfalls__fix">Zero every <code>d[i][i]</code> during initialisation, before any edge is written and before the triple loop starts.</div>
   </li>
   <li>
     <span class="pitfalls__title">Directed vs undirected write</span>
-    <div class="pitfalls__bug">An undirected edge must set both <code>d[u][v]</code> and <code>d[v][u]</code>.</div>
-    <div class="pitfalls__fix">Write both, unless the statement is directed.</div>
+    <div class="pitfalls__bug">An undirected road written only as <code>d[u][v]</code> makes the return trip look infinite, so a pair that is one hop apart in the other direction is reported unreachable.</div>
+    <div class="pitfalls__fix">Write both <code>d[u][v]</code> and <code>d[v][u]</code> unless the statement is directed. Test on a single undirected edge and query both orders.</div>
   </li>
   <li>
     <span class="pitfalls__title">Reading d before all k finish</span>
-    <div class="pitfalls__bug">Partial matrices are "intermediates ≤ k only", not true distances.</div>
-    <div class="pitfalls__fix">That is a feature for "add vertices in reverse" problems — otherwise wait until the end.</div>
+    <div class="pitfalls__bug">A table read after only some values of <code>k</code> is "cheapest route using stopovers from a prefix", not the true distance, so a mid-loop query is silently too large.</div>
+    <div class="pitfalls__fix">Wait until <code>k</code> has run through every city, unless the problem is the reverse-addition variant (CF 295B) that <em>wants</em> the prefix of living vertices.</div>
   </li>
 </ul>
 
@@ -478,28 +488,28 @@ graph LR
   <details class="followup">
     <summary>Why is k the outer loop?</summary>
     <div class="followup__body">
-      <p>The DP is by the <em>set</em> of allowed intermediates. You need every pair's answer for set <code>{0..k-1}</code> before you try k. That is exactly "k outermost".</p>
+      <p>The recurrence is defined on the <em>set</em> of cities you are allowed to use as stopovers. To try city <code>k</code> as a new middle, you need every pair's cheapest route using only <code>{0, &hellip;, k-1}</code> already sitting in the table, including the two halves <code>i &rarr; k</code> and <code>k &rarr; j</code>. Putting <code>k</code> outermost is exactly that dependency. Putting <code>i</code> outermost updates a pair with a stopover that has not finished its own row.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you detect a negative cycle?</summary>
     <div class="followup__body">
-      <p><code>d[i][i] &lt; 0</code> after the loops. Any pair that can reach such an i and be reached from it can be driven to -INF.</p>
+      <p>After the loops, any <code>d[i][i] &lt; 0</code> means a walk from <code>i</code> back to <code>i</code> of negative total weight, so a negative cycle touches <code>i</code>. A pair <code>(u, v)</code> can then be driven to minus infinity if <code>u</code> can reach such an <code>i</code> and that <code>i</code> can reach <code>v</code>, which you read off the same finished table.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Floyd vs n Dijkstras?</summary>
     <div class="followup__body">
-      <p>Floyd wins on dense graphs and when you want the whole matrix plus extras (reachability, minimax). n Dijkstras win on sparse non-negative graphs, especially n = 2000, m = 5000.</p>
+      <p>Floyd wins when the graph is dense, when <code>n &le; 400</code>, or when you want the whole matrix plus extras such as reachability or minimax from the same skeleton. <code>n</code> Dijkstras win on sparse non-negative graphs, especially around <code>n = 2000</code> and <code>m = 5000</code>, where <code>n&sup3;</code> is a billion and the heap runs are a few million. Johnson replaces the Dijkstras when weights can be negative but there is no negative cycle.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can Floyd handle negative edges?</summary>
     <div class="followup__body">
-      <p>Yes, the same way Bellman-Ford does. Negative cycles show up on the diagonal. It does not handle them as finite distances — they are a flag.</p>
+      <p>Yes, in the same sense Bellman-Ford does: a negative edge is just a number, and the min-plus update does not assume a sign. A negative <em>cycle</em> is not turned into a finite distance; it is reported as a negative diagonal entry, and any pair that can reach that cycle can then be driven without bound. Do not treat those cells as real costs.</p>
     </div>
   </details>
 </div>

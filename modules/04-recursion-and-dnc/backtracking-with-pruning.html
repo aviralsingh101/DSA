@@ -40,9 +40,9 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The previous page enumerates a Cartesian product. This page survives products that do not fit in memory by <strong>pruning</strong>: a constraint checked on the prefix that proves every completion is illegal. N-Queens without pruning is 16! board fillings; with column and diagonal bitmasks it is a few thousand leaves on n = 8 and a standard interview.</p>
-<p>The same skeleton covers Sudoku (cell, row, column, box uniqueness), word search (grid DFS that unmarks on the way back), and palindrome partitioning (only cut when the piece is already a palindrome). The skill is not the skeleton &mdash; you already have it &mdash; it is choosing a cheap, complete veto.</p>
-<p>Bitmasks turn the N-Queens veto into a few bitwise operations and make n = 14 solvable. That encoding is the one piece of this page that transfers to <a href="../10-dynamic-programming/bitmask-dp.html">bitmask DP</a> and to several Codeforces constructive searches.</p>
+<p>You are given an n-by-n chessboard and you must place n queens so that none share a row, column, or diagonal. The previous page enumerates a Cartesian product. This page survives products that do not fit in memory by <strong>pruning</strong>: a constraint checked on the prefix that proves every completion is illegal. N-Queens without pruning is 16! board fillings; with column and diagonal bitmasks it is a few thousand leaves on n = 8 and a standard interview.</p>
+<p>The same skeleton covers Sudoku (cell, row, column, box uniqueness), word search (grid DFS that unmarks on the way back), and palindrome partitioning (only cut when the piece is already a palindrome). You are given a partial assignment and you must extend it without violating a local rule. The skill is not the skeleton &mdash; you already have it &mdash; it is choosing a cheap, complete veto that you can check on the prefix alone, before you spend another recursive call.</p>
+<p>Bitmasks turn the N-Queens veto into a few bitwise operations and make n = 14 solvable: each column and each diagonal is one bit, so a placement is a handful of shifts and ORs instead of an <code>O(n)</code> scan of the board. That encoding is the one piece of this page that transfers to <a href="../10-dynamic-programming/bitmask-dp.html">bitmask DP</a> and to several Codeforces constructive searches where the state is "which columns or vertices are already taken".</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
@@ -129,14 +129,13 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: assign, veto, undo</h2>
-<p>The template is four lines of control flow. Pick the next decision (next row, next empty cell, next cut). Iterate the candidates. If a candidate fails the veto, skip it. Otherwise apply it, recurse, then undo. The undo is the difference between backtracking and "just recurse": the same <code>used</code> structure is shared across siblings, so it must be restored.</p>
+<p>The template is four lines of control flow. Pick the next decision (next row, next empty cell, next cut). Iterate the candidates. If a candidate fails the veto, skip it. Otherwise apply it, recurse, then undo. The undo is the difference between backtracking and "just recurse": the same <code>used</code> structure is shared across siblings, so it must be restored after the child returns. If you place a queen in column 1 and never clear that bit, every later sibling still thinks column 1 is taken and the rest of the tree is silently empty.</p>
 <p>N-Queens bitmasks: row <code>r</code> tries every free bit of <code>avail = all &amp; ~(cols | d1 | d2)</code>. Placing bit <code>b</code> updates <code>cols | b</code>, <code>(d1 | b) &lt;&lt; 1</code>, <code>(d2 | b) &gt;&gt; 1</code>. The shifts slide the diagonals as you move to the next row. No arrays, no <code>O(n)</code> attack scan.</p>
-<p>Word search marks <code>board[r][c] = '#'</code> (or a <code>used[][]</code>) before the four recursive calls and restores the letter after. Palindrome partition precomputes <code>isPal[i][j]</code> in <code>O(n&sup2;)</code> so every cut is <code>O(1)</code> to validate; without that, you re-scan the piece at every node.</p>
+<p>Word search marks <code>board[r][c] = '#'</code> (or a <code>used[][]</code>) before the four recursive calls and restores the letter after, so a later starting cell can reuse that square. Palindrome partition precomputes <code>isPal[i][j]</code> in <code>O(n&sup2;)</code> so every cut is <code>O(1)</code> to validate; without that, you re-scan the piece at every node. On <code>s = "aab"</code> the table says <code>aa</code> is already a palindrome, so the cut after index 1 is legal and the tree never builds <code>"a" + "ab"</code> as a candidate.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The interview sentence</span>
     <p>A candidate is legal if and only if it does not violate a constraint with the prefix already chosen. Check that <em>before</em> the recursive call. Undo every mutation (cell, bitmask, mark) on the way back, including after a successful leaf if you are enumerating all solutions.</p>
   </div>
 </aside>
@@ -173,8 +172,8 @@
 <p>Rows top to bottom. Q is a queen, x is rejected by the current masks, a dot is still free. Watch row 2 die with <code>avail = 0</code> &mdash; that is the prune.</p>
 
 <figure class="viz">
-  <div class="dp-grid" data-viz-id="nq4"></div>
-  <div class="viz-player" data-viz-target="nq4">
+  <div class="dp-grid" data-viz-id="backtracking-with-pruningViz"></div>
+  <div class="viz-player" data-viz-target="backtracking-with-pruningViz">
     <script type="application/json" class="viz-frames">
     {
       "corner": "r/c",
@@ -195,7 +194,7 @@
         "cols",
         "avail"
       ],
-      "speed": 1100,
+      "speed": 1000,
       "frames": [
         {
           "note": "Empty board. all = 1111b. Row 0 may place in any column.",
@@ -577,16 +576,16 @@ flowchart TD
   <li><strong>Name the decision sequence.</strong> One queen per row; next empty Sudoku cell; next cut index; next grid step matching the next letter.</li>
   <li><strong>Name the veto</strong> as a function of the prefix only. If you cannot check it yet, you do not have a prune.</li>
   <li><strong>Encode the veto cheaply.</strong> Bitmasks for N-Queens; row/col/box bitsets for Sudoku; a mark on the cell for word search; <code>isPal[i][j]</code> for partitions.</li>
-  <li><strong>Apply, recurse, undo</strong> as three consecutive operations.</li>
-  <li><strong>For find-one</strong>, return a boolean and stop siblings on true. For find-all, collect and keep going.</li>
-  <li><strong>Precompute what you can</strong> &mdash; palindrome table, remaining digit counts.</li>
-  <li><strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or used vertices.</li>
-  <li><strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune.</li>
+  <li><strong>Apply, recurse, undo</strong> as three consecutive operations, because the shared board or bitmask must look unused again before the next sibling runs.</li>
+  <li><strong>For find-one</strong>, return a boolean and stop siblings on true. For find-all, collect the leaf and keep going so later solutions are not skipped.</li>
+  <li><strong>Precompute what you can</strong> &mdash; a palindrome table, remaining digit counts &mdash; so the veto is <code>O(1)</code> at every node.</li>
+  <li><strong>Prefer bitmasks at n &le; 31</strong> whenever the veto is a set of columns or used vertices, because an <code>int</code> already holds the whole set.</li>
+  <li><strong>Count nodes on a 4-queen board by hand</strong> once so you believe the prune: the dead branch at row 2 never creates a row-3 frame.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>N-Queens n = 4, first successful placement. Bitmasks in binary, bit 0 = column 0. Highlighted rows are prunes.</p>
+<p>N-Queens n = 4, first successful placement. Bitmasks in binary, bit 0 = column 0. Highlighted rows are the prunes that kill a prefix.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -817,7 +816,7 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Without a prune, N-Queens is at most <code>n!</code>. The diagonal veto removes a large constant; the tree is still super-exponential, which is why interviews stop at n = 9 and contests stop at n = 14 with bitmasks.</p>
+    <p>Without a prune, N-Queens is at most <code>n!</code> column permutations. The diagonal veto removes a large constant; the tree is still super-exponential, which is why interviews stop at n = 9 and contests stop at n = 14 with bitmasks only.</p>
     <p><span class="eq">word search: O(RC &middot; 4<sup>L</sup>) worst case</span></p>
     <p>Palindrome partition is <code>O(n &middot; 2&#8319;)</code> plus <code>O(n&sup2;)</code> to build <code>isPal</code>. Sudoku is a 9<sup>81</sup> product in theory and a few thousand nodes once row/col/box bitsets veto digits.</p>
   </div>
@@ -842,27 +841,27 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Checking the constraint only at the leaf</span>
-    <div class="pitfalls__bug">Fill all n queens, then test the whole board. The tree is n^n, not n!.</div>
-    <div class="pitfalls__fix">Veto as soon as a queen, digit or letter is placed.</div>
+    <div class="pitfalls__bug">Fill all n queens, then test the whole board. That looks tidy because the checker is one function, but the tree is n^n placements, not n! permutations.</div>
+    <div class="pitfalls__fix">Veto as soon as a queen, digit or letter is placed, before the recursive call.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting to unmark a cell</span>
-    <div class="pitfalls__bug">Word search sets <code>board[r][c] = '#'</code> and returns without restoring.</div>
-    <div class="pitfalls__fix">Restore after the four recursive calls, on every path.</div>
+    <div class="pitfalls__bug">Word search sets <code>board[r][c] = '#'</code> and returns without restoring, because the early true-return looks like the search is done.</div>
+    <div class="pitfalls__fix">Restore the letter after the four recursive calls, on every path, including the successful one.</div>
   </li>
   <li>
     <span class="pitfalls__title">Shifting diagonals the wrong way</span>
-    <div class="pitfalls__bug">Illegal placements survive because attacks slide off the wrong side.</div>
+    <div class="pitfalls__bug">Illegal placements survive because attacks slide off the wrong side, and the bitmask still looks like a clean occupancy set.</div>
     <div class="pitfalls__fix">Draw one queen at (0,1) and write the next row's bits by hand. n = 4 (answer 2) is the unit test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Substring allocations inside the cut loop</span>
-    <div class="pitfalls__bug">Calling <code>s.substring</code> before you know the piece is a palindrome.</div>
-    <div class="pitfalls__fix">Test <code>pal[start][end]</code> first. Only then allocate.</div>
+    <div class="pitfalls__bug">Calling <code>s.substring</code> before you know the piece is a palindrome, because the cut loop looks like ordinary string splitting work.</div>
+    <div class="pitfalls__fix">Test <code>pal[start][end]</code> first. Only then allocate the substring, so rejected cuts never pay for a new string.</div>
   </li>
   <li>
     <span class="pitfalls__title">Sudoku box index off by one</span>
-    <div class="pitfalls__bug"><code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>.</div>
+    <div class="pitfalls__bug"><code>r / 3 + c / 3</code> instead of <code>(r / 3) * 3 + (c / 3)</code>. The shorter formula looks like a box id and silently aliases three boxes together.</div>
     <div class="pitfalls__fix">Box id is <code>(r / 3) * 3 + (c / 3)</code>. Print it on a solved board once.</div>
   </li>
 </ul>
@@ -912,28 +911,28 @@ flowchart TD
   <details class="followup">
     <summary>Is word search BFS or DFS?</summary>
     <div class="followup__body">
-      <p>DFS with mark/unmark. BFS would need a used-set per path, and there is no shortest-path objective. LC 79 is existence, so backtracking DFS is the default.</p>
+      <p>DFS with mark/unmark. BFS would need a used-set per path, because two different routes can visit the same cell, and there is no shortest-path objective. LC 79 is existence of any matching walk, so backtracking DFS is the default and the cheaper structure to write.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>When do I switch from backtracking to bitmask DP?</summary>
     <div class="followup__body">
-      <p>When you need a count or an optimum over subsets of n &le; 20, and the same subset is reached by many orders. Filling under local constraints with n = 9 (Sudoku) stays backtracking.</p>
+      <p>When you need a count or an optimum over subsets of n &le; 20, and the same subset is reached by many orders, so memoising the mask beats replaying every permutation. Filling under local constraints with n = 9 (Sudoku) stays backtracking, because the state is the board, not a subset of items.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can I prune palindrome partition without the n^2 table?</summary>
     <div class="followup__body">
-      <p>Yes: scan the piece at each node. It is correct and slower. The table is the expected interview extra.</p>
+      <p>Yes: scan the piece at each node with two pointers. It is correct and slower, because the same substring is re-tested on many branches. The <code>O(n&sup2;)</code> table is the expected interview extra: build it once up front, then every later cut is a constant-time lookup.</p>
     </div>
   </details>
 </div>
 
 <!-- ======================================================= 13. PRACTICE -->
 <h2>Practice</h2>
-<p>LC 51, LC 37, LC 79 and LC 131 are the four vetoes on this page. The Codeforces problems use the same idea on a grid or a subset mask.</p>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
 
 <div class="table-scroll">
   <table class="problems">

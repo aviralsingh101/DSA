@@ -22,7 +22,7 @@
   <p class="hero__tagline">The linear sieve builds every prime ≤ n in O(n) and the smallest-prime-factor table factors any k ≤ n in O(log k).</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="modular-arithmetic.html">Modular Arithmetic</a>,
       <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
@@ -38,14 +38,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Trial division to n is O(sqrt n) per number. A sieve pays O(n log log n) once (Eratosthenes) or O(n) (linear / Euler sieve) and then primality of every k ≤ n is an array read. The SPF table is the reason you sieve even when you only needed factorisation.</p>
-<p>n = 1e7 is the Java comfort zone for a bool/int sieve. n = 1e12 needs segmented sieves or Miller-Rabin on single queries.</p>
-<p>Multiplicative functions (phi, mu, tau, sigma) fill with the same linear sieve in one pass.</p>
+<p>You are given every integer from <code>2</code> to <code>n</code> and you must mark which of them are prime, or factor a long list of them. Trial division tests one candidate in about <code>sqrt n</code> divisions, so asking the question a million times at <code>n = 10<sup>6</sup></code> is already about a billion steps and the judge will cut you off. A sieve pays that cost once, up front, and then primality of any <code>k &le; n</code> is a single array read.</p>
+<p>The extra prize is the <em>smallest-prime-factor</em> table, usually shortened to SPF: <code>spf[k]</code> stores the smallest prime that divides <code>k</code>. Once you have it, factoring any <code>k &le; n</code> is a loop that peels off <code>spf[k]</code> until you hit <code>1</code>, at most about <code>log k</code> divisions. That is why you sieve even when the statement never asked you to list primes &mdash; it asked you to factor many numbers in a range.</p>
+<p>In Java a boolean or integer sieve is comfortable up to about <code>n = 10<sup>7</sup></code> (tens of megabytes and a few hundred milliseconds). A limit of <code>10<sup>12</sup></code> cannot allocate an array of that length, so you either sieve a short window (a <em>segmented</em> sieve) or test one huge integer with Miller-Rabin. The constraint that names this page is &ldquo;all primes up to <code>n</code>&rdquo; or &ldquo;factor many <code>k &le; n</code>&rdquo; with <code>n</code> in the <code>10<sup>6</sup></code> to <code>10<sup>7</sup></code> band.</p>
+<p>The same linear pass that writes SPF also fills <em>multiplicative functions</em> &mdash; functions determined by their values at prime powers, such as Euler's <code>phi</code> (count of leftovers coprime to <code>n</code>), M&ouml;bius <code>mu</code>, and the divisor-count <code>tau</code>. One sieve, several arrays, and every later query is an array read.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>Every composite k ≤ n has a smallest prime factor p. Mark k=p*m exactly once, when p does not exceed SPF[m]. That is the linear sieve.</p>
+    <p>Every composite <code>k &le; n</code> has a smallest prime factor <code>p</code>. The linear sieve writes <code>k = p * m</code> exactly once, when <code>p</code> does not exceed <code>spf[m]</code>, so each composite is marked by its true smallest prime and the whole table costs a constant amount of work per integer.</p>
   </div>
 </aside>
 
@@ -112,18 +113,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n le 10&#8311;</code> bool sieve ~ 10 MB; int SPF ~ 40 MB. Java init time matters: keep the inner loop tight, start j from i*i.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> A boolean sieve at <code>n = 10<sup>7</sup></code> is about 10 MB; an integer SPF table is about 40 MB. Java init time matters: keep the inner loop tight and start marking at <code>i*i</code>, not at <code>2i</code>. Above <code>n = 10<sup>8</sup></code> both memory and startup get tight; a single 64-bit primality test is Miller-Rabin, not a full sieve.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Eratosthenes: for i=2..n, if prime, mark i*i, i*i+i, ... composite. Optimise odds / wheel if needed.</p>
-<p>Linear: for x=2..n, if spf[x]==0, spf[x]=x, push prime. Then for each prime p with ple spf[x] and p*xle n, spf[p*x]=p. Each composite is written once.</p>
+<p>Eratosthenes is the simpler sieve. Allocate a boolean array <code>prime[0..n]</code>, set everything true, then force <code>prime[0]</code> and <code>prime[1]</code> false. For each <code>i</code> from 2 up to <code>sqrt n</code>, if <code>i</code> is still marked prime, walk <code>j = i*i, i*i+i, i*i+2i, ...</code> and mark those slots composite. Starting at <code>i*i</code> is safe because every smaller multiple of <code>i</code> already had a smaller prime factor and was marked earlier. After the loops, <code>prime[k]</code> is true exactly when <code>k</code> is prime.</p>
+<p>The linear sieve, also called Euler's sieve, builds SPF instead of a boolean. Allocate <code>spf[0..n]</code> of zeros and an empty list of primes. For each <code>x</code> from 2 to <code>n</code>: if <code>spf[x]</code> is still 0 then <code>x</code> is prime, so write <code>spf[x] = x</code> and append <code>x</code> to the prime list. Then, for every prime <code>p</code> in the list so far, if <code>p</code> exceeds <code>spf[x]</code> or <code>p*x</code> exceeds <code>n</code>, stop; otherwise write <code>spf[p*x] = p</code>. The break when <code>p &gt; spf[x]</code> is the whole algorithm: it guarantees each composite is written exactly once, by its smallest prime.</p>
+<p>Walk the table up to 10. At <code>x = 2</code> the slot is unmarked, so 2 is prime and you write <code>spf[4] = spf[6] = spf[8] = spf[10] = 2</code>. At <code>x = 3</code> you append 3; 6 already has SPF 2, so you do not overwrite it. At <code>x = 4</code> the slot is already 2, and the only prime you try is 2. At <code>x = 5</code> you append 5 and later <code>9 = 3*3</code> receives SPF 3. Factoring 84 on a larger table peels <code>2, 2, 3, 7</code> by repeating <code>n /= spf[n]</code>. Euler's <code>phi[10]</code> is 4 because 10 has prime factors 2 and 5, and the leftover count is <code>10 * (1-1/2) * (1-1/5)</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After the linear sieve, spf[x] is the smallest prime dividing x (and spf[p]=p). Factorisation pops spf until x=1, O(Ω(x)) ≤ O(log x).</p>
+    <p>After the linear sieve, <code>spf[x]</code> is the smallest prime dividing <code>x</code>, and <code>spf[p] = p</code> for every prime. Factorisation peels <code>spf[k]</code> until <code>k</code> becomes 1, in at most about <code>log k</code> steps because each peel shrinks <code>k</code> by a factor of at least 2.</p><p>In plain words, you do not test each integer against every prime; you let each composite be claimed once by the smallest prime that divides it, and that claim is the factor you will peel first later.</p><p>Interview sentence: <em>&ldquo;Each composite is written once, by its smallest prime; the break on p &gt; spf[x] is the algorithm.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">The break is load-bearing</span>
+    <p>If you forget <code>if (p &gt; spf[x]) break</code>, a number such as 12 is written by both 2 and 3. Then <code>spf[12]</code> is no longer the smallest prime, factorisation is wrong, and the pass is no longer linear.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Eratosthenes when you only need prime[]</span>
+    <p>A boolean sieve has better cache behaviour if you will never factor. Reach for the linear sieve when you also want SPF, <code>phi</code>, or <code>mu</code> in the same pass.</p>
   </div>
 </aside>
 
@@ -161,7 +179,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "x=2: unmarked, prime. spf[2]=2. Mark 4,6,8,10 with 2 (linear: only ple spf[x]).",
+          "note": "At x=2 the slot is unmarked, so 2 is prime. Write spf of 4, 6, 8 and 10 as 2, their smallest prime.",
           "active": [
             2
           ],
@@ -172,7 +190,7 @@
           }
         },
         {
-          "note": "x=3: prime. spf[3]=3. 6 already has spf 2 (2le3 but 6 was marked by 2 first).",
+          "note": "At x=3 you append 3. Six already has spf 2, written when x was 2, so you leave that slot alone.",
           "active": [
             3
           ],
@@ -183,7 +201,7 @@
           }
         },
         {
-          "note": "x=4: spf=2, composite. Try p=2 only (ple2). 8 already marked.",
+          "note": "At x=4 the slot is already 2, so 4 is composite. The only prime you try is 2, and 8 is already marked.",
           "active": [
             4
           ],
@@ -194,7 +212,7 @@
           }
         },
         {
-          "note": "x=5: prime. Remaining 7, and 9=3*3 gets spf 3.",
+          "note": "At x=5 you append 5. Later 9 equals 3 times 3 and receives spf 3, its smallest prime.",
           "active": [
             5
           ],
@@ -205,7 +223,7 @@
           }
         },
         {
-          "note": "Factor 84 with a bigger table: 2*2*3*7 by looping n/=spf[n].",
+          "note": "Factor 84 by peeling the table: divide by spf until you hit 1, which yields 2, then 2, then 3, then 7.",
           "active": [
             2
           ],
@@ -216,7 +234,7 @@
           }
         },
         {
-          "note": "phi[10]: primes 2,5 so 10*(1-1/2)*(1-1/5)=4.",
+          "note": "Euler phi of 10 counts leftovers coprime to 10. Primes 2 and 5 give 10 times (1-1/2) times (1-1/5), which is 4.",
           "active": [
             10
           ],
@@ -251,17 +269,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate</strong> int[] spf = new int[n+1].</li>
-  <li><strong>For x=2..n:</strong> if spf[x]==0, spf[x]=x, primes.add(x).</li>
-  <li><strong>Inner:</strong> for each prime p, if p>spf[x] or p*x>n break; spf[p*x]=p.</li>
-  <li><strong>Factor k:</strong> while k&gt;1, p=spf[k], divide out p.</li>
-  <li><strong>phi:</strong> same loop, phi[p*x] = phi[x]*p if p|x else phi[x]*(p-1).</li>
-  <li><strong>Segmented:</strong> sieve primes to sqrt(R), then a bool array of length R-L+1.</li>
+  <li><strong>Allocate the SPF table.</strong> Create <code>int[] spf = new int[n+1]</code> filled with zeros; a zero slot still means &ldquo;not yet claimed&rdquo;, so you can tell a prime from a composite as you walk.</li>
+  <li><strong>Discover primes as you walk x.</strong> For each <code>x</code> from 2 to <code>n</code>, if <code>spf[x]</code> is still 0 then <code>x</code> is prime: write <code>spf[x] = x</code> and append <code>x</code> to the prime list.</li>
+  <li><strong>Claim multiples by their smallest prime.</strong> For each prime <code>p</code>, stop if <code>p</code> exceeds <code>spf[x]</code> or <code>p*x</code> exceeds <code>n</code>; otherwise write <code>spf[p*x] = p</code>. That break is what keeps each composite written once.</li>
+  <li><strong>Factor by peeling SPF.</strong> While <code>k &gt; 1</code>, push <code>spf[k]</code> and divide <code>k</code> by it. Each peel shrinks <code>k</code>, so the loop finishes in at most about <code>log k</code> steps.</li>
+  <li><strong>Fill phi in the same pass.</strong> When you write <code>p*x</code>, set <code>phi[p*x] = phi[x]*p</code> if <code>p</code> already divides <code>x</code>, else <code>phi[x]*(p-1)</code>, which is the leftover-count recurrence for a multiplicative function.</li>
+  <li><strong>Segment a huge window.</strong> Sieve primes up to <code>sqrt(R)</code>, then mark a boolean array of length <code>R-L+1</code>. Never allocate an array of length <code>10<sup>12</sup></code>.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Build the smallest-prime-factor table up to 10, then peel 84 and compute Euler's leftover-count for 10.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -269,12 +287,12 @@ flowchart TD
       <tr><th>x</th><th>spf</th><th>primes</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>[2]</td><td>x=2: unmarked, prime. spf[2]=2. Mark 4,6,8,10 with 2 (linear: only ple spf[x]).</td></tr>
-      <tr><td>3</td><td>3</td><td>[2,3]</td><td>x=3: prime. spf[3]=3. 6 already has spf 2 (2le3 but 6 was marked by 2 first).</td></tr>
-      <tr><td>4</td><td>2</td><td>[2,3]</td><td>x=4: spf=2, composite. Try p=2 only (ple2). 8 already marked.</td></tr>
-      <tr><td>5</td><td>5</td><td>[2,3,5]</td><td>x=5: prime. Remaining 7, and 9=3*3 gets spf 3.</td></tr>
-      <tr><td>84</td><td>2,2,3,7</td><td>fact</td><td>Factor 84 with a bigger table: 2*2*3*7 by looping n/=spf[n].</td></tr>
-      <tr><td>10</td><td>2</td><td>phi=4</td><td>phi[10]: primes 2,5 so 10*(1-1/2)*(1-1/5)=4.</td></tr>
+      <tr class="trace-table__row--change"><td>2</td><td>2</td><td>[2]</td><td>At x=2 the slot is unmarked, so 2 is prime. Write spf of 4, 6, 8 and 10 as 2, their smallest prime.</td></tr>
+      <tr><td>3</td><td>3</td><td>[2,3]</td><td>At x=3 you append 3. Six already has spf 2, written when x was 2, so you leave that slot alone.</td></tr>
+      <tr><td>4</td><td>2</td><td>[2,3]</td><td>At x=4 the slot is already 2, so 4 is composite. The only prime you try is 2, and 8 is already marked.</td></tr>
+      <tr><td>5</td><td>5</td><td>[2,3,5]</td><td>At x=5 you append 5. Later 9 equals 3 times 3 and receives spf 3, its smallest prime.</td></tr>
+      <tr><td>84</td><td>2,2,3,7</td><td>fact</td><td>Factor 84 by peeling the table: divide by spf until you hit 1, which yields 2, then 2, then 3, then 7.</td></tr>
+      <tr><td>10</td><td>2</td><td>phi=4</td><td>Euler phi of 10 counts leftovers coprime to 10. Primes 2 and 5 give 10 times (1-1/2) times (1-1/5), which is 4.</td></tr>
     </tbody>
   </table>
 </div>
@@ -380,7 +398,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Linear: each composite is assigned its SPF once, each prime is pushed once. Eratosthenes: harmonic sum of n/p over primes is n log log n.</p>
+    <p>The linear sieve writes each composite exactly once and appends each prime once, so the whole table is a constant amount of work per integer from 2 to <code>n</code> &mdash; that is why it is quoted as <code>O(n)</code>. Eratosthenes marks every multiple of every prime, and the number of those marks is the harmonic sum of <code>n/p</code> over primes, which is about <code>n log log n</code>. Starting the inner loop at <code>i*i</code> does not change the class, but it cuts a large constant.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>7</sup></code> the linear pass is ten million writes, a few hundred milliseconds in Java, and the integer table is about 40 MB. Trial-dividing every integer up to that <code>n</code> would be on the order of <code>n sqrt n &approx; 3 &times; 10<sup>10</sup></code> steps. A segmented window of length <code>10<sup>6</sup></code> inside <code>[1, 10<sup>12</sup>]</code> sieves primes to <code>10<sup>6</sup></code> once, then marks the window, which fits in time and memory; allocating <code>10<sup>12</sup></code> slots does not.</p>
   </div>
 
   <table class="complexity__compare">
@@ -402,28 +421,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Inner loop from 2i instead of i*i</span>
-    <div class="pitfalls__bug">Correct but slower; also i*i overflow for i~46341 in int.</div>
-    <div class="pitfalls__fix"><code>(long)i*i</code> and start at i*i.</div>
+    <div class="pitfalls__bug">Starting at <code>2i</code> is still correct, so it looks fine, but you re-mark numbers that a smaller prime already claimed, and <code>i*i</code> computed in <code>int</code> overflows once <code>i</code> reaches 46341.</div>
+    <div class="pitfalls__fix">Cast <code>(long) i * i</code> and start the inner loop there. Time a sieve to <code>10<sup>7</sup></code> both ways if you want to feel the constant.</div>
   </li>
   <li>
     <span class="pitfalls__title">Linear sieve not breaking on p>spf[x]</span>
-    <div class="pitfalls__bug">A number is marked by several primes, SPF is no longer smallest, and O(n log n).</div>
-    <div class="pitfalls__fix">The break is the algorithm.</div>
+    <div class="pitfalls__bug">Without the break, 12 is written by both 2 and 3. The table still looks populated, but SPF is no longer the smallest prime and the pass becomes <code>O(n log n)</code>.</div>
+    <div class="pitfalls__fix">The break <code>if (p &gt; spf[x]) break</code> is the algorithm. After sieving, check that <code>spf[12]</code> is 2, not 3.</div>
   </li>
   <li>
     <span class="pitfalls__title">spf[1] and factor(1)</span>
-    <div class="pitfalls__bug">Infinite loop while n>1 if spf[1] is 0 and you call factor(1).</div>
-    <div class="pitfalls__fix">Special-case 1 as empty factor list.</div>
+    <div class="pitfalls__bug"><code>spf[1]</code> stays 0, so <code>while (n &gt; 1)</code> on input 1 never divides and the loop runs forever, which looks like a hang rather than a factorisation bug.</div>
+    <div class="pitfalls__fix">Special-case 1 as an empty factor list before you enter the peel loop. Unit tests should include <code>factor(1)</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">n=1e8 boolean in Java</span>
-    <div class="pitfalls__bug">Memory and time both tight; TLE on slow marking.</div>
-    <div class="pitfalls__fix">Bitset, or n=1e7, or linear sieve.</div>
+    <div class="pitfalls__bug">A boolean array of length <code>10<sup>8</sup></code> is tight on both memory and startup, and a slow marking loop times out even when the idea is right.</div>
+    <div class="pitfalls__fix">Stay at <code>n = 10<sup>7</sup></code>, use a bitset, or switch to the linear sieve. Measure init time, not just the query loop.</div>
   </li>
   <li>
     <span class="pitfalls__title">Segmented sieve off-by-one on L=1</span>
-    <div class="pitfalls__bug">1 is not prime; index 0 maps to L.</div>
-    <div class="pitfalls__fix">Mark 0/1 explicitly if Lle1.</div>
+    <div class="pitfalls__bug">Index 0 of the window maps to <code>L</code>. If <code>L</code> is 1 you leave 1 marked prime, and later counts are off by one in a way that looks like a fence-post error.</div>
+    <div class="pitfalls__fix">Force 0 and 1 composite whenever the window covers them. Print primes in <code>[1, 10]</code> and confirm you get four, not five.</div>
   </li>
 </ul>
 
@@ -465,28 +484,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is the linear sieve linear?</summary>
     <div class="followup__body">
-      <p>Every composite m has a unique writing m = p * x with p = spf[m] le spf[x]. The inner loop produces each m once.</p>
+      <p>Every composite <code>m</code> has exactly one writing <code>m = p * x</code> where <code>p</code> is the smallest prime dividing <code>m</code> and <code>p</code> does not exceed <code>spf[x]</code>. The inner loop emits that pair and then stops, so each composite is produced once and each prime is appended once. That is a constant amount of work per integer, which is why the pass is <code>O(n)</code> rather than <code>O(n log log n)</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Eratosthenes vs linear in practice?</summary>
     <div class="followup__body">
-      <p>Eratosthenes has better cache for prime[] only. Linear wins when you want SPF/phi/mu in the same pass.</p>
+      <p>Eratosthenes walks contiguous multiples and hits cache better if you only need a boolean <code>prime[]</code>. The linear sieve wins when you also want SPF, <code>phi</code>, or <code>mu</code>, because those arrays fill in the same pass. For a one-off prime list up to <code>10<sup>7</sup></code> either is fine; reach for linear the moment a later query asks you to factor.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you list primes in [1e12, 1e12+1e6]?</summary>
     <div class="followup__body">
-      <p>Sieve primes ≤ 1e6+eps, then segmented-mark the window. Do not allocate 1e12.</p>
+      <p>Sieve ordinary primes up to a little past <code>10<sup>6</sup></code> (that is <code>sqrt</code> of the right end), then allocate a boolean window of length <code>10<sup>6</sup>+1</code> and mark multiples of those primes inside it. Do not allocate an array of length <code>10<sup>12</sup></code>. After marking, any unmarked slot whose value is at least 2 is prime.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Goldbach / twin primes?</summary>
     <div class="followup__body">
-      <p>Sieve then a linear scan of the prime list. The sieve is the preprocess.</p>
+      <p>Both are scans over a prime list you already built. Goldbach asks whether <code>n - p</code> is prime for some prime <code>p &le; n/2</code>; twins ask whether <code>p</code> and <code>p+2</code> are both in the list. The sieve is the preprocess; the scan is linear in the number of primes, not a second sieve.</p>
     </div>
   </details>
 </div>

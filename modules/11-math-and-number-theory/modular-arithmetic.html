@@ -22,7 +22,7 @@
   <p class="hero__tagline">Work in the ring Z/MZ: add and multiply with <code>% M</code>, invert when gcd(a,M)=1, and never write <code>(a-b)%M</code> in Java without fixing a negative remainder.</p>
   <div class="hero__meta">
     <span class="pill pill--easy">Easy</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>,
       <a href="../00-foundations/java-for-dsa.html">Java for DSA</a>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Contest answers are almost always needed modulo 1e9+7 or 998244353. Those are primes, so every non-zero residue has an inverse and you may divide. Composite moduli lose inverses and need CRT / phi.</p>
-<p>Java's <code>%</code> on negatives is negative. Hashing, prefix differences, and <code>a-b</code> all hit this. The one-liner <code>x%=M; if(x<0)x+=M;</code> belongs in muscle memory.</p>
-<p>Fermat: a^{M-2} ≡ a^{-1} (mod M) for prime M. Binary exponentiation is O(log M). The next pages add sieves, phi, and CRT.</p>
+<p>You are given two integers that can each be as large as a billion, and you must report their product, except the judge only wants the leftover after dividing by <code>1 000 000 007</code>. Multiplying those two numbers already overflows a 32-bit <code>int</code>, and a loop that adds one of them a billion times is far too slow. Working <em>modulo</em> <code>M</code> means you keep only the remainder when you divide by <code>M</code>, so every intermediate value stays between <code>0</code> and <code>M-1</code> and the leftover you hand back is exactly the answer the statement asked for.</p>
+<p>The modulus in a contest is almost always a prime such as <code>10<sup>9</sup>+7</code> or <code>998244353</code>. A prime modulus is special because every leftover except <code>0</code> has a <em>modular inverse</em> &mdash; the number you multiply it by to get leftover <code>1</code>, which is what division means in this world. Composite moduli lose some inverses, and then you need Euler's totient or the Chinese Remainder Theorem from later pages. The phrase &ldquo;print the answer modulo <code>10<sup>9</sup>+7</code>&rdquo; sitting next to <code>n</code> up to <code>10<sup>6</sup></code> or an exponent up to <code>10<sup>18</sup></code> is the constraint that signals this page.</p>
+<p>Java's remainder operator is not the mathematical leftover. Evaluating <code>(1-4)%5</code> gives <code>-3</code>, not <code>2</code>, because the sign of <code>%</code> follows the left operand. Hashing, prefix differences, and any <code>a-b</code> all hit this, and a negative hash becomes an <code>ArrayIndexOutOfBounds</code> or a missed equality. The one-liner <code>x %= M; if (x &lt; 0) x += M;</code> belongs in muscle memory, and you should apply it after every subtraction before you store or compare the value.</p>
+<p>When you need to divide, you do not write <code>a/b</code> in Java. The modular inverse of <code>b</code> is the number that acts like &ldquo;one over <code>b</code>&rdquo;: multiply <code>a</code> by that number and you have divided. When <code>M</code> is prime, Fermat's little theorem says the leftover of <code>b<sup>M-2</sup></code> is exactly that inverse, and binary exponentiation computes it in about thirty multiplies for <code>M</code> around <code>10<sup>9</sup></code>. The next pages add sieves, Euler's totient, and the Chinese Remainder Theorem for the cases Fermat cannot cover.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>(a+b) mod M = (a mod M + b mod M) mod M. Subtraction needs a +M. Division is multiply by the inverse, not Java /. </p>
+    <p>Keep every value as its leftover modulo <code>M</code>. Add and multiply, then reduce; subtract by adding <code>M</code> first so Java cannot hand you a negative. Division is multiply by the modular inverse &mdash; the number that acts like one-over &mdash; and Fermat produces that inverse when <code>M</code> is prime.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> M is usually 1e9+7 (prime) or 998244353 (NTT-friendly prime). long for products before %. n in exponents up to 1e18 → O(log n) muls.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>M</code> is usually <code>10<sup>9</sup>+7</code> (a 32-bit prime) or <code>998244353</code> (an NTT-friendly prime). A product of two residues fits in a 64-bit <code>long</code> before you reduce. Exponents go up to <code>10<sup>18</sup></code>, so a naive loop is impossible and you need about <code>log<sub>2</sub>(10<sup>18</sup>) &approx; 60</code> modular multiplies. If you drop to <code>int</code> for the multiply, <code>10<sup>9</sup> &times; 10<sup>9</sup></code> wraps and the leftover is garbage.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Normalise: <code>x %= M; if (x < 0) x += M;</code>. Multiply: <code>(a%M)*(b%M)%M</code> in long. Pow: binary exponentiation. Inverse: <code>pow(a, M-2)</code> if M prime and a%M!=0.</p>
-<p>998244353-1 = 2^23 * 119, so NTT exists. 1e9+7-1 is not a high power of two. Both are fine for inverses.</p>
+<p>Store every residue in a <code>long</code>. The helper <code>add(a, b)</code> writes <code>a+b</code> and, if the sum reached <code>M</code>, subtracts <code>M</code> once &mdash; that computes the leftover of the sum without calling <code>%</code>. The helper <code>sub(a, b)</code> writes <code>a-b</code> and, if the difference went negative, adds <code>M</code> once, which is the leftover of the difference. The helper <code>mul(a, b)</code> is <code>(a * b) % M</code>, and both factors must already be reduced so the product is at most about <code>10<sup>18</sup></code> and fits in a <code>long</code>.</p>
+<p>The modular inverse of <code>a</code> is the number <code>inv</code> such that the leftover of <code>a * inv</code> is <code>1</code> &mdash; it is the number that acts like division, because the leftover of <code>b * inv</code> is what &ldquo;<code>b / a</code>&rdquo; means in this ring. When <code>M</code> is prime and <code>a</code> is not a multiple of <code>M</code>, Fermat's little theorem says the leftover of <code>a<sup>M-2</sup></code> equals that inverse. Binary exponentiation computes the power: start with result <code>1</code>, square the base, and multiply into the result on every 1-bit of the exponent. That is about thirty multiplies for <code>M-2</code> when <code>M</code> is <code>10<sup>9</sup>+7</code>.</p>
+<p>Walk leftovers modulo <code>5</code>. Adding <code>3</code> and <code>4</code> gives <code>7</code>, leftover <code>2</code>. Subtracting <code>1-4</code> gives <code>-3</code>; Java's <code>%</code> leaves <code>-3</code>, then adding <code>5</code> yields <code>2</code>, and the check <code>4+2 = 6</code> leftover <code>1</code> confirms it. The inverse of <code>3</code> is <code>2</code> because <code>3*2 = 6</code> leftover <code>1</code>; Fermat agrees, because the leftover of <code>3<sup>5-2</sup> = 27</code> is also <code>2</code>. Dividing <code>4</code> by <code>3</code> is therefore the leftover of <code>4*2 = 8</code>, which is <code>3</code>. Raising <code>2</code> to the 7th power: <code>128</code> leftover <code>3</code>, and the binary bits of <code>7</code> (which is <code>4+2+1</code>) multiply leftovers <code>16</code>, <code>4</code>, and <code>2</code> to the same <code>3</code>.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>All arithmetic is in the residue classes mod M. An inverse of a exists iff gcd(a,M)=1. For prime M that is every a not ≡ 0.</p>
+    <p>Every value you store is a residue class modulo <code>M</code>: two integers that differ by a multiple of <code>M</code> are treated as the same. The inverse of <code>a</code> exists exactly when <code>gcd(a, M) = 1</code> &mdash; they share no prime factor &mdash; and for prime <code>M</code> that is every <code>a</code> whose leftover is not <code>0</code>.</p><p>In plain words, you never keep the full integer; you keep the leftover, you add <code>M</code> after a subtraction so the leftover stays non-negative, and &ldquo;divide by <code>a</code>&rdquo; means &ldquo;multiply by the number that turns <code>a</code> into leftover <code>1</code>&rdquo;.</p><p>Interview sentence: <em>&ldquo;Inverse is the number that acts like division; Fermat gives it when M is prime.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Java % is not mathematical mod</span>
+    <p><code>(-2) % 5</code> is <code>-2</code> in Java, not <code>3</code>. A hash or prefix difference that goes negative then looks like a different residue, so two equal keys miss each other. Always write <code>x %= M; if (x &lt; 0) x += M;</code> after a subtraction.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Fermat needs a prime</span>
+    <p>The leftover of <code>a<sup>M-2</sup></code> is the inverse of <code>a</code> only when <code>M</code> is prime and <code>a</code> is not a multiple of <code>M</code>. On a composite modulus use extended Euclid from the next-but-one page, or factor <code>M</code> and apply Euler / CRT.</p>
   </div>
 </aside>
 
@@ -155,7 +173,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Field F5. Add 3+4=7 ≡ 2.",
+          "note": "Working modulo 5, add 3 and 4 to get 7; the leftover of 7 is 2, which is the residue we store.",
           "active": [
             2
           ],
@@ -166,7 +184,7 @@
           }
         },
         {
-          "note": "Sub 1-4 = -3. Java % gives -3. +5 → 2. Check: 4+2=6≡1.",
+          "note": "Subtract 1 minus 4 to get -3. Java % leaves -3; adding 5 yields leftover 2, and 4+2 leftover 1 checks it.",
           "active": [
             2
           ],
@@ -177,7 +195,7 @@
           }
         },
         {
-          "note": "Mul 3*4=12 ≡ 2.",
+          "note": "Multiply 3 by 4 to get 12. The leftover of 12 after dividing by 5 is 2, the product in this ring.",
           "active": [
             2
           ],
@@ -188,7 +206,7 @@
           }
         },
         {
-          "note": "Inv of 3: 3*2=6≡1, so inv=2. Fermat: 3^{3} = 27 ≡ 2 (p-2=3).",
+          "note": "The inverse of 3 is 2 because 3 times 2 leftover 1. Fermat agrees: leftover of 3 to the power 3 is 27 leftover 2.",
           "active": [
             2
           ],
@@ -199,7 +217,7 @@
           }
         },
         {
-          "note": "Div 4/3 ≡ 4*2 ≡ 3 mod 5.",
+          "note": "Dividing 4 by 3 means multiply 4 by that inverse 2, so leftover of 8 is 3 modulo 5.",
           "active": [
             3
           ],
@@ -210,7 +228,7 @@
           }
         },
         {
-          "note": "pow(2,7) mod 5: 128 ≡ 3. Binary: 2^4=16≡1, 2^2=4, 2^1=2 → 1*4*2 wait 7=4+2+1 → 1*4*2=8≡3.",
+          "note": "Power 2 to the 7 is 128 leftover 3. Binary bits of 7 are 4+2+1, so leftovers 16, 4 and 2 multiply to the same 3.",
           "active": [
             3
           ],
@@ -247,17 +265,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Store everything in long</strong> when M ~ 1e9.</li>
-  <li><strong>add:</strong> (a+b)%M with a,b already in 0..M-1 (sum fits long).</li>
-  <li><strong>sub:</strong> (a-b+M)%M.</li>
-  <li><strong>mul:</strong> (a*b)%M in long.</li>
-  <li><strong>pow(a,e):</strong> binary, O(log e).</li>
-  <li><strong>inv(a):</strong> pow(a, M-2) if M prime; else extended Euclid.</li>
+  <li><strong>Store every residue in a long.</strong> When <code>M</code> is around <code>10<sup>9</sup></code> a product of two residues needs 64 bits, so an <code>int</code> wrap before <code>%</code> silently destroys the leftover.</li>
+  <li><strong>Add by reducing the sum.</strong> With <code>a</code> and <code>b</code> already in <code>0..M-1</code>, compute <code>a+b</code> and subtract <code>M</code> if it reached <code>M</code>; that leftover of the sum always fits in a <code>long</code>.</li>
+  <li><strong>Subtract by adding M first.</strong> Write <code>(a - b + M) % M</code> (or add <code>M</code> when the difference is negative) so Java cannot return a negative remainder that later hashes or indexes wrongly.</li>
+  <li><strong>Multiply in long, then reduce.</strong> Cast at least one factor: <code>(long) a * b % M</code> computes the leftover of the product; skipping the cast overflows <code>int</code> and the leftover is garbage.</li>
+  <li><strong>Raise to a power by binary exponentiation.</strong> Square the base and multiply into the result on every 1-bit of the exponent, about <code>log e</code> modular multiplies, which is how you handle exponents up to <code>10<sup>18</sup></code>.</li>
+  <li><strong>Invert by finding the number that acts like division.</strong> When <code>M</code> is prime call <code>pow(a, M-2)</code>, which Fermat says is the leftover that multiplies <code>a</code> to <code>1</code>; otherwise use extended Euclid from the later page.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Trace leftovers modulo 5 through add, subtract, multiply, inverse, divide, and a binary power, matching the visual walkthrough.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -265,12 +283,12 @@ flowchart TD
       <tr><th>op</th><th>raw</th><th>norm</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>3+4</td><td>7</td><td>2</td><td>Field F5. Add 3+4=7 ≡ 2.</td></tr>
-      <tr><td>1-4</td><td>-3</td><td>2</td><td>Sub 1-4 = -3. Java % gives -3. +5 → 2. Check: 4+2=6≡1.</td></tr>
-      <tr><td>3*4</td><td>12</td><td>2</td><td>Mul 3*4=12 ≡ 2.</td></tr>
-      <tr><td>inv 3</td><td>27</td><td>2</td><td>Inv of 3: 3*2=6≡1, so inv=2. Fermat: 3^{3} = 27 ≡ 2 (p-2=3).</td></tr>
-      <tr><td>4/3</td><td>8</td><td>3</td><td>Div 4/3 ≡ 4*2 ≡ 3 mod 5.</td></tr>
-      <tr><td>2^7</td><td>128</td><td>3</td><td>pow(2,7) mod 5: 128 ≡ 3. Binary: 2^4=16≡1, 2^2=4, 2^1=2 → 1*4*2 wait 7=4+2+1 → 1*4*2=8≡3.</td></tr>
+      <tr class="trace-table__row--change"><td>3+4</td><td>7</td><td>2</td><td>Working modulo 5, add 3 and 4 to get 7; the leftover of 7 is 2, which is the residue we store.</td></tr>
+      <tr><td>1-4</td><td>-3</td><td>2</td><td>Subtract 1 minus 4 to get -3. Java % leaves -3; adding 5 yields leftover 2, and 4+2 leftover 1 checks it.</td></tr>
+      <tr><td>3*4</td><td>12</td><td>2</td><td>Multiply 3 by 4 to get 12. The leftover of 12 after dividing by 5 is 2, the product in this ring.</td></tr>
+      <tr><td>inv 3</td><td>27</td><td>2</td><td>The inverse of 3 is 2 because 3 times 2 leftover 1. Fermat agrees: leftover of 3 to the power 3 is 27 leftover 2.</td></tr>
+      <tr><td>4/3</td><td>8</td><td>3</td><td>Dividing 4 by 3 means multiply 4 by that inverse 2, so leftover of 8 is 3 modulo 5.</td></tr>
+      <tr><td>2^7</td><td>128</td><td>3</td><td>Power 2 to the 7 is 128 leftover 3. Binary bits of 7 are 4+2+1, so leftovers 16, 4 and 2 multiply to the same 3.</td></tr>
     </tbody>
   </table>
 </div>
@@ -365,7 +383,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Binary exponentiation does ⌊ log e ⌋ squarings. Inverse is one pow. Factorials need O(n) preprocess for n &lt; M.</p>
+    <p>Addition and subtraction are a handful of arithmetic operations: add or subtract, then maybe add or subtract <code>M</code> once. A multiply is one 64-bit product plus one remainder. Binary exponentiation does one squaring per bit of the exponent and one extra multiply per 1-bit, so an exponent <code>e</code> costs about <code>2 log<sub>2</sub> e</code> modular multiplies. The leftover of <code>a<sup>M-2</sup></code> that Fermat uses as the inverse is therefore one power, roughly sixty multiplies when <code>M</code> is <code>10<sup>9</sup>+7</code>.</p>
+    <p>Putting real numbers in: an exponent of <code>10<sup>18</sup></code> is sixty bits, so about 120 modular multiplies, a few microseconds. A factorial table up to <code>n = 10<sup>6</sup></code> is one million multiplies and one inverse at the top, then a walk down, which is a few milliseconds. A naive loop of <code>10<sup>18</sup></code> multiplies is impossible; floating <code>Math.pow</code> rounds and is not a leftover in the ring.</p>
   </div>
 
   <table class="complexity__compare">
@@ -387,28 +406,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Negative remainder</span>
-    <div class="pitfalls__bug">Hash or index becomes -3, AIOOB or missed equality.</div>
-    <div class="pitfalls__fix">Always +M after sub.</div>
+    <div class="pitfalls__bug">Java <code>%</code> on a subtraction returns a negative leftover such as <code>-3</code>, which looks correct until you use it as a hash or an array index and miss an equality or throw.</div>
+    <div class="pitfalls__fix">After every subtraction write <code>x %= M; if (x &lt; 0) x += M;</code> and test <code>(1-4) mod 5</code>, which must come back <code>2</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">int multiply</span>
-    <div class="pitfalls__bug">1e9*1e9 overflows int before %.</div>
-    <div class="pitfalls__fix">Cast to long first: <code>(long)a * b % M</code>.</div>
+    <div class="pitfalls__bug">A product <code>10<sup>9</sup> * 10<sup>9</sup></code> computed in <code>int</code> wraps before <code>%</code>, so the leftover looks like a plausible residue and the bug is silent.</div>
+    <div class="pitfalls__fix">Cast at least one factor first: <code>(long) a * b % M</code>. Print <code>mul(1_000_000_000, 1_000_000_000)</code> and check it equals leftover <code>49</code> modulo <code>10<sup>9</sup>+7</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">inv(0)</span>
-    <div class="pitfalls__bug">pow(0, M-2)=0, and you silently "divide by zero".</div>
-    <div class="pitfalls__fix">Guard a%M==0.</div>
+    <div class="pitfalls__bug"><code>pow(0, M-2)</code> returns <code>0</code>, so a later multiply by that &ldquo;inverse&rdquo; silently computes leftover 0 instead of failing as a divide-by-zero.</div>
+    <div class="pitfalls__fix">Guard <code>a % M == 0</code> before inverting. A zero leftover has no number that multiplies it to leftover 1.</div>
   </li>
   <li>
     <span class="pitfalls__title">Fermat on composite M</span>
-    <div class="pitfalls__bug">a^{M-2} is not inv(a). Euler needs a^{phi(M)-1} and gcd=1.</div>
-    <div class="pitfalls__fix">Extended Euclid, or factor M.</div>
+    <div class="pitfalls__bug">The leftover of <code>a<sup>M-2</sup></code> is the inverse only for prime <code>M</code>. On a composite it looks like the same one-liner and produces a number that does not multiply back to 1.</div>
+    <div class="pitfalls__fix">Use extended Euclid when <code>gcd(a, M) = 1</code>, or factor <code>M</code> and apply Euler / CRT. Test that <code>mul(a, inv(a))</code> is leftover 1.</div>
   </li>
   <li>
     <span class="pitfalls__title">pow(a, n) with n=1e18 written as a loop</span>
-    <div class="pitfalls__bug">TLE. Or using double Math.pow and rounding.</div>
-    <div class="pitfalls__fix">Binary exp in the integer ring.</div>
+    <div class="pitfalls__bug">A loop of <code>10<sup>18</sup></code> multiplies times out, and <code>Math.pow</code> uses doubles so the leftover is rounded, not exact.</div>
+    <div class="pitfalls__fix">Binary exponentiation in the integer ring: square and multiply on bits. Test <code>2<sup>7</sup> mod 5 = 3</code> before trusting a huge exponent.</div>
   </li>
 </ul>
 
@@ -450,28 +469,28 @@ flowchart TD
   <details class="followup">
     <summary>Why 1e9+7?</summary>
     <div class="followup__body">
-      <p>Prime, fits in 32-bit, product of two residues fits in 64-bit, traditional. 998244353 is preferred when you might NTT.</p>
+      <p>It is a prime that fits in 32 bits, so two residues multiply inside a 64-bit <code>long</code> before you reduce. Contests picked it years ago and every library already has helpers for it. Prefer <code>998244353</code> when you might later run an NTT, because <code>998244353 - 1</code> is a high power of two; both moduli give every non-zero leftover an inverse.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Does (a/b)%M == (a%M)/(b%M)?</summary>
     <div class="followup__body">
-      <p>No. Integer division is not modular division. 8/2=4, but 8 * inv(2) mod 5 = 4*3=12≡2, and 8/2 as ints is 4≡4, already different stories. Always multiply by inv.</p>
+      <p>No. Java <code>/</code> is integer division, which throws away a remainder, not modular division. The leftover of <code>8 / 2</code> as ints is <code>4</code>, but multiplying <code>8</code> by the inverse of <code>2</code> modulo <code>5</code> is leftover of <code>8 * 3 = 24</code>, which is <code>4</code> in one ring and a different story in another. Always multiply by the number that acts like one-over, never use Java <code>/</code> on residues.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Overflow of a+b before %?</summary>
     <div class="followup__body">
-      <p>If a,b &lt; M &lt; 2^62, a+b fits in long. If M is 2^63-ish, subtract M instead of %.</p>
+      <p>If <code>a</code> and <code>b</code> are already reduced and <code>M</code> is less than about <code>2<sup>62</sup></code>, the sum <code>a+b</code> still fits in a <code>long</code>. For a modulus near <code>2<sup>63</sup></code> skip <code>%</code> and subtract <code>M</code> when the sum reaches it, which is also faster. Products are the ones that need the <code>long</code> cast; sums of two residues almost never overflow 64 bits at contest moduli.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Wilson's theorem?</summary>
     <div class="followup__body">
-      <p>(P-1)! ≡ -1 mod P. Cute check, not a primality test you should ship (too slow, and MR is better).</p>
+      <p>Wilson says the leftover of <code>(P-1)!</code> is <code>P-1</code> (that is, leftover <code>-1</code>) when <code>P</code> is prime. It is a cute check on a tiny prime and a terrible primality test: computing that factorial is linear in <code>P</code>, and Miller-Rabin is the test you actually ship. Do not invert a factorial of <code>P</code> or larger; that leftover is already <code>0</code>.</p>
     </div>
   </details>
 </div>

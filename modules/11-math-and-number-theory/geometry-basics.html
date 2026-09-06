@@ -22,7 +22,7 @@
   <p class="hero__tagline">Points are <code>long</code> pairs. Orientation is a cross product. Almost every elementary geometry test — left of a line, segment intersection, polygon area — is that one signed area.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../00-foundations/complexity-analysis.html">Complexity Analysis</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Contest geometry is not trigonometry. You almost never need sin, and you almost always need the sign of (b−a)×(c−a) to decide whether c is left, right, or collinear with directed line ab.</p>
-<p>Integer coordinates up to 1e9 make every multiply a 2e9×2e9 = 4e18 candidate — it fits in long, not in int. Division is the enemy (it loses the exact predicate). Prefer comparisons of cross products to comparing doubles.</p>
-<p>Area of a polygon is the shoelace sum of consecutive crosses. Point-in-polygon is winding or ray-crossing, both built from the same orientation tests. Convex hull is the next page; this page is the toolkit it sits on.</p>
+<p>You are given three points A, B, and C with integer coordinates, and you must say whether walking A to B to C turns left, turns right, or stays on a straight line. Sine and cosine will not help: they are floating, they need an angle, and contests almost never give you one. What you need is the sign of one 2-D cross product, because that sign is which way the turn goes.</p>
+<p>Coordinates go up to <code>10<sup>9</sup></code>, so a product of two differences is a <code>2 &times; 10<sup>9</sup> &times; 2 &times; 10<sup>9</sup> = 4 &times; 10<sup>18</sup></code> candidate. That fits in a <code>long</code> and does not fit in an <code>int</code>. Division is the enemy: dividing by two to get an area, or taking a hypotenuse, throws away the exact predicate and then you compare a double to zero with an epsilon. Prefer comparing the raw cross product to zero.</p>
+<p>Almost every elementary test is that same signed area. Two segments intersect when the endpoints of each straddle the other line, which is four turn tests. Polygon area is the shoelace sum of consecutive crosses, which computes twice the signed area of the polygon. Point-in-polygon is winding or ray-crossing, both built from the same orientation. Convex hull on the next page is a stack of left-turn tests.</p>
+<p>The constraint that names this page is integer coordinates, often <code>|x|, |y| &le; 10<sup>9</sup></code>, next to questions about left-of-a-line, intersection, or area, with <code>n &le; 10<sup>5</sup></code> so each test must be constant time. If the statement wants a floating intersection point and allows <code>10<sup>-9</sup></code> error, still decide the combinatorial questions with <code>long</code> predicates first.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>cross(a,b) = a.x*b.y − a.y*b.x is twice the signed area of the triangle 0,a,b. Its sign is orientation. Overflow of that multiply is the #1 WA.</p>
+    <p>The 2-D cross product leftover of <code>u.x*v.y - u.y*v.x</code> computes twice the signed area of the triangle from the origin through <code>u</code> and <code>v</code>. Its sign is which way the turn goes: positive is left, negative is right, zero is collinear. Overflow of that multiply is the usual wrong answer.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|x|,|y| &le; 1e9</code> → use <code>long</code> for every cross. <code>|x| &le; 1e18</code> needs BigInteger or a careful 128-bit emulation. n ≤ 1e5 for O(n) scans; closest pair is O(n log n).</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> Coordinates satisfy <code>|x|, |y| &le; 10<sup>9</sup></code>, so every cross product must be a <code>long</code>. Coordinates up to <code>10<sup>18</sup></code> need BigInteger or a 128-bit emulation. An <code>O(n)</code> scan is fine at <code>n &le; 10<sup>5</sup></code>; closest pair is the <code>O(n log n)</code> follow-up. A double epsilon test at these magnitudes is a wrong-answer factory.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Point = (x, y). sub(a,b) = a-b. cross(u,v) = u.x*v.y - u.y*v.x. orient(a,b,c) = sign(cross(b-a, c-a)): +1 left, −1 right, 0 collinear.</p>
-<p>Segments AB, CD intersect properly if orient(A,B,C) and orient(A,B,D) have opposite signs and the other pair too. Inclusive intersection also accepts the collinear-and-on-segment case (bounding-box + between).</p>
+<p>A point is a pair of <code>long</code>s. Subtracting <code>b</code> from <code>a</code> is the vector from <code>b</code> to <code>a</code>. The 2-D cross product leftover of <code>u.x*v.y - u.y*v.x</code> computes twice the signed area of the parallelogram spanned by <code>u</code> and <code>v</code>. Orientation of A, B, C is the sign of that cross on the vectors <code>B-A</code> and <code>C-A</code>: positive means C is to the left of the directed line AB (you turn left at B), negative means you turn right, and zero means the three points are collinear. That sign is which way the turn goes, and it is the only predicate most of this page needs.</p>
+<p>Two segments AB and CD intersect properly when C and D lie on opposite sides of AB and A and B lie on opposite sides of CD &mdash; four orientation tests whose signs oppose in pairs. Inclusive intersection also accepts the collinear-and-touching case: the orientation is zero and the shared point lies inside the bounding box of the other segment. Polygon area is the shoelace sum: add leftover of <code>p<sub>i</sub> &times; p<sub>i+1</sub></code> around the closed chain, which computes twice the signed area; positive means the vertices were listed counter-clockwise.</p>
+<p>Walk A = (0, 0), B = (2, 0), C = (1, 2). The vectors are <code>B-A = (2, 0)</code> and <code>C-A = (1, 2)</code>. The cross leftover of <code>2*2 - 0*1 = 4</code> is positive, so C is left of AB and you turn left at B. If C were (1, -2) the cross would be -4, a right turn. If C were (3, 0) the cross is 0, collinear, and C is not on the segment because 3 sits outside the bounding box of AB. Absolute leftover of 4 over 2 is the triangle area 2. Shoelace on a larger polygon is that same consecutive cross, summed and wrapped from last to first.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>orient(a,b,c) &gt; 0 iff you turn left at b walking a→b→c. Shoelace: twice signed area = Σ (p_i × p_{i+1}) with p_n = p_0. Positive means CCW.</p>
+    <p>Walking A to B to C, leftover of the cross of <code>B-A</code> with <code>C-A</code> is positive exactly when you turn left at B, negative when you turn right, and zero when you do not turn. Shoelace leftover of the sum of consecutive crosses is twice the signed area of the polygon, positive when the vertices run counter-clockwise.</p><p>In plain words, you never compute an angle; you compute which way you turned, and that one sign decides left, right, collinear, intersection, and area.</p><p>Interview sentence: <em>&ldquo;The cross-product sign is which way the turn goes.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Sign first, magnitude second</span>
+    <p>The sign of the cross tells you the turn. The absolute value is twice the area of the triangle. Overflow of the multiply corrupts both, so the <code>long</code> cast is not optional decoration.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Do not divide to test zero</span>
+    <p>Comparing leftover of the raw cross to 0 is exact. Dividing by 2 or taking <code>hypot</code> and then comparing a double to <code>1e-9</code> is how collinear points become &ldquo;almost collinear&rdquo; and the judge disagrees.</p>
   </div>
 </aside>
 
@@ -163,7 +181,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "A=(0,0), B=(2,0), C=(1,2). u=B-A=(2,0), v=C-A=(1,2).",
+          "note": "A is (0,0), B is (2,0), C is (1,2). The two vectors from A are (2,0) and (1,2).",
           "active": [
             0,
             1,
@@ -179,7 +197,7 @@
           }
         },
         {
-          "note": "cross = 2*2 − 0*1 = 4. Positive → C is left of AB.",
+          "note": "The cross leftover of 2*2 minus 0*1 is 4. Positive means C is left of AB: you turn left at B.",
           "active": [
             4,
             5
@@ -191,7 +209,7 @@
           }
         },
         {
-          "note": "If C were (1,-2), cross = −4, right turn.",
+          "note": "If C were (1,-2) the same multiply would be -4, so the sign says you turn right at B.",
           "active": [
             4,
             5
@@ -203,7 +221,7 @@
           }
         },
         {
-          "note": "If C=(3,0), cross=0, collinear. On-segment? 0≤3≤2 is false.",
+          "note": "If C is (3,0) the cross is 0, so the points are collinear, and 3 is outside the segment AB.",
           "active": [
             4,
             5
@@ -215,7 +233,7 @@
           }
         },
         {
-          "note": "Triangle area = |cross|/2 = 2.",
+          "note": "Absolute leftover of that cross over 2 is the triangle area 2, twice-signed-area being 4.",
           "best": [
             0,
             2,
@@ -228,7 +246,7 @@
           }
         },
         {
-          "note": "Shoelace on a polygon is the sum of these consecutive crosses.",
+          "note": "Shoelace sums these consecutive crosses around a closed polygon to get twice the signed area.",
           "best": [
             0,
             2,
@@ -264,17 +282,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Store</strong> coordinates as long. Never int for a cross.</li>
-  <li><strong>orient(a,b,c)</strong> = Long.signum(cross(b-a, c-a)).</li>
-  <li><strong>onSeg(a,b,p):</strong> collinear and p in the bounding box of ab.</li>
-  <li><strong>intersect(a,b,c,d):</strong> proper-straddle OR (collinear and onSeg).</li>
-  <li><strong>area2(poly):</strong> sum cross(p[i], p[i+1]), wrap last to first.</li>
-  <li><strong>point in convex:</strong> all orients against edges have the same sign (or 0 on boundary — read the statement).</li>
+  <li><strong>Store every coordinate as a long.</strong> An <code>int</code> cross of two <code>10<sup>9</sup></code> differences wraps, and both the turn sign and the area become garbage.</li>
+  <li><strong>Orientation is the sign of one cross.</strong> Leftover of <code>cross(B-A, C-A)</code> is which way the turn goes: positive left, negative right, zero collinear. Use <code>Long.signum</code>.</li>
+  <li><strong>On-segment needs collinear plus a box.</strong> A point sits on AB only when the turn is zero and both coordinates lie between the endpoints, inclusive.</li>
+  <li><strong>Intersection is four turns, plus the touching case.</strong> Proper crossing is opposite signs on each pair of endpoints. Inclusive also accepts collinear-and-on-segment.</li>
+  <li><strong>Shoelace sums consecutive crosses.</strong> Wrap the last vertex to the first; leftover of that sum is twice the signed area of the polygon.</li>
+  <li><strong>A point is inside a convex polygon when every edge turns the same way.</strong> Treat a zero orientation as boundary and read whether the statement wants the boundary included.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Compute the turn at B for three placements of C, then read the triangle area and the shoelace idea.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -282,12 +300,12 @@ flowchart TD
       <tr><th>cross</th><th>orient</th><th>area2</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>—</td><td>A=(0,0), B=(2,0), C=(1,2). u=B-A=(2,0), v=C-A=(1,2).</td></tr>
-      <tr><td>4</td><td>+1</td><td>4</td><td>cross = 2*2 − 0*1 = 4. Positive → C is left of AB.</td></tr>
-      <tr><td>-4</td><td>-1</td><td>4</td><td>If C were (1,-2), cross = −4, right turn.</td></tr>
-      <tr><td>0</td><td>0</td><td>0</td><td>If C=(3,0), cross=0, collinear. On-segment? 0≤3≤2 is false.</td></tr>
-      <tr class="trace-table__row--change"><td>4</td><td>+1</td><td>4</td><td>Triangle area = |cross|/2 = 2.</td></tr>
-      <tr class="trace-table__row--change"><td>Σ</td><td>CCW</td><td>2Area</td><td>Shoelace on a polygon is the sum of these consecutive crosses.</td></tr>
+      <tr class="trace-table__row--change"><td>—</td><td>—</td><td>—</td><td>A is (0,0), B is (2,0), C is (1,2). The two vectors from A are (2,0) and (1,2).</td></tr>
+      <tr><td>4</td><td>+1</td><td>4</td><td>The cross leftover of 2*2 minus 0*1 is 4. Positive means C is left of AB: you turn left at B.</td></tr>
+      <tr><td>-4</td><td>-1</td><td>4</td><td>If C were (1,-2) the same multiply would be -4, so the sign says you turn right at B.</td></tr>
+      <tr><td>0</td><td>0</td><td>0</td><td>If C is (3,0) the cross is 0, so the points are collinear, and 3 is outside the segment AB.</td></tr>
+      <tr class="trace-table__row--change"><td>4</td><td>+1</td><td>4</td><td>Absolute leftover of that cross over 2 is the triangle area 2, twice-signed-area being 4.</td></tr>
+      <tr class="trace-table__row--change"><td>Σ</td><td>CCW</td><td>2Area</td><td>Shoelace sums these consecutive crosses around a closed polygon to get twice the signed area.</td></tr>
     </tbody>
   </table>
 </div>
@@ -397,7 +415,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each test is a constant number of long multiplies. Closest pair and hull are the log-factor algorithms on the next page / D&C.</p>
+    <p>One orientation is two subtractions and two multiplies, all in <code>long</code>. Inclusive segment intersection is four orientations plus a bounding-box test, still a handful of operations. Shoelace walks each vertex once, so leftover of twice the area is <code>O(n)</code>. Point-in-convex is one turn per edge, also <code>O(n)</code>, or <code>O(log n)</code> after you binary-search the fan from a vertex.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> a scan of orientations is a few hundred thousand multiplies, a millisecond. Closest pair and convex hull add a sort and become the next page. A double <code>atan2</code> sort at coordinate <code>10<sup>9</sup></code> will mis-order a collinear triple and then every later predicate that trusted that order is wrong.</p>
   </div>
 
   <table class="complexity__compare">
@@ -419,28 +438,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">int cross</span>
-    <div class="pitfalls__bug">1e9 * 1e9 overflows int (and even 2e9*2e9 needs long).</div>
-    <div class="pitfalls__fix">Every x, y, and every product is long.</div>
+    <div class="pitfalls__bug">A product of two <code>10<sup>9</sup></code> differences wraps an <code>int</code>, so the turn sign flips or becomes zero and a left turn looks collinear. The code still compiles.</div>
+    <div class="pitfalls__fix">Every coordinate and every product is a <code>long</code>. Print leftover of the cross of <code>(10<sup>9</sup>, 0)</code> with <code>(0, 10<sup>9</sup>)</code> and expect a huge positive, not a wrap.</div>
   </li>
   <li>
     <span class="pitfalls__title">Comparing doubles of areas</span>
-    <div class="pitfalls__bug">You divide by 2 or take hypot and then compare to 0 with 1e-9.</div>
-    <div class="pitfalls__fix">Compare 2*area (the raw cross) to 0. No division.</div>
+    <div class="pitfalls__bug">Dividing the cross by 2, or taking a hypotenuse, and then comparing a double to zero with <code>1e-9</code> looks like the textbook area test and then fails on a collinear triple the judge considers exact.</div>
+    <div class="pitfalls__fix">Compare leftover of the raw cross to 0. No division, no epsilon, on integer input.</div>
   </li>
   <li>
     <span class="pitfalls__title">Collinear overlap missed</span>
-    <div class="pitfalls__bug">Proper-straddle only; two collinear overlapping segments report false.</div>
-    <div class="pitfalls__fix">Handle o==0 && onSeg for inclusive intersection.</div>
+    <div class="pitfalls__bug">The proper-straddle test is true only for an interior crossing, so two collinear overlapping segments report false and an inclusive statement marks you wrong.</div>
+    <div class="pitfalls__fix">When any orientation is zero, also accept the case where an endpoint lies on the other segment (bounding box plus collinear).</div>
   </li>
   <li>
     <span class="pitfalls__title">CW vs CCW polygon</span>
-    <div class="pitfalls__bug">area2 is negative; point-in-convex rejects interior points.</div>
-    <div class="pitfalls__fix">Reverse if area2 < 0, or accept both signs consistently.</div>
+    <div class="pitfalls__bug">Shoelace leftover is negative on a clockwise listing, so a point-in-convex that demands a left turn against every edge rejects every interior point.</div>
+    <div class="pitfalls__fix">Reverse the vertex list if twice-area is negative, or accept one consistent sign for the whole walk.</div>
   </li>
   <li>
     <span class="pitfalls__title">On-boundary policy</span>
-    <div class="pitfalls__bug">The statement says strictly inside and you counted the edge.</div>
-    <div class="pitfalls__fix">Treat orient==0 as a separate case; read the problem once.</div>
+    <div class="pitfalls__bug">The statement says strictly inside and you counted a point on an edge as inside, or the reverse. The turn is zero, so both policies compile and only the statement distinguishes them.</div>
+    <div class="pitfalls__fix">Treat a zero orientation as its own case. Read once whether the boundary is included, and test a point that sits on an edge.</div>
   </li>
 </ul>
 
@@ -482,28 +501,28 @@ flowchart TD
   <details class="followup">
     <summary>Why not atan2 to sort by angle?</summary>
     <div class="followup__body">
-      <p>You can, with care. Safer: sort by quadrant + orient (cross) so the order is exact. atan2 is a double.</p>
+      <p>You can, with a lot of care around the branch cut and around ties. Safer: sort by quadrant first, then by leftover of the cross product, so the order is an exact integer predicate. <code>atan2</code> returns a double, and two nearly-collinear vectors at coordinate <code>10<sup>9</sup></code> can come back in the wrong order.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Dot vs cross?</summary>
     <div class="followup__body">
-      <p>dot(u,v) = |u||v|cos. Sign of dot is acute/obtuse. Sign of cross is left/right. Length² is dot(u,u) — no sqrt until output.</p>
+      <p>Leftover of the dot product <code>u.x*v.x + u.y*v.y</code> is <code>|u||v|cos</code>, so its sign is acute versus obtuse. Leftover of the cross is twice the signed area, so its sign is which way the turn goes. Length squared is leftover of <code>dot(u, u)</code> &mdash; you do not need a square root until the statement asks for a Euclidean length as output.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you test collinear in a degenerate triangle?</summary>
     <div class="followup__body">
-      <p>orient==0. Area is 0. Do not use an epsilon on integer input.</p>
+      <p>The three points are collinear exactly when leftover of the orientation cross is 0, which is also when the triangle area is 0. Do not introduce an epsilon on integer input. If the coordinates are 64-bit and the product might overflow a <code>long</code>, that is a BigInteger problem, not a floating-point one.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Point in non-convex polygon?</summary>
     <div class="followup__body">
-      <p>Ray to +∞ on x, count crossings, skip vertices carefully (only count an edge if it straddles the ray in y). Or winding number with orient.</p>
+      <p>Shoot a ray to <code>+&infin;</code> along <code>x</code> and count how many edges it crosses; odd means inside. Only count an edge that strictly straddles the ray in <code>y</code>, so a vertex sitting on the ray is not counted twice. The winding number, summing leftover of orientations around the boundary, is the other exact version and uses the same turn test.</p>
     </div>
   </details>
 </div>

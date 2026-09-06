@@ -39,14 +39,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Every tree walk, every backtracking search, every divide-and-conquer sort, and every memoised DP you will write is the same mechanism: a function that solves a smaller instance of the same problem and a <strong>base case</strong> that stops the descent. If that model is fuzzy, the later pages in this module become folklore you copy. If it is sharp, they become one-line variations.</p>
-<p>The reason people get recursion wrong in interviews is not the idea, it is the <em>machine</em>. Java allocates a stack frame per call. The frame holds the parameters, the locals, and the address to resume at. Depth is therefore space, and a path of length <code>10&#8309;</code> is a <code>StackOverflowError</code>, not a slow program. Java also does <strong>not</strong> rewrite tail calls into loops, so "make it tail recursive" does not save the stack the way it would in Scheme or Scala.</p>
-<p>The transferable habit is to draw the <strong>recursion tree</strong> before writing a line: what is one call's work, how many children does it spawn, and when does a branch die? That drawing is the same artefact <a href="../00-foundations/recurrences-and-master-theorem.html">the master theorem</a> asks you to account, and it is the same drawing <a href="subsets-permutations-combinations.html">subset generation</a> walks.</p>
+<p>Suppose somebody hands you the top folder of a project and asks how many bytes it holds in total. You cannot write three nested loops for that, because you do not know how deep the folders go &mdash; one branch might be two levels deep and another eleven. What you can say is much simpler: the size of a folder is the sum of the files sitting directly inside it, plus the total size of each folder sitting directly inside it. That sentence describes the answer for a big folder purely in terms of the answer for smaller folders, and a function written exactly like that sentence &mdash; one that calls itself on each sub-folder &mdash; is a <strong>recursive</strong> function.</p>
+<p>The idea is the easy half. The half that trips people up is the machine underneath. When one method calls another, Java sets aside a small block of memory called a <strong>stack frame</strong>, holding that call's parameters, its local variables, and the address of the instruction to return to when the call finishes. Frames are stacked: the newest one sits on top and has to finish before the one below it can resume. A recursive function therefore pays memory for how deeply it nests, not for how much total work it does. The default HotSpot thread stack is roughly one megabyte and a frame costs tens to a few hundred bytes, so somewhere between a few thousand and about <code>10&#8308;</code> nested calls the program dies with a <code>StackOverflowError</code>.</p>
+<p>Cost is the other half. Draw the calls as a tree: the first call is the root, every call it makes is a child, and calls that answer immediately without calling anything are the leaves. Running time is the number of nodes in that <strong>recursion tree</strong> times the work each node does on its own, while extra memory is the length of the longest root-to-leaf path, because a child always finishes and releases its frame before its sibling is even created. That distinction is worth real money. Naive <code>fib(50)</code>, which calls itself twice at every node, builds roughly <code>2.7&times;10&#185;&#8304;</code> nodes and runs for minutes, and yet its deepest path is only 50 frames deep.</p>
+<p>Two facts are specific to Java and both show up in interviews. First, the JVM never turns a recursive call into a loop, not even when the call is the very last thing the function does &mdash; a shape called a <em>tail call</em> that Scheme and Scala do collapse. Writing <code>return fact(n-1, acc*n)</code> still costs one frame per level here, so "make it tail recursive" buys back no stack at all. Second, the constraint line of a problem tells you when plain recursion is simply illegal: a list of length <code>10&#8309;</code>, or a graph search over <code>2&times;10&#8309;</code> nodes that could degenerate into one long path, has to be rewritten with an explicit <code>ArrayDeque</code> before you submit it.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>A recursive function is a loop over a tree of stack frames. The base case is the loop's termination test. Auxiliary space is the longest root-to-leaf path, not the number of nodes.</p>
+    <p>A recursive function is nothing more than a loop over a tree of stack frames: the <strong>base case</strong> &mdash; the input small enough to answer outright, with no further call &mdash; is that loop's stopping test, the number of nodes in the tree is your running time, and the longest root-to-leaf path, not the node count, is the memory the JVM must hold all at once.</p>
   </div>
 </aside>
 
@@ -123,19 +124,18 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> The HotSpot default thread stack is roughly 1&nbsp;MB. A frame is a few dozen to a few hundred bytes, so you overflow somewhere between a few thousand and about <code>10&#8308;</code> frames. Treat <code>n &ge; 10&#8308;</code> linear recursion as illegal in Java unless you have rewritten it as a loop.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> The signal is any bound that lets the <em>depth</em> of the recursion grow with the input. The HotSpot default thread stack is roughly 1&nbsp;MB and one frame costs a few dozen to a few hundred bytes, so you overflow somewhere between a few thousand and about <code>10&#8308;</code> nested calls &mdash; long before you run out of time. Treat a linear recursion at <code>n &ge; 10&#8308;</code> as illegal in Java unless you have already rewritten it as a loop or an explicit stack. A halving recursion is safe at any bound you will meet, because <code>log&#8322;(10&#8313;)</code> is only thirty frames.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: frames, trees, and the base case</h2>
-<p>When <code>f(n)</code> calls <code>f(n-1)</code>, the JVM pushes a frame for <code>f(n)</code>, then a frame for <code>f(n-1)</code>, and so on, until a call hits the base case and returns a value. Each return pops one frame and resumes the caller. That last-in-first-out discipline <em>is</em> the call stack, and it is why a recursive in-order walk of a BST emits keys in sorted order without you managing a stack yourself.</p>
+<p>When <code>f(n)</code> calls <code>f(n-1)</code>, the JVM pushes a frame for <code>f(n)</code>, then a frame for <code>f(n-1)</code>, and so on, until a call hits the <strong>base case</strong> &mdash; the input small enough to answer with no further call &mdash; and returns a value. Each return pops one frame and resumes the caller at the instruction after the recursive call. That last-in-first-out discipline <em>is</em> the call stack, and the chain of resumes is the <strong>return path</strong>: <code>fact(5)</code> waits to multiply by 5 only after <code>fact(4)</code> comes back. That is why a recursive in-order walk of a BST emits keys in sorted order without you managing a stack yourself.</p>
 <p>A <strong>recursion tree</strong> is the same process drawn in two dimensions: the root is the original call, each edge is a child call, and the leaves are base cases. Time is the number of nodes (each does some work). Extra space is the longest path, because sibling frames do not coexist &mdash; a child returns before its sibling is pushed.</p>
 <p>Tail recursion is the special case where the recursive call is the last action, so the caller's frame is dead the moment the child starts. Languages with tail-call optimisation reuse the frame and turn the recursion into a jump. <strong>Java does not do this.</strong> A tail-recursive factorial of <code>n = 10&#8309;</code> still explodes. The correct Java rewrite is a <code>while</code> loop that mutates the accumulator.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The interview sentence</span>
     <p>Write the base case so that every recursive call makes <em>measurable progress</em> toward it (smaller <code>n</code>, a shorter suffix, a child pointer). Then state space as <code>O(depth)</code> and time as "nodes in the tree times work per node". If depth can reach <code>10&#8308;</code>, replace the recursion with an <code>ArrayDeque</code> before you talk about anything else.</p>
   </div>
 </aside>
@@ -172,8 +172,8 @@
 <p>Each cell is one live frame, labelled with its <code>n</code>. Frames push on the way down and pop on the way up. Watch the accumulator come back: that is the return value travelling through the stack.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="recStack"></div>
-  <div class="viz-player" data-viz-target="recStack">
+  <div class="array-viz" data-viz-id="recursion-fundamentalsViz"></div>
+  <div class="viz-player" data-viz-target="recursion-fundamentalsViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "live frames (n)",
@@ -196,7 +196,7 @@
         "action",
         "returning"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
           "note": "Call fact(5). One frame. Not a base case, so it will call fact(4).",
@@ -309,7 +309,7 @@
           }
         },
         {
-          "note": "fact(3) resumes: 3 * 2 = 6.",
+          "note": "fact(3) resumes: 3 * 2 = 6. Its frame then pops.",
           "best": [
             2
           ],
@@ -375,10 +375,10 @@ flowchart TD
   <li><strong>Name the trivial input</strong> and write its answer. Empty, <code>null</code>, <code>n == 0</code>, <code>n == 1</code> &mdash; be explicit about all of them.</li>
   <li><strong>State the progress measure.</strong> Each call must reduce <code>n</code>, shorten a suffix, or move to a child. If you cannot name it, the function can loop forever.</li>
   <li><strong>Assume the function works on every smaller input</strong> and write the current answer in terms of those returns.</li>
-  <li><strong>Draw the tree</strong> for a 4-element example. Count nodes (time) and the longest path (space).</li>
+  <li><strong>Draw the tree</strong> for a 4-element example. Count nodes (time) and the longest path (space), because those two numbers are the cost you will quote.</li>
   <li><strong>Check the JVM stack.</strong> If depth can reach thousands, switch to an <code>ArrayDeque</code> or a loop <em>now</em>.</li>
   <li><strong>Do not rely on tail recursion</strong> to save space in Java. Rewrite tails as <code>while</code> loops that update an accumulator.</li>
-  <li><strong>If nodes repeat</strong>, you have overlapping subproblems: add a memo table or go to <a href="../10-dynamic-programming/dp-foundations.html">DP</a>.</li>
+  <li><strong>If the same nodes repeat</strong>, you have overlapping subproblems: add a memo table or go to <a href="../10-dynamic-programming/dp-foundations.html">DP</a>.</li>
   <li><strong>Trace one return path</strong> by hand so you know what the caller does with the child's result (multiply, min, concat, void side-effect).</li>
 </ol>
 
@@ -585,7 +585,7 @@ flowchart TD
   </li>
   <li>
     <span class="pitfalls__title">Believing Java will optimise a tail call</span>
-    <div class="pitfalls__bug">Rewriting <code>return n * fact(n-1)</code> as <code>return fact(n-1, acc*n)</code> and claiming <code>O(1)</code> space.</div>
+    <div class="pitfalls__bug">Rewriting <code>return n * fact(n-1)</code> as <code>return fact(n-1, acc*n)</code> and claiming <code>O(1)</code> space, because textbooks call that a tail call and other languages collapse it.</div>
     <div class="pitfalls__fix">Say it out loud: HotSpot does not do TCO. Then write the loop. The tail form is useful only as a stepping stone to the loop.</div>
   </li>
   <li>
@@ -595,7 +595,7 @@ flowchart TD
   </li>
   <li>
     <span class="pitfalls__title">Recursing down a linked list of length 1e5</span>
-    <div class="pitfalls__bug">Elegant <code>reverse(head.next)</code> that passes the sample and throws <code>StackOverflowError</code> on the hidden test.</div>
+    <div class="pitfalls__bug">An elegant <code>reverse(head.next)</code> that passes the short sample and throws <code>StackOverflowError</code> on the hidden <code>n = 10&#8309;</code> list, because the recursive form looks like the textbook definition.</div>
     <div class="pitfalls__fix">Interview lists are often short, contest lists are not. If <code>n &le; 10&#8309;</code>, use three pointers or an <code>ArrayDeque</code>.</div>
   </li>
   <li>
@@ -643,35 +643,35 @@ flowchart TD
   <details class="followup">
     <summary>Why does naive Fibonacci take exponential time if there are only n distinct answers?</summary>
     <div class="followup__body">
-      <p>Because the tree recomputes <code>fib(k)</code> from scratch at every node that needs it. There are only <code>n</code> distinct <em>values</em>, but <code>&Theta;(&phi;&#8319;)</code> <em>calls</em>. A memo table of size <code>n</code> collapses the DAG back to <code>O(n)</code> work. That collapse is dynamic programming.</p>
+      <p>Because the tree recomputes <code>fib(k)</code> from scratch at every node that needs it. There are only <code>n</code> distinct <em>values</em>, but <code>&Theta;(&phi;&#8319;)</code> <em>calls</em>. A memo table of size <code>n</code> collapses the DAG back to <code>O(n)</code> work. That collapse of repeated calls into one stored answer is dynamic programming.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is the space of a balanced binary-tree DFS <code>O(n)</code> or <code>O(log n)</code>?</summary>
     <div class="followup__body">
-      <p><code>O(height)</code>. On a perfectly balanced tree that is <code>O(log n)</code>. On a skewed tree (which is a linked list) it is <code>O(n)</code>. Always quote height, then say what the worst-case tree looks like. Interviewers listen for that distinction.</p>
+      <p><code>O(height)</code>. On a perfectly balanced tree that is <code>O(log n)</code>. On a skewed tree (which is a linked list) it is <code>O(n)</code>. Always quote height, then say what the worst-case tree looks like for this input. Interviewers always listen for that distinction.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can I just raise <code>-Xss</code> and recurse?</summary>
     <div class="followup__body">
-      <p>In a local experiment, yes. In a judged solution or a production service, no: you do not control the launcher, and a 100&nbsp;MB stack per thread is not a strategy. Rewrite the recursion. <code>-Xss</code> is a debugging aid, not a solution.</p>
+      <p>In a local experiment, yes. In a judged solution or a production service, no: you do not control the launcher, and a 100&nbsp;MB stack per thread is not a strategy. Rewrite the recursion as a loop or an explicit <code>ArrayDeque</code>. <code>-Xss</code> is a debugging aid, not a solution.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>What should I say when they ask for a tail-recursive version in Java?</summary>
     <div class="followup__body">
-      <p>Write it, explain that it would be <code>O(1)</code> space in a TCO language, then write the equivalent loop and say that is the version you would commit. That answer scores both the concept and the platform knowledge.</p>
+      <p>Write it, explain that it would be <code>O(1)</code> space in a TCO language, then write the equivalent loop and say that is the version you would actually commit in Java. That answer scores both the concept and the platform knowledge that HotSpot will not collapse the tail call.</p>
     </div>
   </details>
 </div>
 
 <!-- ======================================================= 13. PRACTICE -->
 <h2>Practice</h2>
-<p>These lock in the machine model. Trace the stack by hand on the first four before you touch the later ones.</p>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
 
 <div class="table-scroll">
   <table class="problems">

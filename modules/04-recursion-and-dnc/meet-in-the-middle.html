@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Subset sum on n = 40 is the poster child. <code>2<sup>40</sup></code> is a trillion. <code>2<sup>20</sup></code> is a million. Split the array, enumerate every subset sum of each half, and ask whether a left sum plus a right sum hits the target. The ask is a sort plus a binary search, which is how 2<sup>n/2</sup> becomes the running time.</p>
-<p>The same split turns 4-sum into two 2-sums: all pairwise sums of the first half of the variables versus all pairwise sums of the second. It also solves closest subsequence sum (LC 1755) and the Codeforces problems whose constraint line is n &le; 40.</p>
-<p>Meet-in-the-middle is not a clever search. It is the observation that a Cartesian product A &times; B can be enumerated from both sides when each factor is about the square root of a product you cannot afford.</p>
+<p>You are given n = 40 integers and a target, and you must decide whether some subset adds to that target. Subset sum on n = 40 is the poster child. <code>2<sup>40</sup></code> is a trillion. <code>2<sup>20</sup></code> is a million. Split the array, enumerate every subset sum of each half, and ask whether a left sum plus a right sum hits the target. The ask is a sort plus a binary search, which is how 2<sup>n/2</sup> becomes the running time.</p>
+<p>The same split turns 4-sum into two 2-sums: all pairwise sums of the first half of the variables versus all pairwise sums of the second. You are given four arrays of length 400 and you must decide whether some a+b+c+d hits a target; n^3 is too slow, n^2 pairwise maps fit. It also solves closest subsequence sum (LC 1755) and the Codeforces problems whose constraint line is n &le; 40.</p>
+<p>Meet-in-the-middle is not a clever search. It is the observation that a Cartesian product A &times; B can be enumerated from both sides when each factor is about the square root of a product you cannot afford. Split, list every left sum, list every right sum, then ask whether some pair adds to the target. The listing is a bitmask loop you already know; the interview is the join, and forgetting the empty subset is the bug that hides a target sitting entirely in one half.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>2<sup>n</sup> = 2<sup>n/2</sup> &times; 2<sup>n/2</sup>. Enumerate each factor, then join. The join, not the enumeration, is where the bugs live.</p>
+    <p>2<sup>n</sup> = 2<sup>n/2</sup> &times; 2<sup>n/2</sup>. Enumerate each factor, then join with a sort and a binary search. The join, not the enumeration, is where the bugs live.</p>
   </div>
 </aside>
 
@@ -127,14 +127,13 @@
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: enumerate halves, then join</h2>
-<p>Split <code>a[0..n)</code> into <code>L = a[0..n/2)</code> and <code>R = a[n/2..n)</code>. Enumerate every subset sum of L with a bitmask loop, same for R. Sort the left sums. For each right sum <code>y</code>, binary-search <code>target - y</code> (exact) or the closest values (closest-sum).</p>
-<p>4-sum over four arrays is the same picture with pairwise sums in place of subset sums. 4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool when you have four <em>independent</em> arrays of size n &asymp; 400.</p>
-<p>Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB. Store witnesses only when the problem asks for the subset.</p>
+<p>Split <code>a[0..n)</code> into <code>L = a[0..n/2)</code> and <code>R = a[n/2..n)</code>. Enumerate every subset sum of L with a bitmask loop, same for R, including mask 0 so the empty half is present. Sort the left sums. For each right sum <code>y</code>, binary-search <code>target - y</code> (exact) or the closest values (closest-sum). On <code>[2, 4, 5 | 1, 3, 7]</code> targeting 10, the right sum 10 pairs with left 0 and that is a real subset.</p>
+<p>4-sum over four arrays is the same picture with pairwise sums in place of subset sums: build every <code>a[i]+b[j]</code>, then probe with <code>target-(c[k]+d[l])</code>. 4-sum over one array of n numbers is n^3 after a sort; MITM is the right tool when you have four <em>independent</em> arrays of size n &asymp; 400, where n^2 is a 160 000-entry map and n^3 would be tens of millions.</p>
+<p>Memory is the silent constraint. Two arrays of 2<sup>20</sup> ints are 8&nbsp;MB and fit comfortably; two arrays of boxed <code>Long</code> keys in a <code>HashMap</code> do not, because each entry carries object headers. Store witnesses (the mask next to the sum) only when the problem asks for the subset, and otherwise keep a sorted <code>long[]</code>. At n = 40 that array is a million entries, not a memory problem and not a reason to reach for a map.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The interview sentence</span>
     <p>Every subset of the whole array is a subset of the left half plus a subset of the right half, including the two empty ones. Enumerate both families and join a pair of sums in log time, and you have enumerated 2^n subsets in 2^{n/2} log time.</p>
   </div>
 </aside>
@@ -171,8 +170,8 @@
 <p><code>a = [2, 4, 5, 1, 3, 7]</code>. Left sums of <code>[2,4,5]</code>, right sums of <code>[1,3,7]</code>. Each right value asks for <code>10 - y</code> in the sorted left array.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="mitmJoin"></div>
-  <div class="viz-player" data-viz-target="mitmJoin">
+  <div class="array-viz" data-viz-id="meet-in-the-middleViz"></div>
+  <div class="viz-player" data-viz-target="meet-in-the-middleViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "left subset sums, sorted",
@@ -191,7 +190,7 @@
         "need",
         "found"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
           "note": "Left sums of {2,4,5} already sorted. Right starts at y = 0 (empty). Need 10: miss.",
@@ -337,14 +336,14 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible.</li>
-  <li><strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine.</li>
-  <li><strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0. Use <code>long</code> for sums.</li>
-  <li><strong>Sort one side</strong>, usually the left sums.</li>
-  <li><strong>Join.</strong> For each right sum y, search <code>target - y</code>.</li>
-  <li><strong>Keep the empty-empty case.</strong> Target 0 is true because of it.</li>
+  <li><strong>Confirm n is in the 30&ndash;42 window</strong> and naive 2^n is impossible, because 2^40 is a trillion loop iterations.</li>
+  <li><strong>Split</strong> at <code>n/2</code>. Uneven 20+21 is fine: one extra bit is still only about a million masks.</li>
+  <li><strong>Enumerate both halves</strong> with a bitmask loop. Include mask 0 so a target that lives in one half is not lost. Use <code>long</code> for sums.</li>
+  <li><strong>Sort one side</strong>, usually the left sums, so each right value is one binary search instead of a linear scan.</li>
+  <li><strong>Join.</strong> For each right sum y, search <code>target - y</code> in the sorted left array and treat a non-negative index as a hit.</li>
+  <li><strong>Keep the empty-empty case.</strong> Target 0 is true because both empty subsets sum to zero when taken together.</li>
   <li><strong>If you need the subset</strong>, store the mask next to the sum, or re-enumerate the winning half.</li>
-  <li><strong>Mind memory:</strong> 2^{n/2} longs plus a sort. Boxed HashMap keys are optional only at n &le; 36.</li>
+  <li><strong>Mind memory:</strong> 2^{n/2} longs plus a sort. Boxed HashMap keys are optional only at n &le; 36, where 2^18 entries still fit.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -564,9 +563,9 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Each half has size n/2, so each bitmask loop is <code>O(2^{n/2} &middot; n/2)</code> if you walk bits, or <code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds.</p>
+    <p>Each half has size n/2, so each bitmask loop is <code>O(2^{n/2} &middot; n/2)</code> if you walk bits, or <code>O(2^{n/2})</code> if you use SOS / Gray-code incremental adds. At n = 40 that is about a million masks per side, not a trillion.</p>
     <p><span class="eq">sort 2^{n/2} sums + 2^{n/2} binary searches = O(2^{n/2} n)</span></p>
-    <p>4-sum over four arrays of length m is <code>O(m&sup2;)</code> time and memory for the map of pairwise sums. That is why m &le; 400 is the usual constraint.</p>
+    <p>4-sum over four arrays of length m is <code>O(m&sup2;)</code> time and memory for the map of pairwise sums. That is why m &le; 400 is the usual constraint: 160 000 map entries fit, while a four-nested loop does not.</p>
   </div>
 
   <table class="complexity__compare">
@@ -591,26 +590,26 @@ flowchart TD
   <li>
     <span class="pitfalls__title">Forgetting mask 0</span>
     <div class="pitfalls__bug">Looping <code>mask = 1 .. 2^m-1</code>, so sum 0 is missing. Target that lives in one half, or target 0, is reported absent.</div>
-    <div class="pitfalls__fix">Start at 0. The empty subset is a legitimate half.</div>
+    <div class="pitfalls__fix">Start the bitmask loop at 0. The empty subset is a legitimate half and sum 0 must stay in the array.</div>
   </li>
   <li>
     <span class="pitfalls__title">int sums on large values</span>
-    <div class="pitfalls__bug">n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses.</div>
-    <div class="pitfalls__fix"><code>long[]</code> sums, <code>long</code> target.</div>
+    <div class="pitfalls__bug">n = 40, a[i] = 1e9, a subset sum is 4e10. Signed 32-bit wrap. Wrong misses that look like ordinary absent targets.</div>
+    <div class="pitfalls__fix"><code>long[]</code> sums and a <code>long</code> target from the first line, before any addition can wrap.</div>
   </li>
   <li>
     <span class="pitfalls__title">binarySearch confusion</span>
-    <div class="pitfalls__bug">Treating a negative <code>Arrays.binarySearch</code> return as a valid index, or using it as "closest" without decoding the insertion point.</div>
+    <div class="pitfalls__bug">Treating a negative <code>Arrays.binarySearch</code> return as a valid index, or using it as "closest" without decoding the insertion point. A miss still returns a number, so the code compiles and looks like a hit.</div>
     <div class="pitfalls__fix">Existence: <code>&gt;= 0</code> is a hit. Closest: write your own lower_bound and inspect both neighbours.</div>
   </li>
   <li>
     <span class="pitfalls__title">HashMap of 2^{20} boxed Longs</span>
-    <div class="pitfalls__bug">Memory and GC explode. An <code>long[]</code> plus a sort is smaller and faster.</div>
-    <div class="pitfalls__fix">Prefer sorted arrays. Hash only the pairwise 4-sum side, where m^2 is ~1e5.</div>
+    <div class="pitfalls__bug">A <code>HashMap&lt;Long, Integer&gt;</code> of 2^{20} keys makes memory and GC explode, even though the algorithm is otherwise right. A <code>long[]</code> plus a sort is smaller and faster.</div>
+    <div class="pitfalls__fix">Prefer sorted primitive arrays. Hash only the pairwise 4-sum side, where m^2 is about 1e5 entries.</div>
   </li>
   <li>
     <span class="pitfalls__title">Splitting 4-sum on one array the MITM way without handling index reuse</span>
-    <div class="pitfalls__bug">Pairwise sums from the same array can pick the same index twice.</div>
+    <div class="pitfalls__bug">Pairwise sums from the same array can pick the same index twice, so a hit looks valid even though one element was spent on both halves.</div>
     <div class="pitfalls__fix">Either use four independent arrays (LC 454), or generate pairs as (i, j) with i &lt; j and reject overlapping index pairs at join time.</div>
   </li>
 </ul>
@@ -653,14 +652,14 @@ flowchart TD
   <details class="followup">
     <summary>Why not just knapsack DP?</summary>
     <div class="followup__body">
-      <p>If the sums are bounded by S and nS fits, DP is simpler and often faster. MITM wins when S is 40 * 1e9 and n is 40: the value dimension is unusable, the index dimension splits cleanly.</p>
+      <p>If the sums are bounded by S and nS fits in time and memory, knapsack DP is simpler and often faster. MITM wins when S is 40 * 1e9 and n is 40: the value dimension is unusable (a 4e10-long array), while the index dimension splits cleanly into two halves of twenty.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can I recover the subset?</summary>
     <div class="followup__body">
-      <p>Store (sum, mask) pairs. On a hit, the two masks translate back to indices in each half. Or, once you know the two sums, re-enumerate the half (2^{20}) to find a mask that produces them. The second uses no extra memory.</p>
+      <p>Store (sum, mask) pairs. On a hit, the two masks translate back to indices in each half. Or, once you know the two sums, re-enumerate the half (2^{20}) to find a mask that produces them. The second uses no extra memory and is the version you write when the judge only asked for existence first.</p>
     </div>
   </details>
 
@@ -674,14 +673,14 @@ flowchart TD
   <details class="followup">
     <summary>Gray codes and incremental sums?</summary>
     <div class="followup__body">
-      <p>Walking masks in Gray-code order adds or removes one element per step, so each half is O(2^{n/2}) instead of O(n 2^{n/2}). Worth it at n = 42; unnecessary at n = 36.</p>
+      <p>Walking masks in Gray-code order adds or removes one element per step, so each half is O(2^{n/2}) additions instead of O(n 2^{n/2}) bit walks. That factor of n/2 matters at n = 42, where you are already near the time limit; it is unnecessary at n = 36, where a plain bitmask loop already finishes.</p>
     </div>
   </details>
 </div>
 
 <!-- ======================================================= 13. PRACTICE -->
 <h2>Practice</h2>
-<p>CSES Meet in the Middle and CF 888E are the two problems that teach the pattern. LC 1755 is the closest-sum variant; LC 454 is the 4-sum-over-halves variant.</p>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
 
 <div class="table-scroll">
   <table class="problems">

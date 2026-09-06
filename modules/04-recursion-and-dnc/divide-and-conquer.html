@@ -39,14 +39,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Divide and conquer is the reason <code>O(n log n)</code> exists as a default target. Split the array in half, recurse, merge the two sorted runs in linear time. The tree has <code>log n</code> levels and each level touches every element once, so the total is <code>n log n</code>. That accounting is case 2 of <a href="../00-foundations/recurrences-and-master-theorem.html">the master theorem</a>.</p>
-<p>The same split produces inversion counts (a merge that also counts split pairs), majority without Boyer-Moore, and the <code>O(n log n)</code> closest-pair algorithm. Quicksort is the same idea with an uneven, data-dependent split and a free combine &mdash; which is why its worst case is quadratic and its expected case is <code>n log n</code>.</p>
-<p>The skill is the <strong>combine</strong>. The recursive calls are boilerplate. The interview is: what must each half return so the cross terms can be counted in linear time?</p>
+<p>You are given an array of n numbers and you must sort it, or count how many pairs are out of order, without writing a double loop. Divide and conquer is the reason <code>O(n log n)</code> exists as a default target. Split the array in half, recurse, merge the two sorted runs in linear time. The tree has <code>log n</code> levels and each level touches every element once, so the total is <code>n log n</code> &mdash; about <code>1.7 &times; 10&#8310;</code> operations at <code>n = 10&#8309;</code>. That accounting is case 2 of <a href="../00-foundations/recurrences-and-master-theorem.html">the master theorem</a>.</p>
+<p>The same split produces inversion counts (a merge that also counts split pairs), majority without Boyer-Moore, and the <code>O(n log n)</code> closest-pair algorithm. Quicksort is the same idea with an uneven, data-dependent split and a free combine &mdash; which is why its worst case is quadratic and its expected case is <code>n log n</code>. A reverse-sorted input with the first element as pivot is the picture that kills the naive version.</p>
+<p>The skill is the <strong>combine</strong>. The recursive calls are boilerplate. The interview is: what must each half return so the cross terms can be counted in linear time? For inversions that return is a sorted run plus a count; for closest pair it is a y-sorted strip. If you cannot name the extra payload, you do not yet have a divide-and-conquer solution, only a recursive split.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>If the cross-half contribution can be computed in linear time after the halves are sorted, the whole algorithm is <code>O(n log n)</code>.</p>
+    <p>If the cross-half contribution can be computed in linear time after the halves are sorted, the whole algorithm is <code>O(n log n)</code>: <code>log n</code> levels, each touching every element once.</p>
   </div>
 </aside>
 
@@ -123,20 +123,19 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> plus a pair-counting condition is the signature for mergesort-with-a-counter. Shuffle before a hand-rolled quicksort partition; contests will feed you the adversarial permutation.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10&#8309;</code> plus a pair-counting condition is the signature for mergesort-with-a-counter: a double loop is <code>5 &times; 10&#8313;</code> and dies, while <code>n log n</code> fits in a second. Shuffle before a hand-rolled quicksort partition; contests will feed you the adversarial permutation.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea: the combine pays for the split</h2>
-<p>Mergesort: sort <code>a[lo..mid)</code> and <code>a[mid..hi)</code>, then merge into a buffer. Two pointers walk two sorted runs; each step emits the smaller head. Stability comes from preferring the left head on a tie.</p>
-<p>Inversions: a pair (i, j) with i &lt; j and a[i] &gt; a[j] is both-left, both-right, or split. The first two come from the recursive calls. A split inversion is counted when the merge takes a head from the right: every unused left element is greater and to the left, so add <code>leftRemaining</code>.</p>
-<p>Quicksort partitions around a pivot and recurses on both sides; combine is free. Random pivot makes the expected cost n log n. Majority-by-D&C: the majority of n votes, if it exists, is the majority of at least one half; count the two candidates in a linear pass to decide.</p>
+<p>Mergesort: sort <code>a[lo..mid)</code> and <code>a[mid..hi)</code>, then merge into a buffer. Two pointers walk two sorted runs; each step emits the smaller head. Stability comes from preferring the left head on a tie, so equal keys keep the order they had in the input. The buffer is the only extra linear memory; the recursion itself is only <code>O(log n)</code> frames because siblings do not coexist.</p>
+<p>Inversions: a pair (i, j) with i &lt; j and a[i] &gt; a[j] is both-left, both-right, or split. The first two come from the recursive calls. A split inversion is counted when the merge takes a head from the right: every unused left element is greater and to the left, so add <code>leftRemaining</code>. On <code>[2, 5, 8] | [1, 3, 9]</code> taking 1 adds 3, taking 3 adds 2, and the five split inversions are the whole answer because each half was already sorted.</p>
+<p>Quicksort partitions around a pivot and recurses on both sides; combine is free because the work already happened in the partition. A random pivot makes the expected cost <code>n log n</code>. Majority-by-D&amp;C: the majority of n votes, if it exists, is the majority of at least one half; count the two candidates in a linear pass to decide. Boyer-Moore is faster; this version is the proof you can recite.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <span class="callout__title">The interview sentence</span>
-    <p>After both halves are solved, every pair inside one half is already counted. The combine exists only to handle pairs that <em>cross the midpoint</em>, and it must do that in linear time.</p>
+    <p>After both halves are solved, every pair inside one half is already counted. The combine exists only to handle pairs that <em>cross the midpoint</em>, and it must do that in linear time. In plain words, the recursive calls finish all the local work, and the merge's only job is the pairs that have one foot on each side &mdash; leftover left values sitting above a right head &mdash; without scanning every pair again.</p>
   </div>
 </aside>
 
@@ -172,8 +171,8 @@
 <p>Left run <code>[2, 5, 8]</code>, right run <code>[1, 3, 9]</code>. Taking a right head while left still has leftovers is a batch of split inversions.</p>
 
 <figure class="viz">
-  <div class="array-viz" data-viz-id="msMerge"></div>
-  <div class="viz-player" data-viz-target="msMerge">
+  <div class="array-viz" data-viz-id="divide-and-conquerViz"></div>
+  <div class="viz-player" data-viz-target="divide-and-conquerViz">
     <script type="application/json" class="viz-frames">
     {
       "label": "two sorted runs",
@@ -198,7 +197,7 @@
         "inv add",
         "inv total"
       ],
-      "speed": 950,
+      "speed": 1000,
       "frames": [
         {
           "note": "Both runs sorted. Heads are 2 and 1. 1 is smaller, so take right.",
@@ -355,14 +354,14 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Write the base case:</strong> a run of length 0 or 1 is sorted and has 0 inversions.</li>
-  <li><strong>Split at mid = lo + (hi-lo)/2</strong> with half-open ranges.</li>
-  <li><strong>Recurse on both halves</strong> and keep their returned counts.</li>
-  <li><strong>Combine in linear time.</strong> For inversions: merge and add <code>mid - i</code> on every right take.</li>
-  <li><strong>Copy the buffer back</strong> into <code>a[lo..hi)</code>.</li>
-  <li><strong>For quicksort:</strong> partition, recurse both sides. Shuffle or pick a random pivot.</li>
-  <li><strong>For majority:</strong> recurse both halves, then count the two candidates in one pass.</li>
-  <li><strong>Quote T(n) = 2T(n/2) + O(n)</strong> and name the combine.</li>
+  <li><strong>Write the base case:</strong> a run of length 0 or 1 is already sorted and contributes 0 inversions, so the recursion has somewhere to stop.</li>
+  <li><strong>Split at mid = lo + (hi-lo)/2</strong> with half-open ranges so a two-element run cannot recurse forever on itself.</li>
+  <li><strong>Recurse on both halves</strong> and keep their returned counts; those are the already finished in-left and in-right inversions.</li>
+  <li><strong>Combine in linear time.</strong> For inversions: merge and add <code>mid - i</code> on every right take, because those leftover left values sit above the right head.</li>
+  <li><strong>Copy the buffer back</strong> into <code>a[lo..hi)</code> so the parent merge sees two sorted runs on the next level.</li>
+  <li><strong>For quicksort:</strong> partition, recurse both sides. Shuffle or pick a random pivot so a sorted input cannot become a stick.</li>
+  <li><strong>For majority:</strong> recurse both halves, then count the two candidates in one linear pass over the current range.</li>
+  <li><strong>Quote T(n) = 2T(n/2) + O(n)</strong> and name the combine, because the linear merge is what buys the <code>n log n</code> bound.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
@@ -553,10 +552,10 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Mergesort and inversion count share the same recurrence.</p>
+    <p>Mergesort and inversion count share the same recurrence: two half-size subproblems plus a linear scan of the current range. There are <code>log n</code> levels and each level touches every element once, so the total is <code>n log n</code> &mdash; about <code>1.7 &times; 10&#8310;</code> operations at <code>n = 10&#8309;</code>.</p>
     <p><span class="eq">T(n) = 2T(n/2) + &Theta;(n) = &Theta;(n log n)</span></p>
-    <p>Quicksort expected: a random pivot produces a uniform split and expected depth <code>O(log n)</code>. Worst case: <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>.</p>
-    <p>D&amp;C majority is <code>O(n log n)</code>, strictly worse than Boyer-Moore.</p>
+    <p>Quicksort expected: a random pivot produces a uniform split and expected depth <code>O(log n)</code>. Worst case: <code>T(n) = T(n-1) + O(n) = O(n&sup2;)</code>, which is why you shuffle.</p>
+    <p>D&amp;C majority is <code>O(n log n)</code>, strictly worse than Boyer-Moore's single pass. Quote the linear algorithm unless they asked for the recursive proof.</p>
   </div>
 
   <table class="complexity__compare">
@@ -580,28 +579,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Inclusive bounds that recurse forever</span>
-    <div class="pitfalls__bug"><code>go(lo, mid)</code> and <code>go(mid, hi)</code> with both ends inclusive and <code>mid == lo</code> on a two-element run.</div>
-    <div class="pitfalls__fix">Half-open <code>[lo, hi)</code>, base <code>hi - lo &le; 1</code>.</div>
+    <div class="pitfalls__bug"><code>go(lo, mid)</code> and <code>go(mid, hi)</code> with both ends inclusive and <code>mid == lo</code> on a two-element run. The split looks symmetric and the function never reaches a length-1 base case.</div>
+    <div class="pitfalls__fix">Use half-open <code>[lo, hi)</code> and stop when <code>hi - lo &le; 1</code>, so a two-element run splits into 1+1.</div>
   </li>
   <li>
     <span class="pitfalls__title">Counting inversions with an int</span>
-    <div class="pitfalls__bug">n = 1e5 reverse-sorted produces ~5e9 inversions. A signed 32-bit counter wraps.</div>
-    <div class="pitfalls__fix"><code>long inv</code>. Same for reverse-pairs.</div>
+    <div class="pitfalls__bug">n = 1e5 reverse-sorted produces ~5e9 inversions. A signed 32-bit counter wraps to a negative number that still looks like a plausible count.</div>
+    <div class="pitfalls__fix"><code>long inv</code> from the first line. Same for reverse-pairs, where the product of two ints can overflow too.</div>
   </li>
   <li>
     <span class="pitfalls__title">Adding leftover on a left-take</span>
-    <div class="pitfalls__bug">You add <code>hi - j</code> when taking from the left, which counts non-inversions.</div>
-    <div class="pitfalls__fix">Add when the right head loses the comparison.</div>
+    <div class="pitfalls__bug">You add <code>hi - j</code> when taking from the left, which counts non-inversions: those right leftovers are larger, so they are in order.</div>
+    <div class="pitfalls__fix">Add leftover-left only when the right head loses the comparison and is emitted into the buffer.</div>
   </li>
   <li>
     <span class="pitfalls__title">Unstable merge</span>
-    <div class="pitfalls__bug">On a tie, taking the right head. Interviews ask for stability.</div>
-    <div class="pitfalls__fix"><code>if (a[j] &lt; a[i])</code> take right; on equal, take left.</div>
+    <div class="pitfalls__bug">On a tie, taking the right head. The merge still sorts, so the output looks correct, and interviews then ask for stability.</div>
+    <div class="pitfalls__fix"><code>if (a[j] &lt; a[i])</code> take right; on equal, take left so original order is kept.</div>
   </li>
   <li>
     <span class="pitfalls__title">Quicksort without shuffling</span>
-    <div class="pitfalls__bug">Pivot = first element on a sorted array. Quadratic, plus a stack overflow.</div>
-    <div class="pitfalls__fix">Swap a random index into the pivot slot.</div>
+    <div class="pitfalls__bug">Pivot = first element on a sorted array. The partition produces a stick, so the tree is quadratic and the JVM stack overflows.</div>
+    <div class="pitfalls__fix">Swap a random index into the pivot slot before every partition, or shuffle the array once.</div>
   </li>
 </ul>
 
@@ -643,35 +642,35 @@ flowchart TD
   <details class="followup">
     <summary>Why is the closest-pair strip linear, not quadratic?</summary>
     <div class="followup__body">
-      <p>Points closer than d cannot pack tightly in the strip. Walking the y-sorted strip and looking a constant number of steps ahead is enough. That constant is why the combine stays linear.</p>
+      <p>Points closer than d cannot pack tightly in the strip: each point has only a constant number of neighbours that could beat the current best. Walking the y-sorted strip and looking a few steps ahead is enough. That constant (classically seven) is why the combine stays linear instead of becoming a double loop.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Mergesort or Fenwick for inversions?</summary>
     <div class="followup__body">
-      <p>Same complexity. Mergesort is self-contained. Fenwick on compressed ranks also does online queries. If the problem is only inversions, merge.</p>
+      <p>Same <code>O(n log n)</code> complexity. Mergesort is self-contained and needs no rank compression. Fenwick on compressed ranks also does online queries after each insert. If the problem is only a one-shot inversion count, write the merge; if later queries arrive, switch to a Fenwick tree.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Is Java's Arrays.sort a mergesort?</summary>
     <div class="followup__body">
-      <p>Primitives: Dual-Pivot Quicksort. Objects: TimSort. Write inversion count yourself.</p>
+      <p>Primitives: Dual-Pivot Quicksort, which is not stable and does not expose a merge hook. Objects: TimSort, a stable mergesort cousin. Neither lets you inject an inversion counter, so you write the merge yourself when the problem asks for the pairs rather than a sorted array.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do I explain majority D&C in thirty seconds?</summary>
     <div class="followup__body">
-      <p>If a value owns more than half the range, it owns more than half of at least one half. The only two candidates are the majorities of the two halves. Count both and pick the winner.</p>
+      <p>If a value owns more than half the range, it owns more than half of at least one half &mdash; otherwise both halves would be minority and the total could not be a majority. The only two candidates are therefore the majorities of the two halves. Count both on the current range and pick the winner, or report that neither qualifies.</p>
     </div>
   </details>
 </div>
 
 <!-- ======================================================= 13. PRACTICE -->
 <h2>Practice</h2>
-<p>Implement mergesort once; inversion count is a five-line edit. LC 315 and LC 493 are the same edit with a different inequality.</p>
+<p>Work down the list; it is ordered easy to hard on purpose.</p>
 
 <div class="table-scroll">
   <table class="problems">

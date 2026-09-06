@@ -22,7 +22,7 @@
   <p class="hero__tagline">Andrew's monotone chain sorts points by (x, y) and builds lower then upper hulls with a left-turn stack — O(n log n) and the default you should type.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="geometry-basics.html">Geometry Basics</a>
     </span>
@@ -37,14 +37,15 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>The convex hull is the smallest convex polygon containing the points. After you have it, diameter, width, farthest pair, and "does this polygon contain that one" become walks on a circular sequence.</p>
-<p>Andrew's algorithm is Graham scan after a sort by x: walk left-to-right keeping only left turns (lower hull), then right-to-left (upper hull). The stack pops while the last three points do not make a strict CCW turn.</p>
-<p>n ≤ 1e5, integer coords. Degenerate all-collinear is a segment (or a point). Interviews want the sort + stack, the left-turn predicate, and what you do with ties (keep or drop middle of an edge — read the statement).</p>
+<p>You are given a cloud of points and you must draw the tightest rubber band that wraps them: the smallest convex polygon that contains every point. That polygon is the <em>convex hull</em>. Once you have its vertices in order, diameter, width, farthest pair, and &ldquo;does this polygon contain that one&rdquo; become walks on a circular sequence instead of searches over every pair.</p>
+<p>Checking every pair of points as a candidate edge is cubic and dies at <code>n = 10<sup>5</sup></code>. Andrew's algorithm, also called the monotone chain, sorts by x (then y) and walks the list twice with a stack. Left to right you keep only left turns, which builds the lower hull. Right to left with the same rule builds the upper hull. The stack pops while leftover of the last three points' cross product says the turn is not a strict left turn &mdash; that sign is which way the turn goes, from the previous page.</p>
+<p>Limits are <code>n &le; 10<sup>5</sup></code> and integer coordinates up to <code>10<sup>9</sup></code>, so the sort is <code>O(n log n)</code> and every cross is a <code>long</code>. All-collinear input degenerates to a segment (or a single point). Interviews want the sort plus the stack, the left-turn predicate, and what you do with a collinear triple: drop the middle of an edge for a strict hull, or keep it if the statement asks for every boundary point.</p>
+<p>The phrase &ldquo;smallest convex polygon&rdquo; or &ldquo;erect the fence&rdquo; next to those limits is the signal. Graham's polar-angle sort has the same bound and messier ties; Andrew's x-sort is the version you should type. Dynamic hulls that insert and delete online are a different structure (a set of tangents, or Li Chao), not this one-shot stack.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>After sorting by x, the lower hull is the chain you get by refusing right turns. The same walk backwards is the upper hull. Concatenate and drop the duplicated endpoints.</p>
+    <p>After sorting by x, the lower hull is the chain you get by refusing every right turn. The same walk on the reversed list is the upper hull. Concatenate the two chains and drop the duplicated leftmost and rightmost endpoints, and the closed polygon is convex and contains every input point.</p>
   </div>
 </aside>
 
@@ -111,18 +112,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 1e5</code> is O(n log n) sort plus O(n) stack. Coordinates 1e9 → long crosses. Output vertices in CCW order, no consecutive collinear unless asked.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n &le; 10<sup>5</sup></code> means an <code>O(n log n)</code> sort plus an <code>O(n)</code> stack walk, about <code>10<sup>5</sup> log 10<sup>5</sup> &approx; 1.7 &times; 10<sup>6</sup></code> comparisons. Coordinates at <code>10<sup>9</sup></code> need <code>long</code> crosses. Output vertices counter-clockwise, with no consecutive collinear points unless the statement asked to keep the edge midpoints.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Sort unique points by (x, y). If n ≤ 1 return them. Lower: for each point, while the last two + this one are not a left turn, pop. Upper: walk the array backwards with the same rule. Concatenate lower + upper[1..end-1].</p>
-<p>Left turn: cross(stack[-2]→stack[-1], stack[-1]→p) > 0 for a strict hull (drop collinear middles). Use ≥ 0 if you must keep collinear edge points.</p>
+<p>Dedup identical points, then sort the unique ones by x, then by y. If fewer than two points remain, that list is already the hull. The lower chain starts empty. For each point <code>p</code> in sorted order, while the stack has at least two points and leftover of the cross from the last two to <code>p</code> is not a left turn, pop. Then push <code>p</code>. That walk is the lower envelope from leftmost to rightmost, because every right turn (and, on a strict hull, every collinear middle) was refused.</p>
+<p>The upper chain is the same rule on the array walked backwards, from rightmost back to leftmost. Concatenate lower plus the interior of upper, dropping the two endpoints that both chains share. Leftover of the cross of <code>stack[-2] &rarr; stack[-1]</code> with <code>stack[-1] &rarr; p</code> is which way the turn goes: pop while it is <code>&le; 0</code> for a strict hull (drop collinear middles), or only while it is <code>&lt; 0</code> if the statement wants every point that sits on an edge.</p>
+<p>Walk A(0,0), B(1,1), C(2,0), D(2,2), E(0,2). Sorted by x then y: A, E, B, C, D. Lower starts A, E; A-E-B is a right turn because E sits above, so pop E. A-B-C has B above AC, another right-ish turn, so pop B. Lower is A, C. Then D is to the right and A-C-D is a left turn, so lower is A, C, D. Upper walking backwards keeps D, E, A as left turns. Concatenate and drop the duplicated A and D: the hull is A, C, D, E. B sits inside and never survived a stack.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>After the lower pass, every consecutive triple on the stack is a left turn, and the chain is the lower envelope from leftmost to rightmost. The upper pass mirrors that. The closed polygon is convex and contains every input point.</p>
+    <p>After the lower pass, every consecutive triple on the stack is a left turn, and the chain is the lower envelope from the leftmost point to the rightmost. The upper pass mirrors that from right to left. The closed polygon is convex and contains every input point.</p><p>In plain words, you sort left to right, refuse every turn that would dent the rubber band, then do the same upside down, and the two chains are the hull.</p><p>Interview sentence: <em>&ldquo;Sort by x, stack left turns for the lower chain, reverse for the upper.&rdquo;</em></p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Collinear policy is a judge-split</span>
+    <p>Popping on leftover <code>&le; 0</code> drops edge midpoints. Popping only on leftover <code>&lt; 0</code> keeps them. Both look like &ldquo;keep left turns&rdquo;. Read the statement once and test a collinear triple.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Andrew already emits CCW</span>
+    <p>Lower then upper, dropping the duplicated ends, walks the polygon counter-clockwise from the leftmost point. Do not sort the output again; a later calipers or area walk depends on that order.</p>
   </div>
 </aside>
 
@@ -161,7 +179,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y: A,B,C,E,D wait — E is (0,2) so order A,E,B,C,D.",
+          "note": "Five points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y the order is A, E, B, C, D.",
           "active": [
             0
           ],
@@ -172,7 +190,7 @@
           }
         },
         {
-          "note": "Lower: push A, E. Next B: A→E→B is a right turn (E is above). Pop E. A→B is fine. Then C: A-B-C right-ish? B is above AC — pop B. Lower = A,C.",
+          "note": "Lower: A then E, but A-E-B is a right turn so pop E, then A-B-C has B above AC so pop B. Lower is A, C.",
           "active": [
             2
           ],
@@ -183,7 +201,7 @@
           }
         },
         {
-          "note": "D is to the right. A-C-D is left. Lower = A,C,D.",
+          "note": "D sits to the right of C. The turn A-C-D is left, so the lower chain is now A, C, D.",
           "active": [
             4
           ],
@@ -194,7 +212,7 @@
           }
         },
         {
-          "note": "Upper backwards: D,E,A. D-E-A left. Full hull A,C,D,E.",
+          "note": "Upper walking backwards keeps D, E, A as left turns. Joining the chains gives hull A, C, D, E.",
           "active": [
             0,
             2,
@@ -207,7 +225,7 @@
           }
         },
         {
-          "note": "B sits inside, never on the hull.",
+          "note": "B sits strictly inside that quadrilateral, so it was popped and never appears on the hull.",
           "active": [
             1
           ],
@@ -218,7 +236,7 @@
           }
         },
         {
-          "note": "Output CCW from leftmost: A,C,D,E.",
+          "note": "Output counter-clockwise from the leftmost point: A, then C, then D, then E.",
           "best": [
             0,
             2,
@@ -252,17 +270,17 @@ flowchart TD
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Dedup</strong> identical points. Sort by x, then y.</li>
-  <li><strong>build(dir):</strong> empty stack; for each point in order (or reverse), pop while size≥2 and orient is not a left turn; push.</li>
-  <li><strong>Lower</strong> on the sorted list. <strong>Upper</strong> on the reversed list.</li>
-  <li><strong>Join</strong> lower + upper without repeating the two endpoints.</li>
-  <li><strong>n ≤ 1:</strong> return the points. All collinear: two endpoints if strict.</li>
-  <li><strong>Optional:</strong> rotating calipers for diameter on the result.</li>
+  <li><strong>Dedup and sort.</strong> Drop identical points, then sort by x and break ties by y, so the left-to-right walk is well defined and equal x-values cannot cross.</li>
+  <li><strong>Build one chain with a left-turn stack.</strong> For each point, pop while the stack has two points and leftover of the last turn is not left, then push. That refuse-the-dent rule is the whole algorithm.</li>
+  <li><strong>Lower on the sorted list, upper on the reversed list.</strong> The two walks share the leftmost and rightmost points and otherwise cover opposite sides of the rubber band.</li>
+  <li><strong>Join without repeating the endpoints.</strong> Concatenate lower plus the interior of upper so the closed polygon has no zero-length edge at A or at the rightmost point.</li>
+  <li><strong>Handle tiny and collinear input.</strong> One point or none is already the hull. All-collinear input on a strict hull is just the two endpoints.</li>
+  <li><strong>Optionally run rotating calipers on the result.</strong> Diameter and farthest pair are an antipodal walk around this polygon in linear extra time.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Sort the five-point cloud, build the lower chain by popping right turns, then the upper chain, and read the CCW hull.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -270,12 +288,12 @@ flowchart TD
       <tr><th>i</th><th>stack</th><th>cross</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>A</td><td>—</td><td>Points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y: A,B,C,E,D wait — E is (0,2) so order A,E,B,C,D.</td></tr>
-      <tr><td>C</td><td>A C</td><td>pop B</td><td>Lower: push A, E. Next B: A→E→B is a right turn (E is above). Pop E. A→B is fine. Then C: A-B-C right-ish? B is above AC — pop B. Lower = A,C.</td></tr>
-      <tr><td>D</td><td>A C D</td><td>+</td><td>D is to the right. A-C-D is left. Lower = A,C,D.</td></tr>
-      <tr><td>up</td><td>A C D E</td><td>CCW</td><td>Upper backwards: D,E,A. D-E-A left. Full hull A,C,D,E.</td></tr>
-      <tr><td>B</td><td>inside</td><td>0</td><td>B sits inside, never on the hull.</td></tr>
-      <tr class="trace-table__row--change"><td>done</td><td>4 verts</td><td>+</td><td>Output CCW from leftmost: A,C,D,E.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>A</td><td>—</td><td>Five points A(0,0) B(1,1) C(2,0) D(2,2) E(0,2). Sorted by x then y the order is A, E, B, C, D.</td></tr>
+      <tr><td>C</td><td>A C</td><td>pop B</td><td>Lower: A then E, but A-E-B is a right turn so pop E, then A-B-C has B above AC so pop B. Lower is A, C.</td></tr>
+      <tr><td>D</td><td>A C D</td><td>+</td><td>D sits to the right of C. The turn A-C-D is left, so the lower chain is now A, C, D.</td></tr>
+      <tr><td>up</td><td>A C D E</td><td>CCW</td><td>Upper walking backwards keeps D, E, A as left turns. Joining the chains gives hull A, C, D, E.</td></tr>
+      <tr><td>B</td><td>inside</td><td>0</td><td>B sits strictly inside that quadrilateral, so it was popped and never appears on the hull.</td></tr>
+      <tr class="trace-table__row--change"><td>done</td><td>4 verts</td><td>+</td><td>Output counter-clockwise from the leftmost point: A, then C, then D, then E.</td></tr>
     </tbody>
   </table>
 </div>
@@ -416,7 +434,8 @@ flowchart TD
   </div>
 
   <div class="complexity__derivation">
-    <p>Sort dominates. Each point is pushed and popped at most once per chain, so the stack passes are O(n).</p>
+    <p>Sorting <code>n</code> points dominates: about <code>n log n</code> comparisons. After that, each point is pushed at most once and popped at most once on the lower chain, and the same on the upper chain, so the two stack walks are linear. Gift wrapping would be <code>O(n h)</code> with <code>h</code> the hull size, which is quadratic when the hull is fat.</p>
+    <p>Putting real numbers in: at <code>n = 10<sup>5</sup></code> the sort is about <code>1.7 &times; 10<sup>6</sup></code> comparisons, a few tens of milliseconds, and the stack walks are 200 000 pushes and pops. A cubic &ldquo;is this edge extreme&rdquo; check is <code>10<sup>15</sup></code> orientation tests. Coordinates at <code>10<sup>9</sup></code> make every one of those tests a <code>long</code> cross, same as the previous page.</p>
   </div>
 
   <table class="complexity__compare">
@@ -438,28 +457,28 @@ flowchart TD
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Not sorting (or sorting only by x)</span>
-    <div class="pitfalls__bug">Ties in x leave the chain crossing itself.</div>
-    <div class="pitfalls__fix">Sort by x then y. Dedup equals first.</div>
+    <div class="pitfalls__bug">Two points with the same x and different y stay in input order, so the chain can cross itself and a later left-turn test pops the wrong vertex. The sort looks optional because &ldquo;we walk a stack anyway&rdquo;.</div>
+    <div class="pitfalls__fix">Sort by x then y, and drop identical points first. A vertical pair is the usual test.</div>
   </li>
   <li>
     <span class="pitfalls__title">Wrong inequality on collinear</span>
-    <div class="pitfalls__bug"><code>&lt; 0</code> vs <code>≤ 0</code> keeps or drops edge midpoints. The judge has a collinear triple.</div>
-    <div class="pitfalls__fix">Strict hull: pop on ≤ 0. Keep collinear: pop only on < 0.</div>
+    <div class="pitfalls__bug">Leftover <code>&lt; 0</code> versus leftover <code>&le; 0</code> keeps or drops an edge midpoint. Both policies compile, and the judge has a collinear triple that distinguishes them.</div>
+    <div class="pitfalls__fix">Strict hull: pop on leftover <code>&le; 0</code>. Keep collinear boundary points: pop only on leftover <code>&lt; 0</code>. Read the statement once.</div>
   </li>
   <li>
     <span class="pitfalls__title">Duplicating the start point twice</span>
-    <div class="pitfalls__bug">You copy both chains including both endpoints twice and the polygon has a zero-length edge.</div>
-    <div class="pitfalls__fix">Drop the last point of the second chain (it repeats the first of the first).</div>
+    <div class="pitfalls__bug">Copying both chains including both endpoints twice inserts a zero-length edge at A and at the rightmost point. Shoelace then looks fine and a later calipers walk divides by a zero edge.</div>
+    <div class="pitfalls__fix">Drop the last point of the second chain (it repeats the first of the first). The closed polygon should have each vertex once.</div>
   </li>
   <li>
     <span class="pitfalls__title">int cross on 1e9 coordinates</span>
-    <div class="pitfalls__bug">Same overflow as the previous page, now inside a while-pop.</div>
-    <div class="pitfalls__fix">long everywhere.</div>
+    <div class="pitfalls__bug">The same overflow as the previous page now sits inside a while-pop, so a left turn wraps to a right turn and the stack throws away a true hull vertex.</div>
+    <div class="pitfalls__fix">Every coordinate and every cross is a <code>long</code>. Re-use the geometry-page self-check on a <code>10<sup>9</sup></code> pair.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using the hull as unordered</span>
-    <div class="pitfalls__bug">You dump stack points without the CCW order and a later calipers / area walk breaks.</div>
-    <div class="pitfalls__fix">Andrew already emits CCW if you lower-then-upper. Do not sort the output again.</div>
+    <div class="pitfalls__bug">Dumping stack points without the counter-clockwise order looks like &ldquo;here are the hull vertices&rdquo; and then a later calipers or area walk assumes a circular sequence and breaks.</div>
+    <div class="pitfalls__fix">Andrew already emits CCW if you do lower then upper. Do not sort the output again, and do not shuffle it into a set.</div>
   </li>
 </ul>
 
@@ -501,28 +520,28 @@ flowchart TD
   <details class="followup">
     <summary>Why is the hull O(n) after the sort?</summary>
     <div class="followup__body">
-      <p>Amortised stack: a popped point never returns on that chain. Two passes, each O(n).</p>
+      <p>A point that leaves the stack on one chain never comes back on that chain, so each point is pushed once and popped once per pass. Two passes (lower and upper) are therefore linear. The <code>O(n log n)</code> you quote is the sort; say that out loud so nobody thinks the stack is the log factor.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you find the farthest pair?</summary>
     <div class="followup__body">
-      <p>It is an antipodal pair on the hull. Rotating calipers walks one pointer monotonically around the polygon in O(h).</p>
+      <p>The farthest pair of a point set is an <em>antipodal</em> pair on the hull: two vertices whose supporting lines are parallel. Rotating calipers walks one pointer monotonically around the polygon, so after the hull you finish in leftover of <code>O(h)</code> extra orientations. Checking every pair of hull vertices is the slower fallback.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Point in convex in O(log n)?</summary>
     <div class="followup__body">
-      <p>Binary search the fan from h[0]: find the triangle h[0],h[i],h[i+1] by orient, then one more orient. Or two binary searches on upper/lower chains.</p>
+      <p>Binary-search the fan of triangles from <code>h[0]</code>: leftover of two orientations tells you which triangle <code>h[0], h[i], h[i+1]</code> contains the query, then one more orientation says inside versus outside. The other route is two binary searches, one on the lower chain and one on the upper. Both need the hull in CCW order.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Graham vs Andrew?</summary>
     <div class="followup__body">
-      <p>Same complexity. Andrew's x-sort avoids polar-angle ties and is shorter in Java. Prefer Andrew unless the textbook said Graham.</p>
+      <p>Same complexity. Graham sorts by polar angle around the lowest point and then runs one stack; ties on the angle need a distance rule and a double or a careful cross. Andrew sorts by x and runs two simpler stacks. Prefer Andrew in Java unless the interviewer said the word Graham.</p>
     </div>
   </details>
 </div>

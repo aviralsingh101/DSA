@@ -22,7 +22,7 @@
   <p class="hero__tagline">An SCC is a maximal set where every vertex can reach every other. Kosaraju is two DFS passes; Tarjan is one DFS with a low-link stack.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">24 min read</span>
+    <span class="hero__time">28 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="../07-graphs-core/dfs-and-components.html">DFS & Connected Components</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Reachability on a directed graph is not symmetric. The condensation of SCCs is a DAG — the structure every "eventual safe node", "2-SAT", and "minimum edges to make strongly connected" problem sits on.</p>
-<p>Kosaraju: DFS to record finish order, reverse every edge, DFS again in reverse-finish order. Each second-pass tree is an SCC. Tarjan: one DFS, a stack of the current path, <code>low[u] = min(tin[u], tin of back-edges, low of children)</code>; when <code>low[u] == tin[u]</code> you pop an SCC.</p>
-<p>Write Kosaraju if you want the simpler proof. Write Tarjan if you already have tin/low from bridges and want one pass. Both are linear.</p>
+<p>You are given a one-way street map of a city, and you want to know which junctions can reach each other <em>both ways</em>. On an undirected map that question is just "are we in the same connected piece?", answered by one depth-first search. Directed streets break the symmetry: 0 can reach 3 along 0&rarr;1&rarr;3 while 3 has no way home, so they are not in the same group. A <em>strongly connected component</em> (SCC) is a maximal set of junctions where every member can reach every other member by following the arrows. Trying every pair with a fresh search is <code>n</code> searches of a graph with <code>m</code> streets, about <code>4&times;10&#185;&#8304;</code> steps at the usual limits, which no judge accepts.</p>
+<p>The algorithms on this page find every SCC in one or two linear passes and then shrink each component to a single supernode. The graph of supernodes, the <em>condensation</em>, has no directed cycles left &mdash; it is a DAG &mdash; because a cycle would have merged those supernodes into one SCC. That DAG is the object every "eventual safe node", "2-SAT", and "fewest one-way streets to add so everyone can reach everyone" problem actually sits on. Kosaraju builds it with two searches and a reversed copy of the streets; Tarjan builds it with one search, a stack, and a number called <code>low</code>.</p>
+<p>Write Kosaraju when you want the proof you can say out loud: finish times, reverse the arrows, search again. Write Tarjan when you already have discovery times and low-links from the bridges page and want a single pass. Both are <code>O(n + m)</code>. In a problem statement the tell is a directed graph together with "mutual reachability", "condense into a DAG", or limits such as <code>n, m &le; 2&times;10&#8309;</code> that rule out pairwise searches.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>In the reverse graph, the sources of the condensation are the sinks of the original. Processing vertices in reverse-finish order hits those sources first, so each second-pass DFS stays inside one SCC.</p>
+    <p>In the reversed street map, yesterday's sinks become today's sources. A first search's finish order is a reverse topological order of the condensation, so searching the reversed map in reverse-finish order hits one source &mdash; one whole SCC &mdash; at a time and cannot leak into another.</p>
   </div>
 </aside>
 
@@ -111,18 +111,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code>. Both algorithms are O(n+m). Recursion depth can be n — convert to an explicit stack on Java if the judge's stack is 1 MB.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n, m &le; 2&times;10&#8309;</code> is the linear window: both algorithms touch every vertex and every edge a constant number of times. Recursion depth can be <code>n</code>, so a chain of two hundred thousand one-way streets overflows the default Java stack; convert the search to an explicit stack, or raise <code>-Xss</code> only in local tests. Pairwise reachability at this size is about <code>4&times;10&#185;&#8304;</code> steps and will time out.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Kosaraju. Pass 1: DFS on G, push u after exploring children (finish order). Reverse the edges. Pass 2: pop the finish stack; each unvisited pop starts an SCC DFS on G^R.</p>
-<p>Tarjan. DFS with tin, low, and a stack of nodes on the current exploration path (an onStack flag). A back-edge to an on-stack node updates low. When low[u]==tin[u], pop until u — that slice is an SCC. Do not use a back-edge to a finished (popped) node; that is a cross edge into another SCC.</p>
+<p>Kosaraju is two searches and a reversed copy of the streets. Pass 1 runs an ordinary DFS on the original graph and, as each vertex finishes (every outgoing street already explored), pushes it onto a list. Reverse every street to build <code>G<sup>R</sup></code>. Pass 2 pops the finish list from the back and, whenever the popped vertex is still unvisited, starts a DFS on the reversed graph; every vertex that search reaches is one SCC. The reason it cannot leak: reverse-finish order on <code>G</code> is a topological order of the condensation of <code>G<sup>R</sup></code>, so each second-pass root is a source of that DAG and owns exactly one component.</p>
+<p>Tarjan is one search. <code>tin[u]</code> is the discovery time, a counter that ticks the first time you enter <code>u</code>. The vertex is pushed onto a stack and flagged <code>onStack</code>. <code>low[u]</code> measures something precise: the smallest discovery time of any vertex you can still reach from <code>u</code> by walking down tree edges inside <code>u</code>'s subtree and then taking at most one back-edge to a vertex that is still on the stack (still being explored). A back-edge to a vertex that has already been popped is a cross edge into a finished SCC and must not update <code>low</code>. When the search at <code>u</code> returns and <code>low[u] == tin[u]</code>, nothing in the subtree can climb to an ancestor of <code>u</code>, so <code>u</code> is the root of an SCC: pop the stack down to <code>u</code> and stamp that slice with a new component id.</p>
+<p>Walk the four-junction sample in words. Streets are 0&rarr;1&rarr;2&rarr;0 and 1&rarr;3. Tarjan enters 0, then 1, then 2; the street 2&rarr;0 is a back-edge to an on-stack vertex, so <code>low[2]</code> becomes <code>tin[0]</code>, that number climbs to 1 and then to 0, and <code>low[0] == tin[0]</code> pops 2, 1, 0 as SCC 0. Vertex 3 is entered next, has no back-edge, satisfies <code>low[3] == tin[3]</code>, and pops as the singleton SCC 1. The condensation is one arrow SCC0&rarr;SCC1: one source, one sink. Kosaraju's first pass finishes 2, then 0, then 1, then 3; the reversed search starting at 3 takes only 3, and the next reversed search takes 0, 1, 2.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Kosaraju: reverse-finish order of G is a topological order of the condensation of G^R. Tarjan: low[u] is the smallest tin reachable from u via a path of tree edges plus at most one back-edge into the current stack.</p>
+    <p>Kosaraju: reverse-finish order of <code>G</code> is a topological order of the condensation of <code>G<sup>R</sup></code>, so each second-pass DFS tree is exactly one SCC. Tarjan: <code>low[u]</code> is the smallest <code>tin</code> reachable from <code>u</code> by tree edges going down plus at most one back-edge into a vertex still on the stack.</p><p>In plain words, <code>low[u] == tin[u]</code> means "nothing in my subtree can climb to an ancestor still being explored", so the vertices sitting above me on the stack down to me are a maximal mutually-reachable set and may be popped as one component.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">What low[v] actually measures</span>
+    <p><code>low[v]</code> is not "the parent" and not "the smallest neighbour". It is the earliest discovery time still reachable from <code>v</code> without leaving the current exploration path: walk down the DFS subtree, then take at most one back-edge to a vertex that is still on the stack. If that earliest time is <code>v</code>'s own discovery time, the subtree is trapped &mdash; it cannot reach any ancestor &mdash; and <code>v</code> is an SCC root. Updating <code>low</code> from a vertex that has already been popped merges two components that are not mutually reachable.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--tip">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Kosaraju if you want the proof, Tarjan if you already have tin/low</span>
+    <p>Kosaraju's two-pass story (finish order, reverse arrows, search sources of the reversed condensation) is the one you can say out loud in an interview. Tarjan is one pass and shares the same two arrays as the bridges page. Either is acceptable if you can point at the condensation and say it is a DAG.</p>
   </div>
 </aside>
 
@@ -159,7 +176,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Graph: 0\to1\to2\to0, 1\to3. One cycle and a sink.",
+          "note": "One-way streets 0&rarr;1&rarr;2&rarr;0 form a cycle, and 1&rarr;3 hangs a sink off that cycle. Search starts at 0 with the stack holding only 0.",
           "active": [
             0
           ],
@@ -170,7 +187,7 @@
           }
         },
         {
-          "note": "DFS 0-1-2, back to 0. Tarjan low[0]==tin[0], pop 2,1,0 as SCC 0.",
+          "note": "The search walks 0-1-2 and the street 2&rarr;0 is a back-edge, so low climbs to tin[0]. Then low[0]==tin[0] pops 2, 1, 0 as SCC 0.",
           "active": [
             0,
             1,
@@ -183,7 +200,7 @@
           }
         },
         {
-          "note": "Node 3 is still on the stack of the earlier branch from 1? After pop, 3 is visited next.",
+          "note": "Vertex 3 was never pushed during that cycle. After the pop it is entered next, alone on the stack, with no back-edge waiting.",
           "active": [
             3
           ],
@@ -194,7 +211,7 @@
           }
         },
         {
-          "note": "3 has no back-edge. low[3]==tin[3], pop SCC 1 = {3}.",
+          "note": "3 has no back-edge to anyone still on the stack, so low[3] stays equal to tin[3] and 3 pops as the singleton SCC 1.",
           "active": [
             3
           ],
@@ -205,7 +222,7 @@
           }
         },
         {
-          "note": "Condensation: SCC0 \to SCC1. Sources=1, sinks=1.",
+          "note": "The condensation is one arrow from SCC 0 to SCC 1: one source, one sink, and no way back, which is why 3 is not in the cycle.",
           "active": [
             0,
             1,
@@ -213,12 +230,12 @@
           ],
           "values": {
             "u": "dag",
-            "scc": "0\to1",
+            "scc": "0&rarr;1",
             "stack": "—"
           }
         },
         {
-          "note": "ids [0,0,0,1]. 0,1,2 are mutually reachable; 3 is not.",
+          "note": "Finished ids are [0, 0, 0, 1]: junctions 0, 1, 2 can reach each other both ways, and 3 can be reached but cannot return.",
           "active": [
             0,
             1,
@@ -254,17 +271,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Kosaraju 1:</strong> DFS G, record finish order.</li>
-  <li><strong>Reverse</strong> every edge.</li>
-  <li><strong>Kosaraju 2:</strong> DFS G^R in reverse-finish order; each tree is an SCC.</li>
-  <li><strong>Tarjan:</strong> tin/low/stack; pop when low[u]==tin[u].</li>
-  <li><strong>Condense:</strong> map each vertex to its SCC id; add edges between different ids.</li>
-  <li><strong>DAG facts:</strong> sources and sinks of the condensation solve the "make strongly connected" problem.</li>
+  <li><strong>Kosaraju pass 1: search G and record finish order.</strong> Push a vertex onto the list only after every outgoing street has been explored, so the list is a reverse topological order of the condensation and the last vertex finished is a sink of the original DAG of components.</li>
+  <li><strong>Reverse every street to build G<sup>R</sup>.</strong> Yesterday's sinks become today's sources, which is the whole reason the second search can start at a source of the reversed condensation and stay inside one SCC.</li>
+  <li><strong>Kosaraju pass 2: search G<sup>R</sup> in reverse-finish order.</strong> Each time you pop an unvisited vertex, a new DFS tree is exactly one SCC; do not walk the original outgoing streets or you will glue extra vertices into the component.</li>
+  <li><strong>Tarjan: one search with tin, low, and a stack.</strong> Push on entry, update <code>low</code> from children and from back-edges to <code>onStack</code> vertices only, and when <code>low[u] == tin[u]</code> pop down to <code>u</code> &mdash; that slice cannot climb to any ancestor, so it is an SCC.</li>
+  <li><strong>Condense: one supernode per SCC id.</strong> Map every vertex to its id and add a condensation edge <code>id[u] &rarr; id[v]</code> only when the two ids differ, otherwise the DAG grows a self-loop and looks cyclic.</li>
+  <li><strong>Read sources and sinks of that DAG.</strong> A graph that is already one SCC needs 0 extra streets; otherwise the fewest streets that make it strongly connected is <code>max(sources, sinks)</code>, by pairing sinks back to sources.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Four junctions: a directed cycle 0&rarr;1&rarr;2&rarr;0 and a sink hanging off 1&rarr;3. Tarjan pops the cycle {0,1,2} first, then the singleton {3}.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -272,12 +289,12 @@ graph LR
       <tr><th>u</th><th>scc</th><th>stack</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>—</td><td>0</td><td>Graph: 0	o1	o2	o0, 1	o3. One cycle and a sink.</td></tr>
-      <tr><td>0</td><td>0</td><td>pop 2,1,0</td><td>DFS 0-1-2, back to 0. Tarjan low[0]==tin[0], pop 2,1,0 as SCC 0.</td></tr>
-      <tr><td>3</td><td>—</td><td>3</td><td>Node 3 is still on the stack of the earlier branch from 1? After pop, 3 is visited next.</td></tr>
-      <tr><td>3</td><td>1</td><td>empty</td><td>3 has no back-edge. low[3]==tin[3], pop SCC 1 = {3}.</td></tr>
-      <tr><td>dag</td><td>0	o1</td><td>—</td><td>Condensation: SCC0 	o SCC1. Sources=1, sinks=1.</td></tr>
-      <tr><td>done</td><td>0,0,0,1</td><td>—</td><td>ids [0,0,0,1]. 0,1,2 are mutually reachable; 3 is not.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>—</td><td>0</td><td>One-way streets 0&rarr;1&rarr;2&rarr;0 form a cycle, and 1&rarr;3 hangs a sink off that cycle. Search starts at 0 with the stack holding only 0.</td></tr>
+      <tr><td>0</td><td>0</td><td>pop 2,1,0</td><td>The search walks 0-1-2 and the street 2&rarr;0 is a back-edge, so low climbs to tin[0]. Then low[0]==tin[0] pops 2, 1, 0 as SCC 0.</td></tr>
+      <tr><td>3</td><td>—</td><td>3</td><td>Vertex 3 was never pushed during that cycle. After the pop it is entered next, alone on the stack, with no back-edge waiting.</td></tr>
+      <tr><td>3</td><td>1</td><td>empty</td><td>3 has no back-edge to anyone still on the stack, so low[3] stays equal to tin[3] and 3 pops as the singleton SCC 1.</td></tr>
+      <tr><td>dag</td><td>0&rarr;1</td><td>—</td><td>The condensation is one arrow from SCC 0 to SCC 1: one source, one sink, and no way back, which is why 3 is not in the cycle.</td></tr>
+      <tr><td>done</td><td>0,0,0,1</td><td>—</td><td>Finished ids are [0, 0, 0, 1]: junctions 0, 1, 2 can reach each other both ways, and 3 can be reached but cannot return.</td></tr>
     </tbody>
   </table>
 </div>
@@ -426,7 +443,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Each vertex and edge is processed a constant number of times. Kosaraju pays for a reverse-edge list. Tarjan pays for a stack of size n.</p>
+    <p>Kosaraju walks every vertex and every street once on <code>G</code>, once on <code>G<sup>R</sup></code>, and spends linear time building the reversed adjacency lists, so the work is <code>O(n + m)</code>. Tarjan walks every street once, pushes and pops each vertex once, and stores three arrays of length <code>n</code> plus a stack of size at most <code>n</code>, which is the same linear bound with a smaller constant and no reversed copy of the graph.</p>
+    <p>At <code>n, m = 2&times;10&#8309;</code> that is a few hundred thousand array operations, a few milliseconds. The pairwise alternative &mdash; a search from every vertex &mdash; is about <code>n &times; (n + m)</code>, near <code>8&times;10&#185;&#8304;</code> steps, which no judge accepts. Recursion depth can be <code>n</code>, so a chain overflows the default Java stack; the linear bound assumes an explicit stack or a raised <code>-Xss</code>.</p>
   </div>
 
   <table class="complexity__compare">
@@ -448,28 +466,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Using a back-edge to a finished node in Tarjan</span>
-    <div class="pitfalls__bug">Updating low from a popped node merges two SCCs.</div>
-    <div class="pitfalls__fix">Only update from <code>onStack[v]</code> nodes.</div>
+    <div class="pitfalls__bug">A street into a vertex that has already been popped looks like a back-edge, so updating <code>low</code> from it pulls a finished SCC's discovery time into the current one and silently merges two components that are not mutually reachable.</div>
+    <div class="pitfalls__fix">Update <code>low[u]</code> from <code>v</code> only when <code>onStack[v]</code> is still true. A popped neighbour is a cross edge into another SCC and must be ignored.</div>
   </li>
   <li>
     <span class="pitfalls__title">Kosaraju second pass on G, not G^R</span>
-    <div class="pitfalls__bug">You walk outgoing edges and glue extra vertices into the SCC.</div>
-    <div class="pitfalls__fix">Pass 2 is on the reversed graph.</div>
+    <div class="pitfalls__bug">Walking the original outgoing streets on pass 2 follows arrows out of the component and glues extra vertices into the SCC, which looks correct on a single cycle and fails as soon as a sink hangs off it.</div>
+    <div class="pitfalls__fix">Build the reversed adjacency lists in <code>add</code> and run pass 2 on those lists only. Test on 0&rarr;1&rarr;2&rarr;0 plus 1&rarr;3 and check that 3 is not in SCC 0.</div>
   </li>
   <li>
     <span class="pitfalls__title">Finish-order vs discovery-order</span>
-    <div class="pitfalls__bug">Processing in tin order on pass 2 is wrong. You need reverse finish.</div>
-    <div class="pitfalls__fix">Push after the recursive calls, then iterate the list backwards.</div>
+    <div class="pitfalls__bug">Processing pass 2 in discovery (<code>tin</code>) order starts at sources of the original graph rather than sources of the reversed condensation, so a second-pass tree leaks across several SCCs.</div>
+    <div class="pitfalls__fix">Push a vertex only after its recursive calls return, then iterate that list from the back. The last vertex finished is the first one you should start on <code>G<sup>R</sup></code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Java recursion on a 2e5 path</span>
-    <div class="pitfalls__bug">StackOverflowError.</div>
-    <div class="pitfalls__fix">Iterative DFS, or raise the stack (<code>-Xss256m</code>) in local tests; prefer iterative on CF Java.</div>
+    <div class="pitfalls__bug">A directed chain of length <code>n</code> makes the recursive DFS <code>n</code> frames deep and throws <code>StackOverflowError</code> on the default Java stack, which looks like a wrong answer rather than a stack problem.</div>
+    <div class="pitfalls__fix">Write the search with an explicit stack, or raise <code>-Xss256m</code> only for local tests. On Codeforces Java prefer the iterative version every time.</div>
   </li>
   <li>
     <span class="pitfalls__title">Condensing without skipping intra-SCC edges</span>
-    <div class="pitfalls__bug">Self-loops on the DAG, which then looks cyclic.</div>
-    <div class="pitfalls__fix">Add a condensation edge only when <code>id[u] != id[v]</code>.</div>
+    <div class="pitfalls__bug">Copying every original street onto the supernode graph writes a self-loop on any SCC that contained a cycle, so the condensation looks cyclic and source/sink counts come out wrong.</div>
+    <div class="pitfalls__fix">Add a condensation edge only when <code>id[u] != id[v]</code>. Test on a single directed cycle: the condensation must be one isolated supernode, not a loop of one.</div>
   </li>
 </ul>
 
@@ -511,28 +529,28 @@ graph LR
   <details class="followup">
     <summary>Why reverse finish order?</summary>
     <div class="followup__body">
-      <p>Finish times of a first DFS are a reverse topological order of the condensation. Reversing edges flips that into a genuine topo order of G^R's condensation, so each second-pass root owns exactly one SCC.</p>
+      <p>The finish times of a first DFS on <code>G</code> are a reverse topological order of the condensation: a sink component finishes before any component that can reach it. Reversing every street flips sinks into sources, so walking that list from the back starts at a source of <code>G<sup>R</sup></code>'s condensation. A search that starts at a source cannot leave its own SCC, which is why each second-pass tree is exactly one component.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Tarjan vs Kosaraju in an interview?</summary>
     <div class="followup__body">
-      <p>Kosaraju is easier to get right. Tarjan is one pass and shares tin/low with bridges. Either is acceptable if you can prove the condensation is a DAG.</p>
+      <p>Kosaraju is the one whose proof you can say in two sentences (finish, reverse, search sources). Tarjan is one pass and reuses the same <code>tin</code> / <code>low</code> arrays as the bridges page, but the stack-and-onStack details are easier to get wrong. Either is acceptable if you can point at the condensation and say it is a DAG. Do not start implementing Tarjan from scratch unless the interviewer asks for one pass.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How many edges to make the graph strongly connected?</summary>
     <div class="followup__body">
-      <p>Contract SCCs. If one node, 0. Else let A = number of sources, B = number of sinks; answer max(A, B). You can always add that many edges (pair sinks to sources).</p>
+      <p>Contract every SCC to a supernode. If a single supernode remains, the answer is 0. Otherwise let <code>A</code> be the number of supernodes with in-degree 0 and <code>B</code> the number with out-degree 0; the fewest new streets is <code>max(A, B)</code>. You can always realise that number by pairing sinks back to sources, because the condensation is a DAG and every supernode sits on some path from a source to a sink.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can an SCC be a single node with no loop?</summary>
     <div class="followup__body">
-      <p>Yes. A trivial SCC. It is still a DAG node. A self-loop makes that singleton a cycle, which matters for "safe nodes".</p>
+      <p>Yes: a <em>trivial</em> SCC. Vertex 3 on this page is one. It is still a supernode of the condensation. A self-loop on that vertex would make the singleton a cycle, which matters for "eventual safe nodes": a trivial SCC with no self-loop is safe only when it cannot reach a cycle elsewhere, i.e. when its out-degree in the condensation is 0 after you ignore other trivial sinks.</p>
     </div>
   </details>
 </div>

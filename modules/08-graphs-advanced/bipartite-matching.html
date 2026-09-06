@@ -22,7 +22,7 @@
   <p class="hero__tagline">A matching is a set of edges with no shared vertex. In a bipartite graph, Kuhn / Hopcroft-Karp (or unit flow) finds a maximum matching in polynomial time. Kőnig: max matching = min vertex cover.</p>
   <div class="hero__meta">
     <span class="pill pill--medium">Medium</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="max-flow-min-cut.html">Max Flow / Min Cut</a>,
       <a href="../07-graphs-core/cycle-detection-and-bipartite.html">Cycle Detection & Bipartite</a>
@@ -38,14 +38,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>Assigning jobs to workers, boys to girls, rows to columns of a chessboard — if the graph is bipartite, a maximum matching is the complete answer and is not NP-hard. Kuhn's DFS-augment is twenty lines; Hopcroft-Karp is the faster version you write when n is a few thousand.</p>
-<p>Kőnig's theorem: in a bipartite graph the size of a maximum matching equals the size of a minimum vertex cover. Hall's marriage theorem is the existence form. After a max matching, a min cover is recovered from the Hungarian forest (unsaturated L, alternate reach).</p>
-<p>The flow view is the same algorithm: s 	o L 	o R 	o t with unit capacities. Write Kuhn when you want less code; write Dinic when you already have a flow snippet and the graph is bigger.</p>
+<p>You are assigning jobs to workers, or placing rooks on a chessboard so that no two share a row or a column, or pairing people from two sides of a dance. The graph is <em>bipartite</em>: every edge runs from a left set <code>L</code> to a right set <code>R</code>, never within a side. A <em>matching</em> is a set of those edges that share no vertex &mdash; each worker gets at most one job. On a general graph, finding the largest matching needs Edmonds' blossom algorithm. On a bipartite graph it is twenty lines, because an unused worker can steal a job along an alternating path and the steal always increases the matching by one.</p>
+<p>Kuhn's algorithm is that steal, written as a DFS. Hopcroft-Karp (or Dinic on the unit-capacity flow network <code>s &rarr; L &rarr; R &rarr; t</code>) groups many shortest steals into phases and is what you write when both sides have a few thousand vertices. After the matching is maximum, Kőnig's theorem says its size equals the size of a <em>minimum vertex cover</em> &mdash; the smallest set of vertices that touches every edge. The cover is recovered from the Hungarian forest: start at every unmatched left vertex and walk unused edges to the right and matching edges back to the left. Hall's marriage theorem is the existence form of the same picture.</p>
+<p>In a problem statement the tell is a bipartite pairing sitting next to <code>|L|, |R| &le; 500</code> (Kuhn) or <code>2000</code> (Hopcroft-Karp / Dinic), or a follow-up that asks for a minimum vertex cover or a maximum independent set on that same graph. If the graph has odd cycles, Kuhn can return a matching that is not maximum: 2-colour first, and if the colouring fails you need blossoms, not this page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>An augmenting path alternates free-edge / matching-edge and starts at a free left vertex. Flipping it increases the matching by one. When none exists, the matching is maximum (Berge).</p>
+    <p>An augmenting path starts at a free left vertex and alternates unused edge, matching edge, unused edge. Flipping every edge on that path (matched becomes free, free becomes matched) grows the matching by one. When no such path exists, Berge says the matching is already maximum.</p>
   </div>
 </aside>
 
@@ -112,18 +112,27 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|L|, |R| le 500</code> is Kuhn. <code>2000</code> wants Hopcroft-Karp or Dinic. Recursion depth is the augmenting-path length; iterative is safer on CF Java.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>|L|, |R| &le; 500</code> is Kuhn's window: one DFS of the right side per left vertex is <code>O(V E)</code>, about a million edge scans at the cap. Around 2000 vertices you want Hopcroft-Karp or Dinic on the unit network, both <code>O(E &radic;V)</code>. Recursion depth is the length of an augmenting path and can be <code>V</code>; an iterative DFS is safer on Codeforces Java. If the graph is not bipartite, this page does not apply.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Kuhn: <code>matchR[r] = -1</code>. For each left u, DFS: try unused neighbours v; if v is free or <code>dfs(matchR[v])</code> succeeds, set matchR[v]=u and return true. Clear the seen-on-right array every start from a free u (or every phase).</p>
-<p>Min vertex cover: from all free left vertices, walk unused edges L	o R and matching edges R	o L (the Hungarian forest). Cover = (unvisited L) ∪ (visited R).</p>
+<p>Kuhn stores <code>matchR[r]</code>, the left vertex currently paired with right vertex <code>r</code>, or <code>-1</code> if <code>r</code> is free. For each left vertex <code>u</code> you try to grow the matching by one. Clear a <code>seen[]</code> array on the right (or bump a visit token), then DFS: for each unused neighbour <code>v</code> of <code>u</code>, skip <code>v</code> if already seen on this attempt; if <code>v</code> is free, claim it with <code>matchR[v] = u</code> and return true; if <code>v</code> is taken, recursively ask <code>matchR[v]</code> to rematch, and if that steal succeeds, claim <code>v</code> yourself. A failed attempt must not poison <code>seen[]</code> for the next free <code>u</code>: that is why the array is cleared at every start, not once for the whole run.</p>
+<p>After no free left vertex can find an augmenting path, the matching is maximum (Berge's theorem). To read a minimum vertex cover, grow the Hungarian forest: from every unmatched left vertex, walk unused edges <code>L &rarr; R</code> and matching edges <code>R &rarr; L</code>. The cover is (left vertices the forest never visited) union (right vertices the forest did visit). Kőnig says that set has the same size as the matching. The maximum independent set on a bipartite graph is the complement of that cover, so its size is <code>n</code> minus the matching size.</p>
+<p>Walk three-plus-three in words. Left {0, 1, 2}, right {0, 1, 2}, edges 0-0, 0-1, 1-1, 2-2. Left 0 claims right 0. Left 1 claims the free right 1. Left 2 claims right 2. The matching has size 3 and no free left vertex remains, so it is maximum. If right 1 had already been taken when left 1 tried, the DFS would have asked <code>matchR[1]</code> to rematch &mdash; that is the steal, and flipping the path would have grown the matching by one instead of failing.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>Berge: a matching is maximum iff there is no augmenting path. Kuhn searches one from every free left vertex. After termination, Kőnig's construction on the Hungarian forest is a vertex cover of the same size.</p>
+    <p>Berge: a matching is maximum if and only if there is no augmenting path. Kuhn searches for one from every free left vertex. After termination, Kőnig's construction on the Hungarian forest is a vertex cover of the same size as the matching.</p><p>In plain words, if a free worker can steal a job by asking someone else to move, the matching is not yet maximum; when every free worker has tried and failed, the pairing is as large as it can be, and the vertices the steal-search never reached on the left, plus the ones it did reach on the right, cover every leftover edge.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Berge in one picture</span>
+    <p>An augmenting path has an unmatched vertex at each end and alternates unused / matched. Flipping it adds one more matched edge than it removes, so the matching grows by one. When every free left vertex has been tried and none found such a path, no larger matching exists. That is why Kuhn's outer loop is "for each left vertex, try to augment once more" and why a leftover <code>seen[]</code> from a failed try is a correctness bug, not a speed hack.</p>
   </div>
 </aside>
 
@@ -158,7 +167,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "L={0,1,2}, R={0,1,2}. Edges 0-0, 0-1, 1-1, 2-2.",
+          "note": "Left {0, 1, 2} and right {0, 1, 2}, with edges 0-0, 0-1, 1-1, 2-2. Every right vertex starts unmatched.",
           "active": [
             0
           ],
@@ -169,7 +178,7 @@
           }
         },
         {
-          "note": "u=0 takes r0. matchR[0]=0.",
+          "note": "Left 0 claims the free right 0. matchR[0] becomes 0 and the matching now has size 1.",
           "active": [
             0
           ],
@@ -180,7 +189,7 @@
           }
         },
         {
-          "note": "u=1 wants r1 (free). matchR[1]=1.",
+          "note": "Left 1 finds right 1 still free and claims it. matchR[1] becomes 1; no steal was needed.",
           "active": [
             1
           ],
@@ -191,7 +200,7 @@
           }
         },
         {
-          "note": "u=2 takes r2. Matching size 3.",
+          "note": "Left 2 claims the free right 2. Three edges are matched and every left vertex is paired.",
           "active": [
             2
           ],
@@ -202,7 +211,7 @@
           }
         },
         {
-          "note": "If r1 were taken, u=1 would DFS into matchR[1] and try to rematch that left vertex.",
+          "note": "If right 1 had already been taken, left 1 would DFS into matchR[1] and ask that left vertex to rematch.",
           "active": [
             1
           ],
@@ -213,7 +222,7 @@
           }
         },
         {
-          "note": "No free L remains. Maximum matching = 3.",
+          "note": "No free left vertex remains, so no augmenting path exists and the matching of size 3 is maximum.",
           "active": [
             0,
             1,
@@ -250,17 +259,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Confirm bipartite</strong> (2-colour). If you already have L and R, skip.</li>
-  <li><strong>matchR = -1</strong>. For each left u, clear seen, DFS-augment.</li>
-  <li><strong>DFS:</strong> try each unused neighbour; claim it if free or if its match can rematch.</li>
-  <li><strong>Size</strong> is the number of r with matchR[r] != -1.</li>
-  <li><strong>Min cover:</strong> Hungarian forest from free L; cover = unvisited L + visited R.</li>
-  <li><strong>Independent set</strong> is the complement of the cover (size n - matching).</li>
+  <li><strong>Confirm the graph is bipartite, or trust the given sides.</strong> A 2-colouring is the check; an odd cycle means Kuhn can return a non-maximum matching and you need blossoms, not this page.</li>
+  <li><strong>Set matchR to -1 and, for each left u, clear seen then DFS-augment.</strong> Clearing <code>seen[]</code> (or bumping a visit token) at every start is required: a failed try must not poison right vertices for the next free <code>u</code>.</li>
+  <li><strong>DFS: try each unseen neighbour; claim it if free or if its match can rematch.</strong> That recursive steal is the augmenting path; on success write <code>matchR[v] = u</code> and return true so every edge on the path flips.</li>
+  <li><strong>The matching size is the number of r with matchR[r] != -1.</strong> Invert the array if you also need <code>matchL</code>; both views name the same set of edges.</li>
+  <li><strong>Read a min vertex cover from the Hungarian forest.</strong> Walk unused edges from every free left vertex and matching edges back; the cover is unvisited-left union visited-right, and Kőnig says it has the same size as the matching.</li>
+  <li><strong>A maximum independent set is the complement of that cover.</strong> On a bipartite graph its size is <code>n</code> minus the matching size; on a general graph the same sentence is NP-hard and this construction is illegal.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Three workers and three jobs, edges 0-0, 0-1, 1-1, 2-2. Each left vertex claims a free right vertex and the matching of size 3 is already maximum.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -268,12 +277,12 @@ graph LR
       <tr><th>u</th><th>v</th><th>match</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>free</td><td>L={0,1,2}, R={0,1,2}. Edges 0-0, 0-1, 1-1, 2-2.</td></tr>
-      <tr><td>0</td><td>0</td><td>0	o r0</td><td>u=0 takes r0. matchR[0]=0.</td></tr>
-      <tr><td>1</td><td>1</td><td>1	o r1</td><td>u=1 wants r1 (free). matchR[1]=1.</td></tr>
-      <tr><td>2</td><td>2</td><td>2	o r2</td><td>u=2 takes r2. Matching size 3.</td></tr>
-      <tr><td>1</td><td>1</td><td>augment flip</td><td>If r1 were taken, u=1 would DFS into matchR[1] and try to rematch that left vertex.</td></tr>
-      <tr><td>done</td><td>—</td><td>size 3</td><td>No free L remains. Maximum matching = 3.</td></tr>
+      <tr class="trace-table__row--change"><td>0</td><td>0</td><td>free</td><td>Left {0, 1, 2} and right {0, 1, 2}, with edges 0-0, 0-1, 1-1, 2-2. Every right vertex starts unmatched.</td></tr>
+      <tr><td>0</td><td>0</td><td>0	o r0</td><td>Left 0 claims the free right 0. matchR[0] becomes 0 and the matching now has size 1.</td></tr>
+      <tr><td>1</td><td>1</td><td>1	o r1</td><td>Left 1 finds right 1 still free and claims it. matchR[1] becomes 1; no steal was needed.</td></tr>
+      <tr><td>2</td><td>2</td><td>2	o r2</td><td>Left 2 claims the free right 2. Three edges are matched and every left vertex is paired.</td></tr>
+      <tr><td>1</td><td>1</td><td>augment flip</td><td>If right 1 had already been taken, left 1 would DFS into matchR[1] and ask that left vertex to rematch.</td></tr>
+      <tr><td>done</td><td>—</td><td>size 3</td><td>No free left vertex remains, so no augmenting path exists and the matching of size 3 is maximum.</td></tr>
     </tbody>
   </table>
 </div>
@@ -402,7 +411,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>Kuhn starts an O(E) DFS from each of V left vertices, so O(VE). Hopcroft-Karp (and Dinic on the unit network) groups shortest augmenting paths into phases; there are O(√V) phases.</p>
+    <p>Kuhn starts a DFS from each of the <code>V</code> left vertices, and one DFS looks at every edge at most once, so the bound is <code>O(V E)</code>. At <code>|L| = |R| = 500</code> and a few thousand edges that is a few million edge scans, comfortable. Hopcroft-Karp (and Dinic on <code>s &rarr; L &rarr; R &rarr; t</code> with unit capacities) groups shortest augmenting paths into phases; there are <code>O(&radic;V)</code> phases of work <code>O(E)</code> each, which is why 2000-vertex instances move to that algorithm.</p>
+    <p>The Hungarian-forest cover is one extra BFS after the matching is finished, linear in <code>V + E</code>, so it does not change the leading term. Recursion depth is the length of an augmenting path and can be <code>V</code>; an iterative stack version of the DFS is the Codeforces-Java-safe spelling of the same <code>O(V E)</code>.</p>
   </div>
 
   <table class="complexity__compare">
@@ -424,28 +434,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Not resetting seen per left vertex</span>
-    <div class="pitfalls__bug">A failed attempt poisons the seen flags and later left vertices cannot use those right vertices.</div>
-    <div class="pitfalls__fix">New <code>seen[]</code> (or a vis-token) every time you start from a free u.</div>
+    <div class="pitfalls__bug">A failed augment marks right vertices seen and never unmarks them, so a later free left vertex cannot try those jobs even though they are still legal, and the matching comes out smaller than it should.</div>
+    <div class="pitfalls__fix">Allocate a fresh <code>seen[]</code>, or bump a visit token, every time you start a DFS from a free <code>u</code>. Test by adding a second left vertex that only touches a right vertex the first try already walked.</div>
   </li>
   <li>
     <span class="pitfalls__title">Running Kuhn on a non-bipartite graph</span>
-    <div class="pitfalls__bug">Odd-cycle blossoms are ignored; the matching can be non-maximum.</div>
-    <div class="pitfalls__fix">2-colour first. If it fails, you need Blossom or a different model.</div>
+    <div class="pitfalls__bug">An odd cycle needs a blossom, which Kuhn never shrinks, so the DFS can miss an augmenting path and return a matching that is not maximum, while every bipartite sample still passes.</div>
+    <div class="pitfalls__fix">2-colour the graph first. If the colouring fails, this page is the wrong algorithm; you need Edmonds' blossom algorithm or a different model of the problem.</div>
   </li>
   <li>
     <span class="pitfalls__title">Min cover = the matched vertices</span>
-    <div class="pitfalls__bug">That set can miss an unmatched cover vertex or include both ends of a matching edge.</div>
-    <div class="pitfalls__fix">Hungarian forest: free L, alternate; cover = unvisited L ∪ visited R.</div>
+    <div class="pitfalls__bug">Taking both ends of every matching edge double-counts and can miss an unmatched vertex that is the only cover of some leftover edge, so the set is neither minimum nor even a cover.</div>
+    <div class="pitfalls__fix">Grow the Hungarian forest from every free left vertex, alternating unused and matching edges. The cover is unvisited-left union visited-right. Check its size equals the matching size.</div>
   </li>
   <li>
     <span class="pitfalls__title">Independent set = the matching</span>
-    <div class="pitfalls__bug">A matching is an edge set. Max independent set on a bipartite graph is n - matching (vertices).</div>
-    <div class="pitfalls__fix">Complement of the min vertex cover.</div>
+    <div class="pitfalls__bug">A matching is a set of edges. A maximum independent set is a set of vertices. Returning the matched edges (or their endpoints) as an independent set is a type error that still has a plausible size.</div>
+    <div class="pitfalls__fix">The maximum independent set on a bipartite graph is the complement of the min vertex cover, so its size is <code>n</code> minus the matching size. Return those vertices, not the matching edges.</div>
   </li>
   <li>
     <span class="pitfalls__title">Flow gadget with cap 2 on L-R edges</span>
-    <div class="pitfalls__bug">A left vertex can then match two rights.</div>
-    <div class="pitfalls__fix">s	o L and R	o t have cap 1; L	o R cap 1 is enough and necessary.</div>
+    <div class="pitfalls__bug">A left vertex can then send two units across two right vertices, so the "matching" pairs one worker with two jobs, which looks like a larger flow and fails the original pairing.</div>
+    <div class="pitfalls__fix">The network is <code>s &rarr; L</code> capacity 1, <code>L &rarr; R</code> capacity 1, <code>R &rarr; t</code> capacity 1. The unit caps on <code>s &rarr; L</code> and <code>R &rarr; t</code> are what force each vertex to be used at most once.</div>
   </li>
 </ul>
 
@@ -487,28 +497,28 @@ graph LR
   <details class="followup">
     <summary>State Kőnig's theorem.</summary>
     <div class="followup__body">
-      <p>In a bipartite graph, the cardinality of a maximum matching equals the cardinality of a minimum vertex cover. The Hungarian-forest construction is the proof you can code.</p>
+      <p>In a bipartite graph the size of a maximum matching equals the size of a minimum vertex cover. The proof you can code is the Hungarian forest: after a maximum matching, grow an alternating forest from every free left vertex; unvisited-left union visited-right is a cover, and it cannot be smaller than the matching because every matched edge contributes one unique cover vertex. On a general graph the two numbers can differ.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Maximum independent set?</summary>
     <div class="followup__body">
-      <p>On a bipartite graph it is <code>n - max matching</code>: the complement of a min vertex cover. On a general graph it is NP-hard.</p>
+      <p>On a bipartite graph it is the complement of a minimum vertex cover, so its size is <code>n</code> minus the size of a maximum matching. That is why so many "largest set of vertices with no two adjacent" problems on a 2-coloured graph start with Kuhn. On a general graph the same question is NP-hard and this subtraction is illegal.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you recover the actual pairs?</summary>
     <div class="followup__body">
-      <p><code>matchR[v] = u</code> means edge u-v is in the matching. Invert if you want matchL.</p>
+      <p><code>matchR[v] = u</code> means the edge from left <code>u</code> to right <code>v</code> is in the matching. Walk the right array once and emit every pair whose slot is not <code>-1</code>. If you also want a left-indexed view, invert the array into <code>matchL[u] = v</code> in the same scan. The two arrays name the same set of edges.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Kuhn vs Hopcroft-Karp in an interview?</summary>
     <div class="followup__body">
-      <p>Kuhn. Mention the O(E √V) algorithm and the flow reduction. Do not write HK from scratch unless asked.</p>
+      <p>Write Kuhn. Mention that Hopcroft-Karp (and Dinic on the unit network) is <code>O(E &radic;V)</code> and is what you would ship at a few thousand vertices, and that the same matching is a unit-capacity max flow. Do not write Hopcroft-Karp from scratch unless the interviewer asks for the faster algorithm; the phase machinery is easy to get wrong under time pressure.</p>
     </div>
   </details>
 </div>

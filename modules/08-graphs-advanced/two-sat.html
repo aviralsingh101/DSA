@@ -22,7 +22,7 @@
   <p class="hero__tagline">Each clause <code>x ∨ y</code> becomes implications <code>¬x → y</code> and <code>¬y → x</code>. Unsatisfiable iff x and ¬x sit in the same SCC.</p>
   <div class="hero__meta">
     <span class="pill pill--hard">Hard</span>
-    <span class="hero__time">22 min read</span>
+    <span class="hero__time">26 min read</span>
     <span class="hero__prereq">Prerequisites:
       <a href="scc-tarjan-kosaraju.html">SCC: Tarjan & Kosaraju</a>
     </span>
@@ -37,14 +37,14 @@
 
 <!-- ================================================== 2. WHY THIS EXISTS -->
 <h2>Why this exists</h2>
-<p>3-SAT is NP-complete. 2-SAT is linear. The trick is an implication graph on 2n vertices (x and ¬x for each variable): a clause of two literals forces two implications, and a valid assignment is a cut of the condensation that never puts x and ¬x together.</p>
-<p>After SCCs, the condensation is a DAG. Assign x true if <code>scc[x] &gt; scc[¬x]</code> (later in reverse-topo, i.e. we pick the sink side). That is the unique forced choice once you decide to make every implication-respecting assignment.</p>
-<p>Recognition: "choose one of two options, with pairwise conflicts" — seating, assigning truth values, choosing an orientation. If a constraint involves three literals, it is not 2-SAT.</p>
+<p>You are seating people, flipping switches, or choosing an orientation of each street, and every rule mentions at most two choices: "at least one of Alice and Bob sits on the left", "these two switches cannot both be on". Trying every assignment is <code>2<sup>n</sup></code> checks; at <code>n = 10&#8309;</code> that is not a number you can finish. The same problem with three choices per rule is 3-SAT and is NP-complete. The two-choice version, <em>2-SAT</em>, is linear, because each rule can be rewritten as two forced arrows and those arrows are a directed graph you already know how to search.</p>
+<p>A clause <code>x OR y</code> means two sentences at once: "if <code>x</code> is false then <code>y</code> must be true", and "if <code>y</code> is false then <code>x</code> must be true". Those are directed implications <code>&not;x &rarr; y</code> and <code>&not;y &rarr; x</code>. Build a graph with two vertices per variable, one for the variable and one for its negation, and add those two arrows for every clause. Implications are transitive: a path <code>a &rarr; &hellip; &rarr; b</code> means "if you set <code>a</code> true you are forced to set <code>b</code> true". Therefore a path from <code>x</code> to <code>&not;x</code> and a path back from <code>&not;x</code> to <code>x</code> is a contradiction &mdash; setting <code>x</code> either way forces the opposite. Two vertices that can reach each other sit in the same strongly connected component, so unsatisfiability is exactly "some variable shares an SCC with its negation".</p>
+<p>After the SCCs are found, the condensation is a DAG. For every variable you pick the literal whose component is closer to the sinks, which is the side the implications point toward: set <code>x</code> true when <code>scc[x] &gt; scc[&not;x]</code>. In a problem statement the tell is a family of pairwise conflicts or "at least one of these two" sitting next to <code>n, m &le; 10&#8309;</code>. A rule that names three literals is not this page.</p>
 
 <aside class="callout callout--idea">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
   <div class="callout__body">
-    <p>x ∨ y is (¬x → y) ∧ (¬y → x). A path x ⇒ ¬x ⇒ x is a contradiction. SCC is how you find those paths in linear time.</p>
+    <p>A two-literal clause is two forced arrows, and a forced arrow is transitive, so "x forces not-x and not-x forces x" is mutual reachability. SCC is how you find every such pair in linear time; the sink-side literal of each surviving pair is the assignment.</p>
   </div>
 </aside>
 
@@ -111,18 +111,35 @@
     </tbody>
   </table>
 
-  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n</code> variables, <code>m</code> clauses, both ≤ 1e5. Graph has 2n vertices and 2m edges. Recursion / stack same warning as SCC.</p>
+  <p class="recognise__constraints"><strong>Constraint tell:</strong> <code>n</code> variables and <code>m</code> clauses, both up to <code>10&#8309;</code>, produce an implication graph of <code>2n</code> vertices and <code>2m</code> directed edges. One SCC run is linear in that size. The same Java-stack warning as the SCC page applies: a chain of implications of length <code>2n</code> overflows the default recursive DFS. A clause with three literals is not 2-SAT and this graph will not save you.</p>
 </section>
 
 <!-- ============================================ 4. CORE IDEA & INVARIANT -->
 <h2>Core idea and the invariant</h2>
-<p>Map variable i to node 2i (false) and 2i+1 (true), or i and i+n — pick one and stick to it. For a clause (a ∨ b) add edges (~a 	o b) and (~b 	o a). For a forced literal a add (~a 	o a).</p>
-<p>Run SCC. If any i has scc[i] == scc[~i], unsat. Otherwise set val[i] = scc[i] > scc[~i] (Kosaraju ids assigned in reverse-topo of G^R are already in the right order; Tarjan ids are assigned in reverse-topo of the condensation — same comparison).</p>
+<p>Fix one encoding and never mix it. The usual packing is <code>neg(i) = 2*i</code> for "variable <code>i</code> is false" and <code>pos(i) = 2*i+1</code> for "variable <code>i</code> is true", so <code>x ^ 1</code> flips a literal. The other common packing is <code>i</code> and <code>i+n</code>. For a clause <code>(a OR b)</code> add the two implication edges <code>&not;a &rarr; b</code> and <code>&not;b &rarr; a</code>. A forced literal <code>a</code> (a unit clause) is the clause <code>(a OR a)</code>, which adds the single edge <code>&not;a &rarr; a</code>. Forgetting either arrow of a two-literal clause leaves a satisfying assignment that the graph does not force, so both edges are part of correctness.</p>
+<p>Run Tarjan or Kosaraju on that directed graph. If any variable <code>i</code> has <code>scc[pos(i)] == scc[neg(i)]</code>, the instance is unsatisfiable: <code>i</code> and <code>&not;i</code> can reach each other, so each forces the other. Otherwise assign <code>val[i] = scc[pos(i)] &gt; scc[neg(i)]</code>. Both algorithms number components in reverse topological order of the condensation, so the larger id is the sink side &mdash; the side implications point toward, the side you set true. Verify the comparison on the unit clause <code>(x)</code> alone: the edge <code>&not;x &rarr; x</code> puts <code>x</code> later, and the assignment must come back true.</p>
+<p>Walk two variables and two clauses in words. Clauses are <code>x OR y</code> and <code>&not;x OR y</code>. The four implication edges are <code>&not;x &rarr; y</code>, <code>&not;y &rarr; x</code>, <code>x &rarr; y</code>, and <code>&not;y &rarr; &not;x</code>. Every path that starts at <code>&not;y</code> is forced toward <code>y</code>, so <code>y</code> and <code>&not;y</code> do not share a component and <code>y</code> sits on the sink side: <code>y</code> is true. <code>x</code> and <code>&not;x</code> also stay split; the sink-side comparison sets <code>x</code> false. Both clauses become <code>false OR true</code> and <code>true OR true</code>. Adding the two extra clauses <code>x OR &not;y</code> and <code>&not;x OR &not;y</code> would merge <code>y</code> with <code>&not;y</code> and the instance would become unsatisfiable.</p>
 
 <aside class="callout callout--key">
   <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
   <div class="callout__body">
-    <p>If there is a path a ⇒ b in the implication graph, every satisfying assignment that sets a true must set b true. Therefore a path x ⇒ ¬x and ¬x ⇒ x (i.e. same SCC) is unsatisfiable. The DAG assignment picks, for each pair, the literal whose SCC is the sink-side one.</p>
+    <p>If the implication graph contains a path <code>a &rarr; &hellip; &rarr; b</code>, every satisfying assignment that sets <code>a</code> true must set <code>b</code> true. Therefore a path both ways between <code>x</code> and <code>&not;x</code> (they share an SCC) is unsatisfiable.</p><p>In plain words, the arrows record forcing, SCC finds every pair of literals that force each other, and the assignment for a surviving pair is "believe the sink-side literal", because that is the direction the remaining arrows still point.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--key">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Why the implication graph turns 2-SAT into SCC</span>
+    <p>A clause is a pair of forced arrows, and a path of arrows is a chain of forcing. If <code>x</code> can reach <code>&not;x</code> and <code>&not;x</code> can reach <code>x</code>, each truth value forces the other: a contradiction. Mutual reachability is the definition of a strongly connected component, so the entire question "does any variable contradict itself?" becomes one SCC run. The condensation DAG then tells you which side of each surviving pair is forced toward the sinks, which is the assignment.</p>
+  </div>
+</aside>
+
+<aside class="callout callout--warn">
+  <div class="callout__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+  <div class="callout__body">
+    <span class="callout__title">Always add both implication edges</span>
+    <p><code>x OR y</code> is two sentences, not one. A single edge <code>&not;x &rarr; y</code> does not force anything when <code>y</code> is the false one. Write a helper <code>or(a, b)</code> that inserts both arrows, and encode a unit clause as <code>or(a, a)</code> so you never invent a third code path.</p>
   </div>
 </aside>
 
@@ -159,7 +176,7 @@
       "speed": 1000,
       "frames": [
         {
-          "note": "Variables x,y. Clause x ∨ y. Edges ~x→y, ~y→x.",
+          "note": "Two variables x and y. The clause x OR y becomes the two forced arrows not-x &rarr; y and not-y &rarr; x.",
           "active": [
             0
           ],
@@ -170,7 +187,7 @@
           }
         },
         {
-          "note": "Clause ~x ∨ y. Edges x→y, ~y→~x.",
+          "note": "The second clause not-x OR y adds x &rarr; y and not-y &rarr; not-x, so every path out of not-y is now forced toward y.",
           "active": [
             1
           ],
@@ -181,7 +198,7 @@
           }
         },
         {
-          "note": "SCCs: {x}, {~x}, {y,~y}? No — y and ~y must stay split. Here y is forced true.",
+          "note": "y and not-y stay in different components: every arrow points at y, so y is forced true and is not merged with its negation.",
           "active": [
             2
           ],
@@ -192,7 +209,7 @@
           }
         },
         {
-          "note": "scc[x]=0, scc[~x]=1, scc[y]=2, scc[~y]=0? Check x vs ~x different ✓.",
+          "note": "x and not-x are also split, so the instance is still satisfiable. The component ids will decide which side of x is the sink.",
           "active": [
             0,
             1
@@ -204,7 +221,7 @@
           }
         },
         {
-          "note": "Assign x true if scc[x]>scc[~x] → false; y true. Satisfies both clauses (false∨true, true∨true).",
+          "note": "Sink-side comparison sets x false (scc[x] is smaller) and y true. Both clauses become false OR true and true OR true.",
           "active": [
             2
           ],
@@ -215,7 +232,7 @@
           }
         },
         {
-          "note": "If we added x ∨ ~y and ~x ∨ ~y, y and ~y would merge → unsat.",
+          "note": "Adding x OR not-y and not-x OR not-y would merge y with not-y, and the same SCC test would report unsatisfiable.",
           "active": [
             2,
             3
@@ -248,17 +265,17 @@ graph LR
 <!-- ======================================================= 6. ALGORITHM -->
 <h2>Algorithm</h2>
 <ol class="stepper">
-  <li><strong>Allocate</strong> 2n nodes. Fix a mapping <code>pos(i)=2*i+1</code>, <code>neg(i)=2*i</code>.</li>
-  <li><strong>For each clause (a ∨ b)</strong> add <code>~a 	o b</code> and <code>~b 	o a</code>.</li>
-  <li><strong>SCC</strong> the implication graph.</li>
-  <li><strong>If scc[pos(i)]==scc[neg(i)]</strong> return unsat.</li>
-  <li><strong>Else</strong> <code>val[i] = scc[pos(i)] &gt; scc[neg(i)]</code>.</li>
-  <li><strong>Verify</strong> on a tiny sample — mapping bugs are silent.</li>
+  <li><strong>Allocate 2n vertices and freeze one encoding.</strong> The packing <code>neg(i) = 2*i</code>, <code>pos(i) = 2*i+1</code> lets <code>x ^ 1</code> flip a literal; the packing <code>i</code> / <code>i+n</code> needs a <code>not()</code> helper. Mixing the two silently swaps half the arrows.</li>
+  <li><strong>Turn every clause into two implication edges.</strong> For <code>(a OR b)</code> add <code>&not;a &rarr; b</code> and <code>&not;b &rarr; a</code>, because each half of the OR is the sentence "if this side is false, the other side is forced true".</li>
+  <li><strong>Run SCC on that directed graph.</strong> Tarjan or Kosaraju, the same engine as the previous page; the vertices are literals and the streets are forced arrows, not the original variables.</li>
+  <li><strong>Reject if any variable shares a component with its negation.</strong> <code>scc[pos(i)] == scc[neg(i)]</code> means <code>i</code> forces <code>&not;i</code> and <code>&not;i</code> forces <code>i</code>, which is a contradiction no assignment can satisfy.</li>
+  <li><strong>Otherwise set the sink-side literal true.</strong> <code>val[i] = scc[pos(i)] &gt; scc[neg(i)]</code>, because both algorithms number components in reverse topological order and the larger id is the side implications still point toward.</li>
+  <li><strong>Verify the encoding on a unit clause (x) alone.</strong> Mapping bugs and a flipped comparison both produce a clean-looking assignment that fails the one-literal instance, so that is the cheapest test you can write.</li>
 </ol>
 
 <!-- ========================================================= 7. DRY RUN -->
 <h2>Dry run</h2>
-<p>Every step on the sample from the visual walkthrough.</p>
+<p>Two variables, clauses (x OR y) and (not-x OR y). The implication arrows force y true and leave x free to be false.</p>
 
 <div class="table-scroll">
   <table class="trace-table">
@@ -266,12 +283,12 @@ graph LR
       <tr><th>clause</th><th>edges</th><th>sat</th><th>Action / why</th></tr>
     </thead>
     <tbody>
-      <tr class="trace-table__row--change"><td>x∨y</td><td>~x→y, ~y→x</td><td>?</td><td>Variables x,y. Clause x ∨ y. Edges ~x→y, ~y→x.</td></tr>
-      <tr><td>~x∨y</td><td>x→y, ~y→~x</td><td>?</td><td>Clause ~x ∨ y. Edges x→y, ~y→~x.</td></tr>
-      <tr><td>force y</td><td>paths into y</td><td>?</td><td>SCCs: {x}, {~x}, {y,~y}? No — y and ~y must stay split. Here y is forced true.</td></tr>
-      <tr><td>ids</td><td>—</td><td>x and ~x split</td><td>scc[x]=0, scc[~x]=1, scc[y]=2, scc[~y]=0? Check x vs ~x different ✓.</td></tr>
-      <tr><td>assign</td><td>—</td><td>x=0 y=1</td><td>Assign x true if scc[x]>scc[~x] → false; y true. Satisfies both clauses (false∨true, true∨true).</td></tr>
-      <tr><td>bad extra</td><td>merge y</td><td>false</td><td>If we added x ∨ ~y and ~x ∨ ~y, y and ~y would merge → unsat.</td></tr>
+      <tr class="trace-table__row--change"><td>x∨y</td><td>~x→y, ~y→x</td><td>?</td><td>Two variables x and y. The clause x OR y becomes the two forced arrows not-x &rarr; y and not-y &rarr; x.</td></tr>
+      <tr><td>~x∨y</td><td>x→y, ~y→~x</td><td>?</td><td>The second clause not-x OR y adds x &rarr; y and not-y &rarr; not-x, so every path out of not-y is now forced toward y.</td></tr>
+      <tr><td>force y</td><td>paths into y</td><td>?</td><td>y and not-y stay in different components: every arrow points at y, so y is forced true and is not merged with its negation.</td></tr>
+      <tr><td>ids</td><td>—</td><td>x and ~x split</td><td>x and not-x are also split, so the instance is still satisfiable. The component ids will decide which side of x is the sink.</td></tr>
+      <tr><td>assign</td><td>—</td><td>x=0 y=1</td><td>Sink-side comparison sets x false (scc[x] is smaller) and y true. Both clauses become false OR true and true OR true.</td></tr>
+      <tr><td>bad extra</td><td>merge y</td><td>false</td><td>Adding x OR not-y and not-x OR not-y would merge y with not-y, and the same SCC test would report unsatisfiable.</td></tr>
     </tbody>
   </table>
 </div>
@@ -404,7 +421,8 @@ graph LR
   </div>
 
   <div class="complexity__derivation">
-    <p>2n vertices, 2m implication edges, one SCC. Assignment is a linear scan of the variables.</p>
+    <p>The implication graph has <code>2n</code> vertices and exactly two directed edges per clause, so <code>2m</code> edges. One SCC run is <code>O(n + m)</code>, and the assignment is a single scan of the <code>n</code> variables comparing two component ids. At <code>n = m = 10&#8309;</code> that is a few hundred thousand array operations, a few milliseconds, against a brute <code>2<sup>n</sup></code> that cannot start.</p>
+    <p>The same Java-stack caveat as the SCC page applies: a chain of <code>2n</code> implications is a recursion of depth <code>2n</code>. Counting solutions is not free: only when complementary component-pairs have no extra DAG edges between them is the count a clean power of two; otherwise you need a DAG DP that this linear scan does not perform.</p>
   </div>
 
   <table class="complexity__compare">
@@ -426,28 +444,28 @@ graph LR
 <ul class="pitfalls">
   <li>
     <span class="pitfalls__title">Swapping the assignment comparison</span>
-    <div class="pitfalls__bug"><code>scc[x] &lt; scc[~x]</code> flips every variable. Sample may still pass if both work.</div>
-    <div class="pitfalls__fix">Tarjan / Kosaraju ids grow in reverse-topo; the larger id is the sink side → set that literal true. Verify on (x) alone.</div>
+    <div class="pitfalls__bug">Writing <code>scc[x] &lt; scc[&not;x]</code> flips every variable. A sample where both polarities work still passes, so the bug hides until a unit clause or a one-sided force appears.</div>
+    <div class="pitfalls__fix">Tarjan and Kosaraju ids grow in reverse topological order, so the larger id is the sink side: set that literal true. Verify on the instance that is just the clause <code>(x)</code>.</div>
   </li>
   <li>
     <span class="pitfalls__title">Forgetting unit clauses</span>
-    <div class="pitfalls__bug">A forced x needs (~x → x), not just a mental note.</div>
-    <div class="pitfalls__fix">Encode (x ∨ x).</div>
+    <div class="pitfalls__bug">A forced <code>x</code> left as a mental note never becomes an edge, so the SCC run does not know <code>x</code> is true and may assign the other way when other clauses allow it.</div>
+    <div class="pitfalls__fix">Encode a unit clause as <code>(x OR x)</code>, which adds the edge <code>&not;x &rarr; x</code>. Put that in the same <code>or()</code> helper so there is no third code path.</div>
   </li>
   <li>
     <span class="pitfalls__title">Odd mapping of ~x</span>
-    <div class="pitfalls__bug"><code>x^1</code> only works if you packed pos/neg as <code>2i / 2i+1</code>.</div>
-    <div class="pitfalls__fix">Pick one encoding. Write <code>not()</code> once and use it everywhere.</div>
+    <div class="pitfalls__bug"><code>x ^ 1</code> only flips the right bit when you packed true/false as <code>2i / 2i+1</code>. Using it on an <code>i</code> / <code>i+n</code> encoding points at a random vertex and the graph is silently wrong.</div>
+    <div class="pitfalls__fix">Pick one encoding, write a single <code>not()</code> helper, and use it everywhere. Test by printing the two endpoints of a unit-clause edge and reading them by eye.</div>
   </li>
   <li>
     <span class="pitfalls__title">Adding only one implication per clause</span>
-    <div class="pitfalls__bug">x ∨ y is two implications. One edge leaves a satisfying assignment that the graph does not force.</div>
-    <div class="pitfalls__fix">Always add both (~a	o b) and (~b	o a).</div>
+    <div class="pitfalls__bug"><code>x OR y</code> is two sentences. A single edge <code>&not;x &rarr; y</code> does not force anything when <code>y</code> is the false literal, so a satisfying assignment exists that the graph never records.</div>
+    <div class="pitfalls__fix">Always add both <code>&not;a &rarr; b</code> and <code>&not;b &rarr; a</code>. The helper <code>or(a, b)</code> should insert the pair and be the only place edges are created.</div>
   </li>
   <li>
     <span class="pitfalls__title">Using undirected edges</span>
-    <div class="pitfalls__bug">Implications are directed. An undirected edge merges too much.</div>
-    <div class="pitfalls__fix">Directed SCC.</div>
+    <div class="pitfalls__bug">An undirected edge between literals makes each implication run both ways, so two literals that only forced one direction get merged into one SCC and a satisfiable instance is reported unsat.</div>
+    <div class="pitfalls__fix">The implication graph is directed. Run the directed SCC algorithm from the previous page, never an undirected component search.</div>
   </li>
 </ul>
 
@@ -489,28 +507,28 @@ graph LR
   <details class="followup">
     <summary>Why scc[x] > scc[~x] means x is true?</summary>
     <div class="followup__body">
-      <p>Implication edges go from earlier (source) to later (sink) in the condensation. If ~x can reach x but not vice versa, x is forced true. The larger Tarjan id is later in reverse-topo, i.e. closer to sinks.</p>
+      <p>Implication edges in the condensation go from sources toward sinks: if you believe a source literal you are forced to believe everything it can reach. When <code>&not;x</code> can reach <code>x</code> but not the other way, believing <code>&not;x</code> forces <code>x</code>, so the only consistent choice is <code>x</code> true. Both Tarjan and Kosaraju number components in reverse topological order, so the larger id is later, closer to the sinks, and that is the literal you set true.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>Can 2-SAT count solutions?</summary>
     <div class="followup__body">
-      <p>Yes in simple cases: each pair of complementary SCCs that are not forced is a free bit. Extra edges between pairs destroy the 2^{k} formula; then you need a more careful DAG DP.</p>
+      <p>Sometimes. Each complementary pair of components that is not forced by a path either way is a free bit, and the count is <code>2<sup>k</sup></code> for <code>k</code> such pairs. An extra condensation edge between two pairs destroys that formula, because choosing one pair then forces the other. In that case you need a DAG DP over the condensation, which this linear assignment scan does not do.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>How do you force x XOR y?</summary>
     <div class="followup__body">
-      <p>(x ∨ y) ∧ (~x ∨ ~y). Two clauses, four implications.</p>
+      <p>XOR is "exactly one of the two is true", which is the pair of clauses <code>(x OR y)</code> and <code>(&not;x OR &not;y)</code>. That is four implication edges: <code>&not;x &rarr; y</code>, <code>&not;y &rarr; x</code>, <code>x &rarr; &not;y</code>, and <code>y &rarr; &not;x</code>. Equality is the other pair, <code>(x OR &not;y)</code> and <code>(&not;x OR y)</code>.</p>
     </div>
   </details>
 
   <details class="followup">
     <summary>2-SAT vs 2-colouring?</summary>
     <div class="followup__body">
-      <p>Bipartite checking is 2-SAT with clauses "adjacent vertices differ". General 2-SAT allows arbitrary 2-clauses, including forcing two vertices equal, or forcing a single variable.</p>
+      <p>Checking that a graph is bipartite is 2-SAT with one variable per vertex and a clause "adjacent vertices differ" on every edge, i.e. the XOR encoding above. General 2-SAT allows any two-literal clause: forcing two variables equal, forcing a single variable true, or mixing those freely. Same SCC engine, a richer set of arrows, which is why seating and switch problems land here rather than on a 2-colour DFS.</p>
     </div>
   </details>
 </div>
